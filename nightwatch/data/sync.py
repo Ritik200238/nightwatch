@@ -131,19 +131,35 @@ def backfill_bars(
             store.log_sync("bars", venue=client.venue, symbol=symbol, interval=interval, kind=kind, range_start=cursor_start, range_end=cursor_end, rows=n, started_at=began, finished_at=utc_now())
             total += n
             log.info("backfill %s %s %s %s: %s -> %s: %d bars", client.venue.value, symbol, interval.value, kind.value, cursor_start.date(), cursor_end.date(), n)
-            if not bars and cursor_start > r_start:
-                # Upstream has nothing here; jump the cursor instead of walking empty chunks one by one.
-                pass
+            if not bars:
+                # A whole chunk with no bars on a 24/7 venue means we walked past the
+                # instrument's listing date; earlier chunks would be empty too.
+                log.info("backfill %s %s: history exhausted before %s", client.venue.value, symbol, cursor_end.date())
+                break
             cursor_end = cursor_start
     return total
 
 
-def refresh_bars(store: Store, client: BitgetPublicClient, symbol: str, interval: Interval, *, kind: PriceKind = PriceKind.TRADE) -> int:
+def refresh_bars(
+    store: Store,
+    client: BitgetPublicClient,
+    symbol: str,
+    interval: Interval,
+    *,
+    kind: PriceKind = PriceKind.TRADE,
+    allow_backfill: bool = True,
+) -> int:
     """Bring the tail of a series up to date. Uses the 1000-bar recent endpoint when
-    that is enough, else falls back to backfilling the missing tail."""
+    that is enough, else falls back to backfilling the missing tail.
+
+    ``allow_backfill=False`` makes this strictly a tail refresh: series with no stored
+    history are skipped (the recorder uses this so it never duplicates a running sync).
+    """
     cov = store.bar_coverage(client.venue, symbol, interval, kind=kind)
     now = utc_now()
     if cov is None:
+        if not allow_backfill:
+            return 0
         return backfill_bars(store, client, symbol, interval, kind=kind)
     _, cov_max, _ = cov
     step = timedelta(seconds=interval.seconds)
@@ -156,6 +172,8 @@ def refresh_bars(store: Store, client: BitgetPublicClient, symbol: str, interval
         n = store.upsert_bars(bars)
         store.log_sync("refresh", venue=client.venue, symbol=symbol, interval=interval, kind=kind, rows=n, started_at=began, finished_at=utc_now())
         return n
+    if not allow_backfill:
+        return 0
     return backfill_bars(store, client, symbol, interval, start=cov_max + step, kind=kind)
 
 
@@ -228,15 +246,23 @@ def sync_universe(
     return stats
 
 
-def refresh_universe(store: Store, entries: Sequence[UniverseEntry], *, spot: BitgetPublicClient, perp: BitgetPublicClient, intervals: Sequence[Interval] = (Interval.H1,)) -> int:
+def refresh_universe(
+    store: Store,
+    entries: Sequence[UniverseEntry],
+    *,
+    spot: BitgetPublicClient,
+    perp: BitgetPublicClient,
+    intervals: Sequence[Interval] = (Interval.H1,),
+    allow_backfill: bool = False,
+) -> int:
     n = 0
     for e in entries:
         try:
             for interval in intervals:
-                n += refresh_bars(store, spot, e.spot_symbol, interval)
+                n += refresh_bars(store, spot, e.spot_symbol, interval, allow_backfill=allow_backfill)
                 if e.perp_symbol:
                     for kind in (PriceKind.TRADE, PriceKind.INDEX, PriceKind.MARK):
-                        n += refresh_bars(store, perp, e.perp_symbol, interval, kind=kind)
+                        n += refresh_bars(store, perp, e.perp_symbol, interval, kind=kind, allow_backfill=allow_backfill)
         except Exception:  # noqa: BLE001
             log.exception("refresh failed for %s", e.ticker)
     return n
