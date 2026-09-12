@@ -317,6 +317,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Reports use a few non-ASCII glyphs; legacy Windows consoles default to cp1252
+    # and would abort mid-print, so make stdout tolerant rather than dropping the glyphs.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     args = build_parser().parse_args(argv)
     _logging(args.verbose)
     settings = load_settings()
