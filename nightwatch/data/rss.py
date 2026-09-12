@@ -12,9 +12,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from collections.abc import Iterable, Mapping
 from calendar import timegm
-from datetime import datetime, timezone
+from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
 
 import feedparser
 
@@ -109,7 +109,7 @@ class RssNewsClient:
         else:
             # feedparser normalises *_parsed structs to UTC; timegm keeps them UTC
             # (mktime would silently apply the machine's local offset).
-            published = datetime.fromtimestamp(timegm(struct), tz=timezone.utc)
+            published = datetime.fromtimestamp(timegm(struct), tz=UTC)
         summary = (getattr(entry, "summary", "") or "").strip() or None
         text = f"{title}\n{summary or ''}"
         tickers = tuple(sorted(t for t, pat in self._patterns.items() if pat.search(text)))

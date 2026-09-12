@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
 
 from nightwatch.journal.adjust import apply_factors, evaluate_expanding, factors_as_of, fit_factors
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 

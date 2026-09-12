@@ -44,8 +44,12 @@ asyncio_mode = "auto"
 addopts = "-q"
 
 [tool.ruff]
-line-length = 100
+line-length = 200
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N"]
+# E501: report/render lines are deliberately long f-strings. N803/N806: matrix maths uses
+# X, Z, L. UP042: str-enums serialise to JSON as plain strings on purpose. B008: frozen
+# policy dataclasses as defaults are immutable. N818: InsufficientData reads as a condition.
+ignore = ["E501", "N803", "N806", "UP042", "B008", "N818"]

@@ -1,6 +1,6 @@
 """Universe resolution, backfill/refresh planning and the recorder loop, with fakes."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from nightwatch.data.models import (
     Bar,
@@ -17,7 +17,7 @@ from nightwatch.data.store import Store
 from nightwatch.data.sync import UniverseEntry, backfill_bars, build_universe, refresh_bars
 from nightwatch.recorder.orderbook_recorder import OrderBookRecorder
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2026, 8, 1, tzinfo=UTC)
 
 

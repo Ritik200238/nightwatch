@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -19,7 +19,7 @@ from nightwatch.time_utils import (
     previous_trading_day,
 )
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def et(y, m, d, hh=0, mm=0):

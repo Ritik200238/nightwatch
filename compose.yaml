@@ -2,6 +2,7 @@
 #
 #   docker compose build
 #   docker compose run --rm api nightwatch sync --core          # first time: backfill history (long)
+#   docker compose run --rm api nightwatch replay --tickers TSLA NVDA --reset   # score past windows for the calibration page
 #   docker compose run --rm api nightwatch calendars            # earnings + macro calendars
 #   docker compose up -d
 #

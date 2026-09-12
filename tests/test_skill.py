@@ -1,5 +1,7 @@
 """Skill scoring: pinball loss, paired bootstrap, and the journal's baseline columns."""
 
+from datetime import UTC
+
 import numpy as np
 import pandas as pd
 
@@ -40,7 +42,7 @@ def test_identical_forecasts_have_zero_skill_and_too_few_rows_refuse():
 
 def test_journal_migrates_baseline_columns_and_resets_replays(tmp_path):
     import sqlite3
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from nightwatch.data.store import Store
     from nightwatch.journal.journal import Journal
@@ -51,7 +53,7 @@ def test_journal_migrates_baseline_columns_and_resets_replays(tmp_path):
         c.executescript("CREATE TABLE forecasts (id INTEGER PRIMARY KEY, created_at INTEGER NOT NULL, kind TEXT NOT NULL, ticker TEXT NOT NULL, side TEXT NOT NULL, notional REAL NOT NULL, as_of INTEGER NOT NULL, bar_ts INTEGER NOT NULL, horizon_h REAL NOT NULL, horizon_end INTEGER NOT NULL, entry_price REAL NOT NULL, snapshot_hash TEXT NOT NULL, analog_n INTEGER, analog_scope TEXT, p5 REAL, p25 REAL, p50 REAL, p75 REAL, p95 REAL, es5 REAL, mc_p5 REAL, mc_p95 REAL, verdict TEXT, recommended_notional REAL, payload TEXT NOT NULL);")
     with Store(path) as s:
         j = Journal(s)
-        now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 1, tzinfo=UTC)
         q = {"p5": -2.0, "p25": -1.0, "p50": 0.0, "p75": 1.0, "p95": 2.0}
         b = {"p5": -3.0, "p25": -1.5, "p50": 0.0, "p75": 1.5, "p95": 3.0}
         for kind in ("replay", "replay", "ticket"):

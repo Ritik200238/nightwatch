@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -8,7 +8,7 @@ from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import ET
 
-UTC = timezone.utc
+UTC = UTC
 NOW = datetime(2026, 9, 12, 12, tzinfo=UTC)
 
 

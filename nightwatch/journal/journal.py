@@ -17,10 +17,8 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-import numpy as np
 import pandas as pd
 
-from nightwatch.analog.outcomes import compute_match_outcomes
 from nightwatch.data.models import Interval, Venue
 from nightwatch.data.store import Store
 from nightwatch.time_utils import ensure_utc, from_epoch_ms, to_epoch_ms, utc_now
@@ -230,7 +228,7 @@ class Journal:
             (to_epoch_ms(now),),
         ).fetchall()
         n = 0
-        for fid, ticker, side, as_of_ms, horizon_h, end_ms, entry in rows:
+        for fid, ticker, side, as_of_ms, _horizon_h, end_ms, entry in rows:
             symbol = spot_symbol_for.get(ticker)
             if symbol is None:
                 continue

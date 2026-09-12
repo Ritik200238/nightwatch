@@ -21,6 +21,14 @@ Nightwatch takes a trade idea in plain language and answers four questions with 
 
 The human makes the decision. Nightwatch never places orders.
 
+![A sized verdict for a TSLA position](docs/img/desk-verdict.png)
+
+Every forecast is journaled before its outcome is known and scored when the horizon
+passes. The calibration page shows whether the stated probabilities hold up, and what
+the tail adjustment fitted on earlier forecasts does to later ones.
+
+![Calibration page](docs/img/calibration.png)
+
 ## Run it
 
 Python 3.11+ and Node 22+. Everything below works without any API key; only the

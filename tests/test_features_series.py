@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -6,9 +6,8 @@ from nightwatch.data.models import Bar, Interval, PriceKind, Venue
 from nightwatch.data.store import Store
 from nightwatch.features.basis import add_basis_columns, basis_by_bucket, closed_vs_open_ratio
 from nightwatch.features.series import SeriesSpec, completed_before, load_aligned_hourly
-from nightwatch.time_utils import ET
 
-UTC = timezone.utc
+UTC = UTC
 # Wed 2026-09-09 00:00 UTC .. Mon 2026-09-14 00:00 UTC covers weekdays, a Friday night and a whole weekend.
 START = datetime(2026, 9, 9, tzinfo=UTC)
 END = datetime(2026, 9, 14, tzinfo=UTC)

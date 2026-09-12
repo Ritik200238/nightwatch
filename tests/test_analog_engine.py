@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
 
 from nightwatch.analog.engine import AnalogConfig, AnalogEngine, matches_frame, pooled_history
 
-UTC = timezone.utc
+UTC = UTC
 FEATS = ("a", "b", "c", "d")
 
 

@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
-import pandas as pd
 
 from nightwatch.data.models import Bar, Interval, Venue
 from nightwatch.data.store import Store
@@ -15,7 +14,7 @@ from nightwatch.journal.calibration import (
 )
 from nightwatch.journal.journal import Journal
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2026, 9, 1, tzinfo=UTC)
 
 

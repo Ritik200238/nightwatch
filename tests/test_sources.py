@@ -1,6 +1,6 @@
 """Yahoo / Nasdaq / FRED / RSS clients against mocked transports."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -17,7 +17,7 @@ from nightwatch.data.yahoo import BASE_URL as YAHOO_URL
 from nightwatch.data.yahoo import YahooChartClient
 from nightwatch.time_utils import ET
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def fast(base: str = "") -> HttpClient:

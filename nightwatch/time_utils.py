@@ -16,14 +16,14 @@ Conventions
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from enum import Enum
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 import numpy as np
 
-UTC = timezone.utc
+UTC = UTC
 ET = ZoneInfo("America/New_York")
 
 REGULAR_OPEN = time(9, 30)
@@ -75,7 +75,7 @@ def to_epoch_ms(ts: datetime) -> int:
     return int(ensure_utc(ts).timestamp() * 1000)
 
 
-def index_epoch_ns(index) -> "np.ndarray":  # noqa: ANN001
+def index_epoch_ns(index) -> np.ndarray:  # noqa: ANN001
     """Epoch nanoseconds (int64) for a tz-aware DatetimeIndex, independent of the
     index's stored resolution (pandas ≥ 3 defaults to microseconds, so ``asi8`` must
     not be assumed to be nanoseconds)."""

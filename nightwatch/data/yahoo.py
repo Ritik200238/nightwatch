@@ -125,10 +125,10 @@ class YahooChartClient:
         out: list[Bar] = []
         for i, ts in enumerate(stamps):
             try:
-                o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+                o, h, lo, c = opens[i], highs[i], lows[i], closes[i]
             except IndexError:
                 break
-            if None in (o, h, l, c):
+            if None in (o, h, lo, c):
                 continue
             vol = vols[i] if i < len(vols) else None
             out.append(
@@ -140,7 +140,7 @@ class YahooChartClient:
                     ts=datetime.fromtimestamp(int(ts), tz=UTC),
                     open=float(o),
                     high=float(h),
-                    low=float(l),
+                    low=float(lo),
                     close=float(c),
                     volume_base=float(vol) if vol is not None else None,
                     volume_quote=None,

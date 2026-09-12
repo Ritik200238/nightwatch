@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from nightwatch.data.models import OrderBookLevel, OrderBookSnapshot, Venue
 from nightwatch.execution.exit_cost import cost_curve, max_notional_within, quote_exit, quote_hedge, replay_exit_cost
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2026, 9, 12, tzinfo=UTC)
 
 

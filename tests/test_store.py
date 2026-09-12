@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from nightwatch.data.book_metrics import walk_book
 from nightwatch.data.models import (
@@ -15,7 +15,7 @@ from nightwatch.data.models import (
 )
 from nightwatch.data.store import Store
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2026, 9, 1, tzinfo=UTC)
 
 

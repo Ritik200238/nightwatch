@@ -1,6 +1,6 @@
 """Bitget client tests against a mocked transport (no network)."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -10,7 +10,7 @@ from nightwatch.data.bitget import BASE_URL, HISTORY_PAGE, BitgetPublicClient
 from nightwatch.data.http import HttpClient, UpstreamError
 from nightwatch.data.models import Interval, PriceKind, Venue
 
-UTC = timezone.utc
+UTC = UTC
 H = 3_600_000
 
 

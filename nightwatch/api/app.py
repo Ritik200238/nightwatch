@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -193,7 +193,6 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         from dataclasses import asdict
 
         from nightwatch.journal.adjust import evaluate_expanding
-
         from nightwatch.journal.skill import compare_skill
 
         adjusted = evaluate_expanding(df) if not df.empty else None

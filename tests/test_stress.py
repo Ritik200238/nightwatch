@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,6 @@ from nightwatch.data.models import OrderBookLevel, OrderBookSnapshot, Venue
 from nightwatch.stress.montecarlo import block_bootstrap_paths, hourly_log_returns, reverse_stress, simulate
 from nightwatch.stress.scenarios import (
     EmpiricalInputs,
-    Limits,
     Position,
     Scenario,
     Severity,
@@ -20,7 +19,7 @@ from nightwatch.stress.scenarios import (
     sensitivity,
 )
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2026, 9, 12, tzinfo=UTC)
 
 

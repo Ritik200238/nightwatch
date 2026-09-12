@@ -45,7 +45,6 @@ from nightwatch.stress.scenarios import (
     build_presets,
     closed_window_returns,
     earnings_gaps,
-    impacts_table,
 )
 from nightwatch.time_utils import ensure_utc, utc_now
 
@@ -510,6 +509,6 @@ def _serialise(obj: Any) -> Any:
         return [_serialise(v) for v in obj]
     if hasattr(obj, "__dataclass_fields__"):
         return {k: _serialise(v) for k, v in asdict(obj).items()} if not hasattr(obj, "to_dict") or isinstance(obj, AnalysisReport) else obj.to_dict()
-    if hasattr(obj, "value") and isinstance(getattr(obj, "value"), str):
+    if hasattr(obj, "value") and isinstance(obj.value, str):
         return obj.value
     return obj

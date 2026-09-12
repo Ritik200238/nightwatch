@@ -1,7 +1,7 @@
 """End-to-end pipeline on synthetic data: no network, deterministic."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pytest
@@ -29,7 +29,7 @@ from nightwatch.pipeline.render import render_text
 from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import ET, classify_session
 
-UTC = timezone.utc
+UTC = UTC
 START = datetime(2026, 3, 1, tzinfo=UTC)
 AS_OF = datetime(2026, 9, 12, 14, 10, tzinfo=UTC)  # Saturday
 

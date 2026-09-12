@@ -1,4 +1,3 @@
-import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -25,7 +24,7 @@ def test_health_and_universe(client):
 
 
 def test_snapshot_endpoint(client):
-    r = client.get(f"/snapshot/TSLA", params={"as_of": AS_OF.isoformat()})
+    r = client.get("/snapshot/TSLA", params={"as_of": AS_OF.isoformat()})
     assert r.status_code == 200
     body = r.json()
     assert body["ticker"] == "TSLA" and "basis_index_bps" in body["features"]
