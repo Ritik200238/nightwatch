@@ -11,7 +11,7 @@ __pycache__/
 .ruff_cache/
 
 # local data & secrets
-data/
+/data/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
