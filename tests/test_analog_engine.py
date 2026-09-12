@@ -72,6 +72,16 @@ def test_missing_query_features_are_dropped_and_reported():
     assert res.features_used == ("a", "d") and set(res.features_dropped) == {"b", "c"}
 
 
+def test_constant_history_feature_is_dropped_not_exploded():
+    h = history(24 * 60)
+    h["d"] = 0.0  # constant in history
+    q = {"a": 0.5, "b": 0.4, "c": 5.0, "d": 1.0}
+    res = AnalogEngine(cfg(min_matches=3)).search(h, q, query_ts=h.index[-1] + timedelta(hours=1))
+    assert res.ok and res.features_used == ("a", "b", "c")
+    assert any("d (constant" in x for x in res.features_dropped)
+    assert all(np.isfinite(m.distance) and m.distance < 1e3 for m in res.matches)
+
+
 def test_refuses_with_fewer_than_three_features():
     h = history(24 * 60)
     res = AnalogEngine(cfg()).search(h, {"a": 0.5, "d": 0.1}, query_ts=h.index[-1] + timedelta(hours=1))

@@ -126,14 +126,27 @@ class AnalogEngine:
             return self._refuse(f"only {n_candidates} candidate rows with complete features", history, used, dropped, query, n_candidates=n_candidates)
 
         X = hist[list(used)].to_numpy(dtype=float)
-        q = np.array([float(query[f]) for f in used], dtype=float)
 
-        # Robust scaling fit on history.
+        # Features that do not vary in this history carry no information and would
+        # explode the scaling; drop them and say so.
         med = np.median(X, axis=0)
         mad = np.median(np.abs(X - med), axis=0) * MAD_SCALE
-        mad = np.where(mad <= 1e-12, np.std(X, axis=0) + 1e-12, mad)
-        Z = (X - med) / mad
-        zq = (q - med) / mad
+        std = np.std(X, axis=0)
+        keep = ~((mad <= 1e-12) & (std <= 1e-9))
+        if not keep.all():
+            constant = tuple(f for f, k in zip(used, keep, strict=True) if not k)
+            used = tuple(f for f, k in zip(used, keep, strict=True) if k)
+            dropped = dropped + tuple(f"{f} (constant in history)" for f in constant)
+            X, med, mad, std = X[:, keep], med[keep], mad[keep], std[keep]
+            if len(used) < 3:
+                return self._refuse("fewer than 3 informative features in the history", history, used, dropped, query, n_candidates=n_candidates)
+        q = np.array([float(query[f]) for f in used], dtype=float)
+
+        # Robust scaling fit on history; where the MAD collapses (heavy zero mass) fall
+        # back to the standard deviation so a rare feature is not scaled to infinity.
+        scale_vec = np.where(mad <= 1e-12, std, mad)
+        Z = (X - med) / scale_vec
+        zq = (q - med) / scale_vec
 
         w = np.array([cfg.weights.get(f, 1.0) for f in used], dtype=float)
         if cfg.whiten and Z.shape[0] > Z.shape[1] * 5:
@@ -207,18 +220,20 @@ def _isnan(v) -> bool:  # noqa: ANN001
         return True
 
 
+EIGEN_FLOOR = 1e-3  # relative to the largest eigenvalue
+
+
 def _whitener(Z: np.ndarray, shrinkage: float) -> np.ndarray:
-    """Inverse Cholesky factor of the shrunk covariance: (Z @ L_inv.T) has identity covariance."""
-    cov = np.cov(Z, rowvar=False)
-    cov = np.atleast_2d(cov)
+    """Symmetric whitening matrix W such that (Z @ W.T) has (approximately) identity
+    covariance. Built from the eigen-decomposition of a shrinkage covariance with an
+    eigenvalue floor, so near-collinear features cannot produce astronomical distances."""
+    cov = np.atleast_2d(np.cov(Z, rowvar=False))
     diag = np.diag(np.diag(cov))
     shrunk = (1.0 - shrinkage) * cov + shrinkage * diag
-    shrunk += np.eye(shrunk.shape[0]) * 1e-9
-    try:
-        L = np.linalg.cholesky(shrunk)
-        return np.linalg.inv(L)
-    except np.linalg.LinAlgError:
-        return np.diag(1.0 / np.sqrt(np.diag(shrunk)))
+    vals, vecs = np.linalg.eigh(shrunk)
+    floor = max(vals.max(), 1e-12) * EIGEN_FLOOR
+    vals = np.maximum(vals, floor)
+    return vecs @ np.diag(1.0 / np.sqrt(vals)) @ vecs.T
 
 
 def _distance_scale(Zw: np.ndarray, sample: int = 2000, seed: int = 7) -> float:
