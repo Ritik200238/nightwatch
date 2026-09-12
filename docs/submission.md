@@ -76,28 +76,32 @@ All figures **observed** on the build as of 2026-09-12 unless labelled otherwise
 
 * Data: 24 tokenized stocks with hourly bars from January 2025 (891,800 bars across
   spot, perpetual trade/index/mark and native), order-book snapshots recorded every 60
-  seconds since 2026-09-12 08:09 UTC (3,600 snapshots across 48 books at the time of writing), earnings and FOMC calendars,
-  headline feeds.
-* Forecast calibration, historical replay of 1,080 closed-market windows across 11
-  tokens, scored against realised outcomes:
-  * Raw analog distribution: 7.9% of outcomes below the 5th percentile, 12.8% above the
-    95th, 79.3% inside the band (targets 5 / 5 / 90). Tail test: red.
+  seconds (48 books per tick), earnings and FOMC calendars, headline feeds.
+* Forecast calibration, historical replay of 2,343 closed-market windows across 24
+  tokens, every forecast scored against what actually happened:
+  * Raw analog distribution: 8.7% of outcomes below the 5th percentile, 11.9% above the
+    95th, 79.3% inside the band (targets 5 / 5 / 90). Kupiec failure-rate test p < 0.001.
+    Tail band: red.
   * With tail factors fitted only on forecasts that had matured earlier (expanding
-    window, out of sample, 1,048 forecasts): 6.5% / 5.7% / 87.8%. Tail test: amber.
-  * Median absolute error of the median forecast: 1.64 percentage points.
-* Analog cohort vs random same-time-of-week hours, one live ticket per token (22 tokens,
-  5 horizons, 110 pairs): the cohort mean differs from random at p < 0.05 in 9 pairs,
-  close to what chance alone gives. The cohort's 5th percentile sits below random's in
-  62 of 110 pairs. Read plainly: on this test the analogs do not predict a better
-  average outcome; their value is in the conditional tail, which is what the verdict
-  sizes against. A replay-wide comparison of forecast quality (analog vs baseline,
-  scored on the same 1,080 windows) is <in progress / observed: ...>.
+    window, out of sample, 2,299 forecasts): 5.0% below p5, 5.4% above p95, 89.5% inside
+    the band. Tail band: green. The cost is sharpness: the honest band is 12.7 points
+    wide instead of 8.3.
+  * Median absolute error of the median forecast: 2.30 percentage points.
+* Does the retrieval beat not bothering? Each replay point is paired with the
+  distribution of random past hours from the same time-of-week bucket, and both are
+  scored with the pinball loss on the same outcome (2,304 pairs). Averaged over the five
+  quantiles the analogs are indistinguishable from random hours (skill −0.6%, CI −0.014
+  to +0.004). At the 5th percentile they are better, with an interval that excludes zero
+  (skill +4.8%, CI +0.003 to +0.033), and 8.6% of outcomes fall below the analog p5
+  against 10.4% below the random-hours p5. **The analogs do not predict direction; they
+  improve the loss tail.** That is the only claim this product makes, and the verdict
+  never takes a direction from them.
 * Exit cost: a 20,000 USDT RTSLAUSDT exit costs 25 bps on the recorded book (15 bps
   walk + 10 bps fee); the largest size that exits inside a 25 bps budget is ~16,800 USDT.
 * Basis vs index is 2.5 times wider when the US market is closed than during regular
   hours (27.8 bps vs 10.9 bps, mean absolute, TSLA).
 * Latency: a full verdict in 1.5 s after warm-up.
-* Tests: 140 automated tests.
+* Tests: 160 automated tests; lint, tests and the web build run in CI on every push.
 
 **Usage validation plan (targeted):** demo live for the judging window; a public
 calibration page that updates as live tickets mature; 20 external users submitting at
@@ -118,8 +122,9 @@ research data hub answered the handshake but returned empty results; public REST
 endpoints are used directly instead.
 
 **Not built yet / next:** per-token tail factors once each token has enough scored
-forecasts; a location correction (outcomes currently skew above the forecast median);
-funding as a similarity feature; a post-mortem view for closed trades.
+forecasts; a location correction (outcomes skew slightly above the forecast median);
+feature weighting aimed at the loss tail, which is the only place the retrieval earns its
+keep; funding as a similarity feature.
 
 **Stack:** Python 3.11, numpy/pandas, SQLite, FastAPI; Next.js 16, Recharts; Claude
 Opus 5 for the language layer only. Data: Bitget public API (spot, USDT perps with

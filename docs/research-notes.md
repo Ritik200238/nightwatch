@@ -63,7 +63,7 @@ comes from; the whole book absorbs six figures at ~14 bps on a quiet Saturday. T
 order-book recorder (`nightwatch record`) snapshots every core book each minute so
 this can be measured by session over the coming weeks instead of asserted.
 
-## 4. What the analog engine predicts, and how well (first calibration run)
+## 4. What the analog engine predicts, and how well (first calibration run; superseded by §7 and §8)
 
 Replay: NVDA, 80 closed-window starts over the last 180 days, horizon = next US open,
 same-ticker analogs (k = 40, ≥36h apart, history strictly before each point).
@@ -104,10 +104,20 @@ stress: a −4.87% move loses 5% of notional after exit costs on a $20k position
 
 ## 7. Tail calibration: the analog tails were too narrow, and the fix holds out of sample (2026-09-12)
 
-After 1,080 matured replay forecasts (six tokens, closed-market windows since
-Jan 2025) the raw analog distribution was breached far more often than it should be:
-7.9% of outcomes fell below p5 and 12.8% rose above p95, against 5% each. The
-5% tail band was red.
+2,343 matured replay forecasts (24 tokens, one point per closed-market window since
+Jan 2025, scored against what actually happened). The raw analog distribution is
+breached far more often than it should be:
+
+| quantile | nominal | observed | 95% interval |
+|---|---|---|---|
+| p5 | 5% | 8.7% | 7.6–9.9 |
+| p25 | 25% | 29.8% | 28.0–31.7 |
+| p50 | 50% | 46.4% | 44.3–48.4 |
+| p75 | 75% | 63.3% | 61.4–65.3 |
+| p95 | 95% | 88.1% | 86.8–89.4 |
+
+Kupiec failure-rate LR 56.0 (p < 0.001) and Christoffersen independence LR 69.7
+(p < 0.001): too many breaches, and they cluster. Band: red.
 
 The correction is two multipliers, k_lo and k_hi, that widen p5 and p95 about the
 median until exactly 5% of *already-matured* outcomes breach. They are fitted only on
@@ -117,25 +127,48 @@ before it (expanding window, minimum 30 to fit).
 
 | metric | target | raw | adjusted |
 |---|---|---|---|
-| outcomes below p5 | 5% | 7.9% (CI 6.4–9.7) | 6.5% (CI 5.2–8.1) |
-| outcomes above p95 | 5% | 12.8% | 5.7% |
-| inside p5–p95 | 90% | 79.3% | 87.8% |
-| 5% tail band | green | red | amber |
-| mean p5–p95 width | — | 5.77% | 8.83% |
+| outcomes below p5 | 5% | 8.8% | 5.0% |
+| outcomes above p95 | 5% | 12.0% | 5.4% |
+| inside p5–p95 | 90% | 79.3% | 89.5% |
+| 5% tail band | green | red | **green** |
+| mean p5–p95 width | — | 8.28% | 12.72% |
 
-Latest factors: k_lo 1.24, k_hi 1.70 (n = 1,048 evaluated). The verdict now sizes
-against the adjusted p5; the raw quantiles are still journaled so future refits stay
-honest.
+Latest factors: k_lo 1.32, k_hi 1.64 (2,299 forecasts evaluated). The verdict sizes
+against the adjusted p5; the raw quantiles are still journaled, so future refits stay
+honest. The cost is sharpness: the honest band is half again as wide.
 
-What is still wrong: the lower tail is 6.5% out of sample, and its interval does not
-include 5%. The fit is pooled across tokens and the breach rate drifts over time
-(TSLA and NVDA breach more than MSFT), so a pooled factor fitted on the past lags
-the present. Next refinements, in order: per-token factors once each token has
-enough matured forecasts, then a time-decayed fit.
+Reproduce: `nightwatch calibration --kind replay`.
 
-Reproduce: `nightwatch calibration --kind replay` (the adjustment block prints last).
+## 8. Does the retrieval carry information? Only in the tail (2026-09-12)
 
-## 6. Things that did not work, and what was done instead
+Calibration says whether the stated probabilities are honest. It cannot say whether
+finding similar past moments beats not bothering. So every replay point also journals
+the distribution of *random past hours from the same time-of-week bucket*, drawn from
+history strictly before that point, and both are scored with the pinball (quantile)
+loss on the same outcome. 2,304 paired forecasts:
+
+| quantile | analog loss | random-hours loss | skill | 95% CI of the gain |
+|---|---|---|---|---|
+| p5 | 0.365 | 0.383 | **+4.8%** | +0.003 to +0.033 |
+| p25 | 0.957 | 0.943 | −1.5% | −0.027 to −0.001 |
+| p50 | 1.139 | 1.129 | −0.8% | −0.020 to +0.001 |
+| p75 | 1.032 | 1.000 | −3.2% | −0.048 to −0.016 |
+| p95 | 0.452 | 0.464 | +2.5% | −0.011 to +0.035 |
+| all five | 0.789 | 0.784 | −0.6% | −0.014 to +0.004 |
+
+Read it plainly: **the analogs do not predict direction.** Averaged over the whole
+distribution they are indistinguishable from picking random hours of the same kind, and
+at p25/p75 they are slightly worse. What they do improve is the loss tail: the p5 gain
+is positive with an interval that excludes zero, and 8.6% of outcomes fall below the
+analog p5 against 10.4% below the random-hours p5.
+
+That is the claim the product should make and the only one it does make: the cohort is
+used to size against the tail, not to forecast the move. The verdict never takes a
+direction from the analogs.
+
+Reproduce: `nightwatch replay --tickers <list> --reset` then `nightwatch calibration --kind replay`.
+
+## 9. Things that did not work, and what was done instead
 
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
   tool returns empty results; verified the fault is server-side. Not used.
