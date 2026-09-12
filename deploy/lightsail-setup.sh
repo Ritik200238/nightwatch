@@ -45,8 +45,8 @@ fi
 cd "$APP_DIR"
 [ -f .env ] || cp .env.example .env
 
-say "Building the images (a few minutes the first time)"
-$DOCKER compose build
+say "Building the API image (a few minutes the first time)"
+$DOCKER compose build api
 
 say "Starting the API and the recorder"
 # Only these two. The web desk goes to Vercel; running it here wastes memory.
