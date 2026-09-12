@@ -23,16 +23,28 @@ services:
       FRED_API_KEY: ${FRED_API_KEY:-}
     volumes:
       - nightwatch-data:/data
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   recorder:
     image: nightwatch:latest
     restart: unless-stopped
     command: ["nightwatch", "record", "--interval", "60"]
+    # The image's health check belongs to the API. A recorder is healthy when it is
+    # still writing: the newest order-book snapshot must be less than five minutes old.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sqlite3,sys,time; ts=sqlite3.connect('file:/data/nightwatch.sqlite?mode=ro',uri=True).execute('SELECT MAX(ts) FROM orderbook_snapshots').fetchone()[0] or 0; sys.exit(0 if time.time()*1000-ts < 300000 else 1)"]
+      interval: 60s
+      timeout: 20s
+      start_period: 180s
+      retries: 3
     environment:
       NIGHTWATCH_DATA_DIR: /data
       FRED_API_KEY: ${FRED_API_KEY:-}
     volumes:
       - nightwatch-data:/data
+    logging: *logging
     depends_on:
       - api
 
@@ -44,6 +56,7 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    logging: *logging
     depends_on:
       - api
 
