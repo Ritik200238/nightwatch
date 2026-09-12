@@ -1,0 +1,50 @@
+# Nightwatch: API + always-on recorder + web desk, one shared data volume.
+#
+#   docker compose build
+#   docker compose run --rm api nightwatch sync --core          # first time: backfill history (long)
+#   docker compose run --rm api nightwatch calendars            # earnings + macro calendars
+#   docker compose up -d
+#
+# Or copy an existing data/nightwatch.sqlite into the volume instead of backfilling
+# (docs/deploy.md).
+
+services:
+  api:
+    build: .
+    image: nightwatch:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      NIGHTWATCH_DATA_DIR: /data
+      NIGHTWATCH_CORS: ${NIGHTWATCH_CORS:-*}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      FRED_API_KEY: ${FRED_API_KEY:-}
+    volumes:
+      - nightwatch-data:/data
+
+  recorder:
+    image: nightwatch:latest
+    restart: unless-stopped
+    command: ["nightwatch", "record", "--interval", "60"]
+    environment:
+      NIGHTWATCH_DATA_DIR: /data
+      FRED_API_KEY: ${FRED_API_KEY:-}
+    volumes:
+      - nightwatch-data:/data
+    depends_on:
+      - api
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  nightwatch-data:

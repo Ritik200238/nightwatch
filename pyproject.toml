@@ -15,6 +15,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The HTTP API and the language layer. Everything else (CLI, recorder, replay) runs without them.
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "anthropic>=1.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
