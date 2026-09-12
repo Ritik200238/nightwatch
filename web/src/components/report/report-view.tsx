@@ -196,6 +196,7 @@ function AnalogSection({ report }: { report: Report }) {
             ) : (
               <Stat label="5th percentile" value={fmtPct(c.p5)} hint={`CI [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
             )}
+            <Stat label="Average of the worst 5%" value={fmtPct(c.es5_pct)} hint={c.es5_n ? `${c.es5_n} episode${c.es5_n === 1 ? "" : "s"} below p5` : undefined} tone="critical" />
             <Stat label="Worst point in window (p5)" value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
             {primary?.p95_adjusted != null ? (
               <Stat label="95th percentile (calibrated)" value={fmtPct(primary.p95_adjusted)} hint={`raw ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone="good" />

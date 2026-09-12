@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from nightwatch.analog.cohort import compare_to_baseline, sample_baseline_times, summarize
 from nightwatch.analog.outcomes import compute_match_outcomes, structural_horizons, tag_outcome
@@ -111,3 +112,21 @@ def test_sample_baseline_times_spaced_and_excluding():
             if a != b:
                 assert abs((a - b).total_seconds()) >= 36 * 3600
         assert abs((a - exclude[0]).total_seconds()) >= 36 * 3600
+
+
+def test_expected_shortfall_averages_the_worst_tail_and_reports_its_size():
+    import numpy as np
+    import pandas as pd
+
+    from nightwatch.analog.cohort import summarize
+
+    # 40 outcomes: -10 and -8 are the worst two, which is exactly the worst 5%.
+    rets = [-10.0, -8.0] + [float(i) * 0.1 for i in range(38)]
+    table = pd.DataFrame({
+        "ts": pd.date_range("2026-01-01", periods=40, freq="D", tz="UTC"), "status": ["MATURED"] * 40,
+        "ret_pct": rets, "mfe_pct": rets, "mae_pct": rets, "excess_pct": [np.nan] * 40,
+        "max_abs_basis_bps": [np.nan] * 40, "tag": ["Flat"] * 40, "hours": [24.0] * 40,
+    })
+    s = summarize(table, min_sample=10)
+    assert s.es5_n == 2 and s.es5_pct == pytest.approx(-9.0)
+    assert s.es5_pct < s.p5  # the average of the tail is worse than its boundary

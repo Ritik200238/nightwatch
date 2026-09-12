@@ -5,7 +5,8 @@ Rules that make the numbers trustworthy:
 * **Sample size first.** Every summary carries ``n``; below ``min_sample`` the summary
   is marked ``insufficient`` and no verdict-grade statistics are produced.
 * **Percentiles over moments.** The trader wants "how bad does it get" — p5, p25,
-  median, p75, p95 — not just a mean.
+  median, p75, p95 — not just a mean. The 5% expected shortfall answers the question
+  the percentile does not: when it does go past p5, how far past?
 * **Uncertainty is shown.** Bootstrap confidence intervals for the mean, median and
   p5 tell the reader how much to trust a number from *n* episodes.
 * **A baseline.** The same statistics for *random* past hours of the same kind (same
@@ -47,6 +48,8 @@ class CohortStats:
     p25: float | None = None
     p75: float | None = None
     p95: float | None = None
+    es5_pct: float | None = None  # mean of outcomes at or below p5 (historical expected shortfall)
+    es5_n: int | None = None  # how many episodes that average is taken over
     mfe_median_pct: float | None = None
     mae_median_pct: float | None = None
     mae_p5_pct: float | None = None
@@ -70,6 +73,17 @@ class BaselineComparison:
 
 def _pct(a: np.ndarray, p: float) -> float:
     return float(np.percentile(a, p))
+
+
+def _shortfall(a: np.ndarray, p: float) -> tuple[float | None, int | None]:
+    """Mean of the worst ``p``% of outcomes, and how many episodes that is.
+
+    With 40 episodes the worst 5% is two of them, so the number is reported with its
+    own sample size: an average of two observations is a hint, not an estimate."""
+    tail = a[a <= np.percentile(a, p)]
+    if tail.size == 0:
+        return None, None
+    return float(tail.mean()), int(tail.size)
 
 
 def bootstrap_ci(values: np.ndarray, stat, *, n_boot: int = 4000, seed: int = 11) -> Interval95:  # noqa: ANN001
@@ -124,6 +138,7 @@ def summarize(table: pd.DataFrame, *, weights: np.ndarray | None = None, min_sam
         std_pct=float(r.std(ddof=1)) if n > 1 else None,
         win_rate=float((r > 0).mean()),
         p5=_pct(r, 5), p25=_pct(r, 25), p75=_pct(r, 75), p95=_pct(r, 95),
+        es5_pct=_shortfall(r, 5)[0], es5_n=_shortfall(r, 5)[1],
         mfe_median_pct=float(np.median(mfe)),
         mae_median_pct=float(np.median(mae)),
         mae_p5_pct=_pct(mae, 5),

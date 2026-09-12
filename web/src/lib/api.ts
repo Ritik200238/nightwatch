@@ -72,6 +72,8 @@ export interface CohortStats {
   p25: number | null;
   p75: number | null;
   p95: number | null;
+  es5_pct: number | null;
+  es5_n: number | null;
   mfe_median_pct: number | null;
   mae_median_pct: number | null;
   mae_p5_pct: number | null;
