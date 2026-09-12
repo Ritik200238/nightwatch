@@ -1,0 +1,30 @@
+# reference material — study only, never shipped
+my-goal/
+tools/
+
+# environments
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# local data & secrets
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+.env
+.env.*
+!.env.example
+logs/
+*.log
+
+# editors / os
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
