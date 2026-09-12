@@ -80,6 +80,66 @@ export default function CalibrationPage() {
             </div>
           </Section>
 
+          {rep.skill && rep.skill.skill != null ? (
+            <Section
+              title="Does it beat guessing?"
+              subtitle={`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them.`}
+              action={
+                <Pill tone={rep.skill.diff_ci_low != null && rep.skill.diff_ci_low > 0 ? "good" : rep.skill.diff_ci_high != null && rep.skill.diff_ci_high < 0 ? "critical" : "warning"}>
+                  skill {rep.skill.skill >= 0 ? "+" : ""}
+                  {(rep.skill.skill * 100).toFixed(1)}%
+                </Pill>
+              }
+            >
+              <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Quantile</TableHead>
+                      <TableHead className="text-right">Analog loss</TableHead>
+                      <TableHead className="text-right">Random loss</TableHead>
+                      <TableHead className="text-right">Skill</TableHead>
+                      <TableHead className="text-right">95% CI of gain</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rep.skill.per_quantile.map((q) => (
+                      <TableRow key={q.quantile}>
+                        <TableCell className="font-medium">{q.quantile}</TableCell>
+                        <TableCell className="tabular text-right">{q.loss_analog.toFixed(3)}</TableCell>
+                        <TableCell className="tabular text-right">{q.loss_baseline.toFixed(3)}</TableCell>
+                        <TableCell className={`tabular text-right ${q.skill > 0 ? "text-status-good" : q.skill < 0 ? "text-status-critical" : ""}`}>
+                          {q.skill >= 0 ? "+" : ""}
+                          {(q.skill * 100).toFixed(1)}%
+                        </TableCell>
+                        <TableCell className="tabular text-right text-muted-foreground">
+                          [{q.diff_ci_low >= 0 ? "+" : ""}
+                          {q.diff_ci_low.toFixed(3)}, {q.diff_ci_high >= 0 ? "+" : ""}
+                          {q.diff_ci_high.toFixed(3)}]
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Stat label="Mean loss, analog" value={rep.skill.mean_loss_analog?.toFixed(3) ?? "—"} hint="average pinball loss over the five quantiles" />
+                    <Stat label="Mean loss, random hours" value={rep.skill.mean_loss_baseline?.toFixed(3) ?? "—"} hint={`gain CI [${rep.skill.diff_ci_low?.toFixed(3)}, ${rep.skill.diff_ci_high?.toFixed(3)}]`} />
+                    <Stat label="Below p5" value={`${fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} vs ${fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)}`} hint="analog vs random · target 5%" />
+                    <Stat label="Above p95" value={`${fmtPct((rep.skill.analog_hi_coverage ?? 0) * 100, 1, false)} vs ${fmtPct((rep.skill.baseline_hi_coverage ?? 0) * 100, 1, false)}`} hint="analog vs random · target 5%" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Per token:{" "}
+                    {Object.entries(rep.skill.by_ticker)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([t, v]) => `${t} ${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`)
+                      .join(" · ")}
+                  </p>
+                </div>
+              </div>
+            </Section>
+          ) : null}
+
           {rep.adjusted ? (
             <Section
               title="Tail adjustment, scored out of sample"
