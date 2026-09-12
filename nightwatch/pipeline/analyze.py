@@ -65,6 +65,7 @@ class AnalysisContext:
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
     pooled_tickers: tuple[str, ...] | None = None  # None = all entries with data
     journal: Any = None  # nightwatch.journal.journal.Journal, optional
+    frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
     _factors_cache: dict[str, Any] = field(default_factory=dict)
@@ -107,15 +108,25 @@ class AnalysisContext:
         return SeriesSpec(e.ticker, e.spot_symbol, e.perp_symbol, e.yahoo_ticker)
 
     def feature_frame(self, ticker: str, end: datetime) -> pd.DataFrame:
-        """Full-history feature frame for a ticker, cached per process per end-hour."""
+        """Full-history feature frame for a ticker, cached per process per end-hour.
+
+        The cache is bounded (least-recently-used eviction) because an always-on API
+        sees a new end-hour every hour and replays ask for arbitrary as-of hours; an
+        unbounded map would grow by a full frame per ticker per hour for weeks."""
         key = f"{ticker}|{ensure_utc(end).replace(minute=0, second=0, microsecond=0).isoformat()}"
-        if key not in self._frames:
+        frame = self._frames.pop(key, None)
+        if frame is None:
             spec = self.spec(ticker)
             cov = self.store.bar_coverage(Venue.BITGET_SPOT, spec.spot_symbol, Interval.H1)
             if cov is None:
                 raise InsufficientData(f"no stored bars for {spec.spot_symbol}")
-            self._frames[key] = compute_feature_frame(self.store, spec, cov[0], end)
-        return self._frames[key]
+            frame = compute_feature_frame(self.store, spec, cov[0], end)
+        self._frames[key] = frame  # re-insert as most recent
+        while len(self._frames) > self.frame_cache_size:
+            self._frames.pop(next(iter(self._frames)))
+        while len(self._factors_cache) > 64:
+            self._factors_cache.pop(next(iter(self._factors_cache)))
+        return frame
 
 
 # ------------------------------------------------------------------ report types

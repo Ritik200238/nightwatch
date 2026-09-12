@@ -139,3 +139,16 @@ def test_pipeline_is_point_in_time(seeded_store):
     assert a.primary_horizon == "12h"
     assert "no order book available" in " ".join(a.warnings)  # book only exists for TSLA at AS_OF
     ctx.store.close()
+
+
+def test_feature_frame_cache_is_bounded_and_lru(seeded_store):
+    ctx = _ctx(seeded_store)
+    ctx.frame_cache_size = 2
+    t0 = AS_OF - timedelta(days=40)
+    ctx.feature_frame("TSLA", t0)
+    ctx.feature_frame("NVDA", t0)
+    ctx.feature_frame("TSLA", t0)  # touch: TSLA becomes most recent
+    ctx.feature_frame("AAPL", t0)  # evicts NVDA, the least recently used
+    keys = [k.split("|")[0] for k in ctx._frames]
+    assert keys == ["TSLA", "AAPL"]
+    ctx.store.close()
