@@ -1,5 +1,12 @@
 # Deploying Nightwatch
 
+**Live as of 2026-09-12:** the desk is at https://nightwatch-gules.vercel.app (Vercel,
+project `nightwatch`, root directory `web`, connected to the `main` branch so every push
+redeploys). The backend runs on an AWS Lightsail box in Mumbai (ap-south-1), 1 GB plan,
+static IP, port 8000 open, with the API and the recorder as containers. Measured there:
+API 230 MB of memory with all 24 tokens warm, a full verdict in 1.5 s, the calibration
+page in 1.3 s.
+
 Three processes, one SQLite database:
 
 | process | what it does | must be always-on? |

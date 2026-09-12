@@ -135,8 +135,8 @@ calendar, FRED, RSS.
 
 Behind the Submission Materials Link:
 
-1. Live demo: `<https://desk...>` (the desk) and `<https://api.../health>` (service
-   health). No login.
+1. Live demo: https://nightwatch-gules.vercel.app — the desk, the calibration page and
+   the journal. No login. Service health: https://nightwatch-gules.vercel.app/api/health
 2. Source: `<GitHub URL>` (public). `README.md` has run instructions.
 3. Screen recording: `<video URL>`, one complete research task: trade idea in, verdict
    out, calibration page.
