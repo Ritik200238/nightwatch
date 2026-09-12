@@ -259,6 +259,11 @@ def earnings_gaps(native_daily: pd.DataFrame, events: Sequence[EarningsEvent]) -
     return np.asarray(out, dtype=float)
 
 
+def _ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     """Presets calibrated from the ticker's own history. Each records its source."""
     presets: list[Scenario] = []
@@ -271,7 +276,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
         for sev, p in ((Severity.MODERATE, 10), (Severity.SEVERE, 5), (Severity.EXTREME, 1)):
             move = float(np.percentile(r, p))
             presets.append(Scenario(
-                id=f"closed_window_gap_p{p}", name=f"Closed-window gap, {p}th percentile", severity=sev, horizon_h=h,
+                id=f"closed_window_gap_p{p}", name=f"Closed-window gap, {_ordinal(p)} percentile", severity=sev, horizon_h=h,
                 price_move_pct=move, probability_note=f"{p}% of {r.size} past closed windows were worse",
                 calibration={"source": "spot close→open across closed windows", "n": int(r.size), "percentile": p},
             ))
@@ -299,7 +304,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
         b = inp.abs_basis_closed_bps
         for p, sev in ((95, Severity.SEVERE), (99, Severity.EXTREME)):
             presets.append(Scenario(
-                id=f"basis_blowout_p{p}", name=f"Basis blowout, {p}th percentile of closed hours", severity=sev, horizon_h=h,
+                id=f"basis_blowout_p{p}", name=f"Basis blowout, {_ordinal(p)} percentile of closed hours", severity=sev, horizon_h=h,
                 basis_shock_bps=float(np.percentile(b, p)), probability_note=f"{100 - p}% of {b.size} closed-market hours had a wider gap",
                 calibration={"source": "|basis vs index| during closed sessions", "n": int(b.size), "percentile": p},
             ))

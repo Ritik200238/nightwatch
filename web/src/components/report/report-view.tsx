@@ -264,7 +264,7 @@ function StressSection({ report }: { report: Report }) {
       title="What could go wrong"
       subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour basis observations`}
     >
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+      <div className="space-y-4">
         <div className="overflow-x-auto">
           <Table className="min-w-[560px]">
             <TableHeader>
@@ -301,11 +301,11 @@ function StressSection({ report }: { report: Report }) {
             </TableBody>
           </Table>
         </div>
-        <div className="space-y-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {mc ? (
             <>
-              <Histogram values={mc.terminal_ret_pct} markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]} binCount={40} height={160} ariaLabel={`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`} />
-              <div className="grid grid-cols-2 gap-2">
+              <Histogram values={mc.terminal_ret_pct} markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]} binCount={40} height={180} ariaLabel={`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`} />
+              <div className="grid grid-cols-2 gap-2 content-start">
                 <Stat label={`Monte Carlo p5 (${mc.horizon_h}h)`} value={fmtPct(mc.p5)} hint={`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`} tone="critical" />
                 <Stat label="Expected shortfall (5%)" value={fmtPct(mc.expected_shortfall_5_pct)} hint={`P(loss > 5%) ${fmtRatio(mc.prob_loss_gt["5.0"])}`} />
                 <Stat label="Worst point in window (p5)" value={fmtPct(mc.drawdown_p5)} />
