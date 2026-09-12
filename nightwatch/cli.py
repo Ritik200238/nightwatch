@@ -160,9 +160,11 @@ def cmd_analyze(args: argparse.Namespace, settings: Settings) -> int:
     from nightwatch.stress.scenarios import Side
 
     spot, perp = _clients(settings)
+    from nightwatch.journal.journal import Journal
+
     with Store(settings.db_path) as store:
         entries = resolve_universe(store, spot, perp, settings) if not args.offline else _entries_from_store(store, settings)
-        ctx = AnalysisContext(store=store, entries=entries, spot_client=None if args.offline else spot, perp_client=None if args.offline else perp)
+        ctx = AnalysisContext(store=store, entries=entries, spot_client=None if args.offline else spot, perp_client=None if args.offline else perp, journal=Journal(store))
         ticket = TradeTicket(
             ticker=args.ticker.upper(), side=Side(args.side), notional_quote=args.notional, account_equity_quote=args.equity,
             horizon_kind=HorizonKind(args.horizon), horizon_hours=args.hours, entry_price=args.entry, stop_price=args.stop,
@@ -176,6 +178,39 @@ def cmd_analyze(args: argparse.Namespace, settings: Settings) -> int:
             print(json.dumps(report.to_dict(), indent=1, default=str))
         else:
             print(render_text(report))
+    return 0
+
+
+def cmd_replay(args: argparse.Namespace, settings: Settings) -> int:
+    from nightwatch.journal.journal import Journal
+    from nightwatch.journal.replay import replay_ticker
+    from nightwatch.pipeline.analyze import AnalysisContext
+
+    with Store(settings.db_path) as store:
+        entries = _entries_from_store(store, settings)
+        journal = Journal(store)
+        ctx = AnalysisContext(store=store, entries=entries, journal=journal)
+        total = 0
+        for t in args.tickers:
+            n = replay_ticker(ctx, journal, t.upper(), lookback_days=args.lookback_days, max_points=args.max_points, horizon=args.horizon, side=args.side)
+            print(f"{t.upper()}: {n} replay forecasts recorded")
+            total += n
+        matured = journal.mature(spot_symbol_for={e.ticker: e.spot_symbol for e in entries})
+        print(f"matured {matured} forecasts")
+    return 0
+
+
+def cmd_calibration(args: argparse.Namespace, settings: Settings) -> int:
+    from nightwatch.journal.calibration import calibrate, render_calibration
+    from nightwatch.journal.journal import Journal
+
+    with Store(settings.db_path) as store:
+        entries = _entries_from_store(store, settings)
+        journal = Journal(store)
+        matured = journal.mature(spot_symbol_for={e.ticker: e.spot_symbol for e in entries})
+        df = journal.forecasts(ticker=args.ticker.upper() if args.ticker else None, kind=args.kind, matured_only=True)
+        print(f"(matured {matured} new forecasts)")
+        print(render_calibration(calibrate(df)))
     return 0
 
 
@@ -254,6 +289,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--offline", action="store_true", help="use stored instruments/books only, no network")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_analyze)
+
+    sp = sub.add_parser("replay", help="record point-in-time forecasts over stored history and mature them")
+    sp.add_argument("--tickers", nargs="+", required=True)
+    sp.add_argument("--lookback-days", type=int, default=180)
+    sp.add_argument("--max-points", type=int, default=150)
+    sp.add_argument("--horizon", default="next_open")
+    sp.add_argument("--side", choices=["long", "short"], default="long")
+    sp.set_defaults(func=cmd_replay)
+
+    sp = sub.add_parser("calibration", help="score matured forecasts against realised outcomes")
+    sp.add_argument("--ticker")
+    sp.add_argument("--kind", choices=["ticket", "replay"])
+    sp.set_defaults(func=cmd_calibration)
     return p
 
 

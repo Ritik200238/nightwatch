@@ -36,11 +36,14 @@ def test_bars_roundtrip_and_upsert_keeps_earliest_observed(tmp_path):
         assert s.bar_coverage(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1) == (T0, T0 + timedelta(hours=1), 2)
 
 
-def test_point_in_time_read_excludes_later_observations(tmp_path):
+def test_point_in_time_read_excludes_bars_not_yet_closed(tmp_path):
     with Store(tmp_path / "t.sqlite") as s:
-        s.upsert_bars([bar(0, T0 + timedelta(days=1)), bar(1, T0 + timedelta(days=3))])
-        df = s.get_bars(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1, as_of=T0 + timedelta(days=2))
+        s.upsert_bars([bar(0, T0), bar(1, T0), bar(2, T0)])  # bars 00:00, 01:00, 02:00
+        # At 01:30 only the 00:00 bar has closed (01:00 bar closes at 02:00).
+        df = s.get_bars(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1, as_of=T0 + timedelta(hours=1, minutes=30))
         assert len(df) == 1 and df.index[0].to_pydatetime() == T0
+        # Exactly at 02:00 the 01:00 bar is closed and included.
+        assert len(s.get_bars(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1, as_of=T0 + timedelta(hours=2))) == 2
 
 
 def test_bar_range_filters_and_kind_isolation(tmp_path):

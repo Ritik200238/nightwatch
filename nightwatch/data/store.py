@@ -179,7 +179,13 @@ class Store:
         kind: PriceKind = PriceKind.TRADE,
         as_of: datetime | None = None,
     ) -> pd.DataFrame:
-        """Bars as a DataFrame indexed by UTC ``ts`` (ascending). Empty frame if none."""
+        """Bars as a DataFrame indexed by UTC ``ts`` (ascending). Empty frame if none.
+
+        ``as_of`` keeps only bars that had *closed* by that instant (``ts + interval <=
+        as_of``). Price bars are public the moment they close, so that — not the time we
+        happened to download them — is the honest point-in-time boundary. (Revisable
+        data such as earnings estimates and news use ``observed_at`` instead.)
+        """
         sql = "SELECT ts, open, high, low, close, volume_base, volume_quote, observed_at FROM bars WHERE venue=? AND symbol=? AND interval=? AND kind=?"
         args: list[object] = [venue.value, symbol, interval.value, kind.value]
         if start is not None:
@@ -189,8 +195,8 @@ class Store:
             sql += " AND ts < ?"
             args.append(to_epoch_ms(end))
         if as_of is not None:
-            sql += " AND observed_at <= ?"
-            args.append(to_epoch_ms(as_of))
+            sql += " AND ts + ? <= ?"
+            args.extend([interval.seconds * 1000, to_epoch_ms(as_of)])
         sql += " ORDER BY ts"
         df = pd.read_sql_query(sql, self._conn, params=args)
         if df.empty:

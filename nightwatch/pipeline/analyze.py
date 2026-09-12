@@ -64,6 +64,7 @@ class AnalysisContext:
     gate_policy: GatePolicy = field(default_factory=GatePolicy)
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
     pooled_tickers: tuple[str, ...] | None = None  # None = all entries with data
+    journal: Any = None  # nightwatch.journal.journal.Journal, optional
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
 
@@ -153,6 +154,7 @@ class AnalysisReport:
     sources: list[dict[str, Any]]
     warnings: list[str]
     timings_ms: dict[str, int]
+    forecast_id: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -161,7 +163,7 @@ class AnalysisReport:
 # --------------------------------------------------------------------- analyse
 
 
-def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None = None) -> AnalysisReport:
+def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None = None, record: bool = True) -> AnalysisReport:
     t_start = time.perf_counter()
     timings: dict[str, int] = {}
     warnings: list[str] = []
@@ -216,7 +218,9 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             entry_price=entry_price, equity=ticket.account_equity_quote, analog_p5_loss_pct=p5,
             quality_flags=tuple(snapshot.quality_flags), regime_label=snapshot.labels.get("regime_label", "unknown"),
             risk_multiplier=float(snapshot.features.get("risk_multiplier") or _regime_multiplier(frame)),
-            exit_cost_bps=exit_bps, exit_fully_filled=fully, recent_losing_exits=(), now=as_of,
+            exit_cost_bps=exit_bps, exit_fully_filled=fully,
+            recent_losing_exits=(ctx.journal.recent_losing_exits(since=as_of - timedelta(hours=ctx.gate_policy.revenge_cooldown_h)) if ctx.journal is not None else ()),
+            now=as_of,
         ),
         ctx.gate_policy,
     )
@@ -240,9 +244,33 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     timings["decision"] = _ms(t0)
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
 
-    return AnalysisReport(
+    report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
         stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sources=sources, warnings=warnings, timings_ms=timings,
+    )
+    if ctx.journal is not None and record:
+        try:
+            report.forecast_id = _record(ctx, report)
+        except Exception:  # noqa: BLE001 - journaling must never break an analysis
+            log.exception("failed to journal the forecast")
+    return report
+
+
+def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
+    stats = r.analog.horizons[r.primary_horizon].cohort if (r.analog and r.primary_horizon in r.analog.horizons) else None
+    sign = 1.0 if r.ticket.side.value == "long" else -1.0
+    quantiles: dict[str, float | None] = {k: None for k in ("p5", "p25", "p50", "p75", "p95")}
+    if stats is not None and not stats.insufficient:
+        qs = sorted(sign * q for q in (stats.p5, stats.p25, stats.median_pct, stats.p75, stats.p95))
+        quantiles = dict(zip(("p5", "p25", "p50", "p75", "p95"), qs, strict=True))
+    mc = r.stress.monte_carlo
+    return ctx.journal.record_forecast(
+        kind="ticket", ticker=r.ticket.ticker, side=r.ticket.side.value, notional=r.ticket.notional_quote, as_of=r.as_of, bar_ts=r.snapshot.bar_ts,
+        horizon_h=r.horizon_h, entry_price=r.ticket.entry_price or r.snapshot.prices["spot_close"] or 0.0, snapshot_hash=r.snapshot.content_hash,
+        analog_n=r.analog.result.n if r.analog else 0, analog_scope=r.analog.scope if r.analog else None, quantiles=quantiles,
+        es5=(mc.expected_shortfall_5_pct if mc else None), mc_p5=(mc.p5 if mc else None), mc_p95=(mc.p95 if mc else None),
+        verdict=r.verdict.verdict.value, recommended_notional=r.verdict.recommended_notional,
+        payload={"gate": r.gate.decision.value, "reasons": r.verdict.reasons, "labels": r.snapshot.labels, "flags": r.snapshot.quality_flags, "sources": r.sources},
     )
 
 
