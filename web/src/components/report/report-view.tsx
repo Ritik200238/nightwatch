@@ -1,9 +1,11 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
+import { useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
 import { Pill, Section, Stat } from "@/components/report/primitives";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Report } from "@/lib/api";
 import { fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
@@ -254,7 +256,76 @@ function AnalogSection({ report }: { report: Report }) {
           </TableBody>
         </Table>
       </div>
+      <ClosestMoments report={report} />
     </Section>
+  );
+}
+
+/** The retrieved scenarios themselves: when they were, why they matched, what followed. */
+function ClosestMoments({ report }: { report: Report }) {
+  const a = report.analog;
+  const [open, setOpen] = useState(false);
+  if (!a || !a.result.ok || a.result.matches.length === 0) return null;
+  const byTs = new Map(a.matches_outcomes.map((m) => [m.ts, m]));
+  const shown = open ? a.result.matches : a.result.matches.slice(0, 6);
+  const f = (v: number | undefined, digits = 2) => (v == null || Number.isNaN(v) ? "—" : v.toFixed(digits));
+  return (
+    <div className="mt-4">
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <p className="text-xs font-medium text-muted-foreground">
+          The moments themselves · matched on {a.result.features_used.length} features{a.result.features_dropped.length ? `, ${a.result.features_dropped.length} dropped as constant` : ""}
+        </p>
+        <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
+          {open ? "Show fewer" : `Show all ${a.result.matches.length}`}
+        </Button>
+      </div>
+      <div className="overflow-x-auto">
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>When</TableHead>
+              <TableHead>Session</TableHead>
+              <TableHead className="text-right">Similarity</TableHead>
+              <TableHead className="text-right">Vol pctl</TableHead>
+              <TableHead className="text-right">Basis z</TableHead>
+              <TableHead className="text-right">Trend</TableHead>
+              <TableHead className="text-right">To earnings</TableHead>
+              <TableHead className="text-right">What followed</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {shown.map((m) => {
+              const o = byTs.get(m.ts)?.outcomes[report.primary_horizon];
+              const hte = m.features.hours_to_earnings;
+              return (
+                <TableRow key={`${m.ticker}-${m.ts}`}>
+                  <TableCell className="whitespace-nowrap">
+                    {fmtTime(m.ts)}
+                    {m.ticker !== report.ticket.ticker ? <span className="block text-xs text-muted-foreground">{m.ticker}</span> : null}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{titleCase(m.bucket.replace(/_/g, " "))}</TableCell>
+                  <TableCell className="tabular text-right">{fmtRatio(m.similarity)}</TableCell>
+                  <TableCell className="tabular text-right">{f(m.features.vol_pctl_90d, 0)}</TableCell>
+                  <TableCell className="tabular text-right">{f(m.features.basis_index_z)}</TableCell>
+                  <TableCell className="tabular text-right">{fmtPct(m.features.trend_sma_pct, 1)}</TableCell>
+                  <TableCell className="tabular text-right">{hte == null ? "—" : hte >= 720 ? "> 30 d" : `${hte.toFixed(0)} h`}</TableCell>
+                  <TableCell className="tabular text-right">
+                    {o?.status === "MATURED" ? (
+                      <>
+                        <span className={o.ret_pct != null && o.ret_pct < 0 ? "text-status-critical" : "text-status-good"}>{fmtPct(o.ret_pct)}</span>
+                        <span className="block text-xs text-muted-foreground">worst {fmtPct(o.mae_pct)}</span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">still open</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
 
