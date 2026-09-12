@@ -76,7 +76,7 @@ All figures **observed** on the build as of 2026-09-12 unless labelled otherwise
 
 * Data: 24 tokenized stocks with hourly bars from January 2025 (891,800 bars across
   spot, perpetual trade/index/mark and native), order-book snapshots recorded every 60
-  seconds since <date recorder started> (<N> snapshots), earnings and FOMC calendars,
+  seconds since 2026-09-12 08:09 UTC (3,600 snapshots across 48 books at the time of writing), earnings and FOMC calendars,
   headline feeds.
 * Forecast calibration, historical replay of 1,080 closed-market windows across 11
   tokens, scored against realised outcomes:
@@ -85,8 +85,13 @@ All figures **observed** on the build as of 2026-09-12 unless labelled otherwise
   * With tail factors fitted only on forecasts that had matured earlier (expanding
     window, out of sample, 1,048 forecasts): 6.5% / 5.7% / 87.8%. Tail test: amber.
   * Median absolute error of the median forecast: 1.64 percentage points.
-* Analog retrieval beats random same-time-of-week hours on mean outcome in <X> of <Y>
-  ticker-horizon pairs at p < 0.05 (**to be measured before submission**).
+* Analog cohort vs random same-time-of-week hours, one live ticket per token (22 tokens,
+  5 horizons, 110 pairs): the cohort mean differs from random at p < 0.05 in 9 pairs,
+  close to what chance alone gives. The cohort's 5th percentile sits below random's in
+  62 of 110 pairs. Read plainly: on this test the analogs do not predict a better
+  average outcome; their value is in the conditional tail, which is what the verdict
+  sizes against. A replay-wide comparison of forecast quality (analog vs baseline,
+  scored on the same 1,080 windows) is <in progress / observed: ...>.
 * Exit cost: a 20,000 USDT RTSLAUSDT exit costs 25 bps on the recorded book (15 bps
   walk + 10 bps fee); the largest size that exits inside a 25 bps budget is ~16,800 USDT.
 * Basis vs index is 2.5 times wider when the US market is closed than during regular
