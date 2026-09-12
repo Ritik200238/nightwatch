@@ -449,8 +449,9 @@ def _serialise(obj: Any) -> Any:
         return obj.isoformat()
     if isinstance(obj, np.ndarray):
         return [None if (isinstance(x, float) and np.isnan(x)) else float(x) for x in obj.tolist()]
-    if isinstance(obj, np.floating | np.integer):
-        return obj.item()
+    if isinstance(obj, np.generic):  # numpy bool/int/float scalars
+        v = obj.item()
+        return None if isinstance(v, float) and np.isnan(v) else v
     if isinstance(obj, float) and np.isnan(obj):
         return None
     if isinstance(obj, dict):
