@@ -207,6 +207,8 @@ def cmd_replay(args: argparse.Namespace, settings: Settings) -> int:
         ctx = AnalysisContext(store=store, entries=entries, journal=journal)
         total = 0
         for t in args.tickers:
+            if args.reset:
+                print(f"{t.upper()}: removed {journal.delete_replays(t.upper())} earlier replay forecasts")
             n = replay_ticker(ctx, journal, t.upper(), lookback_days=args.lookback_days, max_points=args.max_points, horizon=args.horizon, side=args.side)
             print(f"{t.upper()}: {n} replay forecasts recorded")
             total += n
@@ -226,6 +228,10 @@ def cmd_calibration(args: argparse.Namespace, settings: Settings) -> int:
         df = journal.forecasts(ticker=args.ticker.upper() if args.ticker else None, kind=args.kind, matured_only=True)
         print(f"(matured {matured} new forecasts)")
         print(render_calibration(calibrate(df)))
+        from nightwatch.journal.skill import compare_skill, render_skill
+
+        print()
+        print(render_skill(compare_skill(df)))
         from nightwatch.journal.adjust import evaluate_expanding
 
         ev = evaluate_expanding(df) if not df.empty else None
@@ -323,6 +329,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--max-points", type=int, default=150)
     sp.add_argument("--horizon", default="next_open")
     sp.add_argument("--side", choices=["long", "short"], default="long")
+    sp.add_argument("--reset", action="store_true", help="delete earlier replay forecasts for these tickers first")
     sp.set_defaults(func=cmd_replay)
 
     sp = sub.add_parser("calibration", help="score matured forecasts against realised outcomes")

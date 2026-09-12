@@ -194,8 +194,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         from nightwatch.journal.adjust import evaluate_expanding
 
+        from nightwatch.journal.skill import compare_skill
+
         adjusted = evaluate_expanding(df) if not df.empty else None
-        return {"matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None}
+        skill = compare_skill(df) if not df.empty else None
+        return {"matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None, "skill": asdict(skill) if skill else None}
 
     @app.get("/forecasts")
     def forecasts(ticker: str | None = None, kind: str | None = None, limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:

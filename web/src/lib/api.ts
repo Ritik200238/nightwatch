@@ -117,6 +117,33 @@ export interface AdjustedEvaluation {
   adj_lo_ci: [number, number];
 }
 
+export interface QuantileSkill {
+  quantile: string;
+  tau: number;
+  loss_analog: number;
+  loss_baseline: number;
+  skill: number;
+  diff_ci_low: number;
+  diff_ci_high: number;
+  win_share: number;
+}
+
+export interface SkillReport {
+  n: number;
+  per_quantile: QuantileSkill[];
+  mean_loss_analog: number | null;
+  mean_loss_baseline: number | null;
+  skill: number | null;
+  diff_ci_low: number | null;
+  diff_ci_high: number | null;
+  win_share: number | null;
+  baseline_lo_coverage: number | null;
+  baseline_hi_coverage: number | null;
+  analog_lo_coverage: number | null;
+  analog_hi_coverage: number | null;
+  by_ticker: Record<string, number>;
+}
+
 export interface AnalogMatch {
   ts: string;
   ticker: string;
@@ -318,6 +345,7 @@ export interface CalibrationReport {
   mean_abs_error_p50: number | null;
   by_ticker: Record<string, number>;
   adjusted: AdjustedEvaluation | null;
+  skill: SkillReport | null;
 }
 
 export class ApiError extends Error {

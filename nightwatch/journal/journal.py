@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS forecasts (
     analog_n INTEGER,
     analog_scope TEXT,
     p5 REAL, p25 REAL, p50 REAL, p75 REAL, p95 REAL,
+    base_p5 REAL, base_p25 REAL, base_p50 REAL, base_p75 REAL, base_p95 REAL,  -- random same-bucket baseline
     es5 REAL,
     mc_p5 REAL, mc_p95 REAL,
     verdict TEXT,
@@ -103,11 +104,33 @@ class ForecastRow:
     recommended_notional: float | None
 
 
+BASELINE_COLUMNS = ("base_p5", "base_p25", "base_p50", "base_p75", "base_p95")
+
+
 class Journal:
     def __init__(self, store: Store):
         self.store = store
         self._conn = store._conn
         self._conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a database was created. Additive only."""
+        have = {r[1] for r in self._conn.execute("PRAGMA table_info(forecasts)").fetchall()}
+        with self._conn:
+            for col in BASELINE_COLUMNS:
+                if col not in have:
+                    self._conn.execute(f"ALTER TABLE forecasts ADD COLUMN {col} REAL")
+
+    def delete_replays(self, ticker: str | None = None) -> int:
+        """Remove replay forecasts (and their outcomes). Replays are reproducible from
+        stored bars, so this is the one deletion the journal allows; live tickets stay."""
+        where = "kind='replay'" + (" AND ticker=?" if ticker else "")
+        args = (ticker,) if ticker else ()
+        with self._conn:
+            self._conn.execute(f"DELETE FROM forecast_outcomes WHERE forecast_id IN (SELECT id FROM forecasts WHERE {where})", args)
+            cur = self._conn.execute(f"DELETE FROM forecasts WHERE {where}", args)
+        return int(cur.rowcount)
 
     # ------------------------------------------------------------------ writes
 
@@ -132,18 +155,22 @@ class Journal:
         verdict: str | None,
         recommended_notional: float | None,
         payload: dict,
+        baseline_quantiles: dict[str, float | None] | None = None,
     ) -> int:
         as_of = ensure_utc(as_of)
         horizon_end = as_of + timedelta(hours=horizon_h)
+        b = baseline_quantiles or {}
         with self._conn:
             cur = self._conn.execute(
                 """INSERT INTO forecasts (created_at, kind, ticker, side, notional, as_of, bar_ts, horizon_h, horizon_end, entry_price,
-                   snapshot_hash, analog_n, analog_scope, p5, p25, p50, p75, p95, es5, mc_p5, mc_p95, verdict, recommended_notional, payload)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   snapshot_hash, analog_n, analog_scope, p5, p25, p50, p75, p95, es5, mc_p5, mc_p95, verdict, recommended_notional, payload,
+                   base_p5, base_p25, base_p50, base_p75, base_p95)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     to_epoch_ms(utc_now()), kind, ticker, side, notional, to_epoch_ms(as_of), to_epoch_ms(bar_ts), horizon_h, to_epoch_ms(horizon_end), entry_price,
                     snapshot_hash, analog_n, analog_scope, quantiles.get("p5"), quantiles.get("p25"), quantiles.get("p50"), quantiles.get("p75"), quantiles.get("p95"),
                     es5, mc_p5, mc_p95, verdict, recommended_notional, json.dumps(payload, default=str, separators=(",", ":")),
+                    b.get("p5"), b.get("p25"), b.get("p50"), b.get("p75"), b.get("p95"),
                 ),
             )
         return int(cur.lastrowid)

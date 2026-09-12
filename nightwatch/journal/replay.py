@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from nightwatch.analog.cohort import summarize
+from nightwatch.analog.cohort import sample_baseline_times, summarize
 from nightwatch.analog.engine import AnalogEngine
 from nightwatch.analog.outcomes import compute_match_outcomes, outcomes_table, structural_horizons
 from nightwatch.features.snapshot import InsufficientData, build_snapshot
@@ -121,11 +121,34 @@ def replay_ticker(
                 qs = sorted(sign * q for q in qs)
                 quantiles = dict(zip(("p5", "p25", "p50", "p75", "p95"), qs, strict=True))
                 es5 = None
+        # Same-bucket random baseline from history strictly before the point, so the
+        # journal can later say whether the analogs carried any information at all.
+        base_q: dict[str, float | None] = {k: None for k in ("p5", "p25", "p50", "p75", "p95")}
+        try:
+            cut = hist.index <= pd.Timestamp(snap.bar_ts) - pd.Timedelta(hours=ctx.analog_config.min_age_h)
+            same_bucket = (hist["bucket"] == snap.labels.get("bucket"))[cut]
+            closed_mask = hist["is_closed"].astype(bool)[cut]
+            exclude = pd.DatetimeIndex([m.ts for m in res.matches if m.ticker == ticker]) if res.ok else None
+            base_ts = sample_baseline_times(hist.index[cut], n=120, bucket_mask=same_bucket, fallback_mask=closed_mask, exclude=exclude, min_separation_h=ctx.analog_config.min_separation_h)
+            base_outs = []
+            for t in base_ts:
+                try:
+                    base_outs.append(compute_match_outcomes(frame, t.to_pydatetime(), fixed_h=(ticket_h,)))
+                except (KeyError, ValueError):
+                    continue
+            bstats = summarize(outcomes_table(base_outs, f"{ticket_h}h"), min_sample=ctx.analog_config.min_matches)
+            if not bstats.insufficient:
+                sign = 1.0 if side == "long" else -1.0
+                bq = sorted(sign * q for q in (bstats.p5, bstats.p25, bstats.median_pct, bstats.p75, bstats.p95))
+                base_q = dict(zip(("p5", "p25", "p50", "p75", "p95"), bq, strict=True))
+        except Exception:  # noqa: BLE001
+            log.exception("replay %s @%s: baseline failed", ticker, at)
         entry = snap.prices["spot_close"] or 0.0
         journal.record_forecast(
             kind="replay", ticker=ticker, side=side, notional=10_000.0, as_of=at, bar_ts=snap.bar_ts, horizon_h=float(ticket_h), entry_price=float(entry),
             snapshot_hash=snap.content_hash, analog_n=res.n if res.ok else 0, analog_scope=scope, quantiles=quantiles, es5=es5, mc_p5=None, mc_p95=None,
             verdict=None, recommended_notional=None, payload={"labels": snap.labels, "quality_flags": snap.quality_flags, "reason": res.reason},
+            baseline_quantiles=base_q,
         )
         recorded += 1
         if i % 25 == 0:
