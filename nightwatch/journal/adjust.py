@@ -70,6 +70,15 @@ def _solve(target: float, f, p50, q, r) -> float:  # noqa: ANN001
     return (lo + hi) / 2
 
 
+def _fit_arrays(p5: np.ndarray, p50: np.ndarray, p95: np.ndarray, r: np.ndarray, *, through: datetime | None = None, scope: str = "pooled", target: float = 0.05) -> TailFactors | None:
+    if len(r) < MIN_FIT_N:
+        return None
+    return TailFactors(
+        k_lo=float(_solve(target, _coverage_lo, p50, p5, r)), k_hi=float(_solve(target, _coverage_hi, p50, p95, r)),
+        n_fit=int(len(r)), fitted_through=through, scope=scope,
+    )
+
+
 def fit_factors(forecasts: pd.DataFrame, *, scope: str = "pooled", target: float = 0.05) -> TailFactors | None:
     """``forecasts`` = matured rows with p5/p50/p95 and ret_pct."""
     df = forecasts.dropna(subset=["p5", "p50", "p95", "ret_pct"])
@@ -110,9 +119,15 @@ class AdjustedEvaluation:
     adj_lo_ci: tuple[float, float]
 
 
-def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N) -> AdjustedEvaluation | None:
+def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit_every: int = 25) -> AdjustedEvaluation | None:
     """Point-in-time evaluation: each forecast is scored with factors fitted only on
-    forecasts that had matured before its ``as_of``."""
+    forecasts that had matured before its ``as_of``.
+
+    ``refit_every`` is how many newly matured forecasts must arrive before the factors
+    are re-solved. It is a production choice as much as a speed one: refitting on every
+    single new observation would chase noise. The factors in force are always fitted on
+    strictly earlier data, so the evaluation stays out of sample either way.
+    """
     df = forecasts.dropna(subset=["p5", "p50", "p95", "ret_pct"]).copy()
     if df.empty:
         return None
@@ -120,20 +135,28 @@ def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N) -
     df["horizon_end"] = pd.to_datetime(df["horizon_end"], utc=True)
     df = df.sort_values("as_of").reset_index(drop=True)
 
+    # Sorted by the moment the outcome became knowable, so "what had matured by then"
+    # is a prefix of these arrays and costs a binary search, not a scan.
+    order = np.argsort(df["horizon_end"].to_numpy(), kind="stable")
+    ends_sorted = df["horizon_end"].to_numpy()[order]
+    p5_h, p50_h, p95_h, r_h = (df[c].to_numpy(float)[order] for c in ("p5", "p50", "p95", "ret_pct"))
+    as_ofs = df["as_of"].to_numpy()
+    p5_a, p50_a, p95_a, r_a = (df[c].to_numpy(float) for c in ("p5", "p50", "p95", "ret_pct"))
+
     rows = []
     last: TailFactors | None = None
+    fitted_at = -1  # prior-sample size the current factors were fitted on
     for i in range(len(df)):
-        as_of = df.at[i, "as_of"]
-        prior = df[df["horizon_end"] < as_of]
-        if len(prior) < min_fit_n:
+        k = int(np.searchsorted(ends_sorted, as_ofs[i], side="left"))
+        if k < min_fit_n:
             continue
-        f = fit_factors(prior)
-        if f is None:
+        if last is None or k - fitted_at >= refit_every:
+            last = _fit_arrays(p5_h[:k], p50_h[:k], p95_h[:k], r_h[:k], through=pd.Timestamp(ends_sorted[k - 1]).to_pydatetime())
+            fitted_at = k
+        if last is None:
             continue
-        last = f
-        p5, p50, p95, r = (float(df.at[i, c]) for c in ("p5", "p50", "p95", "ret_pct"))
-        a5, a95 = apply_factors(p5, p50, p95, f)
-        rows.append({"r": r, "p5": p5, "p95": p95, "a5": a5, "a95": a95})
+        a5, a95 = apply_factors(p5_a[i], p50_a[i], p95_a[i], last)
+        rows.append({"r": r_a[i], "p5": p5_a[i], "p95": p95_a[i], "a5": a5, "a95": a95})
     if not rows:
         return None
     e = pd.DataFrame(rows)

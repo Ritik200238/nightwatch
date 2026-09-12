@@ -36,6 +36,7 @@ from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import UTC, utc_now
 
 log = logging.getLogger(__name__)
+CALIBRATION_TTL_SEC = 120
 
 
 class TicketIn(BaseModel):
@@ -87,6 +88,8 @@ class AppState:
             perp_client=BitgetPublicClient(Venue.BITGET_UMCBL, rate_per_sec=4) if live else None,
         )
         self.lock = threading.Lock()  # serialises analyses that share the frame cache
+        # Scoring the whole journal takes seconds; it only changes when forecasts mature.
+        self.calibration_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
         self.warm_thread: threading.Thread | None = None
         self.warm_status: dict[str, Any] = {"state": "idle", "done": 0, "total": 0}
 
@@ -189,6 +192,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     @app.get("/calibration")
     def calibration(ticker: str | None = None, kind: str | None = None) -> dict[str, Any]:
         s = st()
+        key = (ticker or "", kind or "")
+        cached = s.calibration_cache.get(key)
+        if cached and (utc_now() - cached[0]).total_seconds() < CALIBRATION_TTL_SEC:
+            return cached[1]
         with s.lock:
             matured = s.journal.mature(spot_symbol_for={e.ticker: e.spot_symbol for e in s.entries})
             df = s.journal.forecasts(ticker=ticker.upper() if ticker else None, kind=kind, matured_only=True)
@@ -200,7 +207,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         adjusted = evaluate_expanding(df) if not df.empty else None
         skill = compare_skill(df) if not df.empty else None
-        return {"matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None, "skill": asdict(skill) if skill else None}
+        out = {"matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None, "skill": asdict(skill) if skill else None}
+        if matured:
+            s.calibration_cache.clear()  # new outcomes invalidate every view
+        s.calibration_cache[key] = (utc_now(), out)
+        return out
 
     @app.get("/forecasts")
     def forecasts(ticker: str | None = None, kind: str | None = None, limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:
