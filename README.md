@@ -29,6 +29,10 @@ the tail adjustment fitted on earlier forecasts does to later ones.
 
 ![Calibration page](docs/img/calibration.png)
 
+Every call it has made, and how each one turned out:
+
+![Journal page](docs/img/journal.png)
+
 ## Run it
 
 Python 3.11+ and Node 22+. Everything below works without any API key; only the
