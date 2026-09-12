@@ -87,16 +87,23 @@ class YahooChartClient:
         cursor = start
         while cursor < end:
             chunk_end = min(end, cursor + chunk)
-            payload = self._http.get_json(
-                f"/v8/finance/chart/{ticker}",
-                {
-                    "period1": int(cursor.timestamp()),
-                    "period2": int(chunk_end.timestamp()),
-                    "interval": _INTERVAL[interval],
-                    "includePrePost": "true" if include_pre_post else "false",
-                    "events": "div,splits",
-                },
-            )
+            params = {
+                "period1": int(cursor.timestamp()),
+                "period2": int(chunk_end.timestamp()),
+                "interval": _INTERVAL[interval],
+                "includePrePost": "true" if include_pre_post else "false",
+                "events": "div,splits",
+            }
+            try:
+                payload = self._http.get_json(f"/v8/finance/chart/{ticker}", params)
+            except UpstreamError as exc:
+                if exc.status == 400 and "Data doesn't exist" in str(exc):
+                    # The window is entirely before the listing date (recent IPOs such as
+                    # CRCL). Nothing to fetch here; later chunks may have data.
+                    log.info("yahoo %s: no data for %s -> %s (before listing)", ticker, cursor.date(), chunk_end.date())
+                    cursor = chunk_end
+                    continue
+                raise
             for bar in self._parse(payload, ticker, interval, observed):
                 if start <= bar.ts < end:
                     by_ts[int(bar.ts.timestamp())] = bar
