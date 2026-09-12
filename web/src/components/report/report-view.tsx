@@ -8,7 +8,7 @@ import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Report } from "@/lib/api";
-import { fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
+import { bucketLabel, fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
 
 const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
   GO: "good",
@@ -303,7 +303,7 @@ function ClosestMoments({ report }: { report: Report }) {
                     {fmtTime(m.ts)}
                     {m.ticker !== report.ticket.ticker ? <span className="block text-xs text-muted-foreground">{m.ticker}</span> : null}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{titleCase(m.bucket.replace(/_/g, " "))}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{bucketLabel(m.bucket)}</TableCell>
                   <TableCell className="tabular text-right">{fmtRatio(m.similarity)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.vol_pctl_90d, 0)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.basis_index_z)}</TableCell>

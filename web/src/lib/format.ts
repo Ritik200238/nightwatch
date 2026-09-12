@@ -57,3 +57,19 @@ export function fmtTime(iso: string | null | undefined): string {
 export function titleCase(s: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/** Hour-of-week buckets, as a person would say them. */
+const BUCKET_LABELS: Record<string, string> = {
+  us_regular: "US session",
+  us_pre: "US pre-market",
+  us_post: "US after-hours",
+  weeknight: "Weeknight",
+  friday_night: "Friday night",
+  weekend: "Weekend",
+  sunday_night: "Sunday night",
+  holiday: "US holiday",
+};
+
+export function bucketLabel(b: string): string {
+  return BUCKET_LABELS[b] ?? titleCase(b);
+}
