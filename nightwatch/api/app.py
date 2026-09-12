@@ -86,6 +86,7 @@ class AppState:
             store=self.store, entries=self.entries, journal=self.journal,
             spot_client=BitgetPublicClient(Venue.BITGET_SPOT, rate_per_sec=4) if live else None,
             perp_client=BitgetPublicClient(Venue.BITGET_UMCBL, rate_per_sec=4) if live else None,
+            frame_cache_size=settings.frame_cache_size,
         )
         self.lock = threading.Lock()  # serialises analyses that share the frame cache
         # Scoring the whole journal takes seconds; it only changes when forecasts mature.

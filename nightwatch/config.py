@@ -42,6 +42,9 @@ class Settings:
     recorder_interval_sec: int = field(default_factory=lambda: int(os.environ.get("NIGHTWATCH_RECORDER_INTERVAL", "60")))
     recorder_retention_days: int = field(default_factory=lambda: int(os.environ.get("NIGHTWATCH_RECORDER_RETENTION_DAYS", "120")))
     bitget_rate_per_sec: float = field(default_factory=lambda: float(os.environ.get("NIGHTWATCH_BITGET_RPS", "8")))
+    # Feature frames are a few MB each. On a small box, cap the cache at one frame per
+    # token rather than the default, which allows several hours of history per token.
+    frame_cache_size: int = field(default_factory=lambda: int(os.environ.get("NIGHTWATCH_FRAME_CACHE", "64")))
 
     @property
     def db_path(self) -> Path:
