@@ -45,6 +45,7 @@ export interface Health {
   last_book_ts: string | null;
   tickers_with_data: number;
   warm: { state: string; done: number; total: number };
+  chat_ready: boolean;
 }
 
 export interface GateRule {

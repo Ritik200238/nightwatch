@@ -49,3 +49,10 @@ def test_analyze_endpoint_json_and_text_and_journal(client):
 def test_calibration_endpoint_shape(client):
     r = client.get("/calibration").json()
     assert "coverage" in r and "tail" in r and r["tail"]["band"] in ("green", "amber", "red", "insufficient")
+
+
+def test_chat_without_credentials_explains_itself(client, monkeypatch):
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
+    r = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20k TSLA"}]})
+    assert r.status_code == 503 and "ticket form" in r.json()["detail"]
+    assert client.get("/health").json()["chat_ready"] in (True, False)

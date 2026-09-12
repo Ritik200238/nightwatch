@@ -56,6 +56,14 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic()
 
 
+def credentials_present() -> bool:
+    """True when the SDK can find credentials (an API key or a logged-in profile)."""
+    try:
+        return _client().api_key is not None
+    except Exception:  # noqa: BLE001 - the SDK raises when nothing is configured
+        return False
+
+
 def _parse_system(tickers: list[str], account_equity: float | None) -> str:
     now = utc_now()
     return (

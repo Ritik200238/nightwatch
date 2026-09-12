@@ -24,11 +24,24 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // null = not checked yet. The desk works without a model; only this tab needs one.
+  const [ready, setReady] = useState<boolean | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .health()
+      .then((h) => !cancelled && setReady(h.chat_ready))
+      .catch(() => !cancelled && setReady(null));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function send(text: string) {
     const content = text.trim();
@@ -57,13 +70,19 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
   return (
     <div className="flex h-full min-h-[320px] flex-col">
       <div className="flex-1 space-y-3 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label="Conversation">
+        {ready === false ? (
+          <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-sm">
+            <p className="font-medium">Plain-language entry is switched off</p>
+            <p className="text-xs text-muted-foreground">This server has no Anthropic API key, so trade ideas cannot be parsed from free text. The ticket form on the other tab runs exactly the same analysis.</p>
+          </div>
+        ) : null}
         {messages.length === 0 ? (
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">Describe the trade in plain words. I will ask for anything missing, run the numbers, and explain them.</p>
             <ul className="space-y-2">
               {STARTERS.map((s) => (
                 <li key={s}>
-                  <button type="button" onClick={() => void send(s)} disabled={busy} className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50">
+                  <button type="button" onClick={() => void send(s)} disabled={busy || ready === false} className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50">
                     {s}
                   </button>
                 </li>
@@ -113,11 +132,11 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
               void send(draft);
             }
           }}
-          placeholder="e.g. hold 20k of TSLA through the weekend, stop at 350"
-          disabled={busy}
+          placeholder={ready === false ? "Use the ticket form: this server has no model key" : "e.g. hold 20k of TSLA through the weekend, stop at 350"}
+          disabled={busy || ready === false}
           className="min-h-[44px] resize-none"
         />
-        <Button type="submit" disabled={busy || !draft.trim()} className="h-11">
+        <Button type="submit" disabled={busy || ready === false || !draft.trim()} className="h-11">
           Send
         </Button>
       </form>

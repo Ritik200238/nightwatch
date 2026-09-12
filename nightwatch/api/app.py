@@ -132,14 +132,16 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     @app.get("/health")
     def health() -> dict[str, Any]:
+        from nightwatch.api.llm import credentials_present
         s = st()
         c = s.store._conn
         bars = c.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
         ob = c.execute("SELECT COUNT(*), MAX(ts) FROM orderbook_snapshots").fetchone()
         last_book = datetime.fromtimestamp(ob[1] / 1000, tz=UTC).isoformat() if ob[1] else None
+        chat_ready = credentials_present()
         return {
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": ob[0], "last_book_ts": last_book,
-            "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status,
+            "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": chat_ready,
         }
 
     @app.get("/universe")
@@ -215,13 +217,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     @app.post("/chat")
     def chat(body: ChatIn) -> dict[str, Any]:
-        from nightwatch.api.llm import chat_turn
+        from nightwatch.api.llm import chat_turn, credentials_present
 
         s = st()
+        if not credentials_present():
+            # The desk is fully usable without a model; only this entry point needs one.
+            raise HTTPException(503, "The plain-language desk needs an Anthropic API key (set ANTHROPIC_API_KEY on the server). Everything else, including the ticket form, works without one.")
         try:
             return chat_turn(s, [m.model_dump() for m in body.messages], account_equity=body.account_equity_quote)
         except InsufficientData as exc:
             raise HTTPException(422, str(exc)) from exc
+        except RuntimeError as exc:  # missing or rejected credentials
+            raise HTTPException(503, str(exc)) from exc
 
     return app
 
