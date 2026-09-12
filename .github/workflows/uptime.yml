@@ -1,52 +1,18 @@
 # Free uptime monitor for the judging window.
 #
-# Runs every 15 minutes, checks that the desk loads, that the API answers, and that the
-# recorder is still writing. A failed run emails the repository owner, which is the point:
-# a demo that quietly dies between 22 September and 7 October is a lost submission.
+# Every 15 minutes: the desk loads, the API answers, the recorder is still writing, and an
+# analysis still returns a verdict. A failed run emails the repository owner, which is the
+# point: a demo that quietly dies between 22 September and 7 October is a lost submission.
 name: uptime
 
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *" # off the hour: scheduled runs bunch up at :00
+    - cron: "7,22,37,52 * * * *" # off the hour; scheduled runs bunch up at :00
   workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: The desk loads
-        run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://nightwatch-gules.vercel.app/)
-          echo "desk: $code"
-          test "$code" = "200"
-
-      - name: The API answers through the desk
-        run: |
-          body=$(curl -s --max-time 30 https://nightwatch-gules.vercel.app/api/health)
-          echo "$body" | head -c 400; echo
-          echo "$body" | python3 -c '
-import json, sys, datetime
-d = json.load(sys.stdin)
-assert d.get("ok"), "health reports not ok"
-assert d.get("bars", 0) > 500_000, f"only {d.get(\"bars\")} bars"
-assert d.get("tickers_with_data", 0) >= 20, f"only {d.get(\"tickers_with_data\")} tokens"
-# The recorder writes a book every minute; ten minutes of silence means it is stuck.
-last = d.get("last_book_ts")
-assert last, "no order-book snapshot recorded"
-age = (datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(last)).total_seconds()
-assert age < 600, f"last order book is {age/60:.0f} minutes old"
-print(f"ok: {d[\"bars\"]:,} bars, {d[\"tickers_with_data\"]} tokens, book {age/60:.1f} min old")
-'
-
-      - name: A verdict still comes back
-        run: |
-          out=$(curl -s --max-time 90 -X POST https://nightwatch-gules.vercel.app/api/analyze \
-            -H 'content-type: application/json' \
-            -d '{"ticker":"TSLA","side":"long","notional_quote":20000,"account_equity_quote":200000,"horizon_kind":"next_open","stop_price":350,"thesis":"uptime check","invalidation":"uptime check","record":false}')
-          echo "$out" | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-v = d["verdict"]["verdict"]
-assert v in ("GO", "REDUCE_TO", "HEDGE", "NO_GO", "REVIEW"), f"odd verdict {v}"
-print(f"verdict {v} in {d[\"timings_ms\"][\"total\"]} ms")
-'
+      - uses: actions/checkout@v4
+      - run: python3 deploy/uptime_check.py https://nightwatch-gules.vercel.app
