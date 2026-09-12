@@ -354,6 +354,38 @@ class BitgetPublicClient:
             observed_at=observed,
         )
 
+    def list_tickers(self) -> list[Ticker]:
+        """All tickers for the venue family in one request (used by the recorder)."""
+        observed = utc_now()
+        if self.is_perp:
+            rows = self._get("/api/v2/mix/market/tickers", {"productType": PRODUCT_TYPE})
+        else:
+            rows = self._get("/api/v2/spot/market/tickers")
+        out: list[Ticker] = []
+        for r in rows or []:
+            try:
+                out.append(
+                    Ticker(
+                        venue=self.venue,
+                        symbol=str(r["symbol"]),
+                        ts=from_epoch_ms(r["ts"]) if r.get("ts") else observed,
+                        last=_f(r.get("lastPr")),
+                        bid=_f(r.get("bidPr")),
+                        ask=_f(r.get("askPr")),
+                        bid_size=_f(r.get("bidSz")),
+                        ask_size=_f(r.get("askSz")),
+                        index_price=_f(r.get("indexPrice")),
+                        mark_price=_f(r.get("markPrice")),
+                        funding_rate=_f(r.get("fundingRate")),
+                        open_interest=_f(r.get("holdingAmount")),
+                        volume_24h_quote=_f(r.get("usdtVolume")) or _f(r.get("quoteVolume")),
+                        observed_at=observed,
+                    )
+                )
+            except (KeyError, ValueError) as exc:
+                log.warning("bitget ticker row skipped: %s (%s)", r, exc)
+        return out
+
     # ------------------------------------------------------------------- funding
 
     def get_current_funding(self, symbol: str) -> FundingRate:

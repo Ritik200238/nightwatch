@@ -1,0 +1,133 @@
+"""Universe resolution, backfill/refresh planning and the recorder loop, with fakes."""
+
+from datetime import datetime, timedelta, timezone
+
+from nightwatch.data.models import (
+    Bar,
+    Instrument,
+    InstrumentType,
+    Interval,
+    OrderBookLevel,
+    OrderBookSnapshot,
+    PriceKind,
+    Ticker,
+    Venue,
+)
+from nightwatch.data.store import Store
+from nightwatch.data.sync import UniverseEntry, backfill_bars, build_universe, refresh_bars
+from nightwatch.recorder.orderbook_recorder import OrderBookRecorder
+
+UTC = timezone.utc
+T0 = datetime(2026, 8, 1, tzinfo=UTC)
+
+
+def ins(venue, symbol, base, *, tokenized, status="online", underlying=None):
+    return Instrument(venue=venue, symbol=symbol, type=InstrumentType.SPOT if venue == Venue.BITGET_SPOT else InstrumentType.PERP,
+                      base=base, quote="USDT", underlying_ticker=underlying, is_tokenized_stock=tokenized, status=status, observed_at=T0)
+
+
+def test_build_universe_cross_references_perps_and_orders_core_first():
+    spot = [
+        ins(Venue.BITGET_SPOT, "RTSLAUSDT", "rTSLA", tokenized=True, underlying="TSLA"),
+        ins(Venue.BITGET_SPOT, "RAAPLUSDT", "rAAPL", tokenized=True, underlying="AAPL"),
+        ins(Venue.BITGET_SPOT, "RBRKBUSDT", "rBRKB", tokenized=True, underlying="BRKB"),
+        ins(Venue.BITGET_SPOT, "RDEADUSDT", "rDEAD", tokenized=True, underlying="DEAD", status="offline"),
+        ins(Venue.BITGET_SPOT, "BTCUSDT", "BTC", tokenized=False),
+    ]
+    perp = [
+        ins(Venue.BITGET_UMCBL, "TSLAUSDT", "TSLA", tokenized=True, underlying="TSLA", status="normal"),
+        ins(Venue.BITGET_UMCBL, "XAUUSDT", "XAU", tokenized=True, underlying="XAU", status="normal"),  # isRwa but not a stock
+        ins(Venue.BITGET_UMCBL, "AAPLUSDT", "AAPL", tokenized=True, underlying="AAPL", status="maintain"),
+    ]
+    u = build_universe(spot, perp, core=["aapl"])
+    assert [e.ticker for e in u] == ["AAPL", "BRKB", "TSLA"]
+    by = {e.ticker: e for e in u}
+    assert by["TSLA"].perp_symbol == "TSLAUSDT"
+    assert by["AAPL"].perp_symbol is None and by["AAPL"].is_core  # perp not tradeable -> excluded
+    assert by["BRKB"].yahoo_ticker == "BRK-B"
+
+
+class FakeBitget:
+    """Serves hourly bars from an in-memory 24/7 series and counts calls."""
+
+    def __init__(self, venue: Venue, first: datetime, last: datetime):
+        self.venue = venue
+        self.first, self.last = first, last
+        self.calls: list[tuple[datetime, datetime]] = []
+        self.recent_calls = 0
+
+    def get_bars(self, symbol, interval, start, end, *, kind=PriceKind.TRADE):
+        self.calls.append((start, end))
+        out = []
+        t = max(start, self.first)
+        while t < min(end, self.last + timedelta(hours=1)):
+            out.append(Bar(venue=self.venue, symbol=symbol, interval=interval, kind=kind, ts=t, open=1, high=1, low=1, close=1, observed_at=T0))
+            t += timedelta(hours=1)
+        return out
+
+    def get_recent_bars(self, symbol, interval, limit=1000, *, kind=PriceKind.TRADE):
+        self.recent_calls += 1
+        end = self.last + timedelta(hours=1)
+        return self.get_bars(symbol, interval, end - timedelta(hours=limit), end, kind=kind)
+
+
+def test_backfill_only_fetches_missing_ranges(tmp_path):
+    with Store(tmp_path / "t.sqlite") as s:
+        fake = FakeBitget(Venue.BITGET_SPOT, T0, T0 + timedelta(days=9, hours=23))
+        n1 = backfill_bars(s, fake, "RTSLAUSDT", Interval.H1, start=T0 + timedelta(days=3), end=T0 + timedelta(days=6), chunk=timedelta(days=2))
+        assert n1 == 72 and len(fake.calls) == 2  # 3 days in 2-day chunks
+        # Extend both sides: only [0,3) and [6,10) should be requested.
+        fake.calls.clear()
+        n2 = backfill_bars(s, fake, "RTSLAUSDT", Interval.H1, start=T0, end=T0 + timedelta(days=10), chunk=timedelta(days=10))
+        assert n2 == 72 + 96
+        assert fake.calls == [
+            (T0 + timedelta(days=6), T0 + timedelta(days=10)),
+            (T0, T0 + timedelta(days=3)),
+        ] or sorted(fake.calls) == sorted([(T0, T0 + timedelta(days=3)), (T0 + timedelta(days=6), T0 + timedelta(days=10))])
+        assert s.bar_coverage(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1)[2] == 240
+        # Nothing missing now -> no calls.
+        fake.calls.clear()
+        assert backfill_bars(s, fake, "RTSLAUSDT", Interval.H1, start=T0, end=T0 + timedelta(days=10)) == 0
+        assert fake.calls == []
+
+
+def test_refresh_uses_recent_endpoint_for_small_deltas(tmp_path, monkeypatch):
+    import nightwatch.data.sync as sync_mod
+
+    now = datetime(2026, 8, 5, 12, tzinfo=UTC)
+    monkeypatch.setattr(sync_mod, "utc_now", lambda: now)
+    with Store(tmp_path / "t.sqlite") as s:
+        fake = FakeBitget(Venue.BITGET_SPOT, T0, now - timedelta(hours=1))
+        backfill_bars(s, fake, "RTSLAUSDT", Interval.H1, start=T0, end=now - timedelta(hours=30))
+        added = refresh_bars(s, fake, "RTSLAUSDT", Interval.H1)
+        assert added > 0 and fake.recent_calls == 1
+        cov = s.bar_coverage(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1)
+        assert cov[1] == now - timedelta(hours=1)
+
+
+class FakeBookClient:
+    def __init__(self, venue):
+        self.venue = venue
+        self.fail_symbols = set()
+
+    def get_orderbook(self, symbol, depth=150):
+        if symbol in self.fail_symbols:
+            raise RuntimeError("boom")
+        return OrderBookSnapshot(venue=self.venue, symbol=symbol, ts=T0, observed_at=T0,
+                                 bids=(OrderBookLevel(price=99, size=1),), asks=(OrderBookLevel(price=101, size=1),))
+
+    def list_tickers(self):
+        return [Ticker(venue=self.venue, symbol="RTSLAUSDT" if self.venue == Venue.BITGET_SPOT else "TSLAUSDT", ts=T0, last=100, bid=99, ask=101, observed_at=T0),
+                Ticker(venue=self.venue, symbol="OTHER", ts=T0, last=1, bid=1, ask=1, observed_at=T0)]
+
+
+def test_recorder_tick_records_books_and_tickers_and_survives_errors(tmp_path):
+    with Store(tmp_path / "t.sqlite") as s:
+        spot, perp = FakeBookClient(Venue.BITGET_SPOT), FakeBookClient(Venue.BITGET_UMCBL)
+        perp.fail_symbols.add("TSLAUSDT")
+        entries = [UniverseEntry("TSLA", "RTSLAUSDT", "TSLAUSDT", "TSLA", True)]
+        rec = OrderBookRecorder(s, spot=spot, perp=perp, entries=entries, interval_sec=5, refresh_bars_every_sec=None)
+        rec.tick()
+        assert rec.stats.snapshots == 1 and rec.stats.errors == 1
+        assert rec.stats.ticker_rows == 2  # only wanted symbols, one per venue
+        assert s.latest_orderbook(Venue.BITGET_SPOT, "RTSLAUSDT") is not None

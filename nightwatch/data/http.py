@@ -166,6 +166,15 @@ class HttpClient:
         except ValueError as exc:
             raise UpstreamError(f"GET {path}: non-JSON body: {resp.text[:200]}") from exc
 
+    def get_bytes(self, path: str, params: Mapping[str, Any] | None = None) -> bytes:
+        resp = self.get(path, params)
+        if resp.status_code >= 400:
+            raise UpstreamError(
+                f"GET {path} -> HTTP {resp.status_code}: {resp.text[:200]}",
+                status=resp.status_code,
+            )
+        return resp.content
+
     def get_text(self, path: str, params: Mapping[str, Any] | None = None) -> str:
         resp = self.get(path, params)
         if resp.status_code >= 400:
