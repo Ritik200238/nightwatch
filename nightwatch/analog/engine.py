@@ -157,7 +157,7 @@ class AnalogEngine:
             Zw, zqw = Z * w, zq * w
 
         d = np.sqrt(np.sum((Zw - zqw) ** 2, axis=1))
-        scale = _distance_scale(Zw)
+        scale = _distance_scale(Zw, hist.index, cfg.min_separation_h)
 
         order = np.argsort(d, kind="stable")
         chosen: list[int] = []
@@ -236,13 +236,22 @@ def _whitener(Z: np.ndarray, shrinkage: float) -> np.ndarray:
     return vecs @ np.diag(1.0 / np.sqrt(vals)) @ vecs.T
 
 
-def _distance_scale(Zw: np.ndarray, sample: int = 2000, seed: int = 7) -> float:
-    """Typical nearest-neighbour distance inside the history (median over a sample)."""
+def _distance_scale(Zw: np.ndarray, index: pd.DatetimeIndex, min_separation_h: int, sample: int = 2000, seed: int = 7) -> float:
+    """Typical distance between *distinct episodes* in the history.
+
+    Consecutive hours are near-duplicates, so a naive nearest-neighbour distance is
+    tiny and would make every real match look dissimilar. We thin the history to one
+    row per ``min_separation_h`` before measuring, so the scale reflects how far apart
+    genuinely different situations sit."""
     n = Zw.shape[0]
     if n < 3:
         return 1.0
+    step = max(1, int(min_separation_h))
+    thinned = np.arange(0, n, step)
+    if thinned.size < 3:
+        thinned = np.arange(n)
     rng = np.random.default_rng(seed)
-    idx = rng.choice(n, size=min(sample, n), replace=False)
+    idx = rng.choice(thinned, size=min(sample, thinned.size), replace=False)
     S = Zw[idx]
     # Pairwise distances within the sample; ignore self (diagonal).
     sq = np.sum(S**2, axis=1)

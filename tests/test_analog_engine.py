@@ -43,7 +43,8 @@ def test_finds_planted_episodes_and_dedupes_neighbouring_hours():
     for t in planted:
         assert any(abs((m - t.to_pydatetime()).total_seconds()) <= 2 * 3600 for m in top3)
     assert res.matches[0].distance < res.matches[3].distance
-    assert 0 < res.matches[0].similarity <= 1.0
+    assert 0.5 < res.matches[0].similarity <= 1.0  # an exact planted match must score high
+    assert res.matches[0].similarity >= res.matches[-1].similarity
     assert res.matches[0].distance_percentile < 1.0
     assert res.n_candidates < res.n_history_rows  # min_age cut applied
 
