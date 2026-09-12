@@ -54,7 +54,9 @@ credits immediately and up to $200 over six months, which covers the judging win
 
    The script installs Docker, builds the images and starts the API and the recorder. It
    prints the two ways to give it data: copy an existing `nightwatch.sqlite`, or backfill
-   from the public APIs on the box.
+   from the public APIs on the box. Start only what the box needs:
+   `docker compose up -d api recorder`. A plain `docker compose up -d` would also start
+   the web desk, which belongs on Vercel and only wastes memory here.
 5. Check it: `curl -s localhost:8000/health`, and from your own machine
    `curl -s http://<static-ip>:8000/health`.
 

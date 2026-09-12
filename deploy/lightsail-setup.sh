@@ -49,6 +49,7 @@ say "Building the images (a few minutes the first time)"
 $DOCKER compose build
 
 say "Starting the API and the recorder"
+# Only these two. The web desk goes to Vercel; running it here wastes memory.
 $DOCKER compose up -d api recorder
 
 say "Done. The API is on port 8000 of this machine."
