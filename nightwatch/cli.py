@@ -153,6 +153,38 @@ def cmd_status(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def cmd_analyze(args: argparse.Namespace, settings: Settings) -> int:
+    from nightwatch.decision.ticket import HorizonKind, TradeTicket
+    from nightwatch.pipeline.analyze import AnalysisContext, analyze
+    from nightwatch.pipeline.render import render_text
+    from nightwatch.stress.scenarios import Side
+
+    spot, perp = _clients(settings)
+    with Store(settings.db_path) as store:
+        entries = resolve_universe(store, spot, perp, settings) if not args.offline else _entries_from_store(store, settings)
+        ctx = AnalysisContext(store=store, entries=entries, spot_client=None if args.offline else spot, perp_client=None if args.offline else perp)
+        ticket = TradeTicket(
+            ticker=args.ticker.upper(), side=Side(args.side), notional_quote=args.notional, account_equity_quote=args.equity,
+            horizon_kind=HorizonKind(args.horizon), horizon_hours=args.hours, entry_price=args.entry, stop_price=args.stop,
+            target_price=args.target, thesis=args.thesis or "", invalidation=args.invalidation or "", hedge_ratio=args.hedge,
+        )
+        as_of = datetime.fromisoformat(args.as_of).replace(tzinfo=UTC) if args.as_of else None
+        report = analyze(ctx, ticket, as_of=as_of)
+        if args.json:
+            import json
+
+            print(json.dumps(report.to_dict(), indent=1, default=str))
+        else:
+            print(render_text(report))
+    return 0
+
+
+def _entries_from_store(store: Store, settings: Settings) -> list[UniverseEntry]:
+    from nightwatch.data.sync import build_universe
+
+    return build_universe(store.list_instruments(Venue.BITGET_SPOT), store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers)
+
+
 # --------------------------------------------------------------------- parser
 
 
@@ -204,6 +236,24 @@ def build_parser() -> argparse.ArgumentParser:
     common(sp)
     sp.add_argument("--all-rows", action="store_true")
     sp.set_defaults(func=cmd_status)
+
+    sp = sub.add_parser("analyze", help="stress-test a trade ticket")
+    sp.add_argument("--ticker", required=True)
+    sp.add_argument("--side", choices=["long", "short"], default="long")
+    sp.add_argument("--notional", type=float, required=True, help="position size in USDT")
+    sp.add_argument("--equity", type=float, help="account equity in USDT")
+    sp.add_argument("--horizon", choices=["next_open", "window_end", "hours"], default="next_open")
+    sp.add_argument("--hours", type=float)
+    sp.add_argument("--entry", type=float)
+    sp.add_argument("--stop", type=float)
+    sp.add_argument("--target", type=float)
+    sp.add_argument("--thesis")
+    sp.add_argument("--invalidation")
+    sp.add_argument("--hedge", type=float)
+    sp.add_argument("--as-of", help="ISO UTC timestamp for a point-in-time analysis")
+    sp.add_argument("--offline", action="store_true", help="use stored instruments/books only, no network")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_analyze)
     return p
 
 

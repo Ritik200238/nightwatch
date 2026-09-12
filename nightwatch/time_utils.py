@@ -229,7 +229,13 @@ def classify_session(ts: datetime) -> SessionInfo:
     close and the next regular open, which is exactly the unit the product reasons
     about ("what happened during *this* weekend / *this* night").
     """
-    ts = ensure_utc(ts)
+    return _classify_session_cached(ensure_utc(ts))
+
+
+@lru_cache(maxsize=400_000)
+def _classify_session_cached(ts: datetime) -> SessionInfo:
+    # Feature frames classify every hour of every ticker; the calendar answer for a
+    # given instant never changes, so it is memoised across tickers and calls.
     et = ts.astimezone(ET)
     d = et.date()
     t = et.time()
