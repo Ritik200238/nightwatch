@@ -28,7 +28,7 @@ from nightwatch.data.sync import (
     sync_universe,
 )
 from nightwatch.data.yahoo import YahooChartClient
-from nightwatch.recorder.orderbook_recorder import OrderBookRecorder
+from nightwatch.recorder.orderbook_recorder import OrderBookRecorder, PeriodicJob
 from nightwatch.time_utils import UTC
 
 
@@ -124,11 +124,26 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
     spot, perp = _clients(settings)
     with Store(settings.db_path) as store:
         entries = _select(resolve_universe(store, spot, perp, settings), core_only=not args.all, tickers=args.tickers, limit=args.limit)
+        jobs: list[PeriodicJob] = []
+        if not args.no_jobs:
+            from nightwatch.journal.journal import Journal
+
+            fred = FredClient(settings.fred_api_key)
+            nasdaq = NasdaqEarningsClient()
+            tickers = [e.ticker for e in entries]
+            journal = Journal(store)
+            jobs = [
+                # Earnings dates move and macro releases get scheduled; six-hourly is plenty.
+                PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False),
+                PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False),
+                # Score live tickets as soon as their horizon has passed so calibration stays current.
+                PeriodicJob("mature-forecasts", 900, lambda: journal.mature(spot_symbol_for={e.ticker: e.spot_symbol for e in entries})),
+            ]
         rec = OrderBookRecorder(
             store, spot=spot, perp=perp, entries=entries, interval_sec=args.interval,
             record_perp_books=not args.no_perp_books,
             refresh_bars_every_sec=None if args.no_bar_refresh else args.bar_refresh,
-            retention_days=settings.recorder_retention_days,
+            retention_days=settings.recorder_retention_days, jobs=jobs,
         )
         rec.install_signal_handlers()
         rec.run_forever()
@@ -276,6 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-perp-books", action="store_true")
     sp.add_argument("--bar-refresh", type=int, default=900, help="seconds between hourly-bar refreshes")
     sp.add_argument("--no-bar-refresh", action="store_true")
+    sp.add_argument("--no-jobs", action="store_true", help="skip the periodic calendar/news/maturation jobs")
     sp.set_defaults(func=cmd_record)
 
     sp = sub.add_parser("status", help="coverage report")

@@ -12,6 +12,9 @@ Design
 * Per-symbol failures are logged and skipped; the loop never dies on one bad call.
 * Graceful shutdown on SIGINT/SIGTERM; the current tick finishes, then we exit.
 * Optional periodic bar refresh so the stored candles stay current without a cron.
+* Arbitrary periodic jobs (calendars, news, forecast maturation) ride the same loop, each
+  with its own cadence and error isolation, so one always-on process keeps every input
+  current.
 * Old snapshots are pruned daily to a retention window (metrics rows are small, but
   raw level JSON adds up over months).
 """
@@ -22,7 +25,7 @@ import logging
 import signal
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 
@@ -45,6 +48,25 @@ class RecorderStats:
     started_at: float = field(default_factory=time.time)
 
 
+@dataclass
+class PeriodicJob:
+    """A named callable run at most once per ``every_sec`` inside the recorder loop."""
+
+    name: str
+    every_sec: float
+    fn: Callable[[], object]
+    run_at_start: bool = True
+    last_run: float = field(default=0.0, init=False)
+    runs: int = field(default=0, init=False)
+    failures: int = field(default=0, init=False)
+
+    def due(self, now: float) -> bool:
+        if self.runs == 0 and not self.run_at_start and self.last_run == 0.0:
+            self.last_run = now  # first run happens one full period from now
+            return False
+        return now - self.last_run >= self.every_sec
+
+
 class OrderBookRecorder:
     def __init__(
         self,
@@ -57,6 +79,7 @@ class OrderBookRecorder:
         record_perp_books: bool = True,
         refresh_bars_every_sec: int | None = 900,
         retention_days: int = 120,
+        jobs: Sequence[PeriodicJob] = (),
     ):
         if interval_sec < 5:
             raise ValueError("interval_sec must be >= 5")
@@ -68,6 +91,7 @@ class OrderBookRecorder:
         self.record_perp_books = record_perp_books
         self.refresh_every = refresh_bars_every_sec
         self.retention = timedelta(days=retention_days)
+        self.jobs = list(jobs)
         self.stats = RecorderStats()
         self._stop = threading.Event()
         self._last_refresh = 0.0
@@ -114,6 +138,7 @@ class OrderBookRecorder:
             if self.record_perp_books and e.perp_symbol:
                 self._record_book(self.perp, e.perp_symbol)
         self._maybe_refresh_bars()
+        self._run_due_jobs()
         self._maybe_prune()
         if self.stats.ticks % 10 == 0:
             log.info("recorder heartbeat: %s", self.stats)
@@ -154,6 +179,21 @@ class OrderBookRecorder:
         except Exception:  # noqa: BLE001
             self.stats.errors += 1
             log.exception("bar refresh failed")
+
+    def _run_due_jobs(self) -> None:
+        now = time.time()
+        for job in self.jobs:
+            if not job.due(now):
+                continue
+            job.last_run = now
+            job.runs += 1
+            try:
+                result = job.fn()
+                log.info("job %s: %s", job.name, result)
+            except Exception:  # noqa: BLE001
+                job.failures += 1
+                self.stats.errors += 1
+                log.exception("job %s failed", job.name)
 
     def _maybe_prune(self) -> None:
         if time.time() - self._last_prune < 86400:

@@ -131,3 +131,32 @@ def test_recorder_tick_records_books_and_tickers_and_survives_errors(tmp_path):
         assert rec.stats.snapshots == 1 and rec.stats.errors == 1
         assert rec.stats.ticker_rows == 2  # only wanted symbols, one per venue
         assert s.latest_orderbook(Venue.BITGET_SPOT, "RTSLAUSDT") is not None
+
+
+def test_recorder_runs_periodic_jobs_on_their_own_cadence_and_isolates_failures(tmp_path):
+    from nightwatch.recorder.orderbook_recorder import PeriodicJob
+
+    with Store(tmp_path / "t.sqlite") as s:
+        spot, perp = FakeBookClient(Venue.BITGET_SPOT), FakeBookClient(Venue.BITGET_UMCBL)
+        entries = [UniverseEntry("TSLA", "RTSLAUSDT", "TSLAUSDT", "TSLA", True)]
+        calls = {"a": 0, "b": 0}
+
+        def a():
+            calls["a"] += 1
+            return calls["a"]
+
+        def b():
+            calls["b"] += 1
+            raise RuntimeError("feed down")
+
+        jobs = [PeriodicJob("a", 3600, a), PeriodicJob("b", 3600, b), PeriodicJob("later", 3600, a, run_at_start=False)]
+        rec = OrderBookRecorder(s, spot=spot, perp=perp, entries=entries, interval_sec=5, refresh_bars_every_sec=None, jobs=jobs)
+        rec.tick()
+        rec.tick()  # same hour: nothing re-runs
+        assert calls == {"a": 1, "b": 1}
+        assert jobs[1].failures == 1 and rec.stats.errors == 1
+        assert jobs[2].runs == 0  # deferred job waits a full period
+        jobs[0].last_run -= 3601
+        jobs[2].last_run -= 3601
+        rec.tick()
+        assert calls["a"] == 3 and jobs[2].runs == 1
