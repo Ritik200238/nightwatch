@@ -146,6 +146,9 @@ export function ReportView({ report }: { report: Report }) {
         </Section>
       </div>
 
+      {/* What would change it */}
+      <SensitivitySection report={report} />
+
       <p className="text-xs text-muted-foreground">
         Computed in {report.timings_ms.total} ms · sources: {report.sources.map((s) => String(s.kind)).join(", ")}
         {report.forecast_id != null ? ` · journaled as forecast #${report.forecast_id}` : ""}
@@ -249,6 +252,88 @@ function AnalogSection({ report }: { report: Report }) {
             ))}
           </TableBody>
         </Table>
+      </div>
+    </Section>
+  );
+}
+
+const SIZE_TONE: Record<string, "good" | "warning" | "critical" | "info" | "muted"> = { GO: "good", REDUCE_TO: "warning", HEDGE: "info", NO_GO: "critical", REVIEW: "muted" };
+
+function SensitivitySection({ report }: { report: Report }) {
+  const sen = report.sensitivity;
+  if (!sen || sen.sizes.length === 0) return null;
+  const requested = sen.requested_notional;
+  const maxNotional = Math.max(...sen.sizes.map((p) => p.notional));
+  return (
+    <Section
+      title="What would change it"
+      subtitle="The same gate, caps and verdict, re-run at other sizes and stops. Nothing here is an estimate of the verdict; it is the verdict."
+      action={sen.max_go_notional != null ? <Pill tone="good">GO up to {fmtUsd(sen.max_go_notional)}</Pill> : <Pill tone="critical">no size is a GO</Pill>}
+    >
+      <div className="space-y-4">
+        <ul className="space-y-1 text-sm">
+          {sen.notes.map((n) => (
+            <li key={n} className="text-muted-foreground">
+              – {n}
+            </li>
+          ))}
+        </ul>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Verdict by size</p>
+          <ul className="space-y-1">
+            {sen.sizes.map((p) => {
+              const isRequest = Math.abs(p.notional - requested) < 1;
+              return (
+                <li key={p.notional} className="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-0.5 text-xs sm:grid-cols-[5.5rem_8rem_6rem_1fr]">
+                  <span className={`tabular text-right ${isRequest ? "font-semibold" : "text-muted-foreground"}`}>
+                    {fmtUsd(p.notional)}
+                    {isRequest ? <span className="block text-[10px] font-normal text-muted-foreground">requested</span> : null}
+                  </span>
+                  <span className="hidden h-2 w-full rounded-full bg-muted sm:block" aria-hidden>
+                    <span className="block h-2 rounded-full" style={{ width: `${Math.max(3, (p.notional / maxNotional) * 100)}%`, background: `var(--${p.verdict === "GO" ? "status-good" : p.verdict === "NO_GO" ? "status-critical" : p.verdict === "HEDGE" ? "chart-1" : "status-warning"})` }} />
+                  </span>
+                  <span className="justify-self-start">
+                    <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{p.verdict.replace("_", " ")}</Pill>
+                  </span>
+                  <span className="col-span-2 text-muted-foreground sm:col-span-1">
+                    {p.binding_cap ? `${titleCase(p.binding_cap)} binds` : ""}
+                    {p.exit_cost_bps != null ? ` · exit ${fmtBps(p.exit_cost_bps, 0)}` : ""}
+                    {p.risk_pct_of_equity != null ? ` · risk ${p.risk_pct_of_equity.toFixed(2)}% of equity` : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        {sen.stops.length ? (
+          <div className="overflow-x-auto">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Risk by stop distance, at the requested size</p>
+            <Table className="min-w-[420px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Stop distance</TableHead>
+                  <TableHead className="text-right">Stop price</TableHead>
+                  <TableHead className="text-right">Risk, % of equity</TableHead>
+                  <TableHead className="text-right">Risk-budget cap</TableHead>
+                  <TableHead className="text-right">Verdict</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sen.stops.map((p) => (
+                  <TableRow key={p.stop_distance_pct}>
+                    <TableCell className="tabular">{p.stop_distance_pct.toFixed(2)}%</TableCell>
+                    <TableCell className="tabular text-right">{fmtPrice(p.stop_price)}</TableCell>
+                    <TableCell className="tabular text-right">{p.risk_pct_of_equity != null ? `${p.risk_pct_of_equity.toFixed(2)}%` : "—"}</TableCell>
+                    <TableCell className="tabular text-right">{fmtUsd(p.risk_budget_notional)}</TableCell>
+                    <TableCell className="text-right">
+                      <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{p.verdict.replace("_", " ")}</Pill>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : null}
       </div>
     </Section>
   );

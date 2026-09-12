@@ -247,6 +247,35 @@ export interface HedgeQuote {
   note: string;
 }
 
+export interface SizePoint {
+  notional: number;
+  verdict: string;
+  gate: string;
+  binding_cap: string | null;
+  recommended_notional: number | null;
+  worst_severe_pct: number | null;
+  exit_cost_bps: number | null;
+  risk_pct_of_equity: number | null;
+}
+
+export interface StopPoint {
+  stop_distance_pct: number;
+  stop_price: number;
+  verdict: string;
+  gate: string;
+  risk_pct_of_equity: number | null;
+  risk_budget_notional: number | null;
+}
+
+export interface Sensitivity {
+  sizes: SizePoint[];
+  stops: StopPoint[];
+  max_go_notional: number | null;
+  widest_stop_pct_for_requested_size: number | null;
+  requested_notional: number;
+  notes: string[];
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -297,6 +326,7 @@ export interface Report {
   gate: { decision: "GO" | "REVIEW_REQUIRED" | "NO_GO"; rules: GateRule[]; risk_quote: number | null; risk_pct_of_equity: number | null; risk_basis: string };
   sizing: { recommended_notional: number | null; binding_cap: string | null; caps: Cap[]; hedge_ratio_suggested: number | null; hedge_rationale: string };
   verdict: { verdict: "GO" | "REDUCE_TO" | "HEDGE" | "NO_GO" | "REVIEW"; requested_notional: number; recommended_notional: number | null; hedge_ratio: number | null; reasons: string[]; caps: Cap[] };
+  sensitivity: Sensitivity | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

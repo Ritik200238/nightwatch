@@ -72,6 +72,22 @@ def render_text(r: AnalysisReport) -> str:
         h = e.hedge_quote
         lines.append(f"  hedge 100% via {h.perp_symbol}: fees {h.entry_fee_quote + h.exit_fee_quote:,.1f} + funding {h.funding_quote:,.1f} (p95 {h.funding_quote_p95:,.1f}) = {h.total_cost_bps_of_position:.1f} bps; residual basis p95 {_f(h.residual_basis_p95_bps, '{:.0f}')} bps")
     lines.append("")
+    if r.sensitivity is not None:
+        sen = r.sensitivity
+        lines.append("WHAT WOULD CHANGE IT")
+        for note in sen.notes:
+            lines.append(f"  - {note}")
+        flips = []
+        prev = None
+        for p in sen.sizes:
+            if prev is not None and p.verdict != prev.verdict:
+                flips.append(f"{prev.verdict} up to {prev.notional:,.0f} then {p.verdict} ({p.binding_cap})")
+            prev = p
+        if flips:
+            lines.append("  size: " + "; ".join(flips))
+        if sen.widest_stop_pct_for_requested_size is not None:
+            lines.append(f"  stop: up to {sen.widest_stop_pct_for_requested_size:.2f}% away keeps the requested size inside the risk budget")
+        lines.append("")
     lines.append("SIZING CAPS")
     for c in r.sizing.caps:
         mark = "*" if c.name == r.sizing.binding_cap else " "

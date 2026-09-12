@@ -28,8 +28,9 @@ from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Interval, OrderBookSnapshot, Venue
 from nightwatch.data.store import Store
 from nightwatch.data.sync import UniverseEntry
-from nightwatch.decision.gate import GateInputs, GatePolicy, GateReport, evaluate_gate
-from nightwatch.decision.sizing import SizingInputs, SizingPolicy, SizingResult, VerdictResult, decide, recommend_size
+from nightwatch.decision.gate import GatePolicy, GateReport
+from nightwatch.decision.sensitivity import DecisionContext, SensitivityReport, build_sensitivity
+from nightwatch.decision.sizing import SizingPolicy, SizingResult, VerdictResult
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.execution.exit_cost import ExitQuote, HedgeQuote, cost_curve, max_notional_within, quote_exit, quote_hedge
 from nightwatch.features.series import SeriesSpec
@@ -40,7 +41,6 @@ from nightwatch.stress.scenarios import (
     Position,
     Scenario,
     ScenarioImpact,
-    Severity,
     apply_scenario,
     build_presets,
     closed_window_returns,
@@ -64,6 +64,7 @@ class AnalysisContext:
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
     pooled_tickers: tuple[str, ...] | None = None  # None = all entries with data
     journal: Any = None  # nightwatch.journal.journal.Journal, optional
+    sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
@@ -182,6 +183,7 @@ class AnalysisReport:
     gate: GateReport
     sizing: SizingResult
     verdict: VerdictResult
+    sensitivity: SensitivityReport | None
     sources: list[dict[str, Any]]
     warnings: list[str]
     timings_ms: dict[str, int]
@@ -241,43 +243,44 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 6. Gate, sizing, verdict.
     t0 = time.perf_counter()
     p5 = _primary_p5(analog, primary)
-    exit_bps = execution.exit_quote.total_cost_bps if execution.exit_quote else None
-    fully = execution.exit_quote.fully_filled if execution.exit_quote else False
-    gate = evaluate_gate(
-        ticket,
-        GateInputs(
-            entry_price=entry_price, equity=ticket.account_equity_quote, analog_p5_loss_pct=p5,
-            quality_flags=tuple(snapshot.quality_flags), regime_label=snapshot.labels.get("regime_label", "unknown"),
-            risk_multiplier=float(snapshot.features.get("risk_multiplier") or _regime_multiplier(frame)),
-            exit_cost_bps=exit_bps, exit_fully_filled=fully,
-            recent_losing_exits=(ctx.journal.recent_losing_exits(since=as_of - timedelta(hours=ctx.gate_policy.revenge_cooldown_h)) if ctx.journal is not None else ()),
-            now=as_of,
-        ),
-        ctx.gate_policy,
-    )
-    severe = [i.total_pct_of_notional for i, s in zip(stress.impacts, stress.presets, strict=True) if s.severity == Severity.SEVERE and i.total_pct_of_notional is not None]
     residual_p5 = None
     if execution.hedge_quote and execution.hedge_quote.residual_basis_p95_bps is not None:
         residual_p5 = -execution.hedge_quote.residual_basis_p95_bps / 100.0
-    sizing = recommend_size(
-        ticket,
-        SizingInputs(
-            entry_price=entry_price, equity=ticket.account_equity_quote, stop_distance_pct=ticket.stop_distance_pct(entry_price),
-            analog_p5_loss_pct=p5, risk_multiplier=_regime_multiplier(frame),
-            max_exit_notional_within_budget=execution.max_notional_within_budget,
-            worst_severe_stress_pct=min(severe) if severe else None,
-            hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
-            hedge_residual_p5_loss_pct=residual_p5,
-        ),
-        ctx.sizing_policy,
+    # One context drives the headline decision and every what-if, so a swept verdict
+    # can never be computed differently from the one on the report.
+    dc = DecisionContext(
+        entry_price=entry_price, analog_p5_loss_pct=p5, quality_flags=tuple(snapshot.quality_flags),
+        regime_label=snapshot.labels.get("regime_label", "unknown"),
+        risk_multiplier=float(snapshot.features.get("risk_multiplier") or _regime_multiplier(frame)),
+        recent_losing_exits=(ctx.journal.recent_losing_exits(since=as_of - timedelta(hours=ctx.gate_policy.revenge_cooldown_h)) if ctx.journal is not None else ()),
+        now=as_of, book=book, spot_taker_fee=fees["spot_taker"], presets=tuple(stress.presets),
+        max_exit_notional_within_budget=execution.max_notional_within_budget,
+        hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
+        hedge_residual_p5_loss_pct=residual_p5, gate_policy=ctx.gate_policy, sizing_policy=ctx.sizing_policy,
     )
-    verdict = decide(ticket, gate, sizing)
+    ev = dc.evaluate(
+        ticket, impacts=stress.impacts,
+        exit_cost_bps=execution.exit_quote.total_cost_bps if execution.exit_quote else None,
+        exit_fully_filled=execution.exit_quote.fully_filled if execution.exit_quote else False,
+    )
+    gate, sizing, verdict = ev.gate, ev.sizing, ev.verdict
     timings["decision"] = _ms(t0)
+
+    # 7. Sensitivity: what would have to change.
+    t0 = time.perf_counter()
+    sensitivity = None
+    if ctx.sensitivity:
+        try:
+            sensitivity = build_sensitivity(dc, ticket, headline=ev)
+        except Exception:  # noqa: BLE001 - a what-if must never break the decision
+            log.exception("sensitivity sweep failed")
+            warnings.append("sensitivity sweep failed; the verdict above is unaffected")
+    timings["sensitivity"] = _ms(t0)
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sources=sources, warnings=warnings, timings_ms=timings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, sources=sources, warnings=warnings, timings_ms=timings,
     )
     if ctx.journal is not None and record:
         try:
