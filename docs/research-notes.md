@@ -102,6 +102,39 @@ Monte Carlo (block bootstrap of closed-hour returns, 5,000 paths, 53h): p5 −3.
 p50 +0.6%, p95 +4.8%, expected shortfall(5%) −4.4%, P(loss > 5%) = 1.2%. Reverse
 stress: a −4.87% move loses 5% of notional after exit costs on a $20k position.
 
+## 7. Tail calibration: the analog tails were too narrow, and the fix holds out of sample (2026-09-12)
+
+After 1,080 matured replay forecasts (six tokens, closed-market windows since
+Jan 2025) the raw analog distribution was breached far more often than it should be:
+7.9% of outcomes fell below p5 and 12.8% rose above p95, against 5% each. The
+5% tail band was red.
+
+The correction is two multipliers, k_lo and k_hi, that widen p5 and p95 about the
+median until exactly 5% of *already-matured* outcomes breach. They are fitted only on
+forecasts whose outcome was known before the moment of use, and every number below is
+out of sample: each forecast is scored with factors fitted on forecasts that matured
+before it (expanding window, minimum 30 to fit).
+
+| metric | target | raw | adjusted |
+|---|---|---|---|
+| outcomes below p5 | 5% | 7.9% (CI 6.4–9.7) | 6.5% (CI 5.2–8.1) |
+| outcomes above p95 | 5% | 12.8% | 5.7% |
+| inside p5–p95 | 90% | 79.3% | 87.8% |
+| 5% tail band | green | red | amber |
+| mean p5–p95 width | — | 5.77% | 8.83% |
+
+Latest factors: k_lo 1.24, k_hi 1.70 (n = 1,048 evaluated). The verdict now sizes
+against the adjusted p5; the raw quantiles are still journaled so future refits stay
+honest.
+
+What is still wrong: the lower tail is 6.5% out of sample, and its interval does not
+include 5%. The fit is pooled across tokens and the breach rate drifts over time
+(TSLA and NVDA breach more than MSFT), so a pooled factor fitted on the past lags
+the present. Next refinements, in order: per-token factors once each token has
+enough matured forecasts, then a time-decayed fit.
+
+Reproduce: `nightwatch calibration --kind replay` (the adjustment block prints last).
+
 ## 6. Things that did not work, and what was done instead
 
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
