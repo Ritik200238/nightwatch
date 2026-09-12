@@ -421,9 +421,10 @@ export const api = {
     const s = q.toString();
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
-  forecasts: (limit = 100, ticker?: string) => {
+  forecasts: (limit = 100, ticker?: string, kind?: string) => {
     const q = new URLSearchParams({ limit: String(limit) });
     if (ticker) q.set("ticker", ticker);
+    if (kind) q.set("kind", kind);
     return request<Record<string, unknown>[]>(`/forecasts?${q.toString()}`);
   },
 };

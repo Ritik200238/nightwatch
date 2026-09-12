@@ -29,6 +29,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <Link href="/calibration" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Calibration
                 </Link>
+                <Link href="/journal" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                  Journal
+                </Link>
               </nav>
             </div>
             <HealthPill />

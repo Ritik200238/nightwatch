@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
+import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -209,10 +210,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         out = df.to_dict(orient="records")
         for row in out:
             for k, v in list(row.items()):
-                if hasattr(v, "isoformat"):
-                    row[k] = v.isoformat()
-                elif v != v:  # NaN
+                if v is None or v != v or v is pd.NaT:  # NaN and NaT are both "no value"
                     row[k] = None
+                elif hasattr(v, "isoformat"):
+                    row[k] = v.isoformat()
         return out
 
     @app.post("/chat")
