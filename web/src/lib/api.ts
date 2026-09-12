@@ -6,7 +6,23 @@
  * large or optional structures.
  */
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+/**
+ * Where the backend lives.
+ *
+ * Set NEXT_PUBLIC_API_URL to call it directly (local development, or an API that has its
+ * own certificate). When it is unset and the page is not being served from localhost we
+ * fall back to the same-origin proxy at /api, which is how a Vercel deployment reaches a
+ * backend that speaks plain http. That fallback means a deploy where the variable was
+ * forgotten still works instead of calling the visitor's own machine.
+ */
+function resolveApiUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  if (typeof window !== "undefined" && !/^(localhost|127\.|\[::1\])/.test(window.location.hostname)) return "/api";
+  return "http://localhost:8000";
+}
+
+export const API_URL = resolveApiUrl();
 
 export type Side = "long" | "short";
 export type HorizonKind = "next_open" | "window_end" | "hours";

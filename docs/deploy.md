@@ -12,7 +12,75 @@ The database is a single file (`nightwatch.sqlite`, ~190 MB with 24 tokens of ho
 history from Jan 2025). SQLite in WAL mode is safe for one writer (the recorder) plus
 readers (the API) on the same filesystem. Do **not** put the file on a network share.
 
-## Option A: one VM with Docker Compose (recommended)
+## Recommended: web on Vercel, backend on one small box
+
+The desk is a Next.js app and belongs on Vercel. The API and the recorder cannot live
+there: Vercel functions run on a read-only filesystem that is thrown away between calls
+and stop after 300 seconds, while the recorder writes to a SQLite file every minute and
+must stay alive for weeks. So the backend gets one small always-on machine.
+
+The browser never calls that machine directly. The desk ships a same-origin proxy at
+`/api` (`web/src/app/api/[...path]/route.ts`) which forwards to
+`NIGHTWATCH_API_ORIGIN` server-side. That is what makes a plain-http backend usable from
+an https page without buying a domain or installing a certificate.
+
+### A. The backend on AWS Lightsail (about $12/month, prorated)
+
+Lightsail is the simplest thing AWS sells: a fixed-price Linux box with a static IP and a
+firewall in one screen. The $12 plan is 4 GB of memory, 2 vCPUs and 80 GB of disk, which
+is the comfortable size for this workload. A new AWS account currently gets $100 of
+credits immediately and up to $200 over six months, which covers the judging window.
+
+1. Lightsail console -> **Create instance** -> Linux/Unix -> OS only -> **Ubuntu 24.04**
+   -> the **$12** plan -> name it `nightwatch` -> Create.
+2. **Networking** tab -> **Attach static IP** (free while attached to a running instance).
+3. **Networking** -> IPv4 Firewall -> **Add rule** -> Custom, TCP, port **8000**. Leave
+   SSH as it is.
+4. **Connect using SSH** (the browser button works), then:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/deploy/lightsail-setup.sh      | bash -s -- https://github.com/<owner>/<repo>.git
+   ```
+
+   (The repository is private, so either make it public first, clone it with a personal
+   access token, or copy the folder up with `scp` and run `bash deploy/lightsail-setup.sh`.)
+
+   The script installs Docker, builds the images and starts the API and the recorder. It
+   prints the two ways to give it data: copy an existing `nightwatch.sqlite`, or backfill
+   from the public APIs on the box.
+5. Check it: `curl -s localhost:8000/health`, and from your own machine
+   `curl -s http://<static-ip>:8000/health`.
+
+EC2 works the same way if you prefer it: t4g.small or larger, Ubuntu 24.04, security
+group open on 8000, then run the same script.
+
+### B. The desk on Vercel
+
+1. Import the repository, set **Root Directory** to `web`. The framework preset is
+   Next.js; nothing else needs changing.
+2. Environment variables:
+   * `NIGHTWATCH_API_ORIGIN` = `http://<static-ip>:8000` (server-side only, never
+     reaches the browser)
+   * `NEXT_PUBLIC_API_URL` = `/api`
+3. Deploy. Open the URL and check the status pill in the header: it shows the token count
+   and the age of the last order-book snapshot.
+
+If the pill says the API is offline, the backend is unreachable: check the firewall rule
+and that `docker compose ps` shows both containers up.
+
+### C. Everything on one box instead (no Vercel)
+
+`docker compose up -d` starts the web desk too, on port 3000. Put Caddy in front if you
+have a domain:
+
+```
+desk.example.com { reverse_proxy localhost:3000 }
+api.example.com  { reverse_proxy localhost:8000 }
+```
+
+and rebuild the web image with `NEXT_PUBLIC_API_URL=https://api.example.com`.
+
+## Appendix: the same thing on any other VPS
 
 Any 2 vCPU / 4 GB box works. Ubuntu 24.04 commands:
 
@@ -56,12 +124,6 @@ desk.example.com { reverse_proxy localhost:3000 }
 and rebuild `web` with `NEXT_PUBLIC_API_URL=https://api.example.com` (it is baked in at
 build time).
 
-## Option B: web on Vercel, API + recorder on a VM
-
-`web/` deploys to Vercel unchanged (framework preset: Next.js, root directory `web`).
-Set the environment variable `NEXT_PUBLIC_API_URL` to the public API URL. The API must
-then allow that origin: set `NIGHTWATCH_CORS=https://<your-app>.vercel.app` on the VM.
-
 ## Environment variables
 
 | name | default | meaning |
@@ -71,7 +133,8 @@ then allow that origin: set `NIGHTWATCH_CORS=https://<your-app>.vercel.app` on t
 | `NIGHTWATCH_LIVE_BOOK` | `1` | `0` disables live order-book fetches in the API (offline demo) |
 | `ANTHROPIC_API_KEY` | unset | enables the `/chat` language layer; everything else works without it |
 | `FRED_API_KEY` | unset | optional; FRED works unauthenticated for the CSV endpoints used |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | API URL baked into the web build |
+| `NEXT_PUBLIC_API_URL` | `/api` when the page is not on localhost | where the browser sends API calls; `/api` uses the same-origin proxy |
+| `NIGHTWATCH_API_ORIGIN` | unset | where that proxy forwards to, e.g. `http://12.34.56.78:8000`. Server-side only |
 
 ## Health and uptime
 
