@@ -125,24 +125,38 @@ def narrate(client: anthropic.Anthropic, report: AnalysisReport) -> tuple[str, s
 _NUM = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 
 
+def _canonical(token: str) -> float | None:
+    """A number as a comparable magnitude: commas and sign dropped, 6.160 == 6.16."""
+    try:
+        return abs(float(token.replace(",", "")))
+    except ValueError:
+        return None
+
+
 def unverified_numbers(narrative: str, report_text: str) -> list[str]:
-    """Numbers in the narrative that do not appear in the report text (tolerant of sign/format)."""
-    have = {n.replace(",", "").lstrip("+") for n in _NUM.findall(report_text)}
-    have_abs = {h.lstrip("-") for h in have}
-    out = []
-    for n in _NUM.findall(narrative):
-        clean = n.replace(",", "").lstrip("+")
-        if clean in have or clean.lstrip("-") in have_abs:
+    """Numbers in the narrative that do not appear in the report.
+
+    Comparison is on magnitude, so formatting differences (thousands separators, a
+    leading plus, trailing zeros, a loss quoted without its sign) do not raise a flag
+    while a genuinely different figure does. Small integers are allowed because the
+    briefing is asked for in numbered parts.
+    """
+    have = {c for c in (_canonical(t) for t in _NUM.findall(report_text)) if c is not None}
+    out: list[str] = []
+    for token in _NUM.findall(narrative):
+        value = _canonical(token)
+        if value is None or value in have:
             continue
-        # allow trailing-zero differences (5 vs 5.0) and enumerations 1-6
-        if clean.rstrip("0").rstrip(".") in {h.rstrip("0").rstrip(".") for h in have_abs} or clean in {"1", "2", "3", "4", "5", "6"}:
+        if value.is_integer() and 1 <= value <= 6:
             continue
-        out.append(n)
+        out.append(token)
     return out
 
 
-def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None) -> dict[str, Any]:
-    client = _client()
+def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None, client: anthropic.Anthropic | None = None) -> dict[str, Any]:
+    """One conversational turn. ``client`` is injectable so the flow can be tested
+    without credentials; in production it is built from the environment."""
+    client = client or _client()
     tickers = list(state.ctx.tickers_with_data())
     try:
         intent = parse_intent(client, messages, tickers, account_equity)
