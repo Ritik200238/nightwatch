@@ -8,8 +8,8 @@ which one binds:
 * ``concentration`` – max share of equity in one name
 * ``regime``       – the regime multiplier applied to the plan size
 * ``exit_liquidity`` – largest size the live book absorbs within the cost budget
-* ``stress``       – notional at which the worst *severe* preset stays inside the
-  max-loss limit
+* ``stress``       – the largest notional at which the worst *severe* preset's loss,
+  in quote terms, stays inside the allowed share of equity
 
 The verdict then compares the requested size with the recommended one and folds in
 the analog evidence and hedge economics:
@@ -44,7 +44,8 @@ class SizingPolicy:
     risk_pct_of_equity: float = 1.0
     max_position_pct_of_equity: float = 25.0
     exit_cost_budget_bps: float = 25.0
-    max_stress_loss_pct: float = 5.0
+    max_stress_loss_pct: float = 5.0  # reverse stress: the move that loses this % of the position
+    max_stress_loss_pct_of_equity: float = 5.0  # stress cap: worst severe preset may cost this much of equity
     hedge_cost_ceiling_bps: float = 30.0  # hedge only if it costs less than this
     hedge_benefit_min_pct: float = 1.5  # ... and removes at least this much p5 loss
 
@@ -67,6 +68,7 @@ class SizingInputs:
     worst_severe_stress_pct: float | None  # e.g. -6.1 (% of notional) at the requested size
     hedge_cost_bps_of_position: float | None
     hedge_residual_p5_loss_pct: float | None  # p5 loss after hedging (basis only)
+    stress_cap_notional: float | None = None  # solved by the caller, which can re-price the scenarios
 
 
 @dataclass(frozen=True)
@@ -110,15 +112,23 @@ def compute_caps(ticket: TradeTicket, inp: SizingInputs, policy: SizingPolicy = 
         caps.append(Cap("exit_liquidity", None, "no order book"))
     else:
         caps.append(Cap("exit_liquidity", inp.max_exit_notional_within_budget, f"largest size the live book absorbs within {policy.exit_cost_budget_bps:.0f} bps"))
-    # Stress: scale the requested size so the worst severe preset stays inside the limit.
-    if inp.worst_severe_stress_pct is None:
+    # Stress: the worst severe preset must not cost more than a set share of equity.
+    # A limit expressed as a share of the *position* cannot be a size cap: the loss and
+    # the position shrink together, so the ratio never improves. Equity is the anchor.
+    limit = policy.max_stress_loss_pct_of_equity
+    worst = inp.worst_severe_stress_pct
+    if inp.stress_cap_notional is not None:
+        detail = f"worst severe preset {worst:+.1f}% of notional; the largest size whose loss stays inside {limit}% of equity" if worst is not None else f"largest size whose worst severe loss stays inside {limit}% of equity"
+        caps.append(Cap("stress", max(0.0, inp.stress_cap_notional), detail))
+    elif worst is None:
         caps.append(Cap("stress", None, "no stress presets available"))
-    elif inp.worst_severe_stress_pct >= -policy.max_stress_loss_pct:
-        caps.append(Cap("stress", ticket.notional_quote, f"worst severe preset {inp.worst_severe_stress_pct:+.1f}% is within the {policy.max_stress_loss_pct}% limit"))
+    elif inp.equity is None:
+        caps.append(Cap("stress", None, "needs equity to bound the stress loss"))
     else:
-        # Loss scales ~linearly with notional for price moves; exit cost grows faster, so this is a mild overestimate.
-        scale = policy.max_stress_loss_pct / abs(inp.worst_severe_stress_pct)
-        caps.append(Cap("stress", ticket.notional_quote * scale, f"scaled so the worst severe preset ({inp.worst_severe_stress_pct:+.1f}%) meets the {policy.max_stress_loss_pct}% limit"))
+        # First-order fallback: the loss per unit of notional is taken as fixed. Exit
+        # cost grows faster than size, so this overestimates the safe size slightly.
+        cap = inp.equity * limit / 100.0 / (abs(worst) / 100.0)
+        caps.append(Cap("stress", cap, f"worst severe preset {worst:+.1f}% of notional; approximately the largest size within {limit}% of equity"))
     return caps
 
 
