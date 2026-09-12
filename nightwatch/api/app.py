@@ -192,7 +192,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         rep = calibrate(df)
         from dataclasses import asdict
 
-        return {"matured_now": matured, **asdict(rep)}
+        from nightwatch.journal.adjust import evaluate_expanding
+
+        adjusted = evaluate_expanding(df) if not df.empty else None
+        return {"matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None}
 
     @app.get("/forecasts")
     def forecasts(ticker: str | None = None, kind: str | None = None, limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:

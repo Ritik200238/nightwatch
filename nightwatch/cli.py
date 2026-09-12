@@ -211,6 +211,17 @@ def cmd_calibration(args: argparse.Namespace, settings: Settings) -> int:
         df = journal.forecasts(ticker=args.ticker.upper() if args.ticker else None, kind=args.kind, matured_only=True)
         print(f"(matured {matured} new forecasts)")
         print(render_calibration(calibrate(df)))
+        from nightwatch.journal.adjust import evaluate_expanding
+
+        ev = evaluate_expanding(df) if not df.empty else None
+        if ev:
+            print(
+                f"\nTAIL ADJUSTMENT (expanding-window, out-of-sample on {ev.n_evaluated} forecasts; last k_lo {ev.k_lo_last:.2f}, k_hi {ev.k_hi_last:.2f})\n"
+                f"  below p5 : raw {ev.raw_lo_coverage:.1%} -> adjusted {ev.adj_lo_coverage:.1%} (target 5%)\n"
+                f"  above p95: raw {ev.raw_hi_coverage:.1%} -> adjusted {ev.adj_hi_coverage:.1%} (target 5%)\n"
+                f"  inside p5-p95: raw {ev.raw_band_coverage:.1%} -> adjusted {ev.adj_band_coverage:.1%} (target 90%)\n"
+                f"  5% tail band: raw {ev.raw_tail_band} -> adjusted {ev.adj_tail_band} | mean width {ev.raw_width:.2f}% -> {ev.adj_width:.2f}%"
+            )
     return 0
 
 

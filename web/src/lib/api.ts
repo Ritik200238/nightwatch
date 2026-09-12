@@ -94,6 +94,27 @@ export interface HorizonReport {
     permutation_p_value: number | null;
     p5_diff_pct: number | null;
   } | null;
+  p5_adjusted: number | null;
+  p95_adjusted: number | null;
+  adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
+}
+
+export interface AdjustedEvaluation {
+  n_evaluated: number;
+  raw_lo_coverage: number;
+  adj_lo_coverage: number;
+  raw_hi_coverage: number;
+  adj_hi_coverage: number;
+  raw_band_coverage: number;
+  adj_band_coverage: number;
+  raw_tail_band: string;
+  adj_tail_band: string;
+  raw_width: number;
+  adj_width: number;
+  k_lo_last: number | null;
+  k_hi_last: number | null;
+  lo_ci: [number, number];
+  adj_lo_ci: [number, number];
 }
 
 export interface AnalogMatch {
@@ -296,6 +317,7 @@ export interface CalibrationReport {
   mean_width_p5_p95: number | null;
   mean_abs_error_p50: number | null;
   by_ticker: Record<string, number>;
+  adjusted: AdjustedEvaluation | null;
 }
 
 export class ApiError extends Error {

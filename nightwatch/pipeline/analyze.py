@@ -67,6 +67,24 @@ class AnalysisContext:
     journal: Any = None  # nightwatch.journal.journal.Journal, optional
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
+    _factors_cache: dict[str, Any] = field(default_factory=dict)
+
+    def tail_factors(self, as_of: datetime):  # noqa: ANN201
+        """Tail-calibration factors fitted on replay forecasts matured before ``as_of``
+        (None when the journal is absent or has too few matured replays)."""
+        if self.journal is None:
+            return None
+        key = ensure_utc(as_of).replace(minute=0, second=0, microsecond=0).isoformat()
+        if key not in self._factors_cache:
+            from nightwatch.journal.adjust import factors_as_of
+
+            try:
+                df = self.journal.forecasts(kind="replay", matured_only=True)
+                self._factors_cache[key] = factors_as_of(df, as_of) if not df.empty else None
+            except Exception:  # noqa: BLE001
+                log.exception("tail factor fit failed")
+                self._factors_cache[key] = None
+        return self._factors_cache[key]
 
     def tickers_with_data(self) -> tuple[str, ...]:
         """Universe tickers whose spot symbol has stored hourly bars (one SQL query, cached)."""
@@ -109,6 +127,9 @@ class HorizonReport:
     hours: float
     cohort: CohortStats
     baseline: BaselineComparison | None
+    p5_adjusted: float | None = None  # tail-calibrated (see journal.adjust)
+    p95_adjusted: float | None = None
+    adjustment: dict[str, Any] | None = None  # k_lo, k_hi, n_fit, fitted_through
 
 
 @dataclass
@@ -261,8 +282,11 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
     sign = 1.0 if r.ticket.side.value == "long" else -1.0
     quantiles: dict[str, float | None] = {k: None for k in ("p5", "p25", "p50", "p75", "p95")}
     if stats is not None and not stats.insufficient:
+        # Raw analog quantiles are journaled (they are what calibration refits on);
+        # the adjusted tails go in the payload so a report can be audited either way.
         qs = sorted(sign * q for q in (stats.p5, stats.p25, stats.median_pct, stats.p75, stats.p95))
         quantiles = dict(zip(("p5", "p25", "p50", "p75", "p95"), qs, strict=True))
+    h = r.analog.horizons[r.primary_horizon] if (r.analog and r.primary_horizon in r.analog.horizons) else None
     mc = r.stress.monte_carlo
     return ctx.journal.record_forecast(
         kind="ticket", ticker=r.ticket.ticker, side=r.ticket.side.value, notional=r.ticket.notional_quote, as_of=r.as_of, bar_ts=r.snapshot.bar_ts,
@@ -270,7 +294,10 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
         analog_n=r.analog.result.n if r.analog else 0, analog_scope=r.analog.scope if r.analog else None, quantiles=quantiles,
         es5=(mc.expected_shortfall_5_pct if mc else None), mc_p5=(mc.p5 if mc else None), mc_p95=(mc.p95 if mc else None),
         verdict=r.verdict.verdict.value, recommended_notional=r.verdict.recommended_notional,
-        payload={"gate": r.gate.decision.value, "reasons": r.verdict.reasons, "labels": r.snapshot.labels, "flags": r.snapshot.quality_flags, "sources": r.sources},
+        payload={
+            "gate": r.gate.decision.value, "reasons": r.verdict.reasons, "labels": r.snapshot.labels, "flags": r.snapshot.quality_flags, "sources": r.sources,
+            "p5_adjusted": (h.p5_adjusted if h else None), "p95_adjusted": (h.p95_adjusted if h else None), "adjustment": (h.adjustment if h else None),
+        },
     )
 
 
@@ -331,13 +358,21 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     exclude = pd.DatetimeIndex([m.ts for m in result.matches])
     base_ts = sample_baseline_times(frame.index[cut], n=min(120, 3 * max(result.n, 1)), bucket_mask=same_bucket, fallback_mask=closed_mask, exclude=exclude, min_separation_h=ctx.analog_config.min_separation_h)
     base_outcomes = [compute_match_outcomes(frame, t.to_pydatetime(), fixed_h=fixed) for t in base_ts]
+    factors = ctx.tail_factors(as_of)
     for name in horizon_names:
         table = outcomes_table(outcomes, name)
         stats = summarize(table, weights=weights, min_sample=ctx.analog_config.min_matches)
         base_table = outcomes_table(base_outcomes, name)
         comparison = compare_to_baseline(table, base_table, min_sample=ctx.analog_config.min_matches) if not table.empty and not base_table.empty else None
         hours = float(table["hours"].mean()) if not table.empty else float("nan")
-        horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison)
+        p5_adj = p95_adj = None
+        adjustment = None
+        if factors is not None and not stats.insufficient:
+            from nightwatch.journal.adjust import apply_factors
+
+            p5_adj, p95_adj = apply_factors(stats.p5, stats.median_pct, stats.p95, factors)
+            adjustment = {"k_lo": factors.k_lo, "k_hi": factors.k_hi, "n_fit": factors.n_fit, "fitted_through": factors.fitted_through.isoformat() if factors.fitted_through else None, "scope": factors.scope}
+        horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison, p5_adjusted=p5_adj, p95_adjusted=p95_adj, adjustment=adjustment)
     if primary in horizons and horizons[primary].cohort.insufficient:
         warnings.append(f"analog cohort for the {primary} horizon is below the minimum sample; verdict falls back to the stop for risk")
     return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes)
@@ -432,10 +467,14 @@ def _regime_multiplier(frame: pd.DataFrame) -> float:
 
 
 def _primary_p5(analog: AnalogSection | None, primary: str) -> float | None:
+    """The 5th-percentile loss the verdict sizes against: tail-calibrated when
+    replay evidence exists, raw otherwise."""
     if analog is None or primary not in analog.horizons:
         return None
-    stats = analog.horizons[primary].cohort
-    return None if stats.insufficient else stats.p5
+    h = analog.horizons[primary]
+    if h.cohort.insufficient:
+        return None
+    return h.p5_adjusted if h.p5_adjusted is not None else h.cohort.p5
 
 
 def _ms(t0: float) -> int:

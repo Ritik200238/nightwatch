@@ -80,6 +80,60 @@ export default function CalibrationPage() {
             </div>
           </Section>
 
+          {rep.adjusted ? (
+            <Section
+              title="Tail adjustment, scored out of sample"
+              subtitle={`Each forecast re-scored with tail factors fitted only on forecasts that had matured before it (${rep.adjusted.n_evaluated} evaluated; latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}). The verdict uses the adjusted tails.`}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Metric</TableHead>
+                    <TableHead className="text-right">Target</TableHead>
+                    <TableHead className="text-right">Raw</TableHead>
+                    <TableHead className="text-right">Adjusted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Outcomes below p5</TableCell>
+                    <TableCell className="tabular text-right">5%</TableCell>
+                    <TableCell className="tabular text-right">{fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}</TableCell>
+                    <TableCell className="tabular text-right font-medium">{fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Outcomes above p95</TableCell>
+                    <TableCell className="tabular text-right">5%</TableCell>
+                    <TableCell className="tabular text-right">{fmtPct(rep.adjusted.raw_hi_coverage * 100, 1, false)}</TableCell>
+                    <TableCell className="tabular text-right font-medium">{fmtPct(rep.adjusted.adj_hi_coverage * 100, 1, false)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Inside the p5–p95 band</TableCell>
+                    <TableCell className="tabular text-right">90%</TableCell>
+                    <TableCell className="tabular text-right">{fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}</TableCell>
+                    <TableCell className="tabular text-right font-medium">{fmtPct(rep.adjusted.adj_band_coverage * 100, 1, false)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>5% tail band</TableCell>
+                    <TableCell className="tabular text-right">green</TableCell>
+                    <TableCell className="text-right">
+                      <Pill tone={rep.adjusted.raw_tail_band === "green" ? "good" : rep.adjusted.raw_tail_band === "amber" ? "warning" : "critical"}>{rep.adjusted.raw_tail_band}</Pill>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Pill tone={rep.adjusted.adj_tail_band === "green" ? "good" : rep.adjusted.adj_tail_band === "amber" ? "warning" : "critical"}>{rep.adjusted.adj_tail_band}</Pill>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Mean p5–p95 width (sharpness)</TableCell>
+                    <TableCell className="tabular text-right">—</TableCell>
+                    <TableCell className="tabular text-right">{rep.adjusted.raw_width.toFixed(2)}%</TableCell>
+                    <TableCell className="tabular text-right font-medium">{rep.adjusted.adj_width.toFixed(2)}%</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </Section>
+          ) : null}
+
           <div className="grid gap-4 lg:grid-cols-2">
             <Section title="Coverage by quantile" subtitle="Observed share of outcomes below each predicted quantile, with a 95% interval.">
               <Table>

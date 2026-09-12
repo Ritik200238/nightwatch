@@ -167,7 +167,14 @@ function AnalogSection({ report }: { report: Report }) {
   const primary = a.horizons[report.primary_horizon];
   const values = a.matches_outcomes.map((m) => m.outcomes[report.primary_horizon]?.ret_pct).filter((x): x is number => typeof x === "number");
   const c = primary?.cohort;
-  const markers = c && !c.insufficient ? [{ value: c.p5 as number, label: "p5" }, { value: c.median_pct as number, label: "median" }, { value: c.p95 as number, label: "p95" }] : [];
+  const markers =
+    c && !c.insufficient
+      ? [
+          { value: (primary?.p5_adjusted ?? c.p5) as number, label: primary?.p5_adjusted != null ? "p5 cal." : "p5" },
+          { value: c.median_pct as number, label: "median" },
+          { value: (primary?.p95_adjusted ?? c.p95) as number, label: primary?.p95_adjusted != null ? "p95 cal." : "p95" },
+        ]
+      : [];
   return (
     <Section
       title="What history says"
@@ -181,9 +188,17 @@ function AnalogSection({ report }: { report: Report }) {
           <div className="grid grid-cols-2 gap-2">
             <Stat label={`Median over ${report.primary_horizon}`} value={fmtPct(c.median_pct)} hint={`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`} />
             <Stat label="Win rate" value={fmtRatio(c.win_rate)} hint={`n = ${c.n}${c.n_pending ? `, ${c.n_pending} pending` : ""}`} />
-            <Stat label="5th percentile" value={fmtPct(c.p5)} hint={`CI [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
+            {primary?.p5_adjusted != null ? (
+              <Stat label="5th percentile (calibrated)" value={fmtPct(primary.p5_adjusted)} hint={`raw ${fmtPct(c.p5)} · tails widened ×${primary.adjustment?.k_lo.toFixed(2)} from ${primary.adjustment?.n_fit} scored replays`} tone="critical" />
+            ) : (
+              <Stat label="5th percentile" value={fmtPct(c.p5)} hint={`CI [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
+            )}
             <Stat label="Worst point in window (p5)" value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
-            <Stat label="95th percentile" value={fmtPct(c.p95)} tone="good" />
+            {primary?.p95_adjusted != null ? (
+              <Stat label="95th percentile (calibrated)" value={fmtPct(primary.p95_adjusted)} hint={`raw ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone="good" />
+            ) : (
+              <Stat label="95th percentile" value={fmtPct(c.p95)} tone="good" />
+            )}
             <Stat label="Max |basis| p95" value={fmtBps(c.max_abs_basis_p95_bps, 0)} hint="inside the window" />
           </div>
         </div>
@@ -249,9 +264,9 @@ function StressSection({ report }: { report: Report }) {
       title="What could go wrong"
       subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour basis observations`}
     >
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
         <div className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[560px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Scenario</TableHead>
