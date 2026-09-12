@@ -43,11 +43,16 @@ export function HealthPill() {
   }
   const warm = health.warm.state === "running" ? ` · warming ${health.warm.done}/${health.warm.total}` : "";
   return (
-    <span role="status" className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-      <span aria-hidden className="h-2 w-2 rounded-full bg-status-good" />
+    <span role="status" title={`${health.tickers_with_data} tokens · last order book ${fmtTime(health.last_book_ts)}${warm}`} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1 text-xs whitespace-nowrap text-muted-foreground">
+      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-status-good" />
+      {/* Narrow screens keep the signal (live, N tokens) and drop the timestamp. */}
       <span className="tabular">
-        {health.tickers_with_data} tokens · book {fmtTime(health.last_book_ts)}
-        {warm}
+        {health.tickers_with_data} tokens
+        <span className="hidden sm:inline">
+          {" · book "}
+          {fmtTime(health.last_book_ts)}
+          {warm}
+        </span>
       </span>
     </span>
   );
