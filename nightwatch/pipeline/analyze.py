@@ -65,6 +65,17 @@ class AnalysisContext:
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
     pooled_tickers: tuple[str, ...] | None = None  # None = all entries with data
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
+    _with_data: tuple[str, ...] | None = None
+
+    def tickers_with_data(self) -> tuple[str, ...]:
+        """Universe tickers whose spot symbol has stored hourly bars (one SQL query, cached)."""
+        if self._with_data is None:
+            rows = self.store._conn.execute(
+                "SELECT DISTINCT symbol FROM bars WHERE venue=? AND interval=?", (Venue.BITGET_SPOT.value, Interval.H1.value)
+            ).fetchall()
+            have = {r[0] for r in rows}
+            self._with_data = tuple(e.ticker for e in self.entries if e.spot_symbol in have)
+        return self._with_data
 
     def entry(self, ticker: str) -> UniverseEntry:
         for e in self.entries:
@@ -248,7 +259,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     same_ticker_episodes = result.n_distinct_available if result.ok else result.n_distinct_available
     if not result.ok or result.n < ctx.analog_config.k:
         pooled_parts = [(ticket.ticker, frame)]
-        tickers = ctx.pooled_tickers or tuple(e.ticker for e in ctx.entries)
+        tickers = ctx.pooled_tickers or ctx.tickers_with_data()
         for t in tickers:
             if t == ticket.ticker:
                 continue

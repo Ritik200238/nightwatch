@@ -38,6 +38,7 @@ import numpy as np
 import pandas as pd
 
 from nightwatch.features.snapshot import FEATURE_COLUMNS
+from nightwatch.time_utils import index_epoch_ns
 
 MAD_SCALE = 1.4826
 
@@ -160,18 +161,7 @@ class AnalogEngine:
         scale = _distance_scale(Zw, hist.index, cfg.min_separation_h)
 
         order = np.argsort(d, kind="stable")
-        chosen: list[int] = []
-        chosen_ts: list[pd.Timestamp] = []
-        sep = pd.Timedelta(hours=cfg.min_separation_h)
-        n_distinct = 0
-        for i in order:
-            ts_i = hist.index[i]
-            if any(abs(ts_i - t) < sep for t in chosen_ts):
-                continue
-            n_distinct += 1
-            if len(chosen) < cfg.k:
-                chosen.append(int(i))
-                chosen_ts.append(ts_i)
+        chosen, n_distinct = _select_episodes(order, hist.index, cfg.k, cfg.min_separation_h)
         if len(chosen) < cfg.min_matches:
             return self._refuse(f"only {len(chosen)} distinct episodes (need {cfg.min_matches})", history, used, dropped, query, n_candidates=n_candidates, n_distinct=len(chosen))
 
@@ -211,6 +201,43 @@ class AnalogEngine:
 
 
 # -------------------------------------------------------------------------- helpers
+
+
+def _select_episodes(order: np.ndarray, index: pd.DatetimeIndex, k: int, min_separation_h: int) -> tuple[list[int], int]:
+    """Walk candidates by ascending distance; keep one per episode.
+
+    A candidate is skipped when it lies within ``min_separation_h`` of an already
+    *selected* match (selected set stays ≤ k, so the check is cheap). ``n_distinct``
+    counts how many episodes exist in total, which the caller reports so a thin
+    history is visible. Timestamps are compared as int64 nanoseconds.
+    """
+    ts_ns = index_epoch_ns(index)
+    sep_ns = np.int64(min_separation_h) * 3_600_000_000_000
+    chosen: list[int] = []
+    chosen_ns = np.empty(0, dtype=np.int64)
+    # For the distinct count beyond k we keep a separate, growing set; capped so a
+    # 50k-row history does not cost 50k × 50k comparisons.
+    distinct_ns = np.empty(0, dtype=np.int64)
+    n_distinct = 0
+    cap = max(k * 50, 2000)
+    for i in order:
+        t = ts_ns[i]
+        if chosen_ns.size and np.abs(chosen_ns - t).min() < sep_ns:
+            continue
+        if len(chosen) < k:
+            chosen.append(int(i))
+            chosen_ns = np.append(chosen_ns, t)
+            n_distinct += 1
+            continue
+        # Beyond k we only count; use the distinct set (bounded) for the separation test.
+        if distinct_ns.size and np.abs(distinct_ns - t).min() < sep_ns:
+            continue
+        n_distinct += 1
+        if distinct_ns.size < cap:
+            distinct_ns = np.append(distinct_ns, t)
+        else:
+            break  # enough evidence that the history is deep
+    return chosen, n_distinct
 
 
 def _isnan(v) -> bool:  # noqa: ANN001

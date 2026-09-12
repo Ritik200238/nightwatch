@@ -21,6 +21,8 @@ from enum import Enum
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
+import numpy as np
+
 UTC = timezone.utc
 ET = ZoneInfo("America/New_York")
 
@@ -71,6 +73,13 @@ def from_epoch_ms(ms: int | str | float) -> datetime:
 
 def to_epoch_ms(ts: datetime) -> int:
     return int(ensure_utc(ts).timestamp() * 1000)
+
+
+def index_epoch_ns(index) -> "np.ndarray":  # noqa: ANN001
+    """Epoch nanoseconds (int64) for a tz-aware DatetimeIndex, independent of the
+    index's stored resolution (pandas ≥ 3 defaults to microseconds, so ``asi8`` must
+    not be assumed to be nanoseconds)."""
+    return index.tz_convert("UTC").as_unit("ns").asi8.astype("int64")
 
 
 def floor_to_interval(ts: datetime, interval: timedelta) -> datetime:

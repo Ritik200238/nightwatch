@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from nightwatch.time_utils import index_epoch_ns
+
 DEFAULT_MIN_SAMPLE = 15
 PCTS = (5, 25, 50, 75, 95)
 
@@ -71,11 +73,21 @@ def _pct(a: np.ndarray, p: float) -> float:
 
 
 def bootstrap_ci(values: np.ndarray, stat, *, n_boot: int = 4000, seed: int = 11) -> Interval95:  # noqa: ANN001
+    """Percentile bootstrap CI. ``stat`` is ``"mean"``, ``"median"``, ``("percentile", p)``
+    or a callable accepting ``axis=1`` on an (n_boot, n) array — vectorised so 4000
+    resamples cost milliseconds, not seconds."""
     rng = np.random.default_rng(seed)
     n = len(values)
     idx = rng.integers(0, n, size=(n_boot, n))
     samples = values[idx]
-    stats = np.apply_along_axis(stat, 1, samples)
+    if stat == "mean":
+        stats = samples.mean(axis=1)
+    elif stat == "median":
+        stats = np.median(samples, axis=1)
+    elif isinstance(stat, tuple) and stat[0] == "percentile":
+        stats = np.percentile(samples, stat[1], axis=1)
+    else:
+        stats = stat(samples, axis=1)
     return Interval95(low=float(np.percentile(stats, 2.5)), high=float(np.percentile(stats, 97.5)))
 
 
@@ -118,9 +130,9 @@ def summarize(table: pd.DataFrame, *, weights: np.ndarray | None = None, min_sam
         excess_mean_pct=float(excess.mean()) if excess.size else None,
         max_abs_basis_p95_bps=_pct(basis, 95) if basis.size else None,
         tag_counts=m["tag"].value_counts().to_dict(),
-        ci_mean=bootstrap_ci(r, np.mean),
-        ci_median=bootstrap_ci(r, np.median),
-        ci_p5=bootstrap_ci(r, lambda a: np.percentile(a, 5)),
+        ci_mean=bootstrap_ci(r, "mean"),
+        ci_median=bootstrap_ci(r, "median"),
+        ci_p5=bootstrap_ci(r, ("percentile", 5)),
     )
     if weights is not None:
         w = np.asarray(weights, dtype=float)
@@ -162,17 +174,19 @@ def sample_baseline_times(history_index: pd.DatetimeIndex, *, n: int, bucket_mas
     candidates = history_index if bucket_mask is None else history_index[bucket_mask.to_numpy()]
     if fallback_mask is not None and len(candidates) < min_pool:
         candidates = history_index[fallback_mask.to_numpy()]
+    cand_ns = index_epoch_ns(candidates)
+    sep_ns = np.int64(min_separation_h) * 3_600_000_000_000
     if exclude is not None and len(exclude):
-        keep = np.ones(len(candidates), dtype=bool)
-        for t in exclude:
-            keep &= np.abs((candidates - t).total_seconds()) >= min_separation_h * 3600
-        candidates = candidates[keep]
-    order = rng.permutation(len(candidates))
-    chosen: list[pd.Timestamp] = []
+        ex_ns = index_epoch_ns(pd.DatetimeIndex(exclude))
+        keep = (np.abs(cand_ns[:, None] - ex_ns[None, :]) >= sep_ns).all(axis=1)
+        cand_ns = cand_ns[keep]
+    order = rng.permutation(cand_ns.size)
+    chosen_ns = np.empty(0, dtype=np.int64)
     for i in order:
-        t = candidates[i]
-        if all(abs((t - c).total_seconds()) >= min_separation_h * 3600 for c in chosen):
-            chosen.append(t)
-            if len(chosen) >= n:
-                break
-    return chosen
+        t = cand_ns[i]
+        if chosen_ns.size and np.abs(chosen_ns - t).min() < sep_ns:
+            continue
+        chosen_ns = np.append(chosen_ns, t)
+        if chosen_ns.size >= n:
+            break
+    return [pd.Timestamp(t, tz="UTC") for t in chosen_ns]
