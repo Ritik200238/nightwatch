@@ -149,6 +149,9 @@ export function ReportView({ report }: { report: Report }) {
         </Section>
       </div>
 
+      {/* The whole book */}
+      <PortfolioSection report={report} />
+
       {/* The trader's own record */}
       <BreakerStrip report={report} />
 
@@ -355,6 +358,72 @@ const LESSON_LABEL: Record<string, string> = {
   better_than_forecast: "better than forecast",
   no_distribution: "no forecast",
 };
+
+function PortfolioSection({ report }: { report: Report }) {
+  const p = report.portfolio;
+  if (!p) return null;
+  const added = p.before.tail_loss_quote != null && p.after.tail_loss_quote != null ? p.after.tail_loss_quote - p.before.tail_loss_quote : null;
+  const div = p.after.diversification_ratio;
+  return (
+    <Section
+      title="What it does to the book"
+      subtitle={`Your ${p.positions.length} position${p.positions.length === 1 ? "" : "s"} together, over ${fmtHours(p.horizon_h)}. Correlations are measured on the tokens' own hourly history, not assumed.`}
+      action={div != null ? <Pill tone={div > 0.9 ? "critical" : div > 0.75 ? "warning" : "good"}>{div > 0.9 ? "one bet" : div > 0.75 ? "thin diversification" : "diversified"}</Pill> : null}
+    >
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div className="grid grid-cols-2 gap-2">
+          <Stat label="Gross exposure" value={fmtUsd(p.after.gross_quote)} hint={p.after.gross_pct_of_equity != null ? `${p.after.gross_pct_of_equity.toFixed(0)}% of equity · was ${fmtUsd(p.before.gross_quote)}` : `was ${fmtUsd(p.before.gross_quote)}`} />
+          <Stat label="Net exposure" value={fmtUsd(p.after.net_quote)} hint={p.after.net_pct_of_equity != null ? `${p.after.net_pct_of_equity.toFixed(0)}% of equity` : undefined} />
+          <Stat label="Largest name" value={p.after.largest_name ?? "—"} hint={p.after.largest_pct_of_gross != null ? `${p.after.largest_pct_of_gross.toFixed(0)}% of gross · top three ${p.after.top3_pct_of_gross?.toFixed(0)}%` : undefined} tone={p.after.largest_pct_of_gross != null && p.after.largest_pct_of_gross > 60 ? "warning" : undefined} />
+          <Stat
+            label="Book 5th-percentile loss"
+            value={fmtUsd(p.after.tail_loss_quote)}
+            hint={added != null ? `this trade adds ${fmtUsd(Math.abs(added))}` : "needs history for every name"}
+            tone="critical"
+          />
+          {p.after.standalone_tail_sum_quote != null ? (
+            <Stat label="If the names were independent" value={fmtUsd(p.after.standalone_tail_sum_quote)} hint={div != null ? `the book keeps ${fmtPct(div * 100, 0, false)} of that` : undefined} />
+          ) : null}
+          {p.mean_correlation_to_book != null ? (
+            <Stat label={`${report.ticket.ticker} vs the book`} value={p.mean_correlation_to_book.toFixed(2)} hint="mean measured correlation" tone={p.mean_correlation_to_book > 0.7 ? "warning" : undefined} />
+          ) : null}
+        </div>
+        <div>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">Measured correlation</p>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[320px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Pair</TableHead>
+                  <TableHead className="text-right">Correlation</TableHead>
+                  <TableHead className="text-right">Hours</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {p.correlations.slice(0, 6).map((c) => (
+                  <TableRow key={`${c.a}-${c.b}`}>
+                    <TableCell>
+                      {c.a} · {c.b}
+                    </TableCell>
+                    <TableCell className={`tabular text-right ${c.correlation != null && c.correlation > 0.7 ? "text-status-warning" : ""}`}>{c.correlation == null ? "not enough overlap" : c.correlation.toFixed(2)}</TableCell>
+                    <TableCell className="tabular text-right text-muted-foreground">{c.overlap_hours.toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      </div>
+      {p.notes.length ? (
+        <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+          {p.notes.map((n) => (
+            <li key={n}>– {n}</li>
+          ))}
+        </ul>
+      ) : null}
+    </Section>
+  );
+}
 
 /** Marking a trade taken is what turns an analysis into part of the loss record. */
 function TakenButton({ forecastId }: { forecastId: number }) {

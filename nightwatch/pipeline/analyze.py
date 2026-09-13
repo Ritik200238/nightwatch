@@ -31,6 +31,9 @@ from nightwatch.data.sync import UniverseEntry
 from nightwatch.decision.breaker import BreakerPolicy, BreakerReport, BreakerState
 from nightwatch.decision.breaker import evaluate as evaluate_breaker
 from nightwatch.decision.gate import GatePolicy, GateReport
+from nightwatch.decision.portfolio import PortfolioReport
+from nightwatch.decision.portfolio import Position as BookPosition
+from nightwatch.decision.portfolio import evaluate as evaluate_portfolio
 from nightwatch.decision.sensitivity import DecisionContext, SensitivityReport, build_sensitivity
 from nightwatch.decision.sizing import SizingPolicy, SizingResult, VerdictResult
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
@@ -189,6 +192,7 @@ class AnalysisReport:
     sensitivity: SensitivityReport | None
     lessons: list[dict[str, Any]]
     breaker: BreakerReport
+    portfolio: PortfolioReport | None
     sources: list[dict[str, Any]]
     warnings: list[str]
     timings_ms: dict[str, int]
@@ -296,7 +300,29 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         except Exception:  # noqa: BLE001 - memory is a nicety; it must never break a verdict
             log.exception("lesson recall failed")
 
-    # 8. Sensitivity: what would have to change.
+    # 8. The rest of the book, if the trader told us about it.
+    t0 = time.perf_counter()
+    portfolio = None
+    if ticket.open_positions:
+        try:
+            held = [BookPosition(t.upper(), s, float(n)) for t, s, n in ticket.open_positions]
+            frames: dict[str, pd.DataFrame] = {ticket.ticker: frame}
+            for pos in held:
+                if pos.ticker not in frames:
+                    try:
+                        frames[pos.ticker] = ctx.feature_frame(pos.ticker, as_of)
+                    except (InsufficientData, KeyError):
+                        frames[pos.ticker] = pd.DataFrame()
+            portfolio = evaluate_portfolio(
+                held, BookPosition(ticket.ticker, ticket.side.value, ticket.notional_quote), frames,
+                equity=ticket.account_equity_quote, horizon_h=horizon_h,
+            )
+        except Exception:  # noqa: BLE001 - the book view must never break the verdict
+            log.exception("portfolio evaluation failed")
+
+    timings["portfolio"] = _ms(t0)
+
+    # 9. Sensitivity: what would have to change.
     t0 = time.perf_counter()
     sensitivity = None
     if ctx.sensitivity:
@@ -310,7 +336,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, sources=sources, warnings=warnings, timings_ms=timings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, sources=sources, warnings=warnings, timings_ms=timings,
     )
     if ctx.journal is not None and record:
         try:

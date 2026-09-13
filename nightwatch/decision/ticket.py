@@ -36,6 +36,8 @@ class TradeTicket:
     invalidation: str = ""
     hedge_ratio: float | None = None  # trader's own preference, if any
     created_at: datetime | None = None
+    # What the trader already holds, so the desk can judge the book and not just the trade.
+    open_positions: tuple[tuple[str, str, float], ...] = ()  # (ticker, side, notional)
     extra: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:

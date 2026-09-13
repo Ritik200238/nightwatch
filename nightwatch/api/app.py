@@ -40,6 +40,12 @@ log = logging.getLogger(__name__)
 CALIBRATION_TTL_SEC = 120
 
 
+class PositionIn(BaseModel):
+    ticker: str
+    side: Side = Side.LONG
+    notional_quote: float = Field(gt=0)
+
+
 class TicketIn(BaseModel):
     ticker: str
     side: Side = Side.LONG
@@ -55,12 +61,14 @@ class TicketIn(BaseModel):
     hedge_ratio: float | None = Field(default=None, ge=0, le=1)
     as_of: datetime | None = None
     record: bool = True
+    open_positions: list[PositionIn] = Field(default_factory=list)
 
     def to_ticket(self) -> TradeTicket:
         return TradeTicket(
             ticker=self.ticker.upper(), side=self.side, notional_quote=self.notional_quote, account_equity_quote=self.account_equity_quote,
             horizon_kind=self.horizon_kind, horizon_hours=self.horizon_hours, entry_price=self.entry_price, stop_price=self.stop_price,
             target_price=self.target_price, thesis=self.thesis, invalidation=self.invalidation, hedge_ratio=self.hedge_ratio,
+            open_positions=tuple((p.ticker.upper(), p.side.value, p.notional_quote) for p in self.open_positions),
         )
 
 

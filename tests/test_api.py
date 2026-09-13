@@ -71,3 +71,21 @@ def test_chat_without_credentials_explains_itself(client, monkeypatch):
     r = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20k TSLA"}]})
     assert r.status_code == 503 and "ticket form" in r.json()["detail"]
     assert client.get("/health").json()["chat_ready"] in (True, False)
+
+
+def test_the_book_is_judged_alongside_the_trade(client):
+    """Given what the trader already holds, the report says what the trade adds to it."""
+    payload = {
+        "ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000,
+        "stop_price": 300, "thesis": "t", "invalidation": "i", "as_of": AS_OF.isoformat(), "record": False,
+        "open_positions": [{"ticker": "NVDA", "side": "long", "notional_quote": 30000}],
+    }
+    body = client.post("/analyze", json=payload).json()
+    p = body["portfolio"]
+    assert p is not None
+    assert p["before"]["gross_quote"] == 30000 and p["after"]["gross_quote"] == 50000
+    assert p["after"]["largest_name"] == "NVDA"
+    assert any(c["a"] in ("NVDA", "TSLA") and c["b"] in ("NVDA", "TSLA") for c in p["correlations"])
+    # Without a book, there is nothing to say.
+    alone = client.post("/analyze", json={**payload, "open_positions": []}).json()
+    assert alone["portfolio"] is None

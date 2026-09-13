@@ -42,6 +42,7 @@ export interface TicketInput {
   hedge_ratio?: number | null;
   as_of?: string | null;
   record?: boolean;
+  open_positions?: { ticker: string; side: Side; notional_quote: number }[];
 }
 
 export interface UniverseEntry {
@@ -354,6 +355,36 @@ export interface BreakerReport {
   equity: number | null;
 }
 
+export interface BookRisk {
+  gross_quote: number;
+  net_quote: number;
+  gross_pct_of_equity: number | null;
+  net_pct_of_equity: number | null;
+  largest_name: string | null;
+  largest_pct_of_gross: number | null;
+  top3_pct_of_gross: number | null;
+  tail_loss_quote: number | null;
+  standalone_tail_sum_quote: number | null;
+  diversification_ratio: number | null;
+}
+
+export interface PairCorrelation {
+  a: string;
+  b: string;
+  correlation: number | null;
+  overlap_hours: number;
+}
+
+export interface PortfolioReport {
+  positions: { ticker: string; side: string; notional_quote: number }[];
+  before: BookRisk;
+  after: BookRisk;
+  correlations: PairCorrelation[];
+  mean_correlation_to_book: number | null;
+  notes: string[];
+  horizon_h: number;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -407,6 +438,7 @@ export interface Report {
   sensitivity: Sensitivity | null;
   lessons: Lesson[];
   breaker: BreakerReport;
+  portfolio: PortfolioReport | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

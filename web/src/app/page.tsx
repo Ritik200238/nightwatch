@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Chat } from "@/components/desk/chat";
+import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
 import { TicketForm } from "@/components/desk/ticket-form";
 import { ReportView } from "@/components/report/report-view";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ export default function DeskPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<TicketInput | null>(null);
   const [equity, setEquity] = useState<number | null>(200000);
+  const { positions, setPositions } = useOpenPositions();
 
   async function loadUniverse() {
     setUniverseError(null);
@@ -37,7 +39,8 @@ export default function DeskPage() {
     setLastTicket(ticket);
     setEquity(ticket.account_equity_quote ?? null);
     try {
-      setReport(await api.analyze(ticket));
+      // The book travels with the ticket so the report can judge both.
+      setReport(await api.analyze({ ...ticket, open_positions: positions }));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "The analysis failed.");
     } finally {
@@ -63,7 +66,12 @@ export default function DeskPage() {
           </TabsList>
           <TabsContent value="form" className="pt-3">
             {universe ? (
-              <TicketForm universe={universe} busy={busy} onSubmit={run} />
+              <div className="space-y-5">
+                <TicketForm universe={universe} busy={busy} onSubmit={run} />
+                <div className="border-t border-border pt-4">
+                  <OpenPositions universe={universe} positions={positions} onChange={setPositions} />
+                </div>
+              </div>
             ) : universeError ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
                 <p className="font-medium">Couldn&apos;t load the token list</p>
