@@ -108,3 +108,11 @@ def test_verdict_go_reduce_hedge_no_go_review():
     assert decide(t, bad_gate, recommend_size(t, sizing_inputs())).verdict == Verdict.NO_GO
     review_gate = evaluate_gate(ticket(thesis=""), inputs())
     assert decide(t, review_gate, recommend_size(t, sizing_inputs())).verdict == Verdict.REVIEW
+
+
+def test_a_token_that_has_stopped_trading_cannot_pass_as_clean():
+    """The flag carries the number of hours, so the gate matches it by prefix."""
+    rep = evaluate_gate(ticket(), inputs(quality_flags=("spot_has_not_traded_for_14h",)))
+    assert rep.decision == GateDecision.REVIEW_REQUIRED
+    rule = next(r for r in rep.rules if r.rule == "data_quality")
+    assert "spot_has_not_traded_for_14h" in rule.reason

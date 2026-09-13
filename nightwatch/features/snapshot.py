@@ -86,6 +86,10 @@ def compute_feature_frame(store: Store, spec: SeriesSpec, start: datetime, end: 
     return f
 
 
+STALE_FLAG_H = 6.0  # the token has gone quiet: say so on the report and make the gate ask
+STALE_REFUSE_H = 48.0  # nothing usable left; refuse rather than price a two-day-old quote
+
+
 def quality_flags_for_row(row: pd.Series, frame: pd.DataFrame) -> list[str]:
     flags: list[str] = []
     tail = frame.tail(24)
@@ -123,8 +127,12 @@ def build_snapshot(store: Store, spec: SeriesSpec, as_of: datetime | None = None
     if traded.empty:
         raise InsufficientData(f"no traded bars for {spec.ticker} before {as_of.isoformat()}")
     last_trade_ts = traded.index[-1].to_pydatetime()
-    if as_of - last_trade_ts > timedelta(hours=6):
-        raise InsufficientData(f"last traded bar for {spec.ticker} is {last_trade_ts.isoformat()}, more than 6h before as_of")
+    stale_h = (as_of - last_trade_ts).total_seconds() / 3600.0
+    # A token that has not traded for two days has no usable price at all. Short of that,
+    # refusing would hide the most useful fact about it: analyse, and flag it loudly. The
+    # flag is one the gate blocks on, so a stale name can never pass as a clean GO.
+    if stale_h > STALE_REFUSE_H:
+        raise InsufficientData(f"{spec.ticker} has not traded since {last_trade_ts.isoformat()}, {stale_h:.0f}h before as_of")
 
     features = {c: _clean(row.get(c)) for c in FEATURE_COLUMNS}
     labels = {c: str(row.get(c)) for c in LABEL_COLUMNS}
@@ -142,7 +150,7 @@ def build_snapshot(store: Store, spec: SeriesSpec, as_of: datetime | None = None
         features=features,
         labels=labels,
         prices=prices,
-        quality_flags=quality_flags_for_row(row, done),
+        quality_flags=quality_flags_for_row(row, done) + ([f"spot_has_not_traded_for_{stale_h:.0f}h"] if stale_h > STALE_FLAG_H else []),
         history_hours=int(done["spot_close"].notna().sum()),
     )
     return FeatureSnapshot(**{**asdict(snap), "content_hash": _hash(snap)})

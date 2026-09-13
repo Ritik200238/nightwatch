@@ -127,6 +127,7 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
         jobs: list[PeriodicJob] = []
         if not args.no_jobs:
             from nightwatch.journal.journal import Journal
+            from nightwatch.journal.postmortem import mature_and_learn
 
             fred = FredClient(settings.fred_api_key)
             nasdaq = NasdaqEarningsClient()
@@ -137,7 +138,7 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False),
                 PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False),
                 # Score live tickets as soon as their horizon has passed so calibration stays current.
-                PeriodicJob("mature-forecasts", 900, lambda: journal.mature(spot_symbol_for={e.ticker: e.spot_symbol for e in entries})),
+                PeriodicJob("mature-forecasts", 900, lambda: mature_and_learn(journal, spot_symbol_for={e.ticker: e.spot_symbol for e in entries})),
             ]
         rec = OrderBookRecorder(
             store, spot=spot, perp=perp, entries=entries, interval_sec=args.interval,

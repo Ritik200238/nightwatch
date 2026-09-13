@@ -46,6 +46,21 @@ def test_analyze_endpoint_json_and_text_and_journal(client):
     assert client.post("/analyze", json={**payload, "ticker": "NOPE"}).status_code == 404
 
 
+def test_a_quiet_token_is_analysed_with_a_warning_not_refused(client, seeded_store, monkeypatch):  # noqa: F811
+    """A thin token can go hours without a trade. Refusing hides the most useful fact."""
+    from datetime import timedelta
+
+    late = AS_OF + timedelta(hours=20)
+    payload = {"ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000, "stop_price": 300,
+               "thesis": "t", "invalidation": "i", "as_of": late.isoformat(), "record": False}
+    r = client.post("/analyze", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert any(f.startswith("spot_has_not_traded_for_") for f in body["snapshot"]["quality_flags"])
+    assert body["gate"]["decision"] == "REVIEW_REQUIRED"
+    assert body["verdict"]["verdict"] == "REVIEW"
+
+
 def test_calibration_endpoint_shape(client):
     r = client.get("/calibration").json()
     assert "coverage" in r and "tail" in r and r["tail"]["band"] in ("green", "amber", "red", "insufficient")

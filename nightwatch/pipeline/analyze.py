@@ -184,6 +184,7 @@ class AnalysisReport:
     sizing: SizingResult
     verdict: VerdictResult
     sensitivity: SensitivityReport | None
+    lessons: list[dict[str, Any]]
     sources: list[dict[str, Any]]
     warnings: list[str]
     timings_ms: dict[str, int]
@@ -266,7 +267,23 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     gate, sizing, verdict = ev.gate, ev.sizing, ev.verdict
     timings["decision"] = _ms(t0)
 
-    # 7. Sensitivity: what would have to change.
+    # 7. What happened last time conditions looked like this.
+    lessons: list[dict[str, Any]] = []
+    if ctx.journal is not None:
+        try:
+            from nightwatch.journal.postmortem import LessonBook
+
+            book = LessonBook(ctx.journal)
+            for x in book.recall(ticker=ticket.ticker, bucket=snapshot.labels.get("bucket"), regime_label=snapshot.labels.get("regime_label"), as_of=as_of, limit=3):
+                lessons.append({
+                    "forecast_id": x.forecast_id, "as_of": x.as_of.isoformat(), "ticker": x.ticker, "kind": x.kind,
+                    "classification": x.classification.value, "text": x.text, "notable": x.notable,
+                    "ret_pct": x.ret_pct, "p5": x.p5, "bucket": x.bucket, "regime_label": x.regime_label,
+                })
+        except Exception:  # noqa: BLE001 - memory is a nicety; it must never break a verdict
+            log.exception("lesson recall failed")
+
+    # 8. Sensitivity: what would have to change.
     t0 = time.perf_counter()
     sensitivity = None
     if ctx.sensitivity:
@@ -280,7 +297,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, sources=sources, warnings=warnings, timings_ms=timings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, sources=sources, warnings=warnings, timings_ms=timings,
     )
     if ctx.journal is not None and record:
         try:

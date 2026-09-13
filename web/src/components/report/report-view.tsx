@@ -148,6 +148,9 @@ export function ReportView({ report }: { report: Report }) {
         </Section>
       </div>
 
+      {/* What happened last time */}
+      <LessonsSection report={report} />
+
       {/* What would change it */}
       <SensitivitySection report={report} />
 
@@ -330,6 +333,44 @@ function ClosestMoments({ report }: { report: Report }) {
 }
 
 const SIZE_TONE: Record<string, "good" | "warning" | "critical" | "info" | "muted"> = { GO: "good", REDUCE_TO: "warning", HEDGE: "info", NO_GO: "critical", REVIEW: "muted" };
+
+const LESSON_TONE: Record<string, "good" | "warning" | "critical" | "info" | "muted"> = {
+  worse_than_stress: "critical",
+  bad_tail: "warning",
+  as_expected: "muted",
+  good_tail: "info",
+  better_than_forecast: "good",
+  no_distribution: "muted",
+};
+
+const LESSON_LABEL: Record<string, string> = {
+  worse_than_stress: "worse than the stress case",
+  bad_tail: "bad tail",
+  as_expected: "as expected",
+  good_tail: "good tail",
+  better_than_forecast: "better than forecast",
+  no_distribution: "no forecast",
+};
+
+function LessonsSection({ report }: { report: Report }) {
+  const lessons = report.lessons ?? [];
+  if (lessons.length === 0) return null;
+  return (
+    <Section
+      title="What happened last time"
+      subtitle="Past calls in conditions like these, scored after the fact. Each is one episode, not evidence: the distribution above is what you size against."
+    >
+      <ul className="space-y-2">
+        {lessons.map((l) => (
+          <li key={l.forecast_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+            <Pill tone={LESSON_TONE[l.classification] ?? "muted"}>{LESSON_LABEL[l.classification] ?? l.classification}</Pill>
+            <span className="flex-1 text-muted-foreground">{l.text}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
 
 function SensitivitySection({ report }: { report: Report }) {
   const sen = report.sensitivity;

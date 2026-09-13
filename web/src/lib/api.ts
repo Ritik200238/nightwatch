@@ -295,6 +295,20 @@ export interface Sensitivity {
   notes: string[];
 }
 
+export interface Lesson {
+  forecast_id: number;
+  as_of: string;
+  ticker: string;
+  kind: string;
+  classification: string;
+  text: string;
+  notable: boolean;
+  ret_pct: number;
+  p5: number | null;
+  bucket: string | null;
+  regime_label: string | null;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -346,6 +360,7 @@ export interface Report {
   sizing: { recommended_notional: number | null; binding_cap: string | null; caps: Cap[]; hedge_ratio_suggested: number | null; hedge_rationale: string };
   verdict: { verdict: "GO" | "REDUCE_TO" | "HEDGE" | "NO_GO" | "REVIEW"; requested_notional: number; recommended_notional: number | null; hedge_ratio: number | null; reasons: string[]; caps: Cap[] };
   sensitivity: Sensitivity | null;
+  lessons: Lesson[];
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

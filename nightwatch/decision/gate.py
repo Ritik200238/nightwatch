@@ -27,6 +27,8 @@ from enum import Enum
 from nightwatch.decision.ticket import TradeTicket
 
 BLOCKING_QUALITY_FLAGS = frozenset({"index_price_missing", "spot_no_trade_share_24h_gt_25pct"})
+# Flags matched by prefix rather than exact name, because they carry a measurement.
+BLOCKING_QUALITY_PREFIXES = ("spot_has_not_traded_for_",)
 
 
 class GateDecision(str, Enum):
@@ -152,7 +154,7 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
         rules.append(RuleResult("revenge_cooldown", GateDecision.GO, "no recent losing exit"))
 
     # 6. Data quality.
-    blocking = sorted(set(inputs.quality_flags) & BLOCKING_QUALITY_FLAGS)
+    blocking = sorted(f for f in inputs.quality_flags if f in BLOCKING_QUALITY_FLAGS or f.startswith(BLOCKING_QUALITY_PREFIXES))
     if blocking:
         rules.append(RuleResult("data_quality", GateDecision.REVIEW_REQUIRED, "analysis inputs degraded: " + ", ".join(blocking)))
     else:

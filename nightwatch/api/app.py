@@ -30,6 +30,7 @@ from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.features.snapshot import InsufficientData, build_snapshot
 from nightwatch.journal.calibration import calibrate
 from nightwatch.journal.journal import Journal
+from nightwatch.journal.postmortem import LessonBook, mature_and_learn
 from nightwatch.pipeline.analyze import AnalysisContext, analyze
 from nightwatch.pipeline.render import render_text
 from nightwatch.stress.scenarios import Side
@@ -198,7 +199,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if cached and (utc_now() - cached[0]).total_seconds() < CALIBRATION_TTL_SEC:
             return cached[1]
         with s.lock:
-            matured = s.journal.mature(spot_symbol_for={e.ticker: e.spot_symbol for e in s.entries})
+            matured, _ = mature_and_learn(s.journal, spot_symbol_for={e.ticker: e.spot_symbol for e in s.entries})
             df = s.journal.forecasts(ticker=ticker.upper() if ticker else None, kind=kind, matured_only=True)
         rep = calibrate(df)
         from dataclasses import asdict
@@ -213,6 +214,24 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             s.calibration_cache.clear()  # new outcomes invalidate every view
         s.calibration_cache[key] = (utc_now(), out)
         return out
+
+    @app.get("/lessons")
+    def lessons(ticker: str | None = None, limit: int = Query(20, le=200)) -> dict[str, Any]:
+        s = st()
+        book = LessonBook(s.journal)
+        rows = s.journal._conn.execute(
+            "SELECT text, classification, ticker, as_of, ret_pct, p5, kind FROM lessons"
+            + (" WHERE ticker = ?" if ticker else "")
+            + " ORDER BY matured_at DESC LIMIT ?",
+            ((ticker.upper(), limit) if ticker else (limit,)),
+        ).fetchall()
+        return {
+            "summary": book.summary(ticker=ticker.upper() if ticker else None),
+            "lessons": [
+                {"text": r[0], "classification": r[1], "ticker": r[2], "as_of": datetime.fromtimestamp(r[3] / 1000, tz=UTC).isoformat(), "ret_pct": r[4], "p5": r[5], "kind": r[6]}
+                for r in rows
+            ],
+        }
 
     @app.get("/forecasts")
     def forecasts(ticker: str | None = None, kind: str | None = None, limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:
