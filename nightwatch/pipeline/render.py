@@ -91,6 +91,18 @@ def render_text(r: AnalysisReport) -> str:
         if sen.widest_stop_pct_for_requested_size is not None:
             lines.append(f"  stop: up to {sen.widest_stop_pct_for_requested_size:.2f}% away keeps the requested size inside the risk budget")
         lines.append("")
+    if r.regimes and r.regimes.regimes:
+        rm = r.regimes
+        cur = rm.regime(rm.current)
+        lines.append(f"REGIME MAP ({rm.n_fitted} past hours, {len(rm.regimes)} states; {rm.note})")
+        for g in rm.regimes:
+            mark = "*" if g.id == rm.current else " "
+            band = f"next {rm.horizon_h}h med {g.next_ret_median_pct:+.2f}% p5 {g.next_ret_p5_pct:+.2f}%" if g.next_ret_median_pct is not None else f"only {g.n_outcomes} outcomes"
+            lines.append(f"  {mark} {g.id}: {g.description:<52} {g.share:>4.0%} of hours, stays {g.persistence:.0%} | {band}")
+        if cur is not None:
+            nxt = sorted(((j, p) for j, p in enumerate(rm.transitions[rm.current]) if j != rm.current), key=lambda kv: -kv[1])[:2]
+            lines.append("  most likely next: " + ", ".join(f"regime {j} {p:.0%}" for j, p in nxt))
+        lines.append("")
     lines.append("SIZING CAPS")
     for c in r.sizing.caps:
         mark = "*" if c.name == r.sizing.binding_cap else " "

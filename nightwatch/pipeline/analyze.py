@@ -24,6 +24,8 @@ import pandas as pd
 from nightwatch.analog.cohort import BaselineComparison, CohortStats, compare_to_baseline, sample_baseline_times, summarize
 from nightwatch.analog.engine import AnalogConfig, AnalogEngine, AnalogResult, pooled_history
 from nightwatch.analog.outcomes import MatchOutcome, compute_match_outcomes, outcomes_table
+from nightwatch.analog.regimes import RegimeMap
+from nightwatch.analog.regimes import build as build_regimes
 from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Interval, OrderBookSnapshot, Venue
 from nightwatch.data.store import Store
@@ -193,6 +195,7 @@ class AnalysisReport:
     lessons: list[dict[str, Any]]
     breaker: BreakerReport
     portfolio: PortfolioReport | None
+    regimes: RegimeMap | None
     sources: list[dict[str, Any]]
     warnings: list[str]
     timings_ms: dict[str, int]
@@ -300,7 +303,16 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         except Exception:  # noqa: BLE001 - memory is a nicety; it must never break a verdict
             log.exception("lesson recall failed")
 
-    # 8. The rest of the book, if the trader told us about it.
+    # 8. The coarse map: what state this is, and what usually follows it.
+    t0 = time.perf_counter()
+    regimes = None
+    try:
+        regimes = build_regimes(frame, as_of=pd.Timestamp(snapshot.bar_ts), horizon_h=max(1, int(round(horizon_h))))
+    except Exception:  # noqa: BLE001 - a map is not worth breaking a verdict for
+        log.exception("regime map failed")
+    timings["regimes"] = _ms(t0)
+
+    # 9. The rest of the book, if the trader told us about it.
     t0 = time.perf_counter()
     portfolio = None
     if ticket.open_positions:
@@ -322,7 +334,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     timings["portfolio"] = _ms(t0)
 
-    # 9. Sensitivity: what would have to change.
+    # 10. Sensitivity: what would have to change.
     t0 = time.perf_counter()
     sensitivity = None
     if ctx.sensitivity:
@@ -336,7 +348,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, sources=sources, warnings=warnings, timings_ms=timings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings,
     )
     if ctx.journal is not None and record:
         try:

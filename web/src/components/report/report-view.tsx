@@ -149,6 +149,9 @@ export function ReportView({ report }: { report: Report }) {
         </Section>
       </div>
 
+      {/* The coarse map */}
+      <RegimeSection report={report} />
+
       {/* The whole book */}
       <PortfolioSection report={report} />
 
@@ -358,6 +361,62 @@ const LESSON_LABEL: Record<string, string> = {
   better_than_forecast: "better than forecast",
   no_distribution: "no forecast",
 };
+
+function RegimeSection({ report }: { report: Report }) {
+  const m = report.regimes;
+  if (!m || m.regimes.length === 0) return null;
+  const current = m.regimes.find((r) => r.id === m.current) ?? null;
+  const nextLikely = m.current != null ? m.transitions[m.current].map((p, j) => ({ j, p })).filter((x) => x.j !== m.current).sort((a, b) => b.p - a.p).slice(0, 2) : [];
+  return (
+    <Section
+      title="What kind of market this is"
+      subtitle={`${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, basis, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`}
+      action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>now: {current.description}</Pill> : null}
+    >
+      <div className="overflow-x-auto">
+        <Table className="min-w-[640px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>State</TableHead>
+              <TableHead className="text-right">Share of hours</TableHead>
+              <TableHead className="text-right">Stays put</TableHead>
+              <TableHead className="text-right">Next {fmtHours(m.horizon_h)}, median</TableHead>
+              <TableHead className="text-right">Next {fmtHours(m.horizon_h)}, p5</TableHead>
+              <TableHead className="text-right">Episodes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {m.regimes.map((r) => (
+              <TableRow key={r.id} className={r.id === m.current ? "bg-accent/40" : ""}>
+                <TableCell>
+                  <span className={r.id === m.current ? "font-semibold" : ""}>{r.description}</span>
+                  {r.id === m.current ? <span className="ml-2 text-xs text-muted-foreground">now</span> : null}
+                </TableCell>
+                <TableCell className="tabular text-right">{fmtPct(r.share * 100, 0, false)}</TableCell>
+                <TableCell className="tabular text-right text-muted-foreground">{r.persistence == null ? "—" : fmtPct(r.persistence * 100, 0, false)}</TableCell>
+                <TableCell className="tabular text-right">{r.next_ret_median_pct == null ? "—" : fmtPct(r.next_ret_median_pct)}</TableCell>
+                <TableCell className="tabular text-right text-status-critical">{r.next_ret_p5_pct == null ? "—" : fmtPct(r.next_ret_p5_pct)}</TableCell>
+                <TableCell className="tabular text-right text-muted-foreground">{r.n_outcomes.toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      {nextLikely.length ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          If it changes, the usual next states are{" "}
+          {nextLikely.map((x, i) => (
+            <span key={x.j}>
+              {i > 0 ? " and " : ""}
+              <span className="text-foreground">{m.regimes.find((r) => r.id === x.j)?.description}</span> ({fmtPct(x.p * 100, 0, false)})
+            </span>
+          ))}
+          .
+        </p>
+      ) : null}
+    </Section>
+  );
+}
 
 function PortfolioSection({ report }: { report: Report }) {
   const p = report.portfolio;

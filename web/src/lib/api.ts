@@ -404,6 +404,28 @@ export interface PortfolioReport {
   horizon_h: number;
 }
 
+export interface Regime {
+  id: number;
+  n: number;
+  share: number;
+  centre: Record<string, number>;
+  description: string;
+  persistence: number | null;
+  next_ret_median_pct: number | null;
+  next_ret_p5_pct: number | null;
+  next_ret_p95_pct: number | null;
+  n_outcomes: number;
+}
+
+export interface RegimeMap {
+  regimes: Regime[];
+  transitions: number[][];
+  current: number | null;
+  horizon_h: number;
+  n_fitted: number;
+  note: string;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -458,6 +480,7 @@ export interface Report {
   lessons: Lesson[];
   breaker: BreakerReport;
   portfolio: PortfolioReport | null;
+  regimes: RegimeMap | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
