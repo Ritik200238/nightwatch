@@ -151,6 +151,20 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def cmd_liquidity(args: argparse.Namespace, settings: Settings) -> int:
+    from nightwatch.execution.liquidity_history import render, summarise
+
+    spot, perp = _clients(settings)
+    with Store(settings.db_path) as store:
+        entries = resolve_universe(store, spot, perp, settings)
+        entry = next((e for e in entries if e.ticker == args.ticker.upper()), None)
+        if entry is None:
+            print(f"{args.ticker.upper()} is not in the universe")
+            return 1
+        print(render(summarise(store, entry.spot_symbol, reference=args.reference)))
+    return 0
+
+
 def cmd_status(args: argparse.Namespace, settings: Settings) -> int:
     spot, perp = _clients(settings)
     with Store(settings.db_path) as store:
@@ -305,6 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--no-bar-refresh", action="store_true")
     sp.add_argument("--no-jobs", action="store_true", help="skip the periodic calendar/news/maturation jobs")
     sp.set_defaults(func=cmd_record)
+
+    sp = sub.add_parser("liquidity", help="what the recorded order books have looked like by time of week")
+    sp.add_argument("--ticker", required=True)
+    sp.add_argument("--reference", type=float, default=20_000.0, help="exit size to test the book against")
+    sp.set_defaults(func=cmd_liquidity)
 
     sp = sub.add_parser("status", help="coverage report")
     common(sp)

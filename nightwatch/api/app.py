@@ -247,6 +247,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         rep = evaluate_breaker(s.journal.taken_trades(matured_only=False), equity=equity)
         return asdict(rep) | {"state": rep.state.value, "blocks_new_trades": rep.blocks_new_trades}
 
+    @app.get("/liquidity/{ticker}")
+    def liquidity(ticker: str) -> dict[str, Any]:
+        """What the recorded book has looked like by time of week, for this token."""
+        from dataclasses import asdict
+
+        from nightwatch.execution.liquidity_history import summarise
+
+        s = st()
+        try:
+            spec = s.ctx.spec(ticker)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return asdict(summarise(s.store, spec.spot_symbol))
+
     @app.get("/lessons")
     def lessons(ticker: str | None = None, limit: int = Query(20, le=200)) -> dict[str, Any]:
         s = st()
