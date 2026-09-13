@@ -22,6 +22,14 @@ def render_text(r: AnalysisReport) -> str:
     if r.breaker.state.value != "NORMAL" or r.breaker.n_taken:
         lines.append(f"CIRCUIT BREAKER: {r.breaker.state.value} ({r.breaker.n_taken} taken trades) — " + "; ".join(r.breaker.reasons[:2]))
         lines.append("")
+    if r.second_opinion and r.second_opinion.against:
+        so = r.second_opinion
+        lines.append("SECOND OPINION — " + so.summary)
+        for c in so.against:
+            lines.append(f"  - {c.text} [{c.source}]")
+        for c in so.supporting:
+            lines.append(f"  + {c.text} [{c.source}]")
+        lines.append("")
     lines.append("GATE: " + r.gate.decision.value)
     for rule in r.gate.rules:
         mark = "ok " if rule.decision.value == "GO" else ("?? " if rule.decision.value == "REVIEW_REQUIRED" else "XX ")

@@ -150,6 +150,9 @@ export function ReportView({ report }: { report: Report }) {
         </Section>
       </div>
 
+      {/* The case against */}
+      <SecondOpinionSection report={report} />
+
       {/* The coarse map */}
       <RegimeSection report={report} />
 
@@ -362,6 +365,34 @@ const LESSON_LABEL: Record<string, string> = {
   better_than_forecast: "better than forecast",
   no_distribution: "no forecast",
 };
+
+function SecondOpinionSection({ report }: { report: Report }) {
+  const so = report.second_opinion;
+  if (!so || (so.against.length === 0 && so.supporting.length === 0)) return null;
+  return (
+    <Section title="The case against this" subtitle={so.summary}>
+      <ul className="space-y-2">
+        {so.against.map((c) => (
+          <li key={c.text} className="flex gap-2 text-sm">
+            <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-hidden />
+            <span>
+              {c.text} <span className="text-xs text-muted-foreground">{c.source}</span>
+            </span>
+          </li>
+        ))}
+        {so.supporting.map((c) => (
+          <li key={c.text} className="flex gap-2 text-sm">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-hidden />
+            <span>
+              {c.text} <span className="text-xs text-muted-foreground">{c.source}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-muted-foreground">Every point quotes a number from this report. Ranked by what it is worth in money, with one point from each source before any source repeats.</p>
+    </Section>
+  );
+}
 
 /** The recorded archive: is the book always this good, or only right now? */
 function LiquidityByTimeOfWeek({ report }: { report: Report }) {

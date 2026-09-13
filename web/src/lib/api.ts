@@ -448,6 +448,20 @@ export interface RegimeMap {
   note: string;
 }
 
+export interface Counterpoint {
+  kind: string;
+  text: string;
+  magnitude_quote: number | null;
+  source: string;
+}
+
+export interface SecondOpinion {
+  verdict: string;
+  against: Counterpoint[];
+  supporting: Counterpoint[];
+  summary: string;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -504,6 +518,7 @@ export interface Report {
   breaker: BreakerReport;
   portfolio: PortfolioReport | null;
   regimes: RegimeMap | null;
+  second_opinion: SecondOpinion | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

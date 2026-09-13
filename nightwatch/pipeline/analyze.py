@@ -203,6 +203,7 @@ class AnalysisReport:
     warnings: list[str]
     timings_ms: dict[str, int]
     forecast_id: int | None = None
+    second_opinion: Any = None  # nightwatch.decision.devil.SecondOpinion
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -353,6 +354,14 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
         stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings,
     )
+    # The case against whatever was just decided, from the report's own numbers.
+    try:
+        from nightwatch.decision.devil import build as build_second_opinion
+
+        report.second_opinion = build_second_opinion(report)
+    except Exception:  # noqa: BLE001
+        log.exception("second opinion failed")
+
     if ctx.journal is not None and record:
         try:
             report.forecast_id = _record(ctx, report)
