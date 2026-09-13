@@ -74,6 +74,15 @@ def render_text(r: AnalysisReport) -> str:
     if e.hedge_quote:
         h = e.hedge_quote
         lines.append(f"  hedge 100% via {h.perp_symbol}: fees {h.entry_fee_quote + h.exit_fee_quote:,.1f} + funding {h.funding_quote:,.1f} (p95 {h.funding_quote_p95:,.1f}) = {h.total_cost_bps_of_position:.1f} bps; residual basis p95 {_f(h.residual_basis_p95_bps, '{:.0f}')} bps")
+    lh = e.liquidity_history
+    if lh and lh.buckets:
+        usable = [b for b in lh.buckets if not b.thin]
+        if usable:
+            lines.append(f"  recorded book, {lh.n_snapshots:,} snapshots since {lh.since:%d %b}:")
+            for b in usable[:4]:
+                lines.append(f"    {b.bucket:<14} spread {b.spread_median_bps:>5.1f} bps | sellable in 25bps {b.depth_25bps_median:>10,.0f} | too thin for this size {(b.share_below_reference or 0):.0%} of the time")
+        else:
+            lines.append(f"  recorded book: {lh.note}")
     lines.append("")
     if r.sensitivity is not None:
         sen = r.sensitivity

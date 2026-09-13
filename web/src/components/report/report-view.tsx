@@ -106,6 +106,7 @@ export function ReportView({ report }: { report: Report }) {
         ) : (
           <p className="text-sm text-muted-foreground">No order book was available, so exit cost is unknown. Start the recorder or allow live book fetches.</p>
         )}
+        <LiquidityByTimeOfWeek report={report} />
       </Section>
 
       {/* Gate + caps */}
@@ -361,6 +362,53 @@ const LESSON_LABEL: Record<string, string> = {
   better_than_forecast: "better than forecast",
   no_distribution: "no forecast",
 };
+
+/** The recorded archive: is the book always this good, or only right now? */
+function LiquidityByTimeOfWeek({ report }: { report: Report }) {
+  const h = report.execution.liquidity_history;
+  if (!h || h.buckets.length === 0) return null;
+  const usable = h.buckets.filter((b) => !b.thin);
+  if (usable.length === 0) {
+    return <p className="mt-4 text-xs text-muted-foreground">The book archive has {h.n_snapshots.toLocaleString()} snapshots so far, not yet enough in any one part of the week to compare. It fills in as the recorder runs.</p>;
+  }
+  return (
+    <div className="mt-4">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">
+        The same book at other times of the week · {h.n_snapshots.toLocaleString()} recorded snapshots{h.since ? ` since ${fmtTime(h.since)}` : ""}
+      </p>
+      <div className="overflow-x-auto">
+        <Table className="min-w-[520px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>When</TableHead>
+              <TableHead className="text-right">Spread</TableHead>
+              <TableHead className="text-right">Sellable inside 25 bps</TableHead>
+              <TableHead className="text-right">Bad case</TableHead>
+              <TableHead className="text-right">Too thin for {fmtUsd(h.reference_notional)}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {h.buckets.map((b) => (
+              <TableRow key={b.bucket}>
+                <TableCell>
+                  {bucketLabel(b.bucket)}
+                  {b.thin ? <span className="ml-2 text-xs text-muted-foreground">thin</span> : null}
+                </TableCell>
+                <TableCell className="tabular text-right">{fmtBps(b.spread_median_bps, 1)}</TableCell>
+                <TableCell className="tabular text-right">{fmtUsd(b.depth_25bps_median)}</TableCell>
+                <TableCell className="tabular text-right text-muted-foreground">{fmtUsd(b.depth_25bps_p5)}</TableCell>
+                <TableCell className={`tabular text-right ${(b.share_below_reference ?? 0) > 0.25 ? "text-status-warning" : ""}`}>
+                  {b.share_below_reference == null ? "—" : fmtPct(b.share_below_reference * 100, 0, false)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      {h.note ? <p className="mt-1 text-xs text-muted-foreground">{h.note}</p> : null}
+    </div>
+  );
+}
 
 function RegimeSection({ report }: { report: Report }) {
   const m = report.regimes;

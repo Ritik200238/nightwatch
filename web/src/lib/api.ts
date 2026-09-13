@@ -294,6 +294,28 @@ export interface HedgeQuote {
   note: string;
 }
 
+export interface BucketLiquidity {
+  bucket: string;
+  n_snapshots: number;
+  thin: boolean;
+  hours_covered: number;
+  spread_median_bps: number | null;
+  spread_p95_bps: number | null;
+  depth_25bps_median: number | null;
+  depth_25bps_p5: number | null;
+  share_below_reference: number | null;
+}
+
+export interface LiquidityHistory {
+  symbol: string;
+  since: string | null;
+  until: string | null;
+  n_snapshots: number;
+  buckets: BucketLiquidity[];
+  reference_notional: number;
+  note: string;
+}
+
 export interface SizePoint {
   notional: number;
   verdict: string;
@@ -472,6 +494,7 @@ export interface Report {
     hedge_quote: HedgeQuote | null;
     book_ts: string | null;
     book_source: string;
+    liquidity_history: LiquidityHistory | null;
   };
   gate: { decision: "GO" | "REVIEW_REQUIRED" | "NO_GO"; rules: GateRule[]; risk_quote: number | null; risk_pct_of_equity: number | null; risk_basis: string };
   sizing: { recommended_notional: number | null; binding_cap: string | null; caps: Cap[]; hedge_ratio_suggested: number | null; hedge_rationale: string };

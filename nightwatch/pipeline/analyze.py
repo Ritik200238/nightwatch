@@ -40,6 +40,8 @@ from nightwatch.decision.sensitivity import DecisionContext, SensitivityReport, 
 from nightwatch.decision.sizing import SizingPolicy, SizingResult, VerdictResult
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.execution.exit_cost import ExitQuote, HedgeQuote, cost_curve, max_notional_within, quote_exit, quote_hedge
+from nightwatch.execution.liquidity_history import LiquidityHistory
+from nightwatch.execution.liquidity_history import summarise as summarise_liquidity
 from nightwatch.features.series import SeriesSpec
 from nightwatch.features.snapshot import FeatureSnapshot, InsufficientData, build_snapshot, compute_feature_frame
 from nightwatch.stress.montecarlo import MonteCarloResult, hourly_log_returns, reverse_stress, simulate
@@ -176,6 +178,7 @@ class ExecutionSection:
     hedge_quote: HedgeQuote | None
     book_ts: datetime | None
     book_source: str
+    liquidity_history: LiquidityHistory | None = None
 
 
 @dataclass
@@ -249,7 +252,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     # 5. Execution.
     t0 = time.perf_counter()
-    execution = _execution_section(ctx, ticket, spec, frame, book, book_source, fees, horizon_h, entry_info)
+    execution = _execution_section(ctx, ticket, spec, frame, book, book_source, fees, horizon_h, entry_info, as_of)
     timings["execution"] = _ms(t0)
 
     # 6. Gate, sizing, verdict.
@@ -490,7 +493,7 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
     )
 
 
-def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, frame: pd.DataFrame, book: OrderBookSnapshot | None, book_source: str, fees: dict[str, float], horizon_h: float, entry: UniverseEntry) -> ExecutionSection:
+def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, frame: pd.DataFrame, book: OrderBookSnapshot | None, book_source: str, fees: dict[str, float], horizon_h: float, entry: UniverseEntry, as_of: datetime) -> ExecutionSection:
     exit_quote = curve = None
     max_n = None
     if book is not None:
@@ -505,7 +508,16 @@ def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSp
         basis_closed = frame.loc[frame["is_closed"].astype(bool), "basis_index_bps"].abs().dropna()
         residual = float(basis_closed.quantile(0.95)) if len(basis_closed) >= 20 else None
         hedge = quote_hedge(position_notional=ticket.notional_quote, hedge_ratio=1.0, horizon_h=horizon_h, perp_symbol=entry.perp_symbol, perp_fee=fees["perp_taker"], funding_rate_now=now_rate, funding_rate_abs_p95=p95, residual_basis_abs_p95_bps=residual)
-    return ExecutionSection(exit_quote=exit_quote, cost_curve=curve, max_notional_within_budget=max_n, hedge_quote=hedge, book_ts=book.ts if book else None, book_source=book_source)
+    # What the recorded archive says about this book at other times of the week.
+    history = None
+    try:
+        history = summarise_liquidity(ctx.store, spec.spot_symbol, since=as_of - timedelta(days=30), reference=ticket.notional_quote)
+    except Exception:  # noqa: BLE001
+        log.exception("liquidity history failed")
+    return ExecutionSection(
+        exit_quote=exit_quote, cost_curve=curve, max_notional_within_budget=max_n, hedge_quote=hedge,
+        book_ts=book.ts if book else None, book_source=book_source, liquidity_history=history,
+    )
 
 
 # -------------------------------------------------------------------- helpers
