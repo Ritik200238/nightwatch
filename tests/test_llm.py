@@ -15,7 +15,15 @@ from nightwatch.data.sync import UniverseEntry
 from nightwatch.decision.ticket import HorizonKind
 from nightwatch.pipeline.analyze import AnalysisContext
 from nightwatch.stress.scenarios import Side
-from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
+from tests.test_pipeline import AS_OF, seeded_store  # noqa: F401 - fixture
+
+
+@pytest.fixture(autouse=True)
+def _frozen_clock(monkeypatch):
+    """The chat entry has no as_of parameter: it always analyses "now". The seeded store
+    ends at a fixed instant, so without pinning the clock these tests pass on the day
+    they are written and fail the next morning on the staleness guard."""
+    monkeypatch.setattr("nightwatch.pipeline.analyze.utc_now", lambda: AS_OF)
 
 
 class FakeMessages:
