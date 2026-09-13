@@ -206,10 +206,15 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         from nightwatch.journal.adjust import evaluate_expanding
         from nightwatch.journal.skill import compare_skill
+        from nightwatch.journal.walkforward import by_period
 
         adjusted = evaluate_expanding(df) if not df.empty else None
         skill = compare_skill(df) if not df.empty else None
-        out = {"matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None, "skill": asdict(skill) if skill else None}
+        walk = by_period(df) if not df.empty else None
+        out = {
+            "matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None,
+            "skill": asdict(skill) if skill else None, "walk_forward": asdict(walk) if walk else None,
+        }
         if matured:
             s.calibration_cache.clear()  # new outcomes invalidate every view
         s.calibration_cache[key] = (utc_now(), out)

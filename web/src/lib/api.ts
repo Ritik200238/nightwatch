@@ -163,6 +163,33 @@ export interface SkillReport {
   by_ticker: Record<string, number>;
 }
 
+export interface PeriodScore {
+  label: string;
+  start: string;
+  end: string;
+  n: number;
+  thin: boolean;
+  raw_lo_coverage: number;
+  adj_lo_coverage: number;
+  raw_band_coverage: number;
+  adj_band_coverage: number;
+  raw_width: number;
+  adj_width: number;
+  k_lo: number;
+  k_hi: number;
+  lo_ci: [number, number];
+  skill: number | null;
+  mean_abs_error_p50: number | null;
+}
+
+export interface WalkForward {
+  periods: PeriodScore[];
+  freq: string;
+  n_total: number;
+  improving: boolean | null;
+  note: string;
+}
+
 export interface AnalogMatch {
   ts: string;
   ticker: string;
@@ -429,6 +456,7 @@ export interface CalibrationReport {
   by_ticker: Record<string, number>;
   adjusted: AdjustedEvaluation | null;
   skill: SkillReport | null;
+  walk_forward: WalkForward | null;
 }
 
 export class ApiError extends Error {

@@ -140,6 +140,55 @@ export default function CalibrationPage() {
             </Section>
           ) : null}
 
+          {rep.walk_forward && rep.walk_forward.periods.length > 1 ? (
+            <Section
+              title="Is it getting better or worse?"
+              subtitle={`The same out-of-sample scoring, split by month. ${rep.walk_forward.note || ""}`}
+              action={
+                rep.walk_forward.improving == null ? null : (
+                  <Pill tone={rep.walk_forward.improving ? "good" : "warning"}>{rep.walk_forward.improving ? "closing on target" : "drifting from target"}</Pill>
+                )
+              }
+            >
+              <div className="overflow-x-auto">
+                <Table className="min-w-[640px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Month</TableHead>
+                      <TableHead className="text-right">Scored</TableHead>
+                      <TableHead className="text-right">Below p5, raw</TableHead>
+                      <TableHead className="text-right">Below p5, adjusted</TableHead>
+                      <TableHead className="text-right">Inside band, adjusted</TableHead>
+                      <TableHead className="text-right">Band width</TableHead>
+                      <TableHead className="text-right">Skill</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rep.walk_forward.periods.map((p) => (
+                      <TableRow key={p.label}>
+                        <TableCell className="font-medium">
+                          {p.label}
+                          {p.thin ? <span className="ml-2 text-xs text-muted-foreground">thin</span> : null}
+                        </TableCell>
+                        <TableCell className="tabular text-right">{p.n}</TableCell>
+                        <TableCell className="tabular text-right text-muted-foreground">{fmtPct(p.raw_lo_coverage * 100, 1, false)}</TableCell>
+                        <TableCell className={`tabular text-right ${Math.abs(p.adj_lo_coverage - 0.05) < 0.02 ? "text-status-good" : ""}`}>{fmtPct(p.adj_lo_coverage * 100, 1, false)}</TableCell>
+                        <TableCell className="tabular text-right">{fmtPct(p.adj_band_coverage * 100, 1, false)}</TableCell>
+                        <TableCell className="tabular text-right text-muted-foreground">
+                          {p.raw_width.toFixed(1)} → {p.adj_width.toFixed(1)}
+                        </TableCell>
+                        <TableCell className={`tabular text-right ${p.skill != null && p.skill > 0 ? "text-status-good" : p.skill != null && p.skill < 0 ? "text-status-critical" : "text-muted-foreground"}`}>
+                          {p.skill == null ? "—" : `${p.skill >= 0 ? "+" : ""}${(p.skill * 100).toFixed(1)}%`}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">Targets: 5% below p5, 90% inside the band. A month marked thin has too few scored forecasts to read much into.</p>
+            </Section>
+          ) : null}
+
           {rep.adjusted ? (
             <Section
               title="Tail adjustment, scored out of sample"

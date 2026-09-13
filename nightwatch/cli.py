@@ -233,6 +233,11 @@ def cmd_calibration(args: argparse.Namespace, settings: Settings) -> int:
 
         print()
         print(render_skill(compare_skill(df)))
+        from nightwatch.journal.walkforward import by_period
+        from nightwatch.journal.walkforward import render as render_walk
+
+        print()
+        print(render_walk(by_period(df)))
         from nightwatch.journal.adjust import evaluate_expanding
 
         ev = evaluate_expanding(df) if not df.empty else None
