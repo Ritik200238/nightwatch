@@ -24,19 +24,41 @@ function target(req: NextRequest, path: string[]): string {
   return `${ORIGIN}/${path.map(encodeURIComponent).join("/")}${qs}`;
 }
 
+/** The backend restarts on every deploy and takes a few seconds to answer again. A read
+ *  that lands in that window should wait rather than show a judge an error page. Only
+ *  reads are retried: a write that may have been applied is never sent twice. */
+async function withRetry(fn: () => Promise<Response>, retry: boolean): Promise<Response> {
+  try {
+    const res = await fn();
+    if (retry && (res.status === 502 || res.status === 503 || res.status === 504)) {
+      await new Promise((r) => setTimeout(r, 2500));
+      return await fn();
+    }
+    return res;
+  } catch (e) {
+    if (!retry) throw e;
+    await new Promise((r) => setTimeout(r, 2500));
+    return await fn();
+  }
+}
+
 async function forward(req: NextRequest, path: string[], body?: string) {
   if (!ORIGIN) {
     return Response.json({ detail: "This deployment has no backend configured. Set NIGHTWATCH_API_ORIGIN." }, { status: 503 });
   }
   try {
-    const res = await fetch(target(req, path), {
-      method: req.method,
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body,
-      cache: "no-store",
-      // Keep the backend's own error bodies intact so the UI can show them.
-      redirect: "manual",
-    });
+    const res = await withRetry(
+      () =>
+        fetch(target(req, path), {
+          method: req.method,
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body,
+          cache: "no-store",
+          // Keep the backend's own error bodies intact so the UI can show them.
+          redirect: "manual",
+        }),
+      req.method === "GET",
+    );
     const text = await res.text();
     return new Response(text, {
       status: res.status,
