@@ -23,6 +23,7 @@ import pandas as pd
 from nightwatch.data.store import Store
 from nightwatch.features.basis import add_basis_columns
 from nightwatch.features.events import add_event_columns
+from nightwatch.features.macro import MACRO_COLUMNS, build_macro_frame, macro_label
 from nightwatch.features.regime import add_regime_columns
 from nightwatch.features.series import HOUR, SeriesSpec, completed_before, load_aligned_hourly
 from nightwatch.time_utils import ensure_utc, utc_now
@@ -47,8 +48,12 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     "macro_events_72h",
     "hours_to_fomc",
     "news_count_24h",
+    *MACRO_COLUMNS,
 )
 LABEL_COLUMNS: tuple[str, ...] = ("session", "bucket", "vol_state", "trend_state", "liq_state", "regime_label")
+# Searched by default. The macro columns are carried on every snapshot but only join the
+# distance metric if they are shown to earn it; see research/feature_ab.py.
+SEARCH_COLUMNS: tuple[str, ...] = tuple(c for c in FEATURE_COLUMNS if c not in MACRO_COLUMNS)
 HISTORY_DAYS_FOR_SNAPSHOT = 120  # enough for the 90-day vol percentile window
 
 
@@ -83,6 +88,9 @@ def compute_feature_frame(store: Store, spec: SeriesSpec, start: datetime, end: 
     f = add_basis_columns(f)
     f = add_regime_columns(f)
     f = add_event_columns(f, store, spec.ticker, as_of=as_of)
+    # The macro weather is the same for every token at a given hour, so it is joined on
+    # rather than derived from the token's own series.
+    f = f.join(build_macro_frame(store, f.index))
     return f
 
 
@@ -135,7 +143,7 @@ def build_snapshot(store: Store, spec: SeriesSpec, as_of: datetime | None = None
         raise InsufficientData(f"{spec.ticker} has not traded since {last_trade_ts.isoformat()}, {stale_h:.0f}h before as_of")
 
     features = {c: _clean(row.get(c)) for c in FEATURE_COLUMNS}
-    labels = {c: str(row.get(c)) for c in LABEL_COLUMNS}
+    labels = {c: str(row.get(c)) for c in LABEL_COLUMNS} | {"macro_label": macro_label(row)}
     prices = {
         "spot_close": _clean(row.get("spot_close")),
         "perp_close": _clean(row.get("perp_close")),

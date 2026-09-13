@@ -37,7 +37,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from nightwatch.features.snapshot import FEATURE_COLUMNS
+from nightwatch.features.snapshot import SEARCH_COLUMNS
 from nightwatch.time_utils import index_epoch_ns
 
 MAD_SCALE = 1.4826
@@ -45,7 +45,7 @@ MAD_SCALE = 1.4826
 
 @dataclass(frozen=True)
 class AnalogConfig:
-    features: tuple[str, ...] = FEATURE_COLUMNS
+    features: tuple[str, ...] = SEARCH_COLUMNS
     weights: dict[str, float] = field(default_factory=dict)  # default 1.0 each
     k: int = 40
     min_matches: int = 15
