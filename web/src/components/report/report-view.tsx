@@ -414,6 +414,43 @@ function PortfolioSection({ report }: { report: Report }) {
           </div>
         </div>
       </div>
+      {p.attribution && p.attribution.book_tail_quote != null ? (
+        <div className="mt-4 overflow-x-auto">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            Who carries the bad case · measured in the {p.attribution.n_windows.toLocaleString()} historical windows where this book was at its worst
+          </p>
+          <Table className="min-w-[560px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Position</TableHead>
+                <TableHead className="text-right">Weight</TableHead>
+                <TableHead className="text-right">Share of the loss</TableHead>
+                <TableHead className="text-right">Loss in the bad case</TableHead>
+                <TableHead className="text-right">If you dropped it</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {p.attribution.contributions.map((c) => (
+                <TableRow key={`${c.ticker}-${c.side}-${c.notional_quote}`}>
+                  <TableCell>
+                    <span className="font-medium">{c.ticker}</span> <span className="text-muted-foreground">{c.side}</span>
+                    <span className="block text-xs text-muted-foreground">{fmtUsd(c.notional_quote)}</span>
+                  </TableCell>
+                  <TableCell className="tabular text-right text-muted-foreground">{fmtPct(c.share_of_gross * 100, 0, false)}</TableCell>
+                  <TableCell className={`tabular text-right ${c.component_share != null && c.component_share > c.share_of_gross * 1.25 ? "text-status-warning" : ""}`}>
+                    {c.component_share == null ? c.note || "unknown" : fmtPct(c.component_share * 100, 0, false)}
+                  </TableCell>
+                  <TableCell className="tabular text-right">{c.component_quote == null ? "—" : fmtUsd(c.component_quote)}</TableCell>
+                  <TableCell className="tabular text-right text-muted-foreground">
+                    {c.marginal_quote == null ? "—" : c.marginal_quote < 0 ? `tail improves ${fmtUsd(Math.abs(c.marginal_quote))}` : `tail worsens ${fmtUsd(Math.abs(c.marginal_quote))}`}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <p className="mt-1 text-xs text-muted-foreground">A share of the loss well above the weight means that position is doing more damage than its size suggests.</p>
+        </div>
+      ) : null}
       {p.notes.length ? (
         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
           {p.notes.map((n) => (

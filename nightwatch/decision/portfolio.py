@@ -24,6 +24,7 @@ correlation honestly, the pair is reported as unknown rather than assumed to be 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -70,6 +71,7 @@ class PortfolioReport:
     positions: list[Position]
     before: BookRisk
     after: BookRisk
+    attribution: Any = None  # nightwatch.decision.attribution.Attribution
     correlations: list[PairCorrelation] = field(default_factory=list)
     mean_correlation_to_book: float | None = None
     notes: list[str] = field(default_factory=list)
@@ -189,9 +191,12 @@ def evaluate(
         touching = [c.correlation for c in pairs if proposed.ticker in (c.a, c.b) and c.correlation is not None]
         mean_corr = float(np.mean(touching)) if touching else None
 
+    from nightwatch.decision.attribution import attribute
+
+    attribution = attribute(after_positions, frames, horizon_h=h)
     notes = list(dict.fromkeys(notes_b + notes_a))
     if proposed and mean_corr is not None and mean_corr > 0.7:
         notes.append(f"{proposed.ticker} moves with the rest of the book (mean correlation {mean_corr:.2f}): this adds size, not diversification")
     if after.diversification_ratio is not None and after.diversification_ratio > 0.9 and len(after_positions) > 1:
         notes.append("the book's tail is almost the sum of its parts, so these names are one bet")
-    return PortfolioReport(positions=after_positions, before=before, after=after, correlations=pairs, mean_correlation_to_book=mean_corr, notes=notes, horizon_h=float(h))
+    return PortfolioReport(positions=after_positions, before=before, after=after, attribution=attribution, correlations=pairs, mean_correlation_to_book=mean_corr, notes=notes, horizon_h=float(h))

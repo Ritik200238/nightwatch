@@ -375,10 +375,29 @@ export interface PairCorrelation {
   overlap_hours: number;
 }
 
+export interface Contribution {
+  ticker: string;
+  side: string;
+  notional_quote: number;
+  share_of_gross: number;
+  component_quote: number | null;
+  component_share: number | null;
+  marginal_quote: number | null;
+  note: string;
+}
+
+export interface Attribution {
+  book_tail_quote: number | null;
+  n_windows: number;
+  contributions: Contribution[];
+  notes: string[];
+}
+
 export interface PortfolioReport {
   positions: { ticker: string; side: string; notional_quote: number }[];
   before: BookRisk;
   after: BookRisk;
+  attribution: Attribution | null;
   correlations: PairCorrelation[];
   mean_correlation_to_book: number | null;
   notes: string[];
