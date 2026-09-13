@@ -77,6 +77,7 @@ class AnalysisContext:
     sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
+    _book_windows: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
     _factors_cache: dict[str, Any] = field(default_factory=dict)
 
@@ -116,6 +117,23 @@ class AnalysisContext:
     def spec(self, ticker: str) -> SeriesSpec:
         e = self.entry(ticker)
         return SeriesSpec(e.ticker, e.spot_symbol, e.perp_symbol, e.yahoo_ticker)
+
+    def liquidity_frame(self, symbol: str, as_of: datetime, *, days: int = 30):  # noqa: ANN201
+        """The recorded book window for one symbol, bucketed, cached per hour.
+
+        The archive grows by a snapshot a minute per book, so this is the part worth
+        keeping; the aggregation on top of it depends on the ticket size and is cheap."""
+        from nightwatch.execution.liquidity_history import load as load_books
+        from nightwatch.execution.liquidity_history import prepare
+
+        key = f"{symbol}|{ensure_utc(as_of).replace(minute=0, second=0, microsecond=0).isoformat()}"
+        cached = self._book_windows.pop(key, None)
+        if cached is None:
+            cached = prepare(load_books(self.store, symbol, since=ensure_utc(as_of) - timedelta(days=days)))
+        self._book_windows[key] = cached
+        while len(self._book_windows) > 32:
+            self._book_windows.pop(next(iter(self._book_windows)))
+        return cached
 
     def feature_frame(self, ticker: str, end: datetime) -> pd.DataFrame:
         """Full-history feature frame for a ticker, cached per process per end-hour.
@@ -520,7 +538,7 @@ def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSp
     # What the recorded archive says about this book at other times of the week.
     history = None
     try:
-        history = summarise_liquidity(ctx.store, spec.spot_symbol, since=as_of - timedelta(days=30), reference=ticket.notional_quote)
+        history = summarise_liquidity(ctx.store, spec.spot_symbol, reference=ticket.notional_quote, frame=ctx.liquidity_frame(spec.spot_symbol, as_of))
     except Exception:  # noqa: BLE001
         log.exception("liquidity history failed")
     return ExecutionSection(

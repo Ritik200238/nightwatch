@@ -68,6 +68,17 @@ class LiquidityHistory:
         return max(usable, key=lambda b: b.depth_25bps_median) if usable else None
 
 
+def prepare(df: pd.DataFrame) -> pd.DataFrame:
+    """Add the time-of-week columns once, so a cached window can be reused as is."""
+    if df.empty or "bucket" in df.columns:
+        return df
+    out = df.copy()
+    out["when"] = pd.to_datetime(out["ts"], unit="ms", utc=True)
+    out["bucket"] = [hour_of_week_bucket(t.to_pydatetime()).value for t in out["when"]]
+    out["depth25"] = out["depth_bid_25bps"]
+    return out
+
+
 def load(store: Store, symbol: str, *, venue: Venue = Venue.BITGET_SPOT, since: datetime | None = None, until: datetime | None = None) -> pd.DataFrame:
     """Stored snapshot metrics for one symbol. No level JSON: the columns are enough."""
     lo = to_epoch_ms(since) if since else 0
@@ -79,16 +90,22 @@ def load(store: Store, symbol: str, *, venue: Venue = Venue.BITGET_SPOT, since: 
     )
 
 
-def summarise(store: Store, symbol: str, *, venue: Venue = Venue.BITGET_SPOT, since: datetime | None = None, reference: float = REFERENCE_NOTIONAL) -> LiquidityHistory:
-    """Group the archive by time of week and describe each bucket."""
-    df = load(store, symbol, venue=venue, since=since)
+def summarise(store: Store, symbol: str, *, venue: Venue = Venue.BITGET_SPOT, since: datetime | None = None, reference: float = REFERENCE_NOTIONAL, frame: pd.DataFrame | None = None) -> LiquidityHistory:
+    """Group the archive by time of week and describe each bucket.
+
+    ``frame`` lets a caller pass an already-loaded window. The archive grows by a snapshot
+    a minute per book, so reading and bucketing it is the expensive half and worth reusing
+    across requests; the aggregation itself is cheap and depends on the reference size."""
+    df = load(store, symbol, venue=venue, since=since) if frame is None else frame
     if df.empty:
         return LiquidityHistory(symbol=symbol, since=None, until=None, n_snapshots=0, note="no order-book snapshots recorded yet")
 
-    df["when"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
-    df["bucket"] = [hour_of_week_bucket(t.to_pydatetime()).value for t in df["when"]]
-    # Selling hits bids, so the sell side is the one that matters for an exit.
-    df["depth25"] = df["depth_bid_25bps"]
+    if "bucket" not in df.columns:
+        df = df.copy()
+        df["when"] = pd.to_datetime(df["ts"], unit="ms", utc=True)
+        df["bucket"] = [hour_of_week_bucket(t.to_pydatetime()).value for t in df["when"]]
+        # Selling hits bids, so the sell side is the one that matters for an exit.
+        df["depth25"] = df["depth_bid_25bps"]
 
     buckets: list[BucketLiquidity] = []
     for name, g in df.groupby("bucket", sort=True):
