@@ -51,9 +51,11 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     *MACRO_COLUMNS,
 )
 LABEL_COLUMNS: tuple[str, ...] = ("session", "bucket", "vol_state", "trend_state", "liq_state", "regime_label")
-# Searched by default. The macro columns are carried on every snapshot but only join the
-# distance metric if they are shown to earn it; see research/feature_ab.py.
-SEARCH_COLUMNS: tuple[str, ...] = tuple(c for c in FEATURE_COLUMNS if c not in MACRO_COLUMNS)
+# Searched by default. The macro columns earned their place: on 1,605 paired forecasts
+# across 20 tokens they cut the mean pinball loss by 1.3% with an interval that excludes
+# zero, mostly at the median and the upper tail. The lower tail did not improve, so the
+# claim stays narrow. See docs/experiments-macro-features.txt and research/feature_ab.py.
+SEARCH_COLUMNS: tuple[str, ...] = FEATURE_COLUMNS
 HISTORY_DAYS_FOR_SNAPSHOT = 120  # enough for the 90-day vol percentile window
 
 

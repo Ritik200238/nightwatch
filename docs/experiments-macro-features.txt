@@ -1,0 +1,34 @@
+TSLA: 77 scored points
+NVDA: 76 scored points
+AAPL: 81 scored points
+MSFT: 78 scored points
+AMZN: 82 scored points
+GOOGL: 83 scored points
+META: 82 scored points
+NFLX: 77 scored points
+AMD: 77 scored points
+PLTR: 100 scored points
+MSTR: 83 scored points
+HOOD: 83 scored points
+COIN: 83 scored points
+BABA: 82 scored points
+AVGO: 95 scored points
+TSM: 76 scored points
+INTC: 79 scored points
+MU: 44 scored points
+SPY: 84 scored points
+QQQ: 83 scored points
+
+1605 paired forecasts across 20 tokens, 24h horizon
+A = 17 features; B = A + vix_pctl_1y, curve_pctl_1y, dollar_20d_chg_pct, ten_year_20d_chg_bps
+
+  quantile      A loss    B loss     change   95% CI of the gain
+        p5      0.3426    0.3402    +0.72%   [-0.0101, +0.0166]
+       p25      0.8338    0.8275    +0.75%   [-0.0047, +0.0173]
+       p50      0.9569    0.9494    +0.78%   [+0.0018, +0.0133]
+       p75      0.8712    0.8617    +1.09%   [-0.0016, +0.0208]
+       p95      0.3953    0.3770    +4.62%   [+0.0012, +0.0347]
+       all      0.6800    0.6712    +1.29%   [+0.0024, +0.0153]
+
+  B is better
+  below p5: A 8.5%, B 9.0% (target 5%)

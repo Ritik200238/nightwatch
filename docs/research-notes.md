@@ -168,7 +168,44 @@ direction from the analogs.
 
 Reproduce: `nightwatch replay --tickers <list> --reset` then `nightwatch calibration --kind replay`.
 
-## 9. Things that did not work, and what was done instead
+## 9. Does the macro weather help the retrieval? Yes, but not where we hoped (2026-09-13)
+
+Volatility, the yield curve and the dollar describe the market a token trades in. FRED
+has them daily back to 2015, so unlike funding they can be used across the whole searched
+history. Each is held until the day after it is dated, and ranked within its own trailing
+year so a level cannot match on the calendar.
+
+Whether they earn a place in the distance metric was decided by measurement, not taste.
+`research/feature_ab.py` runs the same past moments through both configurations, scores
+both with the pinball loss against what actually happened, and bootstraps the paired
+difference. 1,605 paired forecasts, 20 tokens, 24-hour horizon:
+
+| quantile | without macro | with macro | change | 95% CI of the gain |
+|---|---|---|---|---|
+| p5 | 0.3426 | 0.3402 | +0.72% | −0.0101 to +0.0166 |
+| p25 | 0.8338 | 0.8275 | +0.75% | −0.0047 to +0.0173 |
+| p50 | 0.9569 | 0.9494 | **+0.78%** | +0.0018 to +0.0133 |
+| p75 | 0.8712 | 0.8617 | +1.09% | −0.0016 to +0.0208 |
+| p95 | 0.3953 | 0.3770 | **+4.62%** | +0.0012 to +0.0347 |
+| all five | 0.6800 | 0.6712 | **+1.29%** | +0.0024 to +0.0153 |
+
+So the macro columns ship. Two honest caveats: the gain is concentrated in the median and
+the upper tail, and the lower tail — the number the verdict sizes against — did not
+improve (breach rate 8.5% without, 9.0% with, a difference inside the noise for this
+sample). The tail-calibration layer is what fixes the breach rate either way.
+
+An earlier run on 95 pairs showed nothing at all, and a second on 453 pairs showed a
+favourable direction with intervals spanning zero. That is what a small sample does, and
+it is why the decision waited for the third run.
+
+Funding cannot be treated the same way. Bitget's public funding history returns about 90
+days whatever start date is requested (verified 2026-09-13), so a funding feature would
+have to be imputed across most of the searched period. It stays where the data supports
+it: the stress presets and the hedge cost.
+
+Reproduce: `python research/feature_ab.py --tickers <list> --points 100`.
+
+## 10. Things that did not work, and what was done instead
 
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
   tool returns empty results; verified the fault is server-side. Not used.
