@@ -144,7 +144,12 @@ class Journal:
         where = "kind='replay'" + (" AND ticker=?" if ticker else "")
         args = (ticker,) if ticker else ()
         with self._conn:
-            self._conn.execute(f"DELETE FROM forecast_outcomes WHERE forecast_id IN (SELECT id FROM forecasts WHERE {where})", args)
+            # Everything that points at a forecast has to go first, or the foreign key
+            # refuses. Lessons are derived from outcomes, so they are safe to rewrite.
+            for table in ("forecast_outcomes", "lessons"):
+                if self._conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+                    self._conn.execute(f"DELETE FROM {table} WHERE forecast_id IN (SELECT id FROM forecasts WHERE {where})", args)
+            self._conn.execute(f"UPDATE trade_log SET forecast_id=NULL WHERE forecast_id IN (SELECT id FROM forecasts WHERE {where})", args)
             cur = self._conn.execute(f"DELETE FROM forecasts WHERE {where}", args)
         return int(cur.rowcount)
 

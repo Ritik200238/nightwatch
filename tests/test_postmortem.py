@@ -106,3 +106,12 @@ def test_a_lesson_cannot_be_read_before_its_outcome_existed(book):
     early = NOW - timedelta(days=8, hours=12)
     seen = book.recall(ticker="TSLA", bucket="weekend", as_of=early)
     assert len(seen) == 1 and seen[0].ret_pct == pytest.approx(-7.4)
+
+
+def test_resetting_replays_takes_their_lessons_with_them(book):
+    """Lessons point at forecasts, so a reset has to clear them or the delete is refused."""
+    assert book.write_pending() == 4
+    removed = book.journal.delete_replays("TSLA")
+    assert removed == 2
+    left = {row[0] for row in book.journal._conn.execute("SELECT ticker FROM lessons").fetchall()}
+    assert "TSLA" not in left and "NVDA" in left
