@@ -110,26 +110,39 @@ is a green tail band on live tickets after 100 matured forecasts.
 
 ### 4. Progress
 
-**Built:** everything in section 1, end to end, with a web desk, a plain-language chat
-entry, a CLI, a FastAPI service, an always-on recorder, and container images.
+**Built and live:** everything in section 1, plus a layer that most tools stop short of.
+Every matured forecast writes a post-mortem in plain language, classified against the
+band it stated beforehand, and the desk recalls the relevant ones for the ticket in front
+of you. A circuit breaker counts realised losses on trades the trader marked as taken and
+refuses new ones past daily, weekly or monthly limits. Calibration is scored month by
+month, not once. Given the rest of the book it measures correlation from the tokens' own
+history and says which position carries the bad case. A regime map groups past hours into
+states and reports what followed each. The recorded order-book archive is read back by
+time of week. And every report argues against its own verdict using its own numbers.
 
 **Problems and fixes:** Bitget omits hourly bars when nothing traded, so gaps are
-forward-filled and flagged rather than treated as flat hours. Earnings distance
-dominated the similarity metric; capped at 30 days. Whitening blew up on constant
-features; constants are dropped and eigenvalues floored. The first calibration run
-showed tails too narrow; that became the tail-adjustment layer above. Bitget's free
-research data hub answered the handshake but returned empty results; public REST
-endpoints are used directly instead.
+forward-filled and flagged rather than treated as flat hours. Earnings distance dominated
+the similarity metric; capped at 30 days. Whitening blew up on constant features. The
+first calibration run showed tails too narrow, which became the tail-adjustment layer.
+A token that has gone quiet used to be refused outright; it is now analysed with a flag
+that forces the gate to ask, because "this has not traded for fourteen hours" is the most
+useful thing to say about it. Bitget's research data hub answers the handshake but
+returns empty results, so public REST endpoints are used directly.
 
-**Not built yet / next:** per-token tail factors once each token has enough scored
-forecasts; a location correction (outcomes skew slightly above the forecast median);
-feature weighting aimed at the loss tail, which is the only place the retrieval earns its
-keep; funding as a similarity feature.
+**Deployment:** the desk is on Vercel and the backend on one small always-on box. A push
+to the main branch reaches both: the box only deploys a commit whose CI run passed and
+rolls itself back if the new build fails its health check. A scheduled job checks every
+fifteen minutes that the desk loads, the API answers, the recorder is still writing and a
+verdict still comes back.
+
+**Not built:** funding as a similarity feature, because Bitget's public funding history
+stops at 90 days and the search covers twenty months; it would have to be imputed. Per
+token tail factors, until each token has enough scored forecasts of its own.
 
 **Stack:** Python 3.11, numpy/pandas, SQLite, FastAPI; Next.js 16, Recharts; Claude
-Opus 5 for the language layer only. Data: Bitget public API (spot, USDT perps with
-index and mark candles, order books, funding), Yahoo chart API, Nasdaq earnings
-calendar, FRED, RSS.
+Opus 5 for the language layer only. Data: Bitget public API (spot, USDT perps with index
+and mark candles, order books, funding), Yahoo chart API, Nasdaq earnings calendar, FRED,
+RSS.
 
 ### 5. Deliverables
 
