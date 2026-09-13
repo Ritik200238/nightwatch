@@ -2,8 +2,6 @@
 
 from types import SimpleNamespace
 
-import pytest
-
 from nightwatch.decision.devil import build
 
 
