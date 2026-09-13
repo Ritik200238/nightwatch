@@ -19,13 +19,46 @@ Nightwatch takes a trade idea in plain language and answers four questions with 
 4. **How big, then?** A sized verdict — go, reduce, hedge with the perpetual, or don't —
    with every number traceable to its source.
 
+Then it argues against its own answer, using the same numbers, and tells you what would
+have to change for the verdict to be different: how big you could go, how far your stop
+could sit, and where the answer flips.
+
 The human makes the decision. Nightwatch never places orders.
+
+**Live:** https://nightwatch-gules.vercel.app
 
 ![A sized verdict for a TSLA position](docs/img/desk-verdict.png)
 
+It also keeps track of the things a single trade cannot see:
+
+* **Your book.** Given what you already hold, it measures the correlation from the tokens'
+  own history and says which position actually carries the bad case, rather than assuming
+  three names are three bets.
+* **Your record.** Trades you mark as taken feed daily, weekly and monthly loss limits.
+  Past them, the gate refuses the next ticket whatever it looks like.
+* **What happened last time.** Every matured forecast gets a plain sentence and comes back
+  the next time conditions look similar.
+* **What the book looks like at other hours.** The recorder snapshots every order book
+  every minute, because nobody publishes how deep a tokenized stock is at 3 a.m. on a
+  Sunday.
+
+## Does it work?
+
 Every forecast is journaled before its outcome is known and scored when the horizon
-passes. The calibration page shows whether the stated probabilities hold up, and what
-the tail adjustment fitted on earlier forecasts does to later ones.
+passes, so the page below is not a claim, it is a scorecard. Three findings from it, the
+uncomfortable one included:
+
+* **The raw tails were wrong.** Across 2,300 scored replays, 8.7% of outcomes fell below
+  the stated 5th percentile instead of 5%. Factors fitted only on already-matured
+  forecasts bring that to 5.0% out of sample, and the tail light goes from red to green.
+* **The analogs do not predict direction.** Scored against random hours of the same kind,
+  they are indistinguishable on the average outcome. Where they win is the loss tail, and
+  that is the only claim this product makes.
+* **The macro layer earned its place by measurement**, on the third and largest test of
+  it: 1,605 paired forecasts, a 1.3% lower forecast loss, interval excluding zero. The two
+  smaller tests before it showed nothing, and the notes say so.
+
+The full write-up is in [docs/research-notes.md](docs/research-notes.md).
 
 ![Calibration page](docs/img/calibration.png)
 
