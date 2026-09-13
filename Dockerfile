@@ -7,7 +7,9 @@ WORKDIR /app
 # Dependencies first so code changes do not invalidate the layer.
 COPY pyproject.toml README.md ./
 COPY nightwatch ./nightwatch
-RUN pip install --upgrade pip && pip install ".[api]"
+# Install, then delete the source: with WORKDIR on sys.path, leaving it behind means two
+# importable copies of the package and a partial build can leave them disagreeing.
+RUN pip install --upgrade pip && pip install ".[api]" && rm -rf /app/nightwatch /app/pyproject.toml
 
 # Non-root runtime user; /data is a volume owned by it.
 RUN useradd --create-home --uid 10001 nightwatch && mkdir -p /data && chown nightwatch:nightwatch /data
