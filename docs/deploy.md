@@ -145,6 +145,22 @@ build time).
 | `NEXT_PUBLIC_API_URL` | `/api` when the page is not on localhost | where the browser sends API calls; `/api` uses the same-origin proxy |
 | `NIGHTWATCH_API_ORIGIN` | unset | where that proxy forwards to, e.g. `http://12.34.56.78:8000`. Server-side only |
 
+## How changes reach production
+
+Both halves deploy on a push to `main`, and neither needs a key stored anywhere:
+
+* **The desk**: Vercel is connected to the repository and builds every push.
+* **The backend**: the box runs `deploy/autodeploy.sh` from cron every five minutes. It
+  fetches `main`, and deploys only if that commit's CI run passed. If the new build fails
+  its health check within two minutes it rolls back to the previous commit by itself.
+  The log is `/home/ubuntu/autodeploy.log`.
+
+To deploy immediately instead of waiting for the tick:
+
+```bash
+ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
+```
+
 ## Health and uptime
 
 * `GET /health` returns bar count, order-book snapshot count, the timestamp of the last
