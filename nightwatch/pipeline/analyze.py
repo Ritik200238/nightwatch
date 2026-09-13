@@ -28,6 +28,8 @@ from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Interval, OrderBookSnapshot, Venue
 from nightwatch.data.store import Store
 from nightwatch.data.sync import UniverseEntry
+from nightwatch.decision.breaker import BreakerPolicy, BreakerReport, BreakerState
+from nightwatch.decision.breaker import evaluate as evaluate_breaker
 from nightwatch.decision.gate import GatePolicy, GateReport
 from nightwatch.decision.sensitivity import DecisionContext, SensitivityReport, build_sensitivity
 from nightwatch.decision.sizing import SizingPolicy, SizingResult, VerdictResult
@@ -61,6 +63,7 @@ class AnalysisContext:
     perp_client: BitgetPublicClient | None = None
     analog_config: AnalogConfig = field(default_factory=AnalogConfig)
     gate_policy: GatePolicy = field(default_factory=GatePolicy)
+    breaker_policy: BreakerPolicy = field(default_factory=BreakerPolicy)
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
     pooled_tickers: tuple[str, ...] | None = None  # None = all entries with data
     journal: Any = None  # nightwatch.journal.journal.Journal, optional
@@ -185,6 +188,7 @@ class AnalysisReport:
     verdict: VerdictResult
     sensitivity: SensitivityReport | None
     lessons: list[dict[str, Any]]
+    breaker: BreakerReport
     sources: list[dict[str, Any]]
     warnings: list[str]
     timings_ms: dict[str, int]
@@ -247,6 +251,14 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     residual_p5 = None
     if execution.hedge_quote and execution.hedge_quote.residual_basis_p95_bps is not None:
         residual_p5 = -execution.hedge_quote.residual_basis_p95_bps / 100.0
+    # The trader's own recent record, which has nothing to do with this trade's merits.
+    breaker = BreakerReport(state=BreakerState.NORMAL, reasons=["no journal"], equity=ticket.account_equity_quote)
+    if ctx.journal is not None:
+        try:
+            breaker = evaluate_breaker(ctx.journal.taken_trades(matured_only=False), equity=ticket.account_equity_quote, now=as_of, policy=ctx.breaker_policy)
+        except Exception:  # noqa: BLE001
+            log.exception("circuit breaker evaluation failed")
+
     # One context drives the headline decision and every what-if, so a swept verdict
     # can never be computed differently from the one on the report.
     dc = DecisionContext(
@@ -254,6 +266,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         regime_label=snapshot.labels.get("regime_label", "unknown"),
         risk_multiplier=float(snapshot.features.get("risk_multiplier") or _regime_multiplier(frame)),
         recent_losing_exits=(ctx.journal.recent_losing_exits(since=as_of - timedelta(hours=ctx.gate_policy.revenge_cooldown_h)) if ctx.journal is not None else ()),
+        breaker_state=breaker.state.value, breaker_reason="; ".join(breaker.reasons[:2]),
         now=as_of, book=book, spot_taker_fee=fees["spot_taker"], presets=tuple(stress.presets),
         max_exit_notional_within_budget=execution.max_notional_within_budget,
         hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
@@ -297,7 +310,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, sources=sources, warnings=warnings, timings_ms=timings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, sources=sources, warnings=warnings, timings_ms=timings,
     )
     if ctx.journal is not None and record:
         try:

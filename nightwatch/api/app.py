@@ -215,6 +215,25 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         s.calibration_cache[key] = (utc_now(), out)
         return out
 
+    @app.post("/forecasts/{forecast_id}/taken")
+    def mark_taken(forecast_id: int, taken: bool = True) -> dict[str, Any]:
+        """The trader tells the desk they acted on an analysis. Only these count towards
+        the circuit breaker, so the loss record can never be invented from analyses."""
+        s = st()
+        if not s.journal.mark_taken(forecast_id, taken):
+            raise HTTPException(404, f"no forecast {forecast_id}")
+        return {"forecast_id": forecast_id, "taken": taken}
+
+    @app.get("/breaker")
+    def breaker(equity: float | None = None) -> dict[str, Any]:
+        from dataclasses import asdict
+
+        from nightwatch.decision.breaker import evaluate as evaluate_breaker
+
+        s = st()
+        rep = evaluate_breaker(s.journal.taken_trades(matured_only=False), equity=equity)
+        return asdict(rep) | {"state": rep.state.value, "blocks_new_trades": rep.blocks_new_trades}
+
     @app.get("/lessons")
     def lessons(ticker: str | None = None, limit: int = Query(20, le=200)) -> dict[str, Any]:
         s = st()

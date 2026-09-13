@@ -7,7 +7,7 @@ import { Histogram } from "@/components/charts/histogram";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import type { Report } from "@/lib/api";
+import { api, type Report } from "@/lib/api";
 import { bucketLabel, fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
 
 const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
@@ -53,6 +53,7 @@ export function ReportView({ report }: { report: Report }) {
             </li>
           ))}
         </ul>
+        {report.forecast_id != null ? <TakenButton forecastId={report.forecast_id} /> : null}
         {report.warnings.length ? (
           <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
             <p className="mb-1 flex items-center gap-2 font-medium">
@@ -147,6 +148,9 @@ export function ReportView({ report }: { report: Report }) {
           </ul>
         </Section>
       </div>
+
+      {/* The trader's own record */}
+      <BreakerStrip report={report} />
 
       {/* What happened last time */}
       <LessonsSection report={report} />
@@ -351,6 +355,68 @@ const LESSON_LABEL: Record<string, string> = {
   better_than_forecast: "better than forecast",
   no_distribution: "no forecast",
 };
+
+/** Marking a trade taken is what turns an analysis into part of the loss record. */
+function TakenButton({ forecastId }: { forecastId: number }) {
+  const [state, setState] = useState<"idle" | "saving" | "taken" | "error">("idle");
+  if (state === "taken") {
+    return (
+      <p className="mt-4 text-sm text-status-good">
+        Logged as taken. It now counts towards your loss limits, and will be scored when the horizon passes.{" "}
+        <button type="button" className="underline underline-offset-2" onClick={() => { setState("saving"); api.markTaken(forecastId, false).then(() => setState("idle")).catch(() => setState("error")); }}>
+          Undo
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="mt-4 flex items-center gap-3">
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={state === "saving"}
+        onClick={() => { setState("saving"); api.markTaken(forecastId, true).then(() => setState("taken")).catch(() => setState("error")); }}
+      >
+        I took this trade
+      </Button>
+      <span className="text-xs text-muted-foreground">
+        {state === "error" ? "Could not save that. Try again." : "Only trades you mark are counted by the circuit breaker."}
+      </span>
+    </div>
+  );
+}
+
+function BreakerStrip({ report }: { report: Report }) {
+  const b = report.breaker;
+  if (!b) return null;
+  // Nothing to say to someone who has not logged a trade yet.
+  if (b.state === "NORMAL" && b.n_taken === 0) return null;
+  const tone = b.state === "HALTED" ? "critical" : b.state === "COOLDOWN" ? "warning" : "good";
+  return (
+    <Section
+      title="Your recent record"
+      subtitle={`${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} marked as taken. Only these count; analyses you did not act on are ignored.`}
+      action={<Pill tone={tone}>{b.state.toLowerCase()}</Pill>}
+    >
+      <ul className="mb-3 space-y-1 text-sm text-muted-foreground">
+        {b.reasons.map((r) => (
+          <li key={r}>– {r}</li>
+        ))}
+      </ul>
+      <div className="grid grid-cols-3 gap-2">
+        {b.windows.map((w) => (
+          <Stat
+            key={w.name}
+            label={`Last ${w.name}`}
+            value={fmtUsd(w.realised_quote)}
+            hint={w.limit_quote != null ? `${fmtPct((w.used_fraction ?? 0) * 100, 0, false)} of the ${fmtUsd(w.limit_quote)} limit · ${w.n_trades} trades` : `${w.n_trades} trades · no limit without equity`}
+            tone={w.used_fraction != null && w.used_fraction >= 1 ? "critical" : w.used_fraction != null && w.used_fraction >= 0.75 ? "warning" : undefined}
+          />
+        ))}
+      </div>
+    </Section>
+  );
+}
 
 function LessonsSection({ report }: { report: Report }) {
   const lessons = report.lessons ?? [];

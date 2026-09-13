@@ -36,7 +36,7 @@ def presets():
 def dc() -> DecisionContext:
     return DecisionContext(
         entry_price=ENTRY, analog_p5_loss_pct=-3.0, quality_flags=(), regime_label="favorable", risk_multiplier=1.0,
-        recent_losing_exits=(), now=NOW, book=book(), spot_taker_fee=0.001, presets=presets(),
+        recent_losing_exits=(), breaker_state="NORMAL", breaker_reason="", now=NOW, book=book(), spot_taker_fee=0.001, presets=presets(),
         max_exit_notional_within_budget=60_000.0, hedge_cost_bps_of_position=12.0, hedge_residual_p5_loss_pct=-0.4,
         gate_policy=GatePolicy(), sizing_policy=SizingPolicy(),
     )

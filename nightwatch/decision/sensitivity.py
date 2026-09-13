@@ -89,6 +89,8 @@ class DecisionContext:
     regime_label: str
     risk_multiplier: float
     recent_losing_exits: tuple[datetime, ...]
+    breaker_state: str
+    breaker_reason: str
     now: datetime
     book: OrderBookSnapshot | None
     spot_taker_fee: float
@@ -158,7 +160,8 @@ class DecisionContext:
             GateInputs(
                 entry_price=self.entry_price, equity=ticket.account_equity_quote, analog_p5_loss_pct=self.analog_p5_loss_pct,
                 quality_flags=self.quality_flags, regime_label=self.regime_label, risk_multiplier=self.risk_multiplier,
-                exit_cost_bps=exit_cost_bps, exit_fully_filled=bool(exit_fully_filled), recent_losing_exits=self.recent_losing_exits, now=self.now,
+                exit_cost_bps=exit_cost_bps, exit_fully_filled=bool(exit_fully_filled), recent_losing_exits=self.recent_losing_exits,
+                breaker_state=self.breaker_state, breaker_reason=self.breaker_reason, now=self.now,
             ),
             self.gate_policy,
         )

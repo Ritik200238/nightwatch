@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS forecasts (
     snapshot_hash TEXT NOT NULL,
     analog_n INTEGER,
     analog_scope TEXT,
+    taken INTEGER NOT NULL DEFAULT 0,
     p5 REAL, p25 REAL, p50 REAL, p75 REAL, p95 REAL,
     base_p5 REAL, base_p25 REAL, base_p50 REAL, base_p75 REAL, base_p95 REAL,  -- random same-bucket baseline
     es5 REAL,
@@ -103,6 +104,8 @@ class ForecastRow:
 
 
 BASELINE_COLUMNS = ("base_p5", "base_p25", "base_p50", "base_p75", "base_p95")
+# Did the trader actually take this one? Only taken trades count towards the circuit breaker.
+TAKEN_COLUMN = "taken"
 
 
 class Journal:
@@ -119,6 +122,21 @@ class Journal:
             for col in BASELINE_COLUMNS:
                 if col not in have:
                     self._conn.execute(f"ALTER TABLE forecasts ADD COLUMN {col} REAL")
+            if TAKEN_COLUMN not in have:
+                self._conn.execute(f"ALTER TABLE forecasts ADD COLUMN {TAKEN_COLUMN} INTEGER NOT NULL DEFAULT 0")
+
+    def mark_taken(self, forecast_id: int, taken: bool = True) -> bool:
+        """Record that the trader acted on this analysis (or did not, after all)."""
+        with self._conn:
+            cur = self._conn.execute("UPDATE forecasts SET taken=? WHERE id=?", (int(taken), int(forecast_id)))
+        return cur.rowcount > 0
+
+    def taken_trades(self, *, matured_only: bool = True) -> pd.DataFrame:
+        """Tickets the trader said they took, with outcomes where they exist."""
+        df = self.forecasts(kind="ticket", matured_only=matured_only)
+        if df.empty or "taken" not in df:
+            return df.iloc[0:0]
+        return df[df["taken"].astype("int64") == 1]
 
     def delete_replays(self, ticker: str | None = None) -> int:
         """Remove replay forecasts (and their outcomes). Replays are reproducible from

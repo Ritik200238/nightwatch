@@ -16,6 +16,7 @@ Rules (all inputs explicit; nothing is assumed):
 6. Data quality: no snapshot flags that make the analysis untrustworthy.
 7. Market posture: hostile regime → selective only (size must already be reduced).
 8. Exit liquidity: the book can absorb the position within the cost budget.
+9. Circuit breaker: realised losses on taken trades, and losing streaks.
 """
 
 from __future__ import annotations
@@ -65,6 +66,8 @@ class GateInputs:
     risk_multiplier: float
     exit_cost_bps: float | None
     exit_fully_filled: bool
+    breaker_state: str = "NORMAL"  # NORMAL | COOLDOWN | HALTED
+    breaker_reason: str = ""
     recent_losing_exits: tuple[datetime, ...] = ()
     now: datetime | None = None
 
@@ -177,5 +180,13 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
         rules.append(RuleResult("exit_liquidity", GateDecision.NO_GO, f"exit would cost {inputs.exit_cost_bps:.0f} bps (limit {policy.max_exit_cost_bps:.0f})"))
     else:
         rules.append(RuleResult("exit_liquidity", GateDecision.GO, f"exit costs {inputs.exit_cost_bps:.0f} bps on the live book"))
+
+    # 9. Circuit breaker: the trader's own recent record, not this trade's merits.
+    if inputs.breaker_state == "HALTED":
+        rules.append(RuleResult("circuit_breaker", GateDecision.NO_GO, inputs.breaker_reason or "loss limit reached; no new trades"))
+    elif inputs.breaker_state == "COOLDOWN":
+        rules.append(RuleResult("circuit_breaker", GateDecision.REVIEW_REQUIRED, inputs.breaker_reason or "cooling off after recent losses"))
+    else:
+        rules.append(RuleResult("circuit_breaker", GateDecision.GO, inputs.breaker_reason or "no loss limit is close"))
 
     return GateReport(decision=_worst(rules), rules=rules, risk_quote=risk_quote, risk_pct_of_equity=risk_pct, risk_basis=basis)

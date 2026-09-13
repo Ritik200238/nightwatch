@@ -309,6 +309,24 @@ export interface Lesson {
   regime_label: string | null;
 }
 
+export interface WindowLoss {
+  name: string;
+  hours: number;
+  realised_quote: number;
+  limit_quote: number | null;
+  used_fraction: number | null;
+  n_trades: number;
+}
+
+export interface BreakerReport {
+  state: "NORMAL" | "COOLDOWN" | "HALTED";
+  reasons: string[];
+  windows: WindowLoss[];
+  losing_streak: number;
+  n_taken: number;
+  equity: number | null;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -361,6 +379,7 @@ export interface Report {
   verdict: { verdict: "GO" | "REDUCE_TO" | "HEDGE" | "NO_GO" | "REVIEW"; requested_notional: number; recommended_notional: number | null; hedge_ratio: number | null; reasons: string[]; caps: Cap[] };
   sensitivity: Sensitivity | null;
   lessons: Lesson[];
+  breaker: BreakerReport;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
@@ -454,6 +473,7 @@ export const api = {
     const s = q.toString();
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
+  markTaken: (forecastId: number, taken = true) => request<{ forecast_id: number; taken: boolean }>(`/forecasts/${forecastId}/taken?taken=${taken}`, { method: "POST" }),
   forecasts: (limit = 100, ticker?: string, kind?: string) => {
     const q = new URLSearchParams({ limit: String(limit) });
     if (ticker) q.set("ticker", ticker);
