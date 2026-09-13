@@ -77,31 +77,38 @@ All figures **observed** on the build as of 2026-09-12 unless labelled otherwise
 * Data: 24 tokenized stocks with hourly bars from January 2025 (891,800 bars across
   spot, perpetual trade/index/mark and native), order-book snapshots recorded every 60
   seconds (48 books per tick), earnings and FOMC calendars, headline feeds.
-* Forecast calibration, historical replay of 2,343 closed-market windows across 24
+* Forecast calibration, historical replay of 2,304 closed-market windows across 24
   tokens, every forecast scored against what actually happened:
-  * Raw analog distribution: 8.7% of outcomes below the 5th percentile, 11.9% above the
-    95th, 79.3% inside the band (targets 5 / 5 / 90). Kupiec failure-rate test p < 0.001.
-    Tail band: red.
+  * Raw analog distribution: 8.6% of outcomes below the 5th percentile, 10.4% above the
+    95th, 80.7% inside the band (targets 5 / 5 / 90). Kupiec failure-rate test p < 0.001.
+    Tail band: red. The median is inside its interval, so the centre is right and the
+    tails are not.
   * With tail factors fitted only on forecasts that had matured earlier (expanding
-    window, out of sample, 2,299 forecasts): 5.0% below p5, 5.4% above p95, 89.5% inside
-    the band. Tail band: green. The cost is sharpness: the honest band is 12.7 points
-    wide instead of 8.3.
-  * Median absolute error of the median forecast: 2.30 percentage points.
+    window, out of sample, 2,252 forecasts): 5.2% below p5, 5.5% above p95, 89.3% inside
+    the band. Tail band: green. The cost is sharpness: the honest band is 12.8 points
+    wide instead of 8.4.
+  * Scored month by month, the gap to 90% coverage closes by about 1.1 points per month.
+    The worst month, June, still breached 10.2% after adjustment, and the page says so.
+  * Median absolute error of the median forecast: 2.27 percentage points.
 * Does the retrieval beat not bothering? Each replay point is paired with the
   distribution of random past hours from the same time-of-week bucket, and both are
   scored with the pinball loss on the same outcome (2,304 pairs). Averaged over the five
-  quantiles the analogs are indistinguishable from random hours (skill −0.6%, CI −0.014
-  to +0.004). At the 5th percentile they are better, with an interval that excludes zero
-  (skill +4.8%, CI +0.003 to +0.033), and 8.6% of outcomes fall below the analog p5
-  against 10.4% below the random-hours p5. **The analogs do not predict direction; they
-  improve the loss tail.** That is the only claim this product makes, and the verdict
-  never takes a direction from them.
+  quantiles the analogs are indistinguishable from random hours (skill −0.7%, CI −0.015
+  to +0.004). The one place they help is the loss tail: 8.5% of outcomes fall below the
+  analog 5th percentile against 10.9% below the random-hours one. **The analogs do not
+  predict direction; they improve the loss tail.** That is the only claim this product
+  makes, and the verdict never takes a direction from them.
+* Whether a feature joins the search is decided by measurement. The macro layer was
+  tested three times: 95 pairs showed nothing, 453 showed a favourable direction with
+  intervals spanning zero, and 1,605 pairs across 20 tokens showed a 1.3% lower forecast
+  loss with an interval excluding zero. It ships on the third result;
+  `research/feature_ab.py` reruns the test.
 * Exit cost: a 20,000 USDT RTSLAUSDT exit costs 25 bps on the recorded book (15 bps
   walk + 10 bps fee); the largest size that exits inside a 25 bps budget is ~16,800 USDT.
 * Basis vs index is 2.5 times wider when the US market is closed than during regular
   hours (27.8 bps vs 10.9 bps, mean absolute, TSLA).
 * Latency: a full verdict in 1.5 s after warm-up.
-* Tests: 160 automated tests; lint, tests and the web build run in CI on every push.
+* Tests: 234 automated tests; lint, tests and the web build run in CI on every push, and the backend only deploys a commit whose CI passed.
 
 **Usage validation plan (targeted):** demo live for the judging window; a public
 calibration page that updates as live tickets mature; 20 external users submitting at

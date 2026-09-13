@@ -102,69 +102,87 @@ Monte Carlo (block bootstrap of closed-hour returns, 5,000 paths, 53h): p5 −3.
 p50 +0.6%, p95 +4.8%, expected shortfall(5%) −4.4%, P(loss > 5%) = 1.2%. Reverse
 stress: a −4.87% move loses 5% of notional after exit costs on a $20k position.
 
-## 7. Tail calibration: the analog tails were too narrow, and the fix holds out of sample (2026-09-12)
+## 7. Tail calibration: the analog tails were too narrow, and the fix holds out of sample
 
-2,343 matured replay forecasts (24 tokens, one point per closed-market window since
-Jan 2025, scored against what actually happened). The raw analog distribution is
-breached far more often than it should be:
+**Re-scored 2026-09-13 on the engine that ships** (the macro features of §9 changed the
+retrieval, so the whole journal was rebuilt rather than left describing an older build).
+2,304 matured replay forecasts, 24 tokens, one point per closed-market window.
 
 | quantile | nominal | observed | 95% interval |
 |---|---|---|---|
-| p5 | 5% | 8.7% | 7.6–9.9 |
-| p25 | 25% | 29.8% | 28.0–31.7 |
-| p50 | 50% | 46.4% | 44.3–48.4 |
-| p75 | 75% | 63.3% | 61.4–65.3 |
-| p95 | 95% | 88.1% | 86.8–89.4 |
+| p5 | 5% | 8.6% | 7.5–9.8 |
+| p25 | 25% | 32.0% | 30.1–33.9 |
+| p50 | 50% | 49.8% | 47.8–51.9 |
+| p75 | 75% | 67.3% | 65.3–69.2 |
+| p95 | 95% | 89.6% | 88.3–90.8 |
 
-Kupiec failure-rate LR 56.0 (p < 0.001) and Christoffersen independence LR 69.7
-(p < 0.001): too many breaches, and they cluster. Band: red.
+The centre is now right (the median is inside its interval, which it was not before the
+macro features), and the tails are still too thin. Kupiec failure-rate LR 52.1 and
+Christoffersen independence LR 67.7, both p < 0.001: too many breaches, and they cluster.
+Band: red.
 
-The correction is two multipliers, k_lo and k_hi, that widen p5 and p95 about the
-median until exactly 5% of *already-matured* outcomes breach. They are fitted only on
-forecasts whose outcome was known before the moment of use, and every number below is
-out of sample: each forecast is scored with factors fitted on forecasts that matured
-before it (expanding window, minimum 30 to fit).
+The correction is two multipliers, k_lo and k_hi, that widen p5 and p95 about the median
+until exactly 5% of *already-matured* outcomes breach. They are fitted only on forecasts
+whose outcome was known before the moment of use, so every number below is out of sample.
 
 | metric | target | raw | adjusted |
 |---|---|---|---|
-| outcomes below p5 | 5% | 8.8% | 5.0% |
-| outcomes above p95 | 5% | 12.0% | 5.4% |
-| inside p5–p95 | 90% | 79.3% | 89.5% |
+| outcomes below p5 | 5% | 8.7% | **5.2%** |
+| outcomes above p95 | 5% | 10.7% | **5.5%** |
+| inside p5–p95 | 90% | 80.7% | **89.3%** |
 | 5% tail band | green | red | **green** |
-| mean p5–p95 width | — | 8.28% | 12.72% |
+| mean p5–p95 width | — | 8.44% | 12.83% |
 
-Latest factors: k_lo 1.32, k_hi 1.64 (2,299 forecasts evaluated). The verdict sizes
-against the adjusted p5; the raw quantiles are still journaled, so future refits stay
-honest. The cost is sharpness: the honest band is half again as wide.
+Latest factors: k_lo 1.33, k_hi 1.56 on 2,252 evaluated forecasts. The verdict sizes
+against the adjusted p5; raw quantiles stay journalled so later refits stay honest. The
+cost is sharpness: an honest band is half again as wide.
+
+Month by month (`nightwatch calibration` prints this):
+
+| month | scored | below p5 raw → adjusted | inside band raw → adjusted |
+|---|---|---|---|
+| 2026-03 | 161 | 13.0% → 8.1% | 73.3% → 73.9% |
+| 2026-04 | 392 | 6.1% → 4.6% | 79.6% → 87.2% |
+| 2026-05 | 391 | 6.6% → 3.8% | 81.1% → 90.8% |
+| 2026-06 | 383 | 14.9% → 10.2% | 76.0% → 88.3% |
+| 2026-07 | 415 | 10.1% → 5.1% | 81.2% → 91.1% |
+| 2026-08 | 417 | 4.1% → 1.4% | 86.8% → 94.0% |
+| 2026-09 | 93 | 8.6% → 4.3% | 86.0% → 94.6% |
+
+June is the month to explain rather than hide: even adjusted, one in ten outcomes fell
+below the level sized against. The gap to 90% coverage closes by about 1.1 points per
+month across the period.
 
 Reproduce: `nightwatch calibration --kind replay`.
 
-## 8. Does the retrieval carry information? Only in the tail (2026-09-12)
+## 8. Does the retrieval carry information? Only in the loss tail
 
-Calibration says whether the stated probabilities are honest. It cannot say whether
-finding similar past moments beats not bothering. So every replay point also journals
-the distribution of *random past hours from the same time-of-week bucket*, drawn from
-history strictly before that point, and both are scored with the pinball (quantile)
-loss on the same outcome. 2,304 paired forecasts:
+**Re-scored 2026-09-13 on the shipped engine.** Every replay point also journals the
+distribution of *random past hours from the same time-of-week bucket*, drawn from history
+strictly before it. Both are scored with the pinball loss on the same outcome, 2,304
+pairs:
 
 | quantile | analog loss | random-hours loss | skill | 95% CI of the gain |
 |---|---|---|---|---|
-| p5 | 0.365 | 0.383 | **+4.8%** | +0.003 to +0.033 |
-| p25 | 0.957 | 0.943 | −1.5% | −0.027 to −0.001 |
-| p50 | 1.139 | 1.129 | −0.8% | −0.020 to +0.001 |
-| p75 | 1.032 | 1.000 | −3.2% | −0.048 to −0.016 |
-| p95 | 0.452 | 0.464 | +2.5% | −0.011 to +0.035 |
-| all five | 0.789 | 0.784 | −0.6% | −0.014 to +0.004 |
+| p5 | 0.373 | 0.384 | +2.9% | −0.004 to +0.026 |
+| p25 | 0.949 | 0.943 | −0.6% | −0.021 to +0.009 |
+| p50 | 1.123 | 1.116 | −0.6% | −0.018 to +0.003 |
+| p75 | 0.994 | 0.979 | −1.5% | −0.031 to +0.001 |
+| p95 | 0.449 | 0.439 | −2.4% | −0.032 to +0.010 |
+| all five | 0.778 | 0.772 | −0.7% | −0.015 to +0.004 |
 
-Read it plainly: **the analogs do not predict direction.** Averaged over the whole
-distribution they are indistinguishable from picking random hours of the same kind, and
-at p25/p75 they are slightly worse. What they do improve is the loss tail: the p5 gain
-is positive with an interval that excludes zero, and 8.6% of outcomes fall below the
-analog p5 against 10.4% below the random-hours p5.
+Read plainly: **the analogs do not predict direction.** Over the whole distribution they
+are indistinguishable from picking random hours of the same kind. The one place they help
+is the loss tail, and even there the pinball interval now includes zero; what does stand
+is the breach rate, 8.5% of outcomes below the analog p5 against 10.9% below the
+random-hours p5.
 
-That is the claim the product should make and the only one it does make: the cohort is
-used to size against the tail, not to forecast the move. The verdict never takes a
-direction from the analogs.
+An earlier build (before the macro features) showed a p5 gain of +4.8% with an interval
+excluding zero. That number described a different engine and has been replaced rather
+than kept because it read better.
+
+This is why the verdict never takes a direction from the cohort: it sizes against the
+tail, and says so.
 
 Reproduce: `nightwatch replay --tickers <list> --reset` then `nightwatch calibration --kind replay`.
 
