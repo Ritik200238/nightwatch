@@ -6,7 +6,8 @@ US stocks trade 6.5 hours a day. Tokenized versions of them (rTokens) trade 24/7
 dangerous window is the one where only the token can move: nights, weekends, holidays —
 when news lands and the real market is shut.
 
-Nightwatch takes a trade idea in plain language and answers four questions with data:
+Nightwatch takes a trade idea in plain language — typed as a sentence or filled into a
+form — and answers four questions with data:
 
 1. **What happened before?** It finds the past moments that looked like now — same
    volatility, same gap between token and fair value, same time-of-week, same distance to
@@ -41,6 +42,13 @@ It also keeps track of the things a single trade cannot see:
 * **What the book looks like at other hours.** The recorder snapshots every order book
   every minute, because nobody publishes how deep a tokenized stock is at 3 a.m. on a
   Sunday.
+* **Where the numbers came from.** Six live feeds — Bitget, Yahoo, Nasdaq, FRED, RSS and
+  SEC EDGAR — each listed on the desk with when it was last pulled and the newest thing in
+  it. Filings are timed to the second EDGAR accepted them, because most 8-Ks land after
+  the US close, when the stock cannot react and the token can.
+* **A link you can send someone.** Every analysis keeps its full report, so `/r/<id>`
+  reopens that exact verdict — same analogs, same stress table, same book, same hash of
+  the inputs, nothing recomputed.
 
 ## Does it work?
 
