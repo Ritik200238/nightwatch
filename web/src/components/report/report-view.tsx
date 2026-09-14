@@ -79,7 +79,8 @@ export function ReportView({ report }: { report: Report }) {
           <Stat label="Next earnings" value={fmtHours(report.snapshot.features.hours_to_earnings)} hint={`FOMC in ${fmtHours(report.snapshot.features.hours_to_fomc)}`} />
           <Stat
             label="Last SEC filing"
-            value={report.snapshot.features.hours_since_filing != null ? `${fmtHours(report.snapshot.features.hours_since_filing)} ago` : "—"}
+            // 720 h is the cap the feature carries, not a measurement: say "over 30 d", not "30 d".
+            value={report.snapshot.features.hours_since_filing != null ? (report.snapshot.features.hours_since_filing >= 720 ? "over 30 d ago" : `${fmtHours(report.snapshot.features.hours_since_filing)} ago`) : "—"}
             hint={report.snapshot.features.filings_72h ? `${report.snapshot.features.filings_72h} in the last 72h` : "none in the last 72h"}
             tone={report.snapshot.features.filings_72h ? "warning" : undefined}
           />
