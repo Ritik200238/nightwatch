@@ -39,10 +39,13 @@ def render_text(r: AnalysisReport) -> str:
     f = s.features
     lines.append("NOW")
     lines.append(f"  spot {_f(s.prices['spot_close'], '{:.2f}')}  index {_f(s.prices['index_close'], '{:.2f}')}  native last close {_f(s.prices['native_close'], '{:.2f}')} ({_f(f.get('native_close_age_h'), '{:.0f}')}h old)")
-    lines.append(f"  basis vs index {_f(f.get('basis_index_bps'), '{:+.1f}')} bps (z {_f(f.get('basis_index_z'))})  |  rv24 {_f(f.get('rv_24h'), '{:.0%}')} (pctl {_f(f.get('vol_pctl_90d'), '{:.0f}')})  |  trend {_f(f.get('trend_sma_pct'), '{:+.1f}')}% vs 30d avg  |  liq ratio {_f(f.get('liq_ratio'))}")
+    lines.append(f"  basis vs index {_f(f.get('basis_index_bps'), '{:+.1f}')} bps (z {_f(f.get('basis_index_z'))})  |  rv24 {_f(f.get('rv_24h'), '{:.0%}')} (pctl {_f(f.get('vol_pctl_90d'), '{:.0f}')})  |  trend {_f(f.get('trend_sma_pct'), '{:+.1f}')}% vs 30d avg")
     hte = f.get("hours_to_earnings")
     earn = "n/a" if hte is None else (">30d" if hte >= 720 else f"{hte:.0f}h")
+    hsf = f.get("hours_since_filing")
+    filing = "n/a" if hsf is None else (">30d ago" if hsf >= 720 else f"{hsf:.0f}h ago")
     lines.append(f"  earnings in {earn}  |  FOMC in {_f(f.get('hours_to_fomc'), '{:.0f}')}h  |  macro events next 72h {_f(f.get('macro_events_72h'), '{:.0f}')}  |  headlines 24h {_f(f.get('news_count_24h'), '{:.0f}')}")
+    lines.append(f"  last SEC filing {filing}  |  filings in last 72h {_f(f.get('filings_72h'), '{:.0f}')}  |  liq vs same hour of week {_f(f.get('liq_ratio'), '{:.2f}x')}  |  no-trade share 24h {_f(f.get('no_trade_share_24h'), '{:.0%}')} ({_f(f.get('no_trade_excess_24h'), '{:+.0%}')} vs its norm)")
     if s.quality_flags:
         lines.append("  flags: " + ", ".join(s.quality_flags))
     lines.append("")
