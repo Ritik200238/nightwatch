@@ -155,6 +155,12 @@ Both halves deploy on a push to `main`, and neither needs a key stored anywhere:
   its health check within two minutes it rolls back to the previous commit by itself.
   The log is `/home/ubuntu/autodeploy.log`.
 
+**During judging, stop pushing to `main`.** A deploy restarts the API, and for the sixty
+to ninety seconds it takes to come back the desk shows "API offline" to whoever is looking
+at it. Nothing else stops it: there is no freeze switch, and adding one would be another
+thing to forget to turn off. If something must go out, push it and then check the demo
+yourself a minute later.
+
 To deploy immediately instead of waiting for the tick:
 
 ```bash
