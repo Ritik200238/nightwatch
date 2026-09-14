@@ -112,7 +112,7 @@ nightwatch status
 
 | path | what |
 |---|---|
-| `nightwatch/data` | Bitget, Yahoo, Nasdaq, FRED, RSS clients; SQLite store; sync |
+| `nightwatch/data` | Bitget, Yahoo, Nasdaq, FRED, RSS, SEC EDGAR clients; SQLite store; sync |
 | `nightwatch/features` | session calendar, basis, regime, event features, point-in-time snapshots |
 | `nightwatch/analog` | analog retrieval, forward outcomes, cohort statistics, random baseline |
 | `nightwatch/stress` | data-calibrated presets, block-bootstrap Monte Carlo, reverse stress |
