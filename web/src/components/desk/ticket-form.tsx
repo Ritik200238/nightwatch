@@ -140,7 +140,24 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
         </div>
       ) : null}
       <div className="space-y-1">
-        <Label htmlFor="thesis">Why this trade</Label>
+        <div className="flex items-baseline justify-between gap-2">
+          <Label htmlFor="thesis">Why this trade</Label>
+          {/* The gate refuses a ticket with no written plan, which is the right rule and a
+              poor first click. This fills a plausible one so the rule can be seen working
+              rather than merely blocking. The stop stays empty on purpose. */}
+          {!thesis && !invalidation ? (
+            <button
+              type="button"
+              className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              onClick={() => {
+                setThesis(`${side === "long" ? "Strength" : "Weakness"} into the US open carries through the overnight session.`);
+                setInvalidation(side === "long" ? "A close back below the 30-day average." : "A close back above the 30-day average.");
+              }}
+            >
+              Fill an example
+            </button>
+          ) : null}
+        </div>
         <Textarea id="thesis" rows={2} value={thesis} onChange={(e) => setThesis(e.target.value)} placeholder="One line. The gate needs a written reason." />
       </div>
       <div className="space-y-1">
