@@ -55,7 +55,10 @@ case "$conclusion" in
 esac
 
 say "deploying ${remote_sha:0:8}"
-git -c advice.detachedHead=false checkout --quiet "$remote_sha" || { say "checkout failed"; exit 1; }
+# --force on purpose: this box is a deploy target, not a workspace. The repository is
+# the only source of truth for what runs here, and a stray local edit (even a file mode)
+# must not be able to wedge every future deploy. Untracked files, .env included, survive.
+git -c advice.detachedHead=false checkout --quiet --force "$remote_sha" || { say "checkout failed"; exit 1; }
 
 if ! docker compose build api; then
   say "build failed; rolling back to ${local_sha:0:8}"
