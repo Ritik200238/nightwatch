@@ -265,8 +265,11 @@ export interface MonteCarlo {
   horizon_h: number;
   block_h: number;
   source_hours: number;
-  terminal_ret_pct: number[];
-  worst_drawdown_pct: number[];
+  /** Pre-binned terminal returns: what the chart draws. */
+  terminal_hist?: { edges: number[]; counts: number[] };
+  /** Only present on reports stored before the payload was trimmed. */
+  terminal_ret_pct?: number[];
+  worst_drawdown_pct?: number[];
   p5: number;
   p25: number;
   p50: number;

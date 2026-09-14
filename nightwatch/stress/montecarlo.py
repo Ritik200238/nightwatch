@@ -22,6 +22,8 @@ import pandas as pd
 from nightwatch.data.models import OrderBookSnapshot
 from nightwatch.stress.scenarios import Position, Scenario, Severity, apply_scenario
 
+HISTOGRAM_BINS = 40  # what the interface draws; the raw paths are not sent
+
 
 @dataclass(frozen=True)
 class MonteCarloResult:
@@ -31,6 +33,19 @@ class MonteCarloResult:
     source_hours: int
     terminal_ret_pct: np.ndarray  # per path
     worst_drawdown_pct: np.ndarray  # per path, most adverse point vs entry
+
+    def to_dict(self) -> dict:
+        """The result without its ten thousand raw path values.
+
+        The interface draws a forty-bin histogram of the terminal returns and never
+        touches the drawdown paths, so shipping both arrays put 186 KB of numbers into a
+        320 KB response - on every analysis, to every browser, and into every stored
+        report. The bins are the thing that was actually wanted.
+        """
+        out = {k: v for k, v in self.__dict__.items() if not isinstance(v, np.ndarray)}
+        counts, edges = np.histogram(self.terminal_ret_pct, bins=HISTOGRAM_BINS)
+        out["terminal_hist"] = {"edges": [float(e) for e in edges], "counts": [int(c) for c in counts]}
+        return out
     p5: float
     p25: float
     p50: float

@@ -141,3 +141,21 @@ def test_reverse_stress_finds_breakeven_move():
     assert move is not None and -5.0 < move < -4.5  # slightly less than 5% because exit costs add to the loss
     imp = apply_scenario(pos, Scenario(id="v", name="v", severity=Severity.MILD, horizon_h=48, price_move_pct=move), book=book(depth_each=50), taker_fee=0.001)
     assert abs(imp.total_pct_of_notional + 5.0) < 0.05
+
+
+def test_the_monte_carlo_does_not_ship_its_paths():
+    """Ten thousand raw path values were 186 KB of a 320 KB response, on every analysis,
+    for a chart that draws forty bars."""
+    import json
+
+    from nightwatch.stress.montecarlo import HISTOGRAM_BINS
+
+    rng = np.random.default_rng(5)
+    mc = simulate(1.0, rng.normal(0, 0.01, 4000), 24, n_paths=2000, seed=3)
+    d = mc.to_dict()
+    assert "terminal_ret_pct" not in d and "worst_drawdown_pct" not in d
+    hist = d["terminal_hist"]
+    assert len(hist["counts"]) == HISTOGRAM_BINS and len(hist["edges"]) == HISTOGRAM_BINS + 1
+    assert sum(hist["counts"]) == len(mc.terminal_ret_pct)
+    assert d["p5"] == mc.p5 and d["drawdown_p5"] == mc.drawdown_p5
+    assert len(json.dumps(d)) < 4000

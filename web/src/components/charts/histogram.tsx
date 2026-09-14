@@ -4,7 +4,10 @@ import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Toolt
 import { fmtPct } from "@/lib/format";
 
 interface HistogramProps {
-  values: number[];
+  /** Raw observations, binned here. Use `bins` instead when the server already binned. */
+  values?: number[];
+  /** Counts per bin with their edges: `edges.length === counts.length + 1`. */
+  bins?: { edges: number[]; counts: number[] };
   /** Vertical guide lines with labels, e.g. p5 / median / p95. */
   markers?: { value: number; label: string }[];
   binCount?: number;
@@ -31,8 +34,20 @@ function bin(values: number[], count: number) {
  * Distribution of outcomes. Single series (no legend), thin bars with a surface gap,
  * hover tooltip per bin, reference lines for the quantiles the verdict uses.
  */
-export function Histogram({ values, markers = [], binCount = 24, height = 200, ariaLabel, unit = "%" }: HistogramProps) {
-  const data = bin(values, binCount);
+function fromBins(b: { edges: number[]; counts: number[] }) {
+  const total = b.counts.reduce((a, c) => a + c, 0) || 1;
+  return b.counts.map((n, i) => ({
+    mid: (b.edges[i] + b.edges[i + 1]) / 2,
+    label: `${fmtPct(b.edges[i], 1)} to ${fmtPct(b.edges[i + 1], 1)}`,
+    n,
+    share: n / total,
+  }));
+}
+
+export function Histogram({ values, bins, markers = [], binCount = 24, height = 200, ariaLabel, unit = "%" }: HistogramProps) {
+  // Prefer bins the server sent: five thousand raw path values are 180 KB of response
+  // for a forty-bar chart. Raw values still work, for reports stored before that change.
+  const data = bins && bins.counts.length ? fromBins(bins) : bin(values ?? [], binCount);
   if (!data.length) {
     return <p className="text-sm text-muted-foreground">No outcomes to plot.</p>;
   }

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -618,7 +618,12 @@ def _serialise(obj: Any) -> Any:
     if isinstance(obj, list | tuple):
         return [_serialise(v) for v in obj]
     if hasattr(obj, "__dataclass_fields__"):
-        return {k: _serialise(v) for k, v in asdict(obj).items()} if not hasattr(obj, "to_dict") or isinstance(obj, AnalysisReport) else obj.to_dict()
+        # Walk one level at a time rather than asdict(), which is deep and would flatten a
+        # nested object before its own to_dict() ever ran - which is how ten thousand
+        # Monte Carlo path values kept ending up in the response.
+        if hasattr(obj, "to_dict") and not isinstance(obj, AnalysisReport):
+            return _serialise(obj.to_dict())
+        return {f.name: _serialise(getattr(obj, f.name)) for f in fields(obj)}
     if hasattr(obj, "value") and isinstance(obj.value, str):
         return obj.value
     return obj

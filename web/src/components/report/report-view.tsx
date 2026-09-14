@@ -829,7 +829,7 @@ function StressSection({ report }: { report: Report }) {
         <div className="grid gap-4 md:grid-cols-2">
           {mc ? (
             <>
-              <Histogram values={mc.terminal_ret_pct} markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]} binCount={40} height={180} ariaLabel={`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`} />
+              <Histogram values={mc.terminal_ret_pct} bins={mc.terminal_hist} markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]} binCount={40} height={180} ariaLabel={`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`} />
               <div className="grid grid-cols-2 gap-2 content-start">
                 <Stat label={`Monte Carlo p5 (${mc.horizon_h}h)`} value={fmtPct(mc.p5)} hint={`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`} tone="critical" />
                 <Stat label="Expected shortfall (5%)" value={fmtPct(mc.expected_shortfall_5_pct)} hint={`P(loss > 5%) ${fmtRatio(mc.prob_loss_gt["5.0"])}`} />
