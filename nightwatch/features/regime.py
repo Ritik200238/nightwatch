@@ -63,8 +63,13 @@ def add_regime_columns(frame: pd.DataFrame, thresholds: RegimeThresholds = DEFAU
     active = ~f["spot_filled"].astype(bool)
     r_active = logret.where(active)
 
-    f["rv_24h"] = r_active.rolling(RV_SHORT_H, min_periods=RV_SHORT_H // 2).std() * np.sqrt(HOURS_PER_YEAR)
-    f["rv_168h"] = r_active.rolling(RV_LONG_H, min_periods=RV_LONG_H // 2).std() * np.sqrt(HOURS_PER_YEAR)
+    # Volatility is measured over the last N *traded* hours, then carried through the
+    # hours nothing traded: over a weekend the answer to "how volatile is this token" is
+    # "as volatile as it was on Friday", not "unknown". Without this every US-stock token
+    # lost its regime label from Friday close to Monday open and the desk could not decide.
+    traded = r_active.dropna()
+    f["rv_24h"] = (traded.rolling(RV_SHORT_H, min_periods=RV_SHORT_H // 2).std() * np.sqrt(HOURS_PER_YEAR)).reindex(f.index).ffill()
+    f["rv_168h"] = (traded.rolling(RV_LONG_H, min_periods=RV_LONG_H // 2).std() * np.sqrt(HOURS_PER_YEAR)).reindex(f.index).ffill()
     # Percentile rank of the current value within its trailing window (vectorised;
     # equivalent to ranking the last element against the window's valid values).
     f["vol_pctl_90d"] = f["rv_24h"].rolling(VOL_PCTL_WINDOW_H, min_periods=RV_LONG_H).rank(pct=True) * 100.0
