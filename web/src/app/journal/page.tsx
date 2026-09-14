@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { Pill, Section, Stat } from "@/components/report/primitives";
@@ -162,7 +163,15 @@ export default function JournalPage() {
                     return (
                       <TableRow key={r.id}>
                         <TableCell className="whitespace-nowrap">
-                          {fmtTime(r.as_of)}
+                          {/* Live tickets keep their full report for a while, so the row
+                              opens the argument. Replays keep only the numbers here. */}
+                          {r.kind === "replay" ? (
+                            fmtTime(r.as_of)
+                          ) : (
+                            <Link href={`/r/${r.id}`} className="rounded underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                              {fmtTime(r.as_of)}
+                            </Link>
+                          )}
                           <span className="block text-xs text-muted-foreground">{r.kind === "replay" ? "replay" : "live ticket"}</span>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
