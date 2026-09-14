@@ -65,6 +65,18 @@ export interface Health {
   chat_ready: boolean;
 }
 
+export interface DataSource {
+  key: string;
+  label: string;
+  what: string;
+  cadence: string;
+  last_update: string | null;
+  rows: number;
+  latest: string | null;
+  latest_label: string | null;
+  url: string;
+}
+
 export interface GateRule {
   rule: string;
   decision: "GO" | "REVIEW_REQUIRED" | "NO_GO";
@@ -603,6 +615,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<Health>("/health"),
   universe: (core = true) => request<UniverseEntry[]>(`/universe?core=${core}`),
+  sources: () => request<DataSource[]>("/sources"),
   analyze: (ticket: TicketInput) => request<Report>("/analyze", { method: "POST", body: JSON.stringify(ticket) }),
   chat: (messages: { role: "user" | "assistant"; content: string }[], accountEquity?: number | null) =>
     request<ChatResponse>("/chat", { method: "POST", body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null }) }),

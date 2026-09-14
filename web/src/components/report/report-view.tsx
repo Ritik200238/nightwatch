@@ -70,13 +70,19 @@ export function ReportView({ report }: { report: Report }) {
 
       {/* Now */}
       <Section title="Right now" subtitle={`Last completed bar ${fmtTime(report.snapshot.bar_ts)} · inputs hash ${report.snapshot.content_hash}`}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
           <Stat label="Token price" value={fmtPrice(report.snapshot.prices.spot_close)} />
           <Stat label="Fair value (index)" value={fmtPrice(report.snapshot.prices.index_close)} hint={`native close ${fmtPrice(report.snapshot.prices.native_close)} · ${fmtHours(report.snapshot.features.native_close_age_h)} old`} />
           <Stat label="Basis vs index" value={fmtBps(report.snapshot.features.basis_index_bps, 1, true)} hint={`z ${report.snapshot.features.basis_index_z?.toFixed(2) ?? "—"}`} />
           <Stat label="Realised vol (24h)" value={report.snapshot.features.rv_24h != null ? `${(report.snapshot.features.rv_24h * 100).toFixed(0)}%` : "—"} hint={`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`} />
           <Stat label="Trend vs 30d avg" value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={report.snapshot.labels.trend_state} />
           <Stat label="Next earnings" value={fmtHours(report.snapshot.features.hours_to_earnings)} hint={`FOMC in ${fmtHours(report.snapshot.features.hours_to_fomc)}`} />
+          <Stat
+            label="Last SEC filing"
+            value={report.snapshot.features.hours_since_filing != null ? `${fmtHours(report.snapshot.features.hours_since_filing)} ago` : "—"}
+            hint={report.snapshot.features.filings_72h ? `${report.snapshot.features.filings_72h} in the last 72h` : "none in the last 72h"}
+            tone={report.snapshot.features.filings_72h ? "warning" : undefined}
+          />
         </div>
         {report.snapshot.quality_flags.length ? (
           <p className="mt-3 text-xs text-muted-foreground">Flags: {report.snapshot.quality_flags.join(", ")}</p>

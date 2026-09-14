@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Chat } from "@/components/desk/chat";
 import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
+import { Sources } from "@/components/desk/sources";
 import { TicketForm } from "@/components/desk/ticket-form";
 import { ReportView } from "@/components/report/report-view";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,9 @@ export default function DeskPage() {
                 <TicketForm universe={universe} busy={busy} onSubmit={run} />
                 <div className="border-t border-border pt-4">
                   <OpenPositions universe={universe} positions={positions} onChange={setPositions} />
+                </div>
+                <div className="border-t border-border pt-4">
+                  <Sources />
                 </div>
               </div>
             ) : universeError ? (
