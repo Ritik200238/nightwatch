@@ -24,22 +24,34 @@ function target(req: NextRequest, path: string[]): string {
   return `${ORIGIN}/${path.map(encodeURIComponent).join("/")}${qs}`;
 }
 
-/** The backend restarts on every deploy and takes a few seconds to answer again. A read
- *  that lands in that window should wait rather than show a judge an error page. Only
- *  reads are retried: a write that may have been applied is never sent twice. */
-async function withRetry(fn: () => Promise<Response>, retry: boolean): Promise<Response> {
-  try {
-    const res = await fn();
-    if (retry && (res.status === 502 || res.status === 503 || res.status === 504)) {
-      await new Promise((r) => setTimeout(r, 2500));
-      return await fn();
+const BACKOFF_MS = [1500, 4000, 9000]; // ~15s of cover: a container restart takes about that
+
+/** A connection the backend refused outright. Nothing was delivered, so nothing can have
+ *  been applied, which makes it the one failure a write may safely be retried on. */
+function wasRefused(e: unknown): boolean {
+  const code = (e as { cause?: { code?: string } })?.cause?.code;
+  return code === "ECONNREFUSED" || code === "ECONNRESET" || code === "EHOSTUNREACH";
+}
+
+/** The backend restarts on every deploy and takes the better part of a minute to answer
+ *  again. A call that lands in that window should wait rather than show a judge an error.
+ *
+ *  Reads retry on anything. Writes retry only on a refused connection: a POST that got as
+ *  far as a 502 from the backend may have been applied, and an analysis is journaled, so
+ *  sending it twice would write the same forecast down twice. */
+async function withRetry(fn: () => Promise<Response>, isRead: boolean): Promise<Response> {
+  let last: Response | undefined;
+  for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt - 1]));
+    try {
+      last = await fn();
+      if (!isRead || ![502, 503, 504].includes(last.status)) return last;
+    } catch (e) {
+      if (!isRead && !wasRefused(e)) throw e;
+      if (attempt === BACKOFF_MS.length) throw e;
     }
-    return res;
-  } catch (e) {
-    if (!retry) throw e;
-    await new Promise((r) => setTimeout(r, 2500));
-    return await fn();
   }
+  return last as Response;
 }
 
 async function forward(req: NextRequest, path: string[], body?: string) {
