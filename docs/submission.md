@@ -3,7 +3,8 @@
 Form: Bitget AI Base Camp Hackathon S2, deadline 2026-09-21 UTC+8.
 Track: AI Trading Desk. Sub-theme: Decision Stress Testing.
 
-Placeholders in `<angle brackets>` must be filled before submitting. Every number below is
+Two placeholders are left, both waiting on the recording: `<video URL>` and the forecast
+id of the verdict shown in it. Everything else is filled in. Every number below is
 labelled **observed** (measured on this build), **estimated**, or **targeted**.
 
 ---
@@ -182,13 +183,13 @@ Behind the Submission Materials Link:
    the journal. No login. Service health: https://nightwatch-gules.vercel.app/api/health,
    and every upstream feed with its freshness at
    https://nightwatch-gules.vercel.app/api/sources
-2. Source: `<GitHub URL>` (public). `README.md` has run instructions.
+2. Source: https://github.com/Ritik200238/nightwatch (public). `README.md` has run instructions.
 3. Screen recording: `<video URL>`, one complete research task: trade idea in, verdict
    out, calibration page.
 4. `docs/research-notes.md`: the findings behind every preset and threshold, with
    reproduction commands.
-5. Calibration evidence: `<demo URL>/calibration`, live, updates as forecasts mature.
-6. One worked verdict, fixed in place: `<demo URL>/r/<forecast id>`. Every analysis the
+5. Calibration evidence: https://nightwatch-gules.vercel.app/calibration, live, updates as forecasts mature.
+6. One worked verdict, fixed in place: `https://nightwatch-gules.vercel.app/r/<forecast id>`. Every analysis the
    desk produces gets a link that reopens it exactly as it was argued — same analogs,
    same stress table, same order book, same hash of the inputs, nothing recomputed. Run
    the trade in the recording, then paste its link here, so a judge can read the argument
@@ -248,7 +249,7 @@ video, research notes, calibration page.
 > looked like now, shows what followed (with sample sizes), runs gap/earnings/liquidity
 > stress from the token's own history, walks the live book for your exit, and sizes the
 > verdict. Every forecast is journaled and scored, so you can see when it is wrong.
-> Try it: <demo URL>
+> Try it: https://nightwatch-gules.vercel.app
 > #BitgetHackathon @Bitget_AI
 
 Attach: a screenshot of a verdict and one of the calibration page.
