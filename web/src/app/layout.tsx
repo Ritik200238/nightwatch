@@ -17,21 +17,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <header className="border-b border-border">
-          <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-4 md:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+          {/* Wraps rather than clips: at 390px the brand, three links and the status pill do not
+              fit on one line, and hiding "Journal" behind a scroll is worse than a taller header. */}
+          <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 md:flex-nowrap md:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-6">
               <Link href="/" className="rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none">
                 Nightwatch
               </Link>
-              {/* The nav gives way before the status pill does: at 390px an "API offline"
-                  pill is wider than the healthy one and used to sit on top of "Journal". */}
-              <nav aria-label="Primary" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-                <Link href="/" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              <nav aria-label="Primary" className="flex items-center gap-1">
+                <Link href="/" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Desk
                 </Link>
-                <Link href="/calibration" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                <Link href="/calibration" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Calibration
                 </Link>
-                <Link href="/journal" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                <Link href="/journal" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Journal
                 </Link>
               </nav>
