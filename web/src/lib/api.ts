@@ -621,6 +621,7 @@ export const api = {
   health: () => request<Health>("/health"),
   universe: (core = true) => request<UniverseEntry[]>(`/universe?core=${core}`),
   sources: () => request<DataSource[]>("/sources"),
+  report: (forecastId: string | number) => request<Report>(`/reports/${forecastId}`),
   analyze: (ticket: TicketInput) => request<Report>("/analyze", { method: "POST", body: JSON.stringify(ticket) }),
   chat: (messages: { role: "user" | "assistant"; content: string }[], accountEquity?: number | null) =>
     request<ChatResponse>("/chat", { method: "POST", body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null }) }),

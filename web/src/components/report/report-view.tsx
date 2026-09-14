@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import { useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
+import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -175,9 +176,12 @@ export function ReportView({ report }: { report: Report }) {
       {/* What would change it */}
       <SensitivitySection report={report} />
 
-      <p className="text-xs text-muted-foreground">
-        Computed in {report.timings_ms.total} ms · sources: {report.sources.map((s) => String(s.kind)).join(", ")}
-        {report.forecast_id != null ? ` · journaled as forecast #${report.forecast_id}` : ""}
+      <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <span>
+          Computed in {report.timings_ms.total} ms · sources: {report.sources.map((s) => String(s.kind)).join(", ")}
+          {report.forecast_id != null ? ` · journaled as forecast #${report.forecast_id}` : ""}
+        </span>
+        {report.forecast_id != null ? <Permalink forecastId={report.forecast_id} /> : null}
       </p>
       {primary ? null : null}
     </div>
