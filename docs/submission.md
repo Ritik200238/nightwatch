@@ -258,10 +258,27 @@ Attach: a screenshot of a verdict and one of the calibration page.
 
 ## Pre-submission checklist
 
-- [ ] Demo reachable over HTTPS; `/health` green; recorder heartbeat advancing
-- [ ] Repository public (or judge-accessible); README run instructions verified on a clean machine
-- [ ] Video recorded and linked
-- [ ] Placeholders above filled; "to be measured" numbers measured or removed
-- [ ] X post published with `#BitgetHackathon` and `@Bitget_AI`
-- [ ] Form: track AI Trading Desk, sub-theme Decision Stress Testing
+Done:
+
+- [x] Demo reachable over HTTPS; `/health` green; recorder heartbeat advancing
+- [x] Repository public; README run instructions verified by cloning it cold (14 Sep):
+      lint clean, 265 tests green, CLI runs, web builds
+- [x] Every feed live and fresh, visible at `/api/sources` and on the desk
+- [x] Links filled in: demo, health, sources, repository, calibration
+- [x] Uptime check every 15 minutes through the judging window; the box restarts a
+      container that is running but unhealthy
+
+Left, and each one needs a person:
+
+- [ ] **Video recorded and linked** — script in `docs/demo-script.md`, record against the
+      live URL, then paste the link here and in the form
+- [ ] **The worked verdict**: after the take, click "copy link" in the report footer and
+      put that `/r/<id>` link in deliverable 6
+- [ ] **X post** published with `#BitgetHackathon` and `@Bitget_AI`
+- [ ] **Form**: track AI Trading Desk, sub-theme Decision Stress Testing
 - [ ] University name (optional), Demo Day (optional)
+- [ ] **AWS budget alert** still emails the wrong address; change it to
+      ritik.pandey72@gmail.com in the console
+- [ ] *Optional*: set `ANTHROPIC_API_KEY` in `/home/ubuntu/nightwatch/.env` and
+      `docker compose up -d api` — the chat already works without it, but the model reads
+      a sentence with more range than the parser does
