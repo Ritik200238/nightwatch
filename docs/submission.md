@@ -179,13 +179,20 @@ FRED, RSS headlines, and SEC EDGAR filings timed to the second they were accepte
 Behind the Submission Materials Link:
 
 1. Live demo: https://nightwatch-gules.vercel.app — the desk, the calibration page and
-   the journal. No login. Service health: https://nightwatch-gules.vercel.app/api/health
+   the journal. No login. Service health: https://nightwatch-gules.vercel.app/api/health,
+   and every upstream feed with its freshness at
+   https://nightwatch-gules.vercel.app/api/sources
 2. Source: `<GitHub URL>` (public). `README.md` has run instructions.
 3. Screen recording: `<video URL>`, one complete research task: trade idea in, verdict
    out, calibration page.
 4. `docs/research-notes.md`: the findings behind every preset and threshold, with
    reproduction commands.
 5. Calibration evidence: `<demo URL>/calibration`, live, updates as forecasts mature.
+6. One worked verdict, fixed in place: `<demo URL>/r/<forecast id>`. Every analysis the
+   desk produces gets a link that reopens it exactly as it was argued — same analogs,
+   same stress table, same order book, same hash of the inputs, nothing recomputed. Run
+   the trade in the recording, then paste its link here, so a judge can read the argument
+   rather than trust a screenshot of it.
 
 ### 6. Take on AI trading
 

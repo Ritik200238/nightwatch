@@ -98,6 +98,9 @@ size, the fifth percentile, and the "vs random hours" column.
 > ranked by what they are worth in money. When it says go, this is the strongest reason not
 > to. I have never seen a tool do this to its own answer.
 
+*After the take:* the report footer has **copy link**. Paste that link into the
+submission form as the worked example — it reopens this exact verdict for anyone.
+
 ## 2:40–3:00 Does it tell the truth
 
 **Screen:** the calibration page, then the journal.
