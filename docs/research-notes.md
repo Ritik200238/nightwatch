@@ -223,6 +223,71 @@ it: the stress presets and the hedge cost.
 
 Reproduce: `python research/feature_ab.py --tickers <list> --points 100`.
 
+## 11. Liquidity has to be judged against the same hour of the week (2026-09-14)
+
+A tokenized US stock trades 24/7, but not evenly. Sunday afternoon is a fraction of
+Tuesday's US open — for TSLA, a weekend day turns over $30k–$120k against weekday hours
+an order of magnitude larger. The first liquidity ratio compared the last 24 hours with
+the flat 30-day average of 24-hour volume, so every weekend looked like a collapse. On
+the live box on Sunday morning, 14 September, every one of the 24 tokens had a
+``liq_ratio`` between 0.00 and 0.01, every one was labelled ``thinning``, and 15 of 48
+tickets came back "hostile regime — selective entries only, review". The desk had stopped
+answering, and the reason was a measurement error, not the market.
+
+The baseline is now the median of the same hour of the week over the previous four weeks,
+strictly trailing and excluding the present hour, with the flat average as a fallback
+while there is not yet same-hour history. Measured over the last 60 days on 12 tokens:
+
+| baseline | mean abs. change in log ratio, hour to hour | share of hours labelled thinning |
+|---|---|---|
+| flat 30-day | 0.185 | 33.8% |
+| same hour, 4 weeks | **0.102** | 19.7% |
+| same hour, 8 weeks | 0.114 | 16.6% |
+| same hour, 12 weeks | 0.116 | 17.4% |
+
+The seasonal baseline roughly halves the jitter the baseline itself injects, and four
+weeks beats eight and twelve on that measure while reacting fastest to a genuine change.
+The "thinning" share falls by a third to a half because most of what it was catching was
+Saturday. What survives is real: BABA on that Sunday still read ``thinning`` at a ratio of
+0.65 with 71% of hours untraded.
+
+The same treatment gives ``no_trade_excess_24h`` — how far the no-trade share sits above
+its own same-hour norm — and the thinning test reads the excess rather than the raw share,
+so a name that is always quiet at 03:00 UTC is not condemned for being quiet at 03:00 UTC.
+With no same-hour history the norm is zero and the test is exactly its original self.
+
+A second measurement bug rode along with the first. Realised volatility was a rolling
+window over calendar hours with no-trade hours blanked, so after roughly twelve dead hours
+it went NaN, the volatility state became ``unknown``, the regime label followed, and the
+gate refused to take a position on the market at all. Volatility is now measured over the
+last N *traded* hours and carried forward: over a weekend, the honest answer to "how
+volatile is this token" is "as volatile as it was on Friday", not "unknown".
+
+## 12. A sixth source: SEC filings, timed to the second (2026-09-14)
+
+An 8-K is how a US company tells the market something material, and most are accepted
+after 16:00 Eastern — when the stock cannot trade and the token can. That is precisely the
+gap this desk exists to price, so the filings belong in it. EDGAR's submissions endpoint
+gives every recent filing for an issuer with an acceptance timestamp to the second, which
+makes "was there a filing in the last three days" answerable point-in-time for any hour in
+the searched history, not only for now.
+
+3,016 filings across 21 of the 24 core tickers (QQQ, SQQQ and TQQQ are not SEC registrants
+under those symbols). For TSLA, 43 news-bearing filings since January 2024, **100% of them
+accepted outside US regular trading hours**.
+
+Two columns are carried on every snapshot — ``hours_since_filing``, capped at 720 so it
+cannot dominate a distance metric, and ``filings_72h``. They are shown on the report and
+available to the narration, but they are *not* in the search vector: like the macro
+columns before them, they enter the distance metric only if a paired A/B says they earn
+it. That experiment has not been run yet, so the claim here is about coverage, not skill.
+
+Operationally: EDGAR requires a `Name contact@address` user agent and returns a 403 HTML
+page otherwise — including, specifically, for any contact string mentioning github. The
+recorder re-syncs every four hours.
+
+Reproduce: `nightwatch filings --core`, then `GET /sources`.
+
 ## 10. Things that did not work, and what was done instead
 
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
