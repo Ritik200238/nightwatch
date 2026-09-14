@@ -6,7 +6,7 @@ import { api, type DataSource } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 
 /** How stale a feed is allowed to look before its dot changes colour, per source. */
-const FRESH_H: Record<string, number> = { bitget_bars: 1, yahoo: 72, nasdaq: 24, fred: 24, rss: 6, sec_edgar: 12 };
+const FRESH_H: Record<string, number> = { bitget_bars: 1, yahoo: 3, nasdaq: 24, fred: 24, rss: 6, sec_edgar: 12 };
 
 function ageHours(iso: string | null): number | null {
   if (!iso) return null;
