@@ -193,6 +193,24 @@ class MacroRelease(_Record):
     observed_at: datetime
 
 
+class Filing(_Record):
+    """A company filing with the SEC, timed to the second it was accepted.
+
+    Acceptance time is the point: an 8-K accepted at 20:35 UTC on a weekday lands after
+    the US close, when only the token can react to it."""
+
+    ticker: str
+    cik: str
+    form: str  # 8-K, 8-K/A, 6-K, 10-Q, 10-K
+    accepted_at: datetime  # UTC instant EDGAR accepted it
+    filed_date: datetime  # the filing date, ET calendar day as a UTC instant
+    accession: str
+    description: str | None = None
+    items: str | None = None  # 8-K item codes, e.g. "2.02,9.01"
+    source: str = "sec_edgar"
+    observed_at: datetime
+
+
 class NewsItem(_Record):
     source: str
     id: str  # stable per-source id (guid/link hash)

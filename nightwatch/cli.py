@@ -15,6 +15,7 @@ from nightwatch.data.fred import CORE_SERIES, FredClient
 from nightwatch.data.models import Interval, Venue
 from nightwatch.data.nasdaq import NasdaqEarningsClient
 from nightwatch.data.rss import RssNewsClient
+from nightwatch.data.sec import SecFilingsClient
 from nightwatch.data.store import Store
 from nightwatch.data.sync import (
     HISTORY_START,
@@ -23,6 +24,7 @@ from nightwatch.data.sync import (
     refresh_universe,
     resolve_universe,
     sync_calendars,
+    sync_filings,
     sync_macro_series,
     sync_news,
     sync_universe,
@@ -109,6 +111,15 @@ def cmd_calendars(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def cmd_filings(args: argparse.Namespace, settings: Settings) -> int:
+    spot, perp = _clients(settings)
+    with Store(settings.db_path) as store:
+        entries = _select(resolve_universe(store, spot, perp, settings), core_only=args.core, tickers=args.tickers, limit=args.limit)
+        n = sync_filings(store, SecFilingsClient(), [e.ticker for e in entries])
+    print(f"filing rows: {n}")
+    return 0
+
+
 def cmd_news(args: argparse.Namespace, settings: Settings) -> int:
     spot, perp = _clients(settings)
     with Store(settings.db_path) as store:
@@ -137,6 +148,8 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 # Earnings dates move and macro releases get scheduled; six-hourly is plenty.
                 PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False),
                 PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False),
+                # Filings arrive at any hour; four-hourly keeps "was there an 8-K last night" current.
+                PeriodicJob("filings", 4 * 3600, lambda: sync_filings(store, SecFilingsClient(), tickers), run_at_start=False),
                 # Score live tickets as soon as their horizon has passed so calibration stays current.
                 PeriodicJob("mature-forecasts", 900, lambda: mature_and_learn(journal, spot_symbol_for={e.ticker: e.spot_symbol for e in entries})),
             ]
@@ -305,6 +318,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--days-ahead", type=int, default=120)
     sp.add_argument("--no-series", action="store_true")
     sp.set_defaults(func=cmd_calendars)
+
+    sp = sub.add_parser("filings", help="fetch SEC filings (8-K, 6-K, 10-Q, 10-K) for the universe")
+    common(sp)
+    sp.set_defaults(func=cmd_filings)
 
     sp = sub.add_parser("news", help="fetch RSS headlines")
     sp.set_defaults(func=cmd_news)

@@ -299,6 +299,19 @@ def sync_macro_series(store: Store, fred: FredClient, series: Iterable[str], *, 
     return n
 
 
+def sync_filings(store: Store, sec, tickers: Iterable[str], *, since: datetime | None = None) -> int:  # noqa: ANN001
+    """Pull every news-bearing SEC filing for the given tickers. Idempotent."""
+    began = utc_now()
+    n = 0
+    for t in tickers:
+        try:
+            n += store.upsert_filings(sec.get_filings(t, since=since))
+        except Exception as exc:  # noqa: BLE001 - one issuer failing must not stop the rest
+            log.warning("filings for %s failed: %s", t, exc)
+    store.log_sync("filings", rows=n, started_at=began, finished_at=utc_now())
+    return n
+
+
 def sync_news(store: Store, rss: RssNewsClient) -> int:
     began = utc_now()
     n = store.upsert_news(rss.fetch())

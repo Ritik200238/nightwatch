@@ -26,6 +26,7 @@ from nightwatch.data.book_metrics import DEPTH_BPS_LEVELS, snapshot_metrics
 from nightwatch.data.models import (
     Bar,
     EarningsEvent,
+    Filing,
     FundingRate,
     Instrument,
     Interval,
@@ -99,6 +100,14 @@ CREATE TABLE IF NOT EXISTS macro (
     observed_at INTEGER NOT NULL,
     PRIMARY KEY (series_id, release_ts)
 ) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS filings (
+    ticker TEXT NOT NULL, accession TEXT NOT NULL,
+    cik TEXT NOT NULL, form TEXT NOT NULL, accepted_at INTEGER NOT NULL, filed_date INTEGER NOT NULL,
+    description TEXT, items TEXT, source TEXT NOT NULL, observed_at INTEGER NOT NULL,
+    PRIMARY KEY (ticker, accession)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS filings_ticker_time ON filings (ticker, accepted_at);
 
 CREATE TABLE IF NOT EXISTS news (
     source TEXT NOT NULL, id TEXT NOT NULL,
@@ -468,6 +477,43 @@ class Store:
         ]
 
     # --------------------------------------------------------------------- news
+
+    # ------------------------------------------------------------------ filings
+
+    def upsert_filings(self, filings: Iterable[Filing]) -> int:
+        rows = [
+            (f.ticker, f.accession, f.cik, f.form, to_epoch_ms(f.accepted_at), to_epoch_ms(f.filed_date), f.description, f.items, f.source, to_epoch_ms(f.observed_at))
+            for f in filings
+        ]
+        if not rows:
+            return 0
+        with self._conn:
+            self._conn.executemany(
+                """INSERT INTO filings VALUES (?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT (ticker, accession) DO UPDATE SET description=COALESCE(excluded.description, filings.description),
+                   items=COALESCE(excluded.items, filings.items), observed_at=MIN(filings.observed_at, excluded.observed_at)""",
+                rows,
+            )
+        return len(rows)
+
+    def get_filings(self, ticker: str, *, start: datetime | None = None, end: datetime | None = None, as_of: datetime | None = None) -> list[Filing]:
+        sql = "SELECT ticker, accession, cik, form, accepted_at, filed_date, description, items, source, observed_at FROM filings WHERE ticker=?"
+        args: list[object] = [ticker]
+        if start is not None:
+            sql += " AND accepted_at >= ?"
+            args.append(to_epoch_ms(start))
+        if end is not None:
+            sql += " AND accepted_at < ?"
+            args.append(to_epoch_ms(end))
+        if as_of is not None:
+            sql += " AND observed_at <= ?"
+            args.append(to_epoch_ms(as_of))
+        sql += " ORDER BY accepted_at"
+        return [
+            Filing(ticker=r[0], accession=r[1], cik=r[2], form=r[3], accepted_at=from_epoch_ms(r[4]), filed_date=from_epoch_ms(r[5]),
+                   description=r[6], items=r[7], source=r[8], observed_at=from_epoch_ms(r[9]))
+            for r in self._conn.execute(sql, args)
+        ]
 
     def upsert_news(self, items: Iterable[NewsItem]) -> int:
         rows = [(n.source, n.id, to_epoch_ms(n.published_at), n.title, n.link, n.summary, json.dumps(list(n.tickers)), to_epoch_ms(n.observed_at)) for n in items]
