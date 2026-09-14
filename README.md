@@ -62,7 +62,7 @@ uncomfortable one included:
   amber — most of the way, not all of it, and the page says which.
 * **The analogs do not predict direction.** Scored against random hours of the same kind,
   they are indistinguishable over the distribution as a whole. Where they win is the loss
-  tail: 8.5% of outcomes below their 5th percentile against 10.3% below the random one.
+  tail: 8.4% of outcomes below their 5th percentile against 10.2% below the random one.
   That is the only claim this product makes.
 * **The macro layer earned its place by measurement**, on the third and largest test of
   it: 1,605 paired forecasts, a 1.3% lower forecast loss, interval excluding zero. The two

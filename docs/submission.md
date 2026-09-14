@@ -86,26 +86,28 @@ All figures **observed** on the build as of 2026-09-12 unless labelled otherwise
   seconds (48 books per tick), earnings and FOMC calendars, headline feeds.
 * Forecast calibration, historical replay of 2,345 closed-market windows across 24
   tokens, every forecast scored against what actually happened:
-  * Raw analog distribution: 8.5% of outcomes below the 5th percentile, 10.1% above the
-    95th, 81.1% inside the band (targets 5 / 5 / 90). Kupiec failure-rate test p < 0.001.
+  * Raw analog distribution: 8.5% of outcomes below the 5th percentile, 10.3% above the
+    95th, 81.0% inside the band (targets 5 / 5 / 90). Kupiec failure-rate test p < 0.001.
     Tail band: red. The median is inside its interval, so the centre is right and the
     tails are not.
   * With tail factors fitted only on forecasts that had matured earlier (expanding
-    window, out of sample, 2,301 forecasts): 5.6% below p5, 5.6% above p95, 88.7% inside
+    window, out of sample, 2,301 forecasts): 5.6% below p5, 5.9% above p95, 88.5% inside
     the band. Tail band: amber — most of the way from red, not all of it. Aiming the fit
     slightly under 5% would show green, and would be choosing the target by looking at
     the out-of-sample answer, so it was not done. The cost of the widening is sharpness:
-    the honest band is 12.9 points wide instead of 8.5.
-  * Scored month by month, the gap to 90% coverage closes by about 2.9 points per month.
+    the honest band is 12.9 points wide instead of 8.4.
+  * Scored month by month, the gap to 90% coverage closes by about 3.0 points per month.
     The journal's first month has too little history to fit the factors and breached
-    11.5%; June breached 11.7% even with them. The page says both.
+    12.2%; June breached 11.7% even with them. The page says both.
   * Median absolute error of the median forecast: 2.22 percentage points.
 * Does the retrieval beat not bothering? Each replay point is paired with the
   distribution of random past hours from the same time-of-week bucket, and both are
-  scored with the pinball loss on the same outcome (2,328 pairs). Averaged over the five
-  quantiles the analogs are indistinguishable from random hours (skill −1.0%, CI −0.017
-  to +0.002). The one place they help is the loss tail: 8.5% of outcomes fall below the
-  analog 5th percentile against 10.3% below the random-hours one. **The analogs do not
+  scored with the pinball loss on the same outcome (2,325 pairs). Averaged over the five
+  quantiles the analogs are indistinguishable from random hours (skill −0.8%, CI −0.015
+  to +0.003). The one place they help is the loss tail: 8.4% of outcomes fall below the
+  analog 5th percentile against 10.2% below the random-hours one, and the pinball gain at
+  p5 is +4.0% with an interval that excludes zero — though on three of the five engines
+  this has been re-scored on, it did not. **The analogs do not
   predict direction; they improve the loss tail.** That is the only claim this product
   makes, and the verdict never takes a direction from them.
 * Whether a feature joins the search is decided by measurement. The macro layer was

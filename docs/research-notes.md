@@ -111,14 +111,14 @@ per closed-market window.
 
 | quantile | nominal | observed | 95% interval |
 |---|---|---|---|
-| p5 | 5% | 8.5% | 7.5–9.7 |
-| p25 | 25% | 32.2% | 30.3–34.1 |
+| p5 | 5% | 8.5% | 7.4–9.7 |
+| p25 | 25% | 32.5% | 30.6–34.4 |
 | p50 | 50% | 49.0% | 47.0–51.1 |
 | p75 | 75% | 66.3% | 64.4–68.2 |
-| p95 | 95% | 89.9% | 88.6–91.0 |
+| p95 | 95% | 89.7% | 88.4–90.9 |
 
 The centre is right (the median is inside its interval) and the tails are still too thin.
-Kupiec failure-rate LR 51.2 and Christoffersen independence LR 22.1, both p < 0.001: too
+Kupiec failure-rate LR 50.1 and Christoffersen independence LR 20.6, both p < 0.001: too
 many breaches, and they cluster. Band: red.
 
 The correction is two multipliers, k_lo and k_hi, that widen p5 and p95 about the median
@@ -127,13 +127,13 @@ whose outcome was known before the moment of use, so every number below is out o
 
 | metric | target | raw | adjusted |
 |---|---|---|---|
-| outcomes below p5 | 5% | 8.6% | **5.6%** |
-| outcomes above p95 | 5% | 10.3% | **5.6%** |
-| inside p5–p95 | 90% | 81.1% | **88.7%** |
+| outcomes below p5 | 5% | 8.5% | **5.6%** |
+| outcomes above p95 | 5% | 10.5% | **5.9%** |
+| inside p5–p95 | 90% | 81.0% | **88.5%** |
 | 5% tail band | green | red | **amber** |
-| mean p5–p95 width | — | 8.45% | 12.88% |
+| mean p5–p95 width | — | 8.44% | 12.87% |
 
-Latest factors: k_lo 1.31, k_hi 1.59 on 2,301 evaluated forecasts.
+Latest factors: k_lo 1.35, k_hi 1.57 on 2,301 evaluated forecasts.
 
 **Amber, not green, and it stays amber.** The band is a z-score on the binomial count of
 breaches: green is within one standard deviation of the expected number, amber up to two
@@ -152,21 +152,21 @@ Month by month (`nightwatch calibration` prints this):
 
 | month | scored | below p5 raw → adjusted | inside band raw → adjusted |
 |---|---|---|---|
-| 2026-03 | 139 | 13.7% → 11.5% | 69.8% → 62.6% |
-| 2026-04 | 413 | 5.3% → 4.4% | 78.5% → 87.4% |
-| 2026-05 | 369 | 6.8% → 4.1% | 82.9% → 93.2% |
-| 2026-06 | 392 | 16.8% → 11.7% | 76.3% → 86.2% |
-| 2026-07 | 454 | 10.4% → 5.3% | 80.0% → 90.3% |
-| 2026-08 | 413 | 2.9% → 1.9% | 90.3% → 94.9% |
-| 2026-09 | 121 | 5.0% → 2.5% | 86.8% → 90.1% |
+| 2026-03 | 139 | 13.7% → 12.2% | 70.5% → 61.9% |
+| 2026-04 | 413 | 5.6% → 4.6% | 77.2% → 86.0% |
+| 2026-05 | 369 | 5.7% → 3.0% | 84.3% → 94.9% |
+| 2026-06 | 392 | 16.1% → 11.7% | 76.8% → 86.5% |
+| 2026-07 | 454 | 11.0% → 5.9% | 79.5% → 89.2% |
+| 2026-08 | 413 | 3.1% → 1.5% | 90.1% → 94.9% |
+| 2026-09 | 121 | 5.8% → 2.5% | 84.3% → 90.9% |
 
 Two months to explain rather than hide. March is the first month of the journal: there are
 too few already-matured forecasts behind it for the factors to be fitted at all, so the
-adjustment barely moves and 11.5% of outcomes breach — the honest reading is that this
+adjustment barely moves and 12.2% of outcomes breach — the honest reading is that this
 method needs a few hundred scored forecasts before it is worth anything. June is worse in
 a different way: the factors were available and still more than one outcome in ten fell
 below the level sized against. Across the period the gap to 90% coverage closes by about
-2.9 points per month.
+3.0 points per month.
 
 Reproduce: `nightwatch calibration --kind replay`.
 
@@ -176,28 +176,32 @@ Reproduce: `nightwatch calibration --kind replay`.
 in §11 changed the features the retrieval searches over. Every replay point also journals
 the distribution of *random past hours from the same time-of-week bucket*, drawn from
 history strictly before it. Both are scored with the pinball loss on the same outcome,
-2,328 pairs:
+2,325 pairs:
 
 | quantile | analog loss | random-hours loss | skill | 95% CI of the gain |
 |---|---|---|---|---|
-| p5 | 0.359 | 0.369 | +2.6% | −0.005 to +0.025 |
-| p25 | 0.934 | 0.920 | −1.6% | −0.029 to +0.000 |
-| p50 | 1.104 | 1.096 | −0.7% | −0.018 to +0.003 |
-| p75 | 0.993 | 0.971 | −2.3% | −0.039 to −0.005 |
-| p95 | 0.440 | 0.437 | −0.6% | −0.022 to +0.018 |
-| all five | 0.766 | 0.759 | −1.0% | −0.017 to +0.002 |
+| p5 | 0.362 | 0.378 | **+4.0%** | **+0.001 to +0.030** |
+| p25 | 0.933 | 0.922 | −1.2% | −0.026 to +0.003 |
+| p50 | 1.102 | 1.093 | −0.8% | −0.020 to +0.002 |
+| p75 | 0.991 | 0.969 | −2.3% | −0.039 to −0.006 |
+| p95 | 0.438 | 0.435 | −0.7% | −0.022 to +0.016 |
+| all five | 0.765 | 0.759 | −0.8% | −0.015 to +0.003 |
 
 Read plainly: **the analogs do not predict direction.** Over the whole distribution they
 are indistinguishable from picking random hours of the same kind, and at p25 and p75 they
-are now measurably *worse* — the resemblance concentrates the middle of the distribution
-where the truth is wide. The one place they help is the loss tail, and even there the
-pinball interval still includes zero; what does stand is the breach rate, 8.5% of outcomes
-below the analog p5 against 10.3% below the random-hours p5.
+are measurably *worse* at the upper quartile — the resemblance concentrates the middle of
+the distribution where the truth is wide. The one place they help is the loss tail: 8.4% of
+outcomes fall below the analog p5 against 10.2% below the random-hours p5, and on this
+engine the pinball interval at p5 excludes zero for the first time (+4.0%, +0.001 to
++0.030).
 
-This is the fourth re-score of this table on four successive engines (+4.8%, +2.9%, +3.6%,
-+2.6% at p5). The sign has never changed and the interval has never cleanly excluded zero.
-That consistency is the honest summary: a small, real tail effect that this sample cannot
-prove at 95%.
+Do not read too much into that last part. This is the fifth re-score of this table on five
+successive engines: +4.8%, +2.9%, +3.6%, +2.6%, +4.0% at p5, and only the first and the
+last had an interval clear of zero. The sign has never changed, which is the finding; its
+significance wanders around the 95% line from build to build, which is what a real effect
+of this size looks like in 2,325 paired forecasts. The claim stays where it was: the
+analogs do not predict direction, and they put fewer outcomes below the level the verdict
+sizes against.
 
 This is why the verdict never takes a direction from the cohort: it sizes against the
 tail, and says so.
