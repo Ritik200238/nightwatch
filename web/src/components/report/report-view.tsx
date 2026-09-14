@@ -102,11 +102,11 @@ export function ReportView({ report }: { report: Report }) {
         {report.execution.exit_quote ? (
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             <div className="grid grid-cols-2 gap-2">
-              <Stat label={`Exit ${fmtUsd(report.execution.exit_quote.notional_quote)}`} value={fmtBps(report.execution.exit_quote.total_cost_bps)} hint={`${fmtBps(report.execution.exit_quote.walk_cost_bps)} walk + ${report.execution.exit_quote.fee_bps.toFixed(0)} bps fee`} tone={report.execution.exit_quote.fully_filled ? undefined : "critical"} />
+              <Stat label={`Exit ${fmtUsd(report.execution.exit_quote.notional_quote)} USDT`} value={fmtBps(report.execution.exit_quote.total_cost_bps)} hint={`${fmtBps(report.execution.exit_quote.walk_cost_bps)} walk + ${report.execution.exit_quote.fee_bps.toFixed(0)} bps fee`} tone={report.execution.exit_quote.fully_filled ? undefined : "critical"} />
               <Stat label="Fills" value={report.execution.exit_quote.fully_filled ? "Yes" : "No"} hint={`${report.execution.exit_quote.levels_consumed} levels`} tone={report.execution.exit_quote.fully_filled ? "good" : "critical"} />
-              <Stat label={`Max size ≤ ${budget} bps`} value={fmtUsd(report.execution.max_notional_within_budget)} />
+              <Stat label="Largest exit inside budget" value={fmtUsd(report.execution.max_notional_within_budget)} hint={`USDT that still exits under ${budget} bps`} />
               {report.execution.hedge_quote ? (
-                <Stat label={`Hedge 100% via ${report.execution.hedge_quote.perp_symbol}`} value={fmtBps(report.execution.hedge_quote.total_cost_bps_of_position)} hint={`fees ${fmtUsd(report.execution.hedge_quote.entry_fee_quote + report.execution.hedge_quote.exit_fee_quote, 2)} · funding ${fmtUsd(report.execution.hedge_quote.funding_quote, 2)} · residual basis p95 ${fmtBps(report.execution.hedge_quote.residual_basis_p95_bps, 0)}`} />
+                <Stat label={`Hedge 100% via ${report.execution.hedge_quote.perp_symbol}`} value={fmtBps(report.execution.hedge_quote.total_cost_bps_of_position)} hint={`fees ${fmtUsd(report.execution.hedge_quote.entry_fee_quote + report.execution.hedge_quote.exit_fee_quote, 2)} USDT · funding ${fmtUsd(report.execution.hedge_quote.funding_quote, 2)} USDT · residual basis p95 ${fmtBps(report.execution.hedge_quote.residual_basis_p95_bps, 0)}`} />
               ) : null}
             </div>
             {report.execution.cost_curve ? <CostCurve points={report.execution.cost_curve} requested={t.notional_quote} budgetBps={budget} /> : null}
