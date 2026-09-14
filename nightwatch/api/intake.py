@@ -48,7 +48,7 @@ _HEDGE_PCT = re.compile(r"\bhedge\b[^.\d]{0,15}(\d{1,3})\s*%", re.I)
 _HEDGE = re.compile(r"\bhedge\b|\bdelta[-\s]?neutral\b", re.I)
 _THESIS = re.compile(r"\b(?:because|since|thesis\s*:|on the view that|reason\s*:|the idea is)\s+(.+?)(?:[.;!?]|$)", re.I)
 _INVALID = re.compile(
-    r"\b(?:invalidat\w*\s*(?:is|if|when|:)|(?:i.m|it.s)\s+wrong\s+if|abort\s+if|bail\s+if|proves?\s+(?:it|me)\s+wrong\s+if)\s*(.+?)(?:[.;!?]|$)",
+    r"\b(?:invalidat\w*\s*(?:is|if|when|:)|(?:(?:i.m|it.s|this is|that.s)\s+)?wrong\s+if|abort\s+if|bail\s+if|proves?\s+(?:it|me)\s+wrong\s+if)\s*(.+?)(?:[.;!?]|$)",
     re.I,
 )
 
