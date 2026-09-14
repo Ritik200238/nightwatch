@@ -460,13 +460,14 @@ function RegimeSection({ report }: { report: Report }) {
       action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>now: {current.description}</Pill> : null}
     >
       <div className="overflow-x-auto">
-        <Table className="min-w-[640px]">
+        <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
               <TableHead>State</TableHead>
               <TableHead className="text-right">Share of hours</TableHead>
               <TableHead className="text-right">Stays put</TableHead>
               <TableHead className="text-right">Next {fmtHours(m.horizon_h)}, median</TableHead>
+              <TableHead className="text-right">Never moved</TableHead>
               <TableHead className="text-right">Next {fmtHours(m.horizon_h)}, p5</TableHead>
               <TableHead className="text-right">Episodes</TableHead>
             </TableRow>
@@ -481,6 +482,7 @@ function RegimeSection({ report }: { report: Report }) {
                 <TableCell className="tabular text-right">{fmtPct(r.share * 100, 0, false)}</TableCell>
                 <TableCell className="tabular text-right text-muted-foreground">{r.persistence == null ? "—" : fmtPct(r.persistence * 100, 0, false)}</TableCell>
                 <TableCell className="tabular text-right">{r.next_ret_median_pct == null ? "—" : fmtPct(r.next_ret_median_pct)}</TableCell>
+                <TableCell className="tabular text-right text-muted-foreground">{r.flat_share == null ? "—" : fmtPct(r.flat_share * 100, 0, false)}</TableCell>
                 <TableCell className="tabular text-right text-status-critical">{r.next_ret_p5_pct == null ? "—" : fmtPct(r.next_ret_p5_pct)}</TableCell>
                 <TableCell className="tabular text-right text-muted-foreground">{r.n_outcomes.toLocaleString()}</TableCell>
               </TableRow>
@@ -500,6 +502,10 @@ function RegimeSection({ report }: { report: Report }) {
           .
         </p>
       ) : null}
+      <p className="mt-2 text-xs text-muted-foreground">
+        The medians sit on zero because these tokens do not trade every hour: in the &ldquo;never moved&rdquo; share of windows the price ends on the same
+        last trade it started on. The p5 column is the one the sizing uses.
+      </p>
     </Section>
   );
 }

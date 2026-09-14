@@ -21,6 +21,12 @@ How it works, and why each choice:
   measurably is (volatility percentile, basis, trend), not as "risk-off".
 * **Judged by outcomes.** Each regime carries the distribution of what followed it, with
   its sample size. A regime with eleven observations is reported as such.
+* **The flat share is reported, because the medians need it.** A tokenized US stock does
+  not trade every hour, so a window can begin and end on the same last trade and return
+  exactly zero. Roughly a sixth of them do, which is enough mass at zero to put the median
+  there for every state. Printing "median 0.00%" and nothing else invites the reader to
+  assume the table is broken; printing how often a window simply does not move says what
+  is actually true about this market, and points at the p5 column as the useful one.
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ class Regime:
     next_ret_p5_pct: float | None
     next_ret_p95_pct: float | None
     n_outcomes: int
+    flat_share: float | None = None  # windows that ended exactly where they started
 
 
 @dataclass(frozen=True)
@@ -168,6 +175,7 @@ def build(frame: pd.DataFrame, *, as_of: pd.Timestamp | None = None, k: int = DE
                 next_ret_p5_pct=float(np.percentile(outcomes, 5)) if enough else None,
                 next_ret_p95_pct=float(np.percentile(outcomes, 95)) if enough else None,
                 n_outcomes=int(len(outcomes)),
+                flat_share=float((outcomes.abs() < 1e-9).mean()) if enough else None,
             )
         )
 

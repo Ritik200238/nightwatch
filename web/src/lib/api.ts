@@ -449,6 +449,9 @@ export interface Regime {
   next_ret_p5_pct: number | null;
   next_ret_p95_pct: number | null;
   n_outcomes: number;
+  /** Share of windows in this state that ended exactly where they started: the token
+   *  never traded. It is why the medians sit on zero. */
+  flat_share: number | null;
 }
 
 export interface RegimeMap {
