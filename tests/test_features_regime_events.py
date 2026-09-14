@@ -54,7 +54,11 @@ def test_weekend_that_is_normal_for_a_weekend_is_not_thinning():
     row make the ninth ordinary, not a liquidity crisis."""
     f = synthetic_frame(24 * 74)  # ends on a Sunday
     weekend = f.index.dayofweek >= 5
-    f.loc[weekend, "spot_vol_quote"] = 100.0  # a tenth of a weekday hour, every weekend
+    # Two per cent of a weekday hour, which is the order of magnitude the real tokens
+    # show. An earlier guard treated any seasonal baseline under a twentieth of the flat
+    # average as broken and fell back to the flat one, which restored the original bug on
+    # exactly this data while a gentler 10% weekend went on passing.
+    f.loc[weekend, "spot_vol_quote"] = 20.0
     f = add_regime_columns(f)
     last = f.iloc[-1]
     assert f.index[-1].dayofweek >= 5  # the frame ends on a weekend
@@ -68,8 +72,8 @@ def test_weekend_that_is_normal_for_a_weekend_is_not_thinning():
 def test_liquidity_thinning_when_a_weekend_is_quiet_for_a_weekend():
     f = synthetic_frame(24 * 74)  # ends on a Sunday
     weekend = f.index.dayofweek >= 5
-    f.loc[weekend, "spot_vol_quote"] = 100.0
-    f.loc[f.index[-24:], "spot_vol_quote"] = 20.0  # this weekend is a fifth of a normal one
+    f.loc[weekend, "spot_vol_quote"] = 20.0
+    f.loc[f.index[-24:], "spot_vol_quote"] = 4.0  # this weekend is a fifth of a normal one
     f = add_regime_columns(f)
     assert f.iloc[-1]["liq_state"] == "thinning"
 

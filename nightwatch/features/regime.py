@@ -41,7 +41,6 @@ SLOPE_H = 24 * 5
 LIQ_WINDOW_H = 24
 LIQ_BASELINE_H = 24 * 30
 LIQ_SEASONAL_WEEKS = 4  # same-hour-of-week observations behind the window
-LIQ_BASELINE_FLOOR = 0.05  # a seasonal baseline below this share of the flat one is unusable
 LIQ_RATIO_CAP = 10.0  # ten times normal and a thousand times normal mean the same thing
 HOURS_PER_WEEK = 24 * 7
 
@@ -95,14 +94,14 @@ def add_regime_columns(frame: pd.DataFrame, thresholds: RegimeThresholds = DEFAU
     flat_hourly = vol.rolling(LIQ_BASELINE_H, min_periods=LIQ_BASELINE_H // 2).mean().shift(LIQ_WINDOW_H)
     expected_hourly = _seasonal_norm(vol, LIQ_SEASONAL_WEEKS).fillna(flat_hourly)
     baseline = expected_hourly.rolling(LIQ_WINDOW_H, min_periods=LIQ_WINDOW_H).sum()
-    # A baseline near zero is not a measurement of anything. If the same hours of the week
-    # were almost dead in the reference weeks, dividing by them turns an ordinary day into
-    # a ratio of hundreds, so fall back to the flat baseline for those hours.
+    # Only a baseline of literally nothing falls back to the flat one: a weekend baseline
+    # is *meant* to be a small fraction of the all-hours average, and an earlier version
+    # of this guard treated "less than a twentieth of the flat average" as broken, which
+    # quietly restored the very bug the seasonal baseline exists to remove.
     flat_baseline = flat_hourly.rolling(LIQ_WINDOW_H, min_periods=LIQ_WINDOW_H).sum()
-    too_small = baseline < LIQ_BASELINE_FLOOR * flat_baseline
-    baseline = baseline.where(~too_small, flat_baseline)
-    # And cap what survives: beyond a point, "much busier than normal" is one fact, not a
-    # scale. Uncapped, a single hour dominates anything that standardises these columns.
+    baseline = baseline.where(baseline > 0.0, flat_baseline)
+    # Cap what survives: beyond a point, "much busier than normal" is one fact, not a
+    # scale, and uncapped a single hour dominates anything that standardises this column.
     f["liq_ratio"] = (recent / baseline.replace(0.0, np.nan)).clip(upper=LIQ_RATIO_CAP)
 
     filled = f["spot_filled"].astype(float)
