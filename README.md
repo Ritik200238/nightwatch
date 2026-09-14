@@ -48,12 +48,13 @@ Every forecast is journaled before its outcome is known and scored when the hori
 passes, so the page below is not a claim, it is a scorecard. Three findings from it, the
 uncomfortable one included:
 
-* **The raw tails were wrong.** Across 2,345 scored replays, 8.2% of outcomes fell below
+* **The raw tails were wrong.** Across 2,345 scored replays, 8.5% of outcomes fell below
   the stated 5th percentile instead of 5%. Factors fitted only on already-matured
-  forecasts bring that to 5.4% out of sample, and the tail light goes from red to green.
+  forecasts bring that to 5.6% out of sample, which moves the tail light from red to
+  amber — most of the way, not all of it, and the page says which.
 * **The analogs do not predict direction.** Scored against random hours of the same kind,
   they are indistinguishable over the distribution as a whole. Where they win is the loss
-  tail: 8.2% of outcomes below their 5th percentile against 10.7% below the random one.
+  tail: 8.5% of outcomes below their 5th percentile against 10.3% below the random one.
   That is the only claim this product makes.
 * **The macro layer earned its place by measurement**, on the third and largest test of
   it: 1,605 paired forecasts, a 1.3% lower forecast loss, interval excluding zero. The two
