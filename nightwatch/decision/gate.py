@@ -27,7 +27,13 @@ from enum import Enum
 
 from nightwatch.decision.ticket import TradeTicket
 
-BLOCKING_QUALITY_FLAGS = frozenset({"index_price_missing", "spot_no_trade_share_24h_gt_25pct"})
+# Only what makes the analysis untrustworthy blocks. Thin weekend trading is the
+# product's whole subject, so it is a caution that shows up in the verdict, not a veto.
+BLOCKING_QUALITY_FLAGS = frozenset({"index_price_missing"})
+CAUTION_QUALITY_FLAGS = {
+    "spot_no_trade_share_24h_gt_25pct": "thin trading: over a quarter of the last day had no trades, so volatility and the analogs lean on filled bars",
+    "native_close_older_than_72h": "the native stock has not printed for three days; fair value is older than usual",
+}
 # Flags matched by prefix rather than exact name, because they carry a measurement.
 BLOCKING_QUALITY_PREFIXES = ("spot_has_not_traded_for_",)
 
@@ -79,6 +85,7 @@ class GateReport:
     risk_quote: float | None = None
     risk_pct_of_equity: float | None = None
     risk_basis: str = ""
+    advisories: list[str] = field(default_factory=list)  # passed, but the trader should know
 
     @property
     def reasons(self) -> list[str]:
@@ -95,6 +102,7 @@ def _worst(rules: list[RuleResult]) -> GateDecision:
 
 def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = GatePolicy()) -> GateReport:
     rules: list[RuleResult] = []
+    advisories: list[str] = []
     entry = inputs.entry_price
 
     # 1. Written plan.
@@ -107,7 +115,13 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
     # 2. Stop.
     dist = ticket.stop_distance_pct(entry)
     if dist is None:
-        rules.append(RuleResult("stop", GateDecision.REVIEW_REQUIRED, "no stop price; risk will be judged on the analog 5th percentile"))
+        # A stop is the better discipline, but its absence is not a reason to give no
+        # answer: the calibrated 5th percentile is a measured loss level and sizes the trade.
+        if inputs.analog_p5_loss_pct is not None:
+            rules.append(RuleResult("stop", GateDecision.GO, f"no stop given; sized on the 5th percentile ({inputs.analog_p5_loss_pct:+.1f}%) instead"))
+            advisories.append(f"no stop given: risk is sized on the calibrated 5th percentile, {inputs.analog_p5_loss_pct:+.1f}% over the horizon")
+        else:
+            rules.append(RuleResult("stop", GateDecision.REVIEW_REQUIRED, "no stop price and no analog distribution to size on"))
     elif ticket.stop_is_on_correct_side(entry) is False:
         rules.append(RuleResult("stop", GateDecision.NO_GO, "stop is on the wrong side of entry"))
     elif dist < policy.min_stop_distance_pct:
@@ -162,6 +176,7 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
         rules.append(RuleResult("data_quality", GateDecision.REVIEW_REQUIRED, "analysis inputs degraded: " + ", ".join(blocking)))
     else:
         rules.append(RuleResult("data_quality", GateDecision.GO, "inputs complete" if not inputs.quality_flags else "minor flags: " + ", ".join(inputs.quality_flags)))
+    advisories.extend(CAUTION_QUALITY_FLAGS[f] for f in inputs.quality_flags if f in CAUTION_QUALITY_FLAGS)
 
     # 7. Posture.
     if inputs.regime_label == "hostile":
@@ -189,4 +204,4 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
     else:
         rules.append(RuleResult("circuit_breaker", GateDecision.GO, inputs.breaker_reason or "no loss limit is close"))
 
-    return GateReport(decision=_worst(rules), rules=rules, risk_quote=risk_quote, risk_pct_of_equity=risk_pct, risk_basis=basis)
+    return GateReport(decision=_worst(rules), rules=rules, risk_quote=risk_quote, risk_pct_of_equity=risk_pct, risk_basis=basis, advisories=advisories)

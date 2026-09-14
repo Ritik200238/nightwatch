@@ -61,7 +61,8 @@ def test_gate_no_go_on_wrong_side_stop_oversize_and_revenge():
 
 def test_gate_uses_analog_p5_when_no_stop_and_flags_liquidity():
     rep = evaluate_gate(ticket(stop_price=None), inputs())
-    assert rep.risk_basis == "analog 5th-percentile loss" and rep.decision == GateDecision.REVIEW_REQUIRED  # no stop -> review
+    assert rep.risk_basis == "analog 5th-percentile loss" and rep.decision == GateDecision.GO  # no stop -> sized on p5, and said so
+    assert any("no stop given" in a for a in rep.advisories)
     rep2 = evaluate_gate(ticket(), inputs(exit_fully_filled=False))
     assert rep2.decision == GateDecision.NO_GO
     rep3 = evaluate_gate(ticket(), inputs(quality_flags=("index_price_missing",)))
@@ -116,3 +117,19 @@ def test_a_token_that_has_stopped_trading_cannot_pass_as_clean():
     assert rep.decision == GateDecision.REVIEW_REQUIRED
     rule = next(r for r in rep.rules if r.rule == "data_quality")
     assert "spot_has_not_traded_for_14h" in rule.reason
+
+
+def test_thin_weekend_trading_is_a_caution_in_the_verdict_not_a_veto():
+    """The product's subject is the weekend. Thin trading there must not silence it."""
+    rep = evaluate_gate(ticket(), inputs(quality_flags=("spot_no_trade_share_24h_gt_25pct",)))
+    assert rep.decision == GateDecision.GO
+    assert any("thin trading" in a for a in rep.advisories)
+    sizing = recommend_size(ticket(), SizingInputs(entry_price=364.0, equity=200_000.0, stop_distance_pct=3.85, analog_p5_loss_pct=-3.2, risk_multiplier=1.0, max_exit_notional_within_budget=50_000.0, worst_severe_stress_pct=-4.0, hedge_cost_bps_of_position=None, hedge_residual_p5_loss_pct=None))
+    verdict = decide(ticket(), rep, sizing)
+    assert verdict.verdict is Verdict.GO
+    assert any("thin trading" in r for r in verdict.reasons)  # said, not hidden
+
+
+def test_no_stop_and_no_distribution_still_asks():
+    rep = evaluate_gate(ticket(stop_price=None), inputs(analog_p5_loss_pct=None))
+    assert rep.decision == GateDecision.REVIEW_REQUIRED

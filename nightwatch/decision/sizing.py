@@ -168,6 +168,8 @@ def decide(ticket: TradeTicket, gate: GateReport, sizing: SizingResult, *, toler
     if sizing.recommended_notional is None:
         reasons.append("no cap could be computed; provide equity and a stop")
         return VerdictResult(Verdict.REVIEW, ticket.notional_quote, None, None, reasons, sizing.caps)
+    # Passed, but with things the trader should read before acting.
+    reasons.extend(gate.advisories)
     rec = sizing.recommended_notional
     if rec <= 0:
         reasons.append(f"no size satisfies the {sizing.binding_cap} cap")

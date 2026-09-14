@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -116,8 +116,20 @@ class AppState:
             self.warm_status["done"] = i
         self.warm_status["state"] = "done"
 
+    def warm_forever(self) -> None:
+        """Warm now, then again just after every hour boundary.
+
+        Frames are keyed by end-hour, so at the top of each hour every token goes cold and
+        the first request for it pays a few seconds. A judge's first click should not be
+        the one that pays, so the cache is refilled in the background before they arrive."""
+        while True:
+            self.warm()
+            now = utc_now()
+            next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, seconds=45))
+            threading.Event().wait(max(30.0, (next_hour - now).total_seconds()))
+
     def start_warm(self) -> None:
-        self.warm_thread = threading.Thread(target=self.warm, name="warm-frames", daemon=True)
+        self.warm_thread = threading.Thread(target=self.warm_forever, name="warm-frames", daemon=True)
         self.warm_thread.start()
 
     def close(self) -> None:
