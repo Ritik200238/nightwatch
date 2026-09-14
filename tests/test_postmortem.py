@@ -100,6 +100,32 @@ def test_writing_is_idempotent_and_recall_prefers_what_taught_something(book):
     assert book.summary()["worse_than_stress"] == 2
 
 
+def test_recall_prefers_the_worse_breach_when_everything_else_matches(tmp_path):
+    """Two lessons on the same token, same bucket, same regime, both breaches. The one
+    that broke the band by a mile has more to teach than the one that grazed it."""
+    store = Store(tmp_path / "b.sqlite")
+    journal = Journal(store)
+    q = {"p5": -6.0, "p25": -2.0, "p50": 0.0, "p75": 2.0, "p95": 6.0}
+    for ret, days in [(-6.2, 5), (-17.0, 6)]:  # a graze yesterday, a rout the day before
+        at = NOW - timedelta(days=days)
+        fid = journal.record_forecast(
+            kind="replay", ticker="TSLA", side="long", notional=10_000.0, as_of=at, bar_ts=at, horizon_h=24.0,
+            entry_price=100.0, snapshot_hash="h", analog_n=40, analog_scope="same_ticker", quantiles=q, es5=None,
+            mc_p5=None, mc_p95=None, verdict=None, recommended_notional=None,
+            payload={"labels": {"bucket": "weekend", "regime_label": "normal"}},
+        )
+        with store._conn:
+            store._conn.execute(
+                "INSERT INTO forecast_outcomes (forecast_id, matured_at, exit_ts, exit_price, ret_pct, mfe_pct, mae_pct, max_abs_basis_bps) VALUES (?,?,?,?,?,?,?,?)",
+                (fid, int((at + timedelta(days=1)).timestamp() * 1000), int((at + timedelta(days=1)).timestamp() * 1000), 100.0, ret, 1.0, ret - 1, None),
+            )
+    b = LessonBook(journal)
+    b.write_pending()
+    top = b.recall(ticker="TSLA", bucket="weekend", regime_label="normal", as_of=NOW, limit=2)
+    assert [x.ret_pct for x in top] == [pytest.approx(-17.0), pytest.approx(-6.2)]  # worse first, though older
+    store.close()
+
+
 def test_a_lesson_cannot_be_read_before_its_outcome_existed(book):
     book.write_pending()
     # Outcomes land a day after the call, so only the oldest lesson exists at this instant.

@@ -236,12 +236,18 @@ class LessonBook:
         bucket and regime beat a mismatch; a lesson that taught something (a breach, a
         stress level touched, a size cut worth money) beats one that did not; and newer
         beats older. Only lessons whose outcome was already known at ``as_of`` qualify.
+
+        A breach also counts for how badly it broke. Overshoot is measured against the
+        width of the band that was breached, so a token that moves in tenths of a percent
+        and one that moves in tens are on the same scale, and capped at two band widths so
+        a single outlier cannot own the panel forever.
         """
         cutoff = to_epoch_ms(ensure_utc(as_of)) if as_of else to_epoch_ms(utc_now())
         rows = self._conn.execute(
             """SELECT *,
                       (ticker = ?) * 4 + (bucket IS NOT NULL AND bucket = ?) * 2 + (regime_label IS NOT NULL AND regime_label = ?) * 1
-                        + (breached_low OR breached_high) * 3 + touched_stress * 2 + (size_effect_quote IS NOT NULL) * 2 AS score
+                        + (breached_low OR breached_high) * 3 + touched_stress * 2 + (size_effect_quote IS NOT NULL) * 2
+                        + COALESCE(MIN(2.0, MAX(0.0, p5 - ret_pct, ret_pct - p95) / NULLIF(p95 - p5, 0.0)) * 3.0, 0.0) AS score
                FROM lessons WHERE matured_at < ? AND (ticker = ? OR bucket = ?)
                ORDER BY score DESC, matured_at DESC LIMIT ?""",
             (ticker, bucket, regime_label, cutoff, ticker, bucket, int(limit)),
