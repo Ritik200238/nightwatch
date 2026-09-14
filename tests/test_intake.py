@@ -51,7 +51,9 @@ def test_horizons_are_read_the_way_they_are_said():
     assert p("long 10k TSLA for 8 hours").horizon_hours == 8.0
     assert p("long 10k TSLA for 3 days").horizon_hours == 72.0
     assert p("long 10k TSLA for a week").horizon_hours == 168.0
-    assert p("long 10k TSLA").horizon_kind == "next_open"  # the default, and it is stated
+    # Silence about the horizon stays silence, so that a later message in a conversation
+    # cannot overwrite an earlier "for 8 hours" with the default.
+    assert p("long 10k TSLA").horizon_kind is None
 
 
 def test_labelled_numbers_do_not_get_mistaken_for_size():
@@ -95,6 +97,27 @@ def test_a_conversation_builds_the_ticket_a_piece_at_a_time():
     assert out.kind == "analyze"
     assert (out.ticker, out.side, out.notional_quote, out.stop_price) == ("TSLA", "long", 25_000.0, 330.0)
     assert out.account_equity_quote == 200_000
+
+
+def test_a_later_message_does_not_wipe_the_horizon_it_says_nothing_about():
+    msgs = [
+        {"role": "user", "content": "long 25k TSLA for 8 hours"},
+        {"role": "user", "content": "actually make it 30k"},
+    ]
+    out = read_conversation(msgs, TICKERS)
+    assert out.notional_quote == 30_000.0
+    assert (out.horizon_kind, out.horizon_hours) == ("hours", 8.0)
+
+    # But a message that does speak about it wins.
+    said = read_conversation([*msgs, {"role": "user", "content": "hold it overnight instead"}], TICKERS)
+    assert said.horizon_kind == "next_open"
+
+
+def test_a_ticket_with_no_stated_horizon_holds_to_the_next_open():
+    from nightwatch.api.intake import intent_to_ticket
+
+    ticket = intent_to_ticket(p("long 10k TSLA"), 200_000)
+    assert ticket.horizon_kind.value == "next_open"
 
 
 def test_the_latest_message_overrides_an_earlier_one():

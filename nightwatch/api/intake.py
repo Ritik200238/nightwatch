@@ -167,8 +167,10 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         out.horizon_kind, out.horizon_hours = "hours", float(days.group(1)) * 24.0
     elif re.search(r"\b(?:a|one)\s+week\b", text, re.I):
         out.horizon_kind, out.horizon_hours = "hours", 168.0
-    else:
-        out.horizon_kind = "next_open"
+    # Left as None when the message says nothing about a horizon. A conversation merges
+    # message by message, so filling in the default here would let "make it 30k" quietly
+    # overwrite the "for 8 hours" from the message before it. The default is applied once,
+    # when the ticket is built.
 
     pct = _HEDGE_PCT.search(text)
     if pct:
