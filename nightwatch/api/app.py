@@ -32,6 +32,7 @@ from nightwatch.features.snapshot import InsufficientData, build_snapshot
 from nightwatch.journal.calibration import calibrate
 from nightwatch.journal.journal import Journal
 from nightwatch.journal.postmortem import LessonBook, mature_and_learn
+from nightwatch.journal.reports import ReportStore
 from nightwatch.pipeline.analyze import AnalysisContext, analyze
 from nightwatch.pipeline.render import render_text
 from nightwatch.stress.scenarios import Side
@@ -91,6 +92,7 @@ class AppState:
             self.store.list_instruments(Venue.BITGET_SPOT), self.store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers
         )
         self.journal = Journal(self.store)
+        self.reports = ReportStore(self.store)
         live = os.environ.get("NIGHTWATCH_LIVE_BOOK", "1") == "1"
         self.ctx = AnalysisContext(
             store=self.store, entries=self.entries, journal=self.journal,
@@ -220,9 +222,25 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, str(exc)) from exc
         except InsufficientData as exc:
             raise HTTPException(422, str(exc)) from exc
+        payload = report.to_dict()
+        # Keep the finished report so a link can reopen it exactly as it was argued.
+        if report.forecast_id is not None and body.record:
+            try:
+                s.reports.save(report.forecast_id, payload)
+            except Exception as exc:  # noqa: BLE001 - a keepsake must not fail an analysis
+                log.warning("could not store report %s: %s", report.forecast_id, exc)
         if text:
             return {"text": render_text(report), "forecast_id": report.forecast_id}
-        return report.to_dict()
+        return payload
+
+    @app.get("/reports/{forecast_id}")
+    def stored_report(forecast_id: int) -> dict[str, Any]:
+        """A report exactly as it was produced. The desk links to this so a verdict can
+        be shown to someone else without asking them to trust a screenshot."""
+        found = st().reports.get(forecast_id)
+        if found is None:
+            raise HTTPException(404, f"No stored report {forecast_id}. Only recent live tickets are kept, not replays.")
+        return found
 
     @app.get("/calibration")
     def calibration(ticker: str | None = None, kind: str | None = None) -> dict[str, Any]:

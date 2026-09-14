@@ -129,3 +129,34 @@ def test_a_ticker_we_do_not_cover_is_named_as_such(client):
     detail = r.json()["detail"]
     assert "GME is not a tokenized stock" in detail and "TSLA" in detail
     assert "USDT in [" not in detail  # not the pipeline's internal complaint
+
+
+def test_a_report_can_be_reopened_by_its_link(client):
+    """A verdict you cannot show someone is worth less. The stored copy is the same
+    argument: same verdict, same inputs hash, same analog cohort."""
+    payload = {
+        "ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000,
+        "stop_price": 300, "thesis": "t", "invalidation": "i", "as_of": AS_OF.isoformat(),
+    }
+    fresh = client.post("/analyze", json=payload).json()
+    fid = fresh["forecast_id"]
+    assert fid is not None
+
+    again = client.get(f"/reports/{fid}")
+    assert again.status_code == 200
+    stored = again.json()
+    assert stored["verdict"]["verdict"] == fresh["verdict"]["verdict"]
+    assert stored["snapshot"]["content_hash"] == fresh["snapshot"]["content_hash"]
+    assert stored["ticket"]["ticker"] == "TSLA"
+
+    missing = client.get("/reports/99999999")
+    assert missing.status_code == 404 and "Only recent live tickets" in missing.json()["detail"]
+
+
+def test_an_analysis_that_asked_not_to_be_recorded_is_not_kept(client):
+    payload = {
+        "ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000,
+        "stop_price": 300, "thesis": "t", "invalidation": "i", "as_of": AS_OF.isoformat(), "record": False,
+    }
+    r = client.post("/analyze", json=payload).json()
+    assert r["forecast_id"] is None
