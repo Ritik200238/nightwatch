@@ -132,10 +132,20 @@ export function ReportView({ report }: { report: Report }) {
             ))}
           </ul>
         </Section>
-        <Section title="Sizing caps" subtitle="The smallest cap binds. Each one is independent and named.">
+        <Section
+          title="Sizing caps"
+          subtitle={
+            report.verdict.recommended_notional != null && report.verdict.recommended_notional < t.notional_quote - 1
+              ? "The smallest cap binds. Each one is independent and named."
+              : "Each one is independent and named. None of them cuts the requested size."
+          }
+        >
           <ul className="space-y-2">
             {report.sizing.caps.map((c) => {
-              const binding = c.name === report.sizing.binding_cap;
+              // A cap only binds if it actually cuts the request. The smallest cap is often
+              // the regime one at a multiplier of 1.00, and labelling that "binds" reads as
+              // though the desk is limiting you to exactly the size you asked for.
+              const binding = c.name === report.sizing.binding_cap && c.notional != null && c.notional < t.notional_quote - 1;
               const max = Math.max(t.notional_quote, ...report.sizing.caps.map((x) => x.notional ?? 0));
               const width = c.notional == null ? 0 : Math.min(100, (c.notional / max) * 100);
               return (
