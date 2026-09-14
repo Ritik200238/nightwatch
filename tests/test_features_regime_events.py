@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from nightwatch.data.models import EarningsEvent, MacroRelease, NewsItem
 from nightwatch.data.store import Store
@@ -103,3 +104,27 @@ def test_snapshot_refuses_stale_data(tmp_path):
             pass
         else:  # pragma: no cover
             raise AssertionError("expected InsufficientData for stale bars")
+
+
+def test_filing_columns_are_point_in_time(tmp_path):
+    from nightwatch.data.models import Filing
+    from nightwatch.data.store import Store
+    from nightwatch.features.events import add_event_columns
+
+    store = Store(tmp_path / "f.sqlite")
+    idx = pd.date_range("2026-03-02", periods=24 * 5, freq="h", tz="UTC")
+    seen = datetime(2026, 3, 3, 12, tzinfo=UTC)
+    store.upsert_filings([
+        Filing(ticker="TSLA", cik="1", form="8-K", accepted_at=datetime(2026, 3, 2, 21, 5, tzinfo=UTC), filed_date=datetime(2026, 3, 2, tzinfo=UTC), accession="a1", observed_at=seen),
+        Filing(ticker="TSLA", cik="1", form="10-Q", accepted_at=datetime(2026, 3, 4, 21, 5, tzinfo=UTC), filed_date=datetime(2026, 3, 4, tzinfo=UTC), accession="a2", observed_at=seen + timedelta(days=2)),
+    ])
+    f = add_event_columns(pd.DataFrame(index=idx), store, "TSLA")
+    assert np.isnan(f.loc["2026-03-02 20:00", "hours_since_filing"])
+    assert f.loc["2026-03-02 22:00", "hours_since_filing"] == pytest.approx(55 / 60)
+    assert f.loc["2026-03-04 22:00", "filings_72h"] == 2.0  # the 8-K is 49h old, still inside the window
+    assert f.loc["2026-03-05 22:00", "filings_72h"] == 1.0  # now it has aged out
+    # As of before the second filing was observed, it does not exist yet.
+    g = add_event_columns(pd.DataFrame(index=idx), store, "TSLA", as_of=seen)
+    assert g.loc["2026-03-04 22:00", "hours_since_filing"] == pytest.approx(48 + 55 / 60)
+    assert g["filings_72h"].max() == 1.0
+    store.close()

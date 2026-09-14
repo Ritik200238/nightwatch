@@ -167,3 +167,69 @@ def test_rss_dead_feed_does_not_stop_others():
     client._http._retry.base_delay = 0.0
     items = client.fetch()
     assert len(items) == 3 and all(i.source == "ok" for i in items)
+
+
+# --- SEC EDGAR --------------------------------------------------------------------
+
+
+def _sec_client():
+    from nightwatch.data.sec import DATA_URL, TICKERS_URL, SecFilingsClient
+
+    return SecFilingsClient(http_www=fast(TICKERS_URL), http_data=fast(DATA_URL))
+
+
+SEC_SUBMISSIONS = {
+    "cik": 1318605,
+    "filings": {
+        "recent": {
+            "form": ["8-K", "4", "10-Q", "8-K"],
+            "acceptanceDateTime": ["2026-07-22T20:35:12.000Z", "2026-07-21T18:00:00.000Z", "2026-07-23T01:02:31.000Z", "2024-01-05T14:00:00.000Z"],
+            "filingDate": ["2026-07-22", "2026-07-21", "2026-07-22", "2024-01-05"],
+            "accessionNumber": ["0001-26-1", "0001-26-2", "0001-26-3", "0001-24-4"],
+            "primaryDocDescription": ["8-K", "FORM 4", "10-Q", "8-K"],
+            "items": ["2.02,9.01", "", "", "5.02"],
+        }
+    },
+}
+
+
+@respx.mock
+def test_sec_filters_forms_since_and_sorts_by_acceptance():
+    from nightwatch.data.sec import after_hours
+
+    respx.get("https://www.sec.gov/files/company_tickers.json").mock(return_value=httpx.Response(200, json={"0": {"cik_str": 1318605, "ticker": "TSLA", "title": "Tesla, Inc."}}))
+    respx.get("https://data.sec.gov/submissions/CIK0001318605.json").mock(return_value=httpx.Response(200, json=SEC_SUBMISSIONS))
+    c = _sec_client()
+    out = c.get_filings("tsla", since=datetime(2025, 1, 1, tzinfo=UTC))
+    assert [f.form for f in out] == ["8-K", "10-Q"]  # Form 4 dropped, 2024 filing before `since`
+    assert out[0].accepted_at == datetime(2026, 7, 22, 20, 35, 12, tzinfo=UTC)
+    assert out[0].items == "2.02,9.01" and out[1].items is None
+    assert out[0].cik == "0001318605" and out[0].ticker == "TSLA"
+    # 16:35 ET on a Wednesday: after the close, and 21:02 ET likewise.
+    assert after_hours(out[0]) and after_hours(out[1])
+    assert c.get_filings("NOPE") == []
+    c.close()
+
+
+def test_sec_after_hours_is_regular_session_in_eastern_time():
+    from nightwatch.data.models import Filing
+    from nightwatch.data.sec import after_hours
+
+    def at(iso: str) -> Filing:
+        t = datetime.fromisoformat(iso)
+        return Filing(ticker="X", cik="1", form="8-K", accepted_at=t, filed_date=t, accession=iso, observed_at=t)
+
+    assert not after_hours(at("2026-07-22T15:00:00+00:00"))  # 11:00 ET Wednesday
+    assert after_hours(at("2026-07-22T20:05:00+00:00"))  # 16:05 ET
+    assert after_hours(at("2026-07-25T15:00:00+00:00"))  # Saturday
+    assert after_hours(at("2026-01-14T14:00:00+00:00"))  # 09:00 ET in winter, before the open
+
+
+@respx.mock
+def test_sec_user_agent_names_a_contact():
+    from nightwatch.data.sec import USER_AGENT, SecFilingsClient
+
+    route = respx.get("https://www.sec.gov/files/company_tickers.json").mock(return_value=httpx.Response(200, json={}))
+    SecFilingsClient().cik_map()  # the real constructor, so the headers it sets are what is under test
+    sent = route.calls.last.request.headers["user-agent"]
+    assert sent == USER_AGENT and "@" in sent and "github" not in sent.lower()
