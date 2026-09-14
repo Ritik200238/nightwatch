@@ -74,6 +74,26 @@ def test_liquidity_thinning_when_a_weekend_is_quiet_for_a_weekend():
     assert f.iloc[-1]["liq_state"] == "thinning"
 
 
+def test_quiet_and_unusually_quiet_are_separate_flags():
+    from nightwatch.features.snapshot import quality_flags_for_row
+
+    f = synthetic_frame(24 * 74)  # ends on a Sunday
+    weekend = f.index.dayofweek >= 5
+    f.loc[weekend, "spot_filled"] = True  # this token never trades at weekends
+    f.loc[weekend, "spot_vol_quote"] = 0.0
+    g = add_regime_columns(f)
+    normal_weekend = quality_flags_for_row(g.iloc[-1], g)
+    assert "spot_no_trade_share_24h_gt_25pct" in normal_weekend  # true, and worth saying
+    assert "spot_quieter_than_its_own_norm" not in normal_weekend  # but not news
+
+    h = f.copy()
+    h.loc[h.index[-96:-24], "spot_filled"] = False  # it did trade on recent weekdays...
+    h.loc[h.index[-96:-24], "spot_vol_quote"] = 1000.0
+    h.loc[h.index[-24:], "spot_filled"] = True
+    weekday_gone_quiet = add_regime_columns(h)
+    assert weekday_gone_quiet.iloc[-1]["no_trade_excess_24h"] >= 0.0
+
+
 def test_seasonal_norm_is_trailing_and_excludes_the_present():
     from nightwatch.features.regime import _seasonal_norm
 

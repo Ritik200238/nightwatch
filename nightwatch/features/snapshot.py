@@ -110,6 +110,11 @@ def quality_flags_for_row(row: pd.Series, frame: pd.DataFrame) -> list[str]:
     tail = frame.tail(24)
     if tail["spot_filled"].mean() > 0.25:
         flags.append("spot_no_trade_share_24h_gt_25pct")
+    # Quiet and unusually quiet are different warnings. A tokenized stock is always quiet
+    # at 04:00 on a Sunday; it is worth saying when it is quieter than that.
+    excess = row.get("no_trade_excess_24h")
+    if excess is not None and not pd.isna(excess) and excess >= 0.15:
+        flags.append("spot_quieter_than_its_own_norm")
     if pd.isna(row.get("index_close")):
         flags.append("index_price_missing")
     if pd.isna(row.get("native_close")):

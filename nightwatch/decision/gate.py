@@ -32,6 +32,7 @@ from nightwatch.decision.ticket import TradeTicket
 BLOCKING_QUALITY_FLAGS = frozenset({"index_price_missing"})
 CAUTION_QUALITY_FLAGS = {
     "spot_no_trade_share_24h_gt_25pct": "thin trading: over a quarter of the last day had no trades, so volatility and the analogs lean on filled bars",
+    "spot_quieter_than_its_own_norm": "quieter than this token usually is at this time of week, which is a liquidity change rather than a weekend",
     "native_close_older_than_72h": "the native stock has not printed for three days; fair value is older than usual",
 }
 # Flags matched by prefix rather than exact name, because they carry a measurement.
