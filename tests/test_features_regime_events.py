@@ -49,6 +49,44 @@ def test_regime_liquidity_thinning_from_no_trade_share():
     assert f.iloc[-1]["no_trade_share_24h"] == 1.0
 
 
+def test_weekend_that_is_normal_for_a_weekend_is_not_thinning():
+    """A tokenized stock trades every hour, but not equally. Eight quiet weekends in a
+    row make the ninth ordinary, not a liquidity crisis."""
+    f = synthetic_frame(24 * 74)  # ends on a Sunday
+    weekend = f.index.dayofweek >= 5
+    f.loc[weekend, "spot_vol_quote"] = 100.0  # a tenth of a weekday hour, every weekend
+    f = add_regime_columns(f)
+    last = f.iloc[-1]
+    assert f.index[-1].dayofweek >= 5  # the frame ends on a weekend
+    assert last["liq_state"] == "normal"
+    assert 0.8 < last["liq_ratio"] < 1.25
+    # The same data against a flat all-hours baseline would have called it thin.
+    flat = f["spot_vol_quote"].rolling(24, min_periods=24).sum() / (f["spot_vol_quote"].rolling(720, min_periods=360).mean().shift(24) * 24)
+    assert flat.iloc[-1] < 0.7
+
+
+def test_liquidity_thinning_when_a_weekend_is_quiet_for_a_weekend():
+    f = synthetic_frame(24 * 74)  # ends on a Sunday
+    weekend = f.index.dayofweek >= 5
+    f.loc[weekend, "spot_vol_quote"] = 100.0
+    f.loc[f.index[-24:], "spot_vol_quote"] = 20.0  # this weekend is a fifth of a normal one
+    f = add_regime_columns(f)
+    assert f.iloc[-1]["liq_state"] == "thinning"
+
+
+def test_seasonal_norm_is_trailing_and_excludes_the_present():
+    from nightwatch.features.regime import _seasonal_norm
+
+    idx = pd.date_range(datetime(2026, 1, 1, tzinfo=UTC), periods=24 * 42, freq="1h", tz="UTC")
+    v = pd.Series(range(len(idx)), index=idx, dtype=float)
+    norm = _seasonal_norm(v, 4)
+    # The value at t is the median of the same hour of week in the four weeks before it.
+    ts_pos = len(idx) - 1
+    same_hour = [ts_pos - 168 * k for k in (1, 2, 3, 4)]
+    assert norm.iloc[ts_pos] == np.median([v.iloc[i] for i in same_hour])
+    assert np.isnan(norm.iloc[:168]).all()  # nothing to compare the first week against
+
+
 def test_regime_uses_only_trailing_windows():
     base = synthetic_frame(24 * 100)
     f_all = add_regime_columns(base)

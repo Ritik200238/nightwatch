@@ -42,6 +42,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     "sma_slope_5d_pct",
     "liq_ratio",
     "no_trade_share_24h",
+    "no_trade_excess_24h",
     "native_close_age_h",
     "hours_to_earnings",
     "hours_since_earnings",
@@ -57,8 +58,9 @@ LABEL_COLUMNS: tuple[str, ...] = ("session", "bucket", "vol_state", "trend_state
 # across 20 tokens they cut the mean pinball loss by 1.3% with an interval that excludes
 # zero, mostly at the median and the upper tail. The lower tail did not improve, so the
 # claim stays narrow. See docs/experiments-macro-features.txt and research/feature_ab.py.
-# Filing columns are carried and shown but not searched until an A/B says they earn it.
-SEARCH_COLUMNS: tuple[str, ...] = tuple(c for c in FEATURE_COLUMNS if c not in ("hours_since_filing", "filings_72h"))
+# Filing columns and the no-trade excess are carried and shown but not searched until an
+# A/B says they earn it.
+SEARCH_COLUMNS: tuple[str, ...] = tuple(c for c in FEATURE_COLUMNS if c not in ("hours_since_filing", "filings_72h", "no_trade_excess_24h"))
 HISTORY_DAYS_FOR_SNAPSHOT = 120  # enough for the 90-day vol percentile window
 
 
