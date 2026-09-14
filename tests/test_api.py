@@ -121,3 +121,11 @@ def test_sources_lists_every_feed_with_freshness(client):
     assert bitget["rows"] > 0 and bitget["latest"] is not None
     for r in rows:
         assert set(r) >= {"label", "what", "cadence", "last_update", "rows", "latest", "url"}
+
+
+def test_a_ticker_we_do_not_cover_is_named_as_such(client):
+    r = client.post("/analyze", json={"ticker": "GME", "side": "long", "notional_quote": 20000, "thesis": "t", "invalidation": "i", "record": False})
+    assert r.status_code == 404
+    detail = r.json()["detail"]
+    assert "GME is not a tokenized stock" in detail and "TSLA" in detail
+    assert "USDT in [" not in detail  # not the pipeline's internal complaint

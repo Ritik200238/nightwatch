@@ -207,6 +207,12 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             ticket = body.to_ticket()
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
+        # Say which tokens exist rather than letting the pipeline fail on a symbol it
+        # constructed hopefully: "no spot bars for RGMEUSDT in [...]" is a stack trace
+        # wearing a hat, and this endpoint is public.
+        known = s.ctx.tickers_with_data()
+        if ticket.ticker not in set(known):
+            raise HTTPException(404, f"{ticket.ticker} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
         try:
             with s.lock:
                 report = analyze(s.ctx, ticket, as_of=body.as_of, record=body.record)
