@@ -22,7 +22,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/" className="rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none">
                 Nightwatch
               </Link>
-              <nav aria-label="Primary" className="flex items-center gap-1">
+              {/* The nav gives way before the status pill does: at 390px an "API offline"
+                  pill is wider than the healthy one and used to sit on top of "Journal". */}
+              <nav aria-label="Primary" className="flex min-w-0 items-center gap-1 overflow-x-auto">
                 <Link href="/" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Desk
                 </Link>

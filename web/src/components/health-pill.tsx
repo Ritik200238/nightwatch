@@ -32,14 +32,14 @@ export function HealthPill() {
 
   if (error) {
     return (
-      <span role="status" className="inline-flex items-center gap-2 rounded-full border border-destructive/40 px-3 py-1 text-xs text-destructive">
+      <span role="status" className="inline-flex shrink-0 items-center gap-2 rounded-full border border-destructive/40 px-3 py-1 text-xs whitespace-nowrap text-destructive">
         <span aria-hidden className="h-2 w-2 rounded-full bg-destructive" />
         API offline
       </span>
     );
   }
   if (!health) {
-    return <span role="status" className="h-7 w-32 animate-pulse rounded-full bg-muted" aria-label="Checking API" />;
+    return <span role="status" className="h-7 w-32 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Checking API" />;
   }
   const warm = health.warm.state === "running" ? ` · warming ${health.warm.done}/${health.warm.total}` : "";
   return (

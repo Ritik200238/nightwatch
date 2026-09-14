@@ -50,8 +50,11 @@ export default function DeskPage() {
   }
 
   return (
+    // min-w-0 on both columns: a grid track is auto-sized by default, so one wide table
+    // in the report stretches the whole column past the viewport and takes the sidebar
+    // with it. With it, the tables' own overflow-x-auto wrappers do the scrolling.
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-      <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+      <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Stress-test a trade</h1>
           <p className="text-sm text-muted-foreground">Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.</p>
@@ -98,7 +101,7 @@ export default function DeskPage() {
         </Tabs>
       </aside>
 
-      <section aria-live="polite" aria-busy={busy}>
+      <section className="min-w-0" aria-live="polite" aria-busy={busy}>
         {busy && !report ? <ReportSkeleton /> : null}
         {error ? (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
