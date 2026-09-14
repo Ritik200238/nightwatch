@@ -69,8 +69,9 @@ Every call it has made, and how each one turned out:
 
 ## Run it
 
-Python 3.11+ and Node 22+. Everything below works without any API key; only the
-plain-language chat needs `ANTHROPIC_API_KEY`.
+Python 3.11+ and Node 22+. Everything works without any API key, including the
+plain-language chat, which falls back to a rule-based parser and briefing. Set
+`ANTHROPIC_API_KEY` to have Claude handle the conversation instead.
 
 ```bash
 # 1. Python environment

@@ -189,8 +189,16 @@ Claude Opus 5 (Anthropic) does two things at run time, and nothing else.
 
 The model does not retrieve analogs, compute statistics, run stress tests, size the
 position, or issue the verdict. Those are deterministic code and are journaled and scored
-independently of the model. The desk works fully without an API key; only the chat entry
-needs one.
+independently of the model.
+
+Both of those jobs also have a rule-based implementation, and the desk falls back to it
+when there is no API key or the provider is unreachable. The parser reads the shapes a
+trader actually types ("long 25k TSLA overnight, stop 340"), names any field it is
+missing rather than guessing it, and invents nothing — no thesis, no stop, no size the
+trader did not state. The briefing is assembled from the report's own fields, so the rule
+the model is held to is structurally unbreakable there. The response says which one
+answered. The point is not that rules are as good as the model; it is that the desk has
+no single point of failure, and every number on it has one source either way.
 
 During development, Claude Code was used as a coding assistant. No Qwen credits were
 used.
