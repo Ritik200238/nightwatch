@@ -71,6 +71,11 @@ for _ in $(seq 1 24); do
   if curl -fsS --max-time 10 "$HEALTH" | grep -q '"ok":true'; then
     say "healthy on ${remote_sha:0:8}"
     docker image prune -f >/dev/null 2>&1
+    # Every build leaves layers behind. Unchecked over a three-week judging window they
+    # are the most likely thing to fill a 40 GB disk and take the demo down; 2 GB is
+    # enough to keep the next build fast.
+    docker builder prune -f --keep-storage 2GB >/dev/null 2>&1
+    say "disk $(df -h / | awk 'NR==2 {print $5" used, "$4" free"}')"
     exit 0
   fi
 done
