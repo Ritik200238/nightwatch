@@ -71,7 +71,9 @@ export function ReportView({ report }: { report: Report }) {
 
       {/* Now */}
       <Section title="Right now" subtitle={`Last completed bar ${fmtTime(report.snapshot.bar_ts)} · inputs hash ${report.snapshot.content_hash}`}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        {/* Seven tiles across a 820px column truncates every label: "Fair value (in…".
+            Four columns and two rows keeps them readable at every width. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           <Stat label="Token price" value={fmtPrice(report.snapshot.prices.spot_close)} />
           <Stat label="Fair value (index)" value={fmtPrice(report.snapshot.prices.index_close)} hint={`native close ${fmtPrice(report.snapshot.prices.native_close)} · ${fmtHours(report.snapshot.features.native_close_age_h)} old`} />
           <Stat label="Basis vs index" value={fmtBps(report.snapshot.features.basis_index_bps, 1, true)} hint={`z ${report.snapshot.features.basis_index_z?.toFixed(2) ?? "—"}`} />
