@@ -12,7 +12,11 @@ How it works, and why each choice:
   descriptors with k-means. The fit uses only rows before the moment being described, so
   a regime label can never have been shaped by the future it is used to predict.
 * **Standardised by median and absolute deviation**, not mean and variance, so one
-  violent week cannot define the axes.
+  violent week cannot define the axes, and then clipped at four deviations before the
+  fit. Without the clip a single freak hour is its own cluster: k-means minimises squared
+  distance, so one point a thousand deviations out is worth more than a thousand ordinary
+  hours. Clipping keeps the extreme hour in the map, in the group it belongs to, instead
+  of letting it take a whole regime with it.
 * **Named by their own statistics**, never by a story: a regime is described as what it
   measurably is (volatility percentile, basis, trend), not as "risk-off".
 * **Judged by outcomes.** Each regime carries the distribution of what followed it, with
@@ -31,6 +35,7 @@ REGIME_FEATURES: tuple[str, ...] = ("vol_pctl_90d", "basis_index_z", "trend_sma_
 DEFAULT_K = 5
 MIN_ROWS_PER_FIT = 500
 MIN_ROWS_PER_REGIME = 30
+CLIP_DEVIATIONS = 4.0  # no single hour may own a cluster
 
 
 @dataclass(frozen=True)
@@ -132,7 +137,7 @@ def build(frame: pd.DataFrame, *, as_of: pd.Timestamp | None = None, k: int = DE
         return RegimeMap(note=f"only {len(usable)} complete hours: too few to fit regimes", n_fitted=len(usable))
 
     x, med, mad = _standardise(usable.to_numpy())
-    labels, centres = _kmeans(x, k, seed=seed)
+    labels, centres = _kmeans(np.clip(x, -CLIP_DEVIATIONS, CLIP_DEVIATIONS), k, seed=seed)
 
     # Outcomes: what the next ``horizon_h`` hours did, from each labelled hour.
     close = hist["spot_close"].astype(float)
@@ -169,7 +174,7 @@ def build(frame: pd.DataFrame, *, as_of: pd.Timestamp | None = None, k: int = DE
     current = None
     if as_of is not None or len(usable):
         last = usable.iloc[-1].to_numpy(float)
-        z = (last - med) / mad
+        z = np.clip((last - med) / mad, -CLIP_DEVIATIONS, CLIP_DEVIATIONS)
         current = int(((z - centres) ** 2).sum(axis=1).argmin())
     order = sorted(range(k), key=lambda i: regimes[i].centre.get("vol_pctl_90d", 0.0))
     remap = {old: new for new, old in enumerate(order)}

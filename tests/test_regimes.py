@@ -90,9 +90,30 @@ def test_a_frame_without_the_state_columns_is_refused():
 
 
 def test_a_thin_regime_reports_no_outcome_statistics():
-    """One far-away hour forms its own cluster; it must not pretend to have a distribution."""
+    """A state the token has only been in for a handful of hours must not pretend to have
+    a distribution. Twenty hours is a fact about the past, not a forecast."""
     frame = two_regime_frame()
-    frame.iloc[-1, frame.columns.get_loc("vol_pctl_90d")] = 1e6
+    rare = slice(1000, 1020)
+    frame.iloc[rare, frame.columns.get_loc("vol_pctl_90d")] = 99.0
+    frame.iloc[rare, frame.columns.get_loc("basis_index_z")] = 3.5
+    frame.iloc[rare, frame.columns.get_loc("trend_sma_pct")] = -12.0
     m = build(frame, k=DEFAULT_K)
     thin = [r for r in m.regimes if r.n_outcomes < 30]
     assert thin and all(r.next_ret_median_pct is None for r in thin)
+    assert all(r.next_ret_median_pct is not None for r in m.regimes if r.n_outcomes >= 30)
+
+
+def test_one_freak_hour_cannot_take_a_whole_regime():
+    """k-means minimises squared distance, so an unclipped outlier a thousand deviations
+    out is worth more than a thousand ordinary hours and ends up alone in its own cluster.
+    This is what a division by a near-zero liquidity baseline actually produced."""
+    f = two_regime_frame(2000)
+    f.loc[f.index[500], "liq_ratio"] = 2268.0
+    f.loc[f.index[900], "liq_ratio"] = 711.0
+    f.loc[f.index[1300], "basis_index_z"] = 20.7
+    m = build(f)
+    sizes = sorted(r.n for r in m.regimes)
+    assert len(m.regimes) == DEFAULT_K
+    assert sizes[0] >= 20, f"a cluster kept almost nothing in it: {sizes}"
+    # The freak hours are still in the map, sitting in a group with their neighbours.
+    assert sum(r.n for r in m.regimes) == len(f)
