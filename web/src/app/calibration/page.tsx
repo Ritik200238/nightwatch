@@ -128,6 +128,16 @@ export default function CalibrationPage() {
                     <Stat label="Below p5" value={`${fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} vs ${fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)}`} hint="analog vs random · target 5%" />
                     <Stat label="Above p95" value={`${fmtPct((rep.skill.analog_hi_coverage ?? 0) * 100, 1, false)} vs ${fmtPct((rep.skill.baseline_hi_coverage ?? 0) * 100, 1, false)}`} hint="analog vs random · target 5%" />
                   </div>
+                  {/* A judge reading only the headline number would conclude the retrieval
+                      is useless. It is nearly useless for direction, which is why the
+                      verdict never takes one from it; the tail is the part that is used. */}
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-foreground">How to read this.</span> Over the whole distribution the analogs are indistinguishable from picking random hours of the
+                    same kind, and around the quartiles they are measurably worse — the resemblance narrows the middle where the truth is wide. Where they help is the loss
+                    tail: {fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} of outcomes fall below the analog 5th percentile against{" "}
+                    {fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)} below the random-hours one. That is the number every verdict is sized against, and it is
+                    the only claim this product makes about the retrieval.
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Per token:{" "}
                     {Object.entries(rep.skill.by_ticker)
