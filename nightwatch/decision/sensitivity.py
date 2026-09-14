@@ -145,7 +145,7 @@ class DecisionContext:
         self._stress_caps[key] = lo
         return lo
 
-    def evaluate(self, ticket: TradeTicket, *, impacts: list[ScenarioImpact] | None = None, exit_cost_bps: float | None = None, exit_fully_filled: bool | None = None) -> Evaluation:
+    def evaluate(self, ticket: TradeTicket, *, impacts: list[ScenarioImpact] | None = None, exit_cost_bps: float | None = None, exit_fully_filled: bool | None = None, has_book: bool | None = None) -> Evaluation:
         """Gate, size and decide one ticket. Precomputed pieces are reused when given."""
         if impacts is None:
             position = Position(ticket.ticker, ticket.side, ticket.notional_quote, self.entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
@@ -160,7 +160,9 @@ class DecisionContext:
             GateInputs(
                 entry_price=self.entry_price, equity=ticket.account_equity_quote, analog_p5_loss_pct=self.analog_p5_loss_pct,
                 quality_flags=self.quality_flags, regime_label=self.regime_label, risk_multiplier=self.risk_multiplier,
-                exit_cost_bps=exit_cost_bps, exit_fully_filled=bool(exit_fully_filled), recent_losing_exits=self.recent_losing_exits,
+                exit_cost_bps=exit_cost_bps, exit_fully_filled=bool(exit_fully_filled),
+                has_book=self.book is not None if has_book is None else has_book,
+                recent_losing_exits=self.recent_losing_exits,
                 breaker_state=self.breaker_state, breaker_reason=self.breaker_reason, now=self.now,
             ),
             self.gate_policy,
