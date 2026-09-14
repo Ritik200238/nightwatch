@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from nightwatch import __version__
+from nightwatch.api.sources import data_sources
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Venue
@@ -169,6 +170,12 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": ob[0], "last_book_ts": last_book,
             "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": chat_ready,
         }
+
+    @app.get("/sources")
+    def sources() -> list[dict[str, Any]]:
+        """Every feed the desk reads, with how fresh it is. Judges and users can check
+        the numbers on a report are backed by live data, not a fixture."""
+        return data_sources(st().store)
 
     @app.get("/universe")
     def universe(core: bool = True) -> list[dict[str, Any]]:
