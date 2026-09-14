@@ -174,6 +174,12 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
 * `GET /sources` lists every upstream feed with when it was last pulled, how many rows it
   holds and the newest thing in it. It is the fastest way to tell a dead feed from a quiet
   market, and the desk shows the same six rows in its sidebar.
+* **How much load it takes.** Analyses are serialised behind one lock, because the
+  feature-frame cache they share is not thread-safe. One analysis is about two seconds, so
+  four people clicking at once wait about eight, and the queue is first-come. It was
+  measured by asking for all 24 tokens both ways at four at a time: 48 verdicts, median
+  7.4 s, slowest 9.1 s. Two of those sweeps at once (96 queued analyses) pushes the
+  slowest past three minutes and some time out. That is a demo box, not a service.
 * **Self-healing**: `deploy/heal.sh` runs from cron every five minutes and restarts a
   container that is running but unhealthy - a wedged API, or a recorder that has not
   written an order book in five minutes. Docker's restart policy only covers a process
