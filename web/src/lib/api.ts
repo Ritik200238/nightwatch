@@ -545,6 +545,8 @@ export interface ChatResponse {
   report_text: string | null;
   unverified_numbers: string[];
   reply: string;
+  /** "model" when an Anthropic key answered, "rules" when the built-in parser did. */
+  mode?: "model" | "rules";
 }
 
 export interface Coverage {
