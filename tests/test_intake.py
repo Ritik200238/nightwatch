@@ -30,6 +30,16 @@ def test_the_usual_shapes_a_trader_types(text, ticker, side, notional):
     assert out.kind == "analyze"
 
 
+def test_holding_a_position_is_being_long():
+    """These are the two starter prompts on the desk; both must land without a question."""
+    a = p("Hold $20k of TSLA through the weekend, stop at 350")
+    assert (a.kind, a.ticker, a.side, a.notional_quote, a.stop_price) == ("analyze", "TSLA", "long", 20_000.0, 350.0)
+    b = p("Short 5k NVDA for the next 12 hours")
+    assert (b.kind, b.ticker, b.side, b.notional_quote, b.horizon_hours) == ("analyze", "NVDA", "short", 5_000.0, 12.0)
+    # A holding *period* after a stated direction does not flip it.
+    assert p("short 15k SPY, holding period 2 days").side == "short"
+
+
 def test_short_term_is_a_horizon_not_a_direction():
     out = p("buy 10k AAPL, short term view")
     assert out.side == "long"

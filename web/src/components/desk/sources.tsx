@@ -58,7 +58,7 @@ export function Sources() {
     <div>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
         <span>
-          <span className="text-sm font-medium">Data sources</span>
+          <span className="text-sm font-medium">Data sources</span>{" "}
           <span className="ml-2 text-xs text-muted-foreground">{rows ? `${rows.length} live feeds${stale ? ` · ${stale} behind` : ""}` : error ? "unavailable" : "checking…"}</span>
         </span>
         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />

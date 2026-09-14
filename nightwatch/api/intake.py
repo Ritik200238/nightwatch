@@ -35,7 +35,9 @@ _SCALE = {"k": 1e3, "m": 1e6, "b": 1e9}
 
 # "short term" is a horizon, not a direction. Same for "shorter" and "short-dated".
 _SHORT = re.compile(r"\bshort(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell\b|\bbearish\b|\bfade\b", re.I)
-_LONG = re.compile(r"\blong(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy\b|\bbullish\b", re.I)
+# "hold 20k of TSLA overnight" is a long position; a trader saying it would be surprised
+# to be asked which way round they meant it.
+_LONG = re.compile(r"\blong(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy\b|\bbullish\b|\bhold(?:ing)?\b|\bcarry\b|\bkeep\b", re.I)
 _STOP = re.compile(r"\bstop(?:[-\s]?loss)?\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 _EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?", re.I)
