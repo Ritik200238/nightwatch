@@ -29,8 +29,11 @@ moments that looked like this, and can I survive the bad cases?** Given a trade 
 
 1. Builds a point-in-time snapshot of the token: realised volatility and its percentile,
    trend, gap between token and fair value (basis) and its z-score, liquidity relative
-   to normal, time-of-week, hours to the next earnings report and FOMC decision,
-   headline count.
+   to normal (measured against the same hour of the week, so a quiet Sunday is not
+   mistaken for a liquidity crisis), time-of-week, hours to the next earnings report and
+   FOMC decision, headline count, hours since the last SEC filing, and the macro weather
+   (VIX, the yield curve, the dollar, the 10-year, each as a percentile of its own
+   trailing year).
 2. Retrieves the most similar past hours by Mahalanobis distance over those features,
    de-duplicated into distinct episodes, and refuses to answer when fewer than 15
    distinct matches exist.
@@ -44,8 +47,11 @@ moments that looked like this, and can I survive the bad cases?** Given a trade 
    block-bootstrap Monte Carlo and a reverse stress ("what move loses 5%").
 5. Walks the recorded live order book for the ticket size and quotes the real cost of
    getting out, and the cost of hedging with the perpetual.
-6. Passes the ticket through an eight-rule discipline gate and five independent sizing
+6. Passes the ticket through a nine-rule discipline gate and five independent sizing
    caps, and returns a verdict: go, reduce to a size, hedge a ratio, or do not trade.
+   The gate is built to decide, not to abstain: where a missing input is a caution rather
+   than a danger - no stop given, thin weekend trading - it says so in the verdict and
+   sizes against the calibrated 5th percentile instead of refusing.
 
 The core hypothesis is that a forecast which is never scored is a guess. So every
 verdict is journaled before its outcome is known and scored when the horizon passes.
