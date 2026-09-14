@@ -165,6 +165,13 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
 
 * `GET /health` returns bar count, order-book snapshot count, the timestamp of the last
   book, and the warm-up state. Point any uptime monitor at it.
+* `GET /sources` lists every upstream feed with when it was last pulled, how many rows it
+  holds and the newest thing in it. It is the fastest way to tell a dead feed from a quiet
+  market, and the desk shows the same six rows in its sidebar.
+* **Self-healing**: `deploy/heal.sh` runs from cron every five minutes and restarts a
+  container that is running but unhealthy - a wedged API, or a recorder that has not
+  written an order book in five minutes. Docker's restart policy only covers a process
+  that exits. The log is `/home/ubuntu/heal.log`, and it stays empty while all is well.
 * The recorder logs a heartbeat every 10 ticks and every job run; `docker compose logs -f recorder`.
 * The API warms the feature frames for every token on start (about a minute for 24
   tokens); until then `/health` reports `warm.state = running` and analyses are slower.
