@@ -101,6 +101,18 @@ def add_event_columns(
     f["macro_events_72h"] = _count_within(index, macro_instants, MACRO_WINDOW_H)
     f["hours_to_fomc"] = _hours_to_next(index, fomc_instants)
 
+    # SEC filings: when was the last one, and how many landed in the trailing three days.
+    filings = store.get_filings(ticker, start=index[0].to_pydatetime() - timedelta(days=400), end=index[-1].to_pydatetime() + timedelta(hours=1), as_of=as_of)
+    filing_instants = sorted(x.accepted_at for x in filings)
+    f["hours_since_filing"] = np.minimum(_hours_since_last(index, filing_instants), EARNINGS_CAP_H)
+    if filing_instants:
+        inst = pd.DatetimeIndex(filing_instants).tz_convert("UTC")
+        upto = inst.searchsorted(index, side="right")
+        before = inst.searchsorted(index - pd.Timedelta(hours=72), side="right")
+        f["filings_72h"] = (upto - before).astype(float)
+    else:
+        f["filings_72h"] = 0.0
+
     news = store.get_news(index[0].to_pydatetime() - timedelta(hours=NEWS_WINDOW_H), index[-1].to_pydatetime() + timedelta(hours=1), ticker=ticker, as_of=as_of)
     news_instants = sorted(n.published_at for n in news)
     # Count of tagged headlines in the trailing 24h: count(<= t) - count(<= t-24h).
