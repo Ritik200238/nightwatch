@@ -73,6 +73,7 @@ class GateInputs:
     risk_multiplier: float
     exit_cost_bps: float | None
     exit_fully_filled: bool
+    has_book: bool = True  # whether a book existed at all, as opposed to one too thin to fill
     breaker_state: str = "NORMAL"  # NORMAL | COOLDOWN | HALTED
     breaker_reason: str = ""
     recent_losing_exits: tuple[datetime, ...] = ()
@@ -187,11 +188,13 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
     else:
         rules.append(RuleResult("market_posture", GateDecision.GO, f"regime {inputs.regime_label}"))
 
-    # 8. Exit liquidity.
-    if inputs.exit_cost_bps is None:
+    # 8. Exit liquidity. A book that cannot absorb the size and no book at all are
+    # different answers: the first is a decision, the second is an admission. Both leave
+    # the cost as None, so the order of these two branches decides which one gets said.
+    if not inputs.exit_fully_filled and inputs.has_book:
+        rules.append(RuleResult("exit_liquidity", GateDecision.NO_GO, "the live book cannot absorb this size at any price"))
+    elif inputs.exit_cost_bps is None:
         rules.append(RuleResult("exit_liquidity", GateDecision.REVIEW_REQUIRED, "no order book available to cost the exit"))
-    elif not inputs.exit_fully_filled:
-        rules.append(RuleResult("exit_liquidity", GateDecision.NO_GO, "the live book cannot absorb this size"))
     elif inputs.exit_cost_bps > policy.max_exit_cost_bps:
         rules.append(RuleResult("exit_liquidity", GateDecision.NO_GO, f"exit would cost {inputs.exit_cost_bps:.0f} bps (limit {policy.max_exit_cost_bps:.0f})"))
     else:

@@ -133,3 +133,15 @@ def test_thin_weekend_trading_is_a_caution_in_the_verdict_not_a_veto():
 def test_no_stop_and_no_distribution_still_asks():
     rep = evaluate_gate(ticket(stop_price=None), inputs(analog_p5_loss_pct=None))
     assert rep.decision == GateDecision.REVIEW_REQUIRED
+
+
+def test_a_book_too_thin_to_fill_is_a_decision_not_an_admission():
+    """Both leave the exit cost unknown, and they are not the same answer: one says the
+    size cannot be got out of at any price, the other says we could not tell."""
+    thin = evaluate_gate(ticket(), inputs(exit_cost_bps=None, exit_fully_filled=False, has_book=True))
+    blind = evaluate_gate(ticket(), inputs(exit_cost_bps=None, exit_fully_filled=False, has_book=False))
+
+    thin_rule = next(r for r in thin.rules if r.rule == "exit_liquidity")
+    blind_rule = next(r for r in blind.rules if r.rule == "exit_liquidity")
+    assert thin_rule.decision is GateDecision.NO_GO and "cannot absorb" in thin_rule.reason
+    assert blind_rule.decision is GateDecision.REVIEW_REQUIRED and "no order book" in blind_rule.reason

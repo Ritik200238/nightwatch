@@ -305,6 +305,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         ticket, impacts=stress.impacts,
         exit_cost_bps=execution.exit_quote.total_cost_bps if execution.exit_quote else None,
         exit_fully_filled=execution.exit_quote.fully_filled if execution.exit_quote else False,
+        has_book=execution.exit_quote is not None,
     )
     gate, sizing, verdict = ev.gate, ev.sizing, ev.verdict
     timings["decision"] = _ms(t0)
