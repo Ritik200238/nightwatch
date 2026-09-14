@@ -110,12 +110,19 @@ All figures **observed** on the build as of 2026-09-12 unless labelled otherwise
   intervals spanning zero, and 1,605 pairs across 20 tokens showed a 1.3% lower forecast
   loss with an interval excluding zero. It ships on the third result;
   `research/feature_ab.py` reruns the test.
-* Exit cost: a 20,000 USDT RTSLAUSDT exit costs 25 bps on the recorded book (15 bps
-  walk + 10 bps fee); the largest size that exits inside a 25 bps budget is ~16,800 USDT.
+* Exit cost is quoted from the live book, not assumed: on 14 September a 20,000 USDT
+  RTSLAUSDT exit cost 15.1 bps (5.1 walk + 10 fee) and the largest size that exits inside
+  a 25 bps budget was 193,000 USDT. The same book read by time of week is thinner at the
+  weekend: the recorded archive could not absorb 20,000 within budget 35% of the time on
+  a weekend, against 0% on a weeknight.
 * Basis vs index is 2.5 times wider when the US market is closed than during regular
   hours (27.8 bps vs 10.9 bps, mean absolute, TSLA).
-* Latency: a full verdict in 1.5 s after warm-up.
-* Tests: 234 automated tests; lint, tests and the web build run in CI on every push, and the backend only deploys a commit whose CI passed.
+* Latency: a full verdict in about 2.1 s on the server after warm-up (analog retrieval
+  is 1.6 s of it), 2.4-3.1 s end to end through the public URL. The first request after a
+  deploy is slower while the feature cache rebuilds, and the API says so in `/health`.
+* Tests: 265 automated tests; lint, tests and the web build run in CI on every push, and
+  the backend only deploys a commit whose CI passed. A cron job restarts a container that
+  is running but unhealthy, because judging runs for two weeks unattended.
 
 **Usage validation plan (targeted):** demo live for the judging window; a public
 calibration page that updates as live tickets mature; 20 external users submitting at
@@ -135,7 +142,13 @@ states and reports what followed each. The recorded order-book archive is read b
 time of week. And every report argues against its own verdict using its own numbers.
 
 **Problems and fixes:** Bitget omits hourly bars when nothing traded, so gaps are
-forward-filled and flagged rather than treated as flat hours. Earnings distance dominated
+forward-filled and flagged rather than treated as flat hours. Two consequences of that
+took a while to find, and both were measurement errors rather than market facts: realised
+volatility computed over calendar hours went blank after half a day of no trades, taking
+the regime label with it, and liquidity compared against a flat 30-day average made every
+weekend look like a crisis - 15 of 48 test tickets came back "hostile regime, review" for
+no better reason than that it was Sunday. Volatility is now measured over traded hours and
+carried forward; liquidity is compared against the same hour of the week. Earnings distance dominated
 the similarity metric; capped at 30 days. Whitening blew up on constant features. The
 first calibration run showed tails too narrow, which became the tail-adjustment layer.
 A token that has gone quiet used to be refused outright; it is now analysed with a flag
