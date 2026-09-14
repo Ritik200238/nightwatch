@@ -66,11 +66,34 @@ def test_calibration_endpoint_shape(client):
     assert "coverage" in r and "tail" in r and r["tail"]["band"] in ("green", "amber", "red", "insufficient")
 
 
-def test_chat_without_credentials_explains_itself(client, monkeypatch):
+def test_chat_answers_with_rules_when_there_is_no_model(client, monkeypatch):
+    """No key is not the same as no desk. The rules read the ticket and brief the answer."""
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
-    r = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20k TSLA"}]})
-    assert r.status_code == 503 and "ticket form" in r.json()["detail"]
+    r = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20k TSLA overnight, stop 300, because momentum"}]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["mode"] == "rules"
+    assert body["intent"]["ticker"] == "TSLA" and body["intent"]["side"] == "long" and body["intent"]["notional_quote"] == 20000
+    assert body["ticket"]["stop_price"] == 300 and body["ticket"]["thesis"] == "momentum"
+    assert body["report"]["verdict"]["verdict"] in ("GO", "REDUCE_TO", "HEDGE", "REVIEW", "NO_GO")
+    assert "USDT" in body["reply"] and body["unverified_numbers"] == []
     assert client.get("/health").json()["chat_ready"] in (True, False)
+
+
+def test_chat_asks_for_what_is_missing_rather_than_guessing(client, monkeypatch):
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
+    r = client.post("/chat", json={"messages": [{"role": "user", "content": "what about tesla?"}]}).json()
+    assert r["intent"]["kind"] == "clarify" and r["report"] is None
+    assert "long or short" in r["reply"] and "size" in r["reply"]
+
+
+def test_chat_falls_back_to_rules_when_the_model_fails(client, monkeypatch):
+    """A provider outage must not take the desk down."""
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: True)
+    monkeypatch.setattr("nightwatch.api.llm.chat_turn", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("provider down")))
+    r = client.post("/chat", json={"messages": [{"role": "user", "content": "short 10k NVDA for 6 hours"}]})
+    assert r.status_code == 200 and r.json()["mode"] == "rules"
+    assert r.json()["ticket"]["ticker"] == "NVDA"
 
 
 def test_the_book_is_judged_alongside_the_trade(client):

@@ -314,18 +314,31 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     @app.post("/chat")
     def chat(body: ChatIn) -> dict[str, Any]:
+        """Talk to the desk in plain language.
+
+        Two implementations, one contract. With an Anthropic key the model parses the
+        idea and writes the briefing; without one - or when the provider is unreachable -
+        rules do the same two jobs with less range. The desk never goes silent, and the
+        response says which one answered.
+        """
+        from nightwatch.api.intake import rule_turn
         from nightwatch.api.llm import chat_turn, credentials_present
 
         s = st()
-        if not credentials_present():
-            # The desk is fully usable without a model; only this entry point needs one.
-            raise HTTPException(503, "The plain-language desk needs an Anthropic API key (set ANTHROPIC_API_KEY on the server). Everything else, including the ticket form, works without one.")
+        messages = [m.model_dump() for m in body.messages]
         try:
-            return chat_turn(s, [m.model_dump() for m in body.messages], account_equity=body.account_equity_quote)
+            if credentials_present():
+                out = chat_turn(s, messages, account_equity=body.account_equity_quote)
+                out.setdefault("mode", "model")
+                return out
         except InsufficientData as exc:
             raise HTTPException(422, str(exc)) from exc
-        except RuntimeError as exc:  # missing or rejected credentials
-            raise HTTPException(503, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - a language layer must not take the desk down
+            log.warning("chat fell back to rules: %s", exc)
+        try:
+            return rule_turn(s, messages, account_equity=body.account_equity_quote)
+        except InsufficientData as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     return app
 
