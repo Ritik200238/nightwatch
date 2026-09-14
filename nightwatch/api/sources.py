@@ -26,7 +26,7 @@ def _one(store: Store, sql: str, args: tuple = ()) -> tuple:
 def data_sources(store: Store) -> list[dict[str, Any]]:
     c = store._conn
     last = {task: ms for task, ms in c.execute("SELECT task, MAX(finished_at) FROM sync_log GROUP BY task").fetchall()}
-    last_yahoo = _one(store, "SELECT MAX(finished_at) FROM sync_log WHERE task='bars' AND venue=?", (Venue.YAHOO.value,))
+    last_yahoo = _one(store, "SELECT MAX(finished_at) FROM sync_log WHERE task IN ('bars','equity_refresh') AND (venue=? OR task='equity_refresh')", (Venue.YAHOO.value,))
     last_bitget = _one(store, "SELECT MAX(finished_at) FROM sync_log WHERE task IN ('bars','refresh') AND venue<>?", (Venue.YAHOO.value,))
 
     bars_bitget = _one(store, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue<>?", (Venue.YAHOO.value,))
@@ -47,7 +47,7 @@ def data_sources(store: Store) -> list[dict[str, Any]]:
             cadence="books every 30 s, candles every 5 min", last_update=last_bitget[0] if last_bitget else None, rows=int(bars_bitget[0] or 0),
             latest=_iso(max(x for x in (bars_bitget[1], books[1]) if x) if (bars_bitget[1] or books[1]) else None), latest_label=f"{int(books[0] or 0):,} order-book snapshots", url="https://www.bitget.com"),
         row("yahoo", "Yahoo Finance", "The native US stock's own hourly bars, for fair value and basis",
-            cadence="hourly", last_update=last_yahoo[0] if last_yahoo else None, rows=int(bars_yahoo[0] or 0), latest=_iso(bars_yahoo[1]), url="https://finance.yahoo.com"),
+            cadence="hourly while the US market is open", last_update=last_yahoo[0] if last_yahoo else None, rows=int(bars_yahoo[0] or 0), latest=_iso(bars_yahoo[1]), url="https://finance.yahoo.com"),
         row("nasdaq", "Nasdaq", "Earnings calendar: dates, before/after the bell, estimates and actuals",
             cadence="every 6 h", last_update=last.get("earnings_calendar"), rows=int(earnings[0] or 0),
             latest=_iso(earnings[3]) if earnings else None, latest_label="furthest scheduled report", url="https://www.nasdaq.com/market-activity/earnings"),

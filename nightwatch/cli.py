@@ -24,6 +24,7 @@ from nightwatch.data.sync import (
     refresh_universe,
     resolve_universe,
     sync_calendars,
+    sync_equity_universe,
     sync_filings,
     sync_macro_series,
     sync_news,
@@ -148,6 +149,9 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 # Earnings dates move and macro releases get scheduled; six-hourly is plenty.
                 PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False),
                 PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False),
+                # The native stock's own bars: hourly while the US market is open, and a
+                # no-op the rest of the time because the missing-range check finds nothing.
+                PeriodicJob("equity-bars", 3600, lambda: sync_equity_universe(store, YahooChartClient(), entries), run_at_start=False),
                 # Filings arrive at any hour; four-hourly keeps "was there an 8-K last night" current.
                 PeriodicJob("filings", 4 * 3600, lambda: sync_filings(store, SecFilingsClient(), tickers), run_at_start=False),
                 # Score live tickets as soon as their horizon has passed so calibration stays current.

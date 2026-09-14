@@ -312,6 +312,26 @@ def sync_filings(store: Store, sec, tickers: Iterable[str], *, since: datetime |
     return n
 
 
+def sync_equity_universe(store: Store, yahoo: YahooChartClient, entries: Sequence[UniverseEntry]) -> int:
+    """Bring the native US stocks' own bars up to date, one ticker at a time.
+
+    Fair value comes from Bitget's index candle, but the basis against the stock's own
+    last traded price, and how old that price is, both come from here. Left alone these
+    go stale the moment nobody runs a backfill by hand, which over a two-week judging
+    window means the desk quietly stops knowing what the shares did.
+    """
+    began = utc_now()
+    n = 0
+    for e in entries:
+        try:
+            n += sync_equity_bars(store, yahoo, e.yahoo_ticker)
+        except Exception as exc:  # noqa: BLE001 - one ticker failing must not stop the rest
+            log.warning("equity bars for %s failed: %s", e.yahoo_ticker, exc)
+    log.info("equity bars: %d rows across %d tickers", n, len(entries))
+    store.log_sync("equity_refresh", rows=n, started_at=began, finished_at=utc_now())
+    return n
+
+
 def sync_news(store: Store, rss: RssNewsClient) -> int:
     began = utc_now()
     n = store.upsert_news(rss.fetch())
