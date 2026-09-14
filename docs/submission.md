@@ -147,9 +147,10 @@ stops at 90 days and the search covers twenty months; it would have to be impute
 token tail factors, until each token has enough scored forecasts of its own.
 
 **Stack:** Python 3.11, numpy/pandas, SQLite, FastAPI; Next.js 16, Recharts; Claude
-Opus 5 for the language layer only. Data: Bitget public API (spot, USDT perps with index
-and mark candles, order books, funding), Yahoo chart API, Nasdaq earnings calendar, FRED,
-RSS.
+Opus 5 for the language layer only. Six live data sources, all listed with their
+freshness on the desk itself and at `/sources`: Bitget public API (spot, USDT perps with
+index and mark candles, order books, funding), Yahoo chart API, Nasdaq earnings calendar,
+FRED, RSS headlines, and SEC EDGAR filings timed to the second they were accepted.
 
 ### 5. Deliverables
 
