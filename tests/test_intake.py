@@ -108,3 +108,12 @@ def test_the_latest_message_overrides_an_earlier_one():
 
 def test_a_ticker_we_have_no_data_for_is_simply_not_found():
     assert p("long 10k GME").ticker is None
+
+
+def test_a_number_that_rounds_to_zero_is_not_written_as_a_loss():
+    from nightwatch.api.intake import _pct
+
+    assert _pct(-0.04) == "0.0%"  # not "-0.0%"
+    assert _pct(0.04) == "0.0%"
+    assert _pct(-1.26) == "-1.3%"
+    assert _pct(2.5) == "+2.5%"

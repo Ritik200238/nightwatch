@@ -17,18 +17,26 @@ export function fmtCompact(v: number | null | undefined): string {
 }
 
 /** Signed percent, e.g. +1.23% / −0.45%. */
+/** The sign comes from the rounded value, not the raw one: a median of −0.004% rounds to
+ *  zero, and "−0.0%" reads as a loss that is not there. */
+function signOf(v: number, digits: number): "" | "+" | "−" {
+  const rounded = Number(v.toFixed(digits));
+  return rounded > 0 ? "+" : rounded < 0 ? "−" : "";
+}
+
 export function fmtPct(v: number | null | undefined, digits = 2, signed = true): string {
   if (v == null || Number.isNaN(v)) return "—";
-  const s = v.toFixed(digits);
-  if (!signed) return `${s}%`;
-  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(digits)}%`;
+  const sign = signOf(v, digits);
+  if (!signed) return `${sign === "−" ? "−" : ""}${Math.abs(v).toFixed(digits)}%`;
+  return `${sign}${Math.abs(v).toFixed(digits)}%`;
 }
 
 export function fmtBps(v: number | null | undefined, digits = 1, signed = false): string {
   if (v == null || Number.isNaN(v)) return "—";
+  const sign = signOf(v, digits);
   const s = `${Math.abs(v).toFixed(digits)} bps`;
-  if (!signed) return s;
-  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${s}`;
+  if (!signed) return `${sign === "−" ? "−" : ""}${s}`;
+  return `${sign}${s}`;
 }
 
 export function fmtPrice(v: number | null | undefined): string {

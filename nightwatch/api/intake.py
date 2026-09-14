@@ -212,6 +212,14 @@ def intent_to_ticket(p: RuleIntent, account_equity: float | None) -> TradeTicket
     )
 
 
+def _pct(v: float, digits: int = 1) -> str:
+    """A signed percentage whose sign comes from the rounded value: a median of -0.04%
+    rounds to zero, and "-0.0%" reads as a loss that is not there."""
+    text = f"{abs(v):.{digits}f}%"
+    sign = "+" if round(v, digits) > 0 else "-" if round(v, digits) < 0 else ""
+    return sign + text
+
+
 def brief(report: Any) -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -232,7 +240,7 @@ def brief(report: Any) -> str:
         c = horizon.cohort
         p5 = horizon.p5_adjusted if horizon.p5_adjusted is not None else c.p5
         if p5 is not None and c.median_pct is not None:
-            line = f"History: {c.n} past moments like this one; the middle outcome was {c.median_pct:+.1f}% and one in twenty was worse than {p5:+.1f}%."
+            line = f"History: {c.n} past moments like this one; the middle outcome was {_pct(c.median_pct)} and one in twenty was worse than {_pct(p5)}."
             if horizon.baseline is not None and horizon.baseline.permutation_p_value is not None:
                 line += f" Against random hours of the same kind, p = {horizon.baseline.permutation_p_value:.2f}."
             lines.append(line)
@@ -241,10 +249,10 @@ def brief(report: Any) -> str:
     if priced:
         worst = min(priced, key=lambda i: i.total_pnl_quote)
         name = next((s.name for s in report.stress.presets if s.id == worst.scenario_id), worst.scenario_id)
-        lines.append(f"Worst stress preset ({name}): {worst.total_pct_of_notional:+.1f}% of the position, about {worst.total_pnl_quote:,.0f} USDT.")
+        lines.append(f"Worst stress preset ({name}): {_pct(worst.total_pct_of_notional)} of the position, about {worst.total_pnl_quote:,.0f} USDT.")
     mc = report.stress.monte_carlo
     if mc is not None:
-        lines.append(f"Simulated tail: one path in twenty ends below {mc.p5:+.1f}%, and the worst drawdown is past {mc.drawdown_p5:+.1f}% in the same fifth percentile.")
+        lines.append(f"Simulated tail: one path in twenty ends below {_pct(mc.p5)}, and the worst drawdown is past {_pct(mc.drawdown_p5)} in the same fifth percentile.")
 
     q = report.execution.exit_quote
     if q is not None:
