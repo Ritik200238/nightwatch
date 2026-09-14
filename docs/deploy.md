@@ -4,8 +4,8 @@
 project `nightwatch`, root directory `web`, connected to the `main` branch so every push
 redeploys). The backend runs on an AWS Lightsail box in Mumbai (ap-south-1), 1 GB plan,
 static IP, port 8000 open, with the API and the recorder as containers. Measured there:
-API 230 MB of memory with all 24 tokens warm, a full verdict in 1.5 s, the calibration
-page in 1.3 s.
+API 209 MB of memory with all 24 tokens warm and the recorder 44 MB, a full verdict in
+about 2.1 s, the calibration page in 2.1 s (cached for two minutes after that).
 
 Three processes, one SQLite database:
 
