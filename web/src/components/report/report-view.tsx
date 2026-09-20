@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import { useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
+import { ActOnIt } from "@/components/report/act-on-it";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,7 @@ function DecisionCard({ report }: { report: Report }) {
         </p>
       ) : null}
 
+      <ActOnIt report={report} />
       {report.forecast_id != null ? <TakenButton forecastId={report.forecast_id} /> : null}
       {report.warnings.length ? (
         <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
