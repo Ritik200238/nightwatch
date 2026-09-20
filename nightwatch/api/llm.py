@@ -130,6 +130,48 @@ def narrate(client: anthropic.Anthropic, report: AnalysisReport) -> tuple[str, s
     return narrative, text
 
 
+FOLLOWUP_SYSTEM = (
+    "You are Nightwatch's explainer. The trader is asking a question about a decision report you are given. "
+    "Answer only from the report. You may quote and rearrange its numbers; you may not compute new ones, estimate, "
+    "round differently, or bring in anything you know from elsewhere. If the report does not contain the answer, say so "
+    "plainly and name what it does contain that is closest. You are also given the answer the deterministic layer "
+    "produced from the same report: it is correct, so keep its facts and its numbers, and say them better - shorter, "
+    "in the order a trader would want them, and without repeating the question back. Under 120 words. No markdown headers. "
+    "The human makes the decision; you inform it."
+)
+
+
+def followup_turn(report: dict, question: str, grounded: Any) -> dict:  # noqa: ANN401
+    """Say the deterministic answer better, and check it did not invent anything.
+
+    The rules layer has already answered from the report's own fields. The model's job is
+    fluency, not arithmetic, so it is handed that answer and told to keep its numbers; any
+    figure it prints that is not in the report or in that answer comes back flagged.
+    """
+    client = _client()
+    report_text = json.dumps(report, default=str)
+    response = client.beta.messages.create(
+        model=MODEL,
+        max_tokens=800,
+        betas=[FALLBACK_BETA],
+        fallbacks="default",
+        system=FOLLOWUP_SYSTEM,
+        messages=[{"role": "user", "content": f"QUESTION\n\n{question}\n\nGROUNDED ANSWER\n\n{grounded.text}\n\nREPORT\n\n{report_text[:120000]}"}],
+    )
+    if response.stop_reason == "refusal":
+        return {}
+    text = "".join(b.text for b in response.content if b.type == "text").strip()
+    if not text:
+        return {}
+    unverified = unverified_numbers(text, f"{grounded.text} {report_text}")
+    if unverified:
+        # A number that is in neither the report nor the grounded answer is a number the
+        # model made up. The answer that cannot do that is the one that ships.
+        log.warning("model follow-up invented %s; keeping the grounded answer", unverified)
+        return {}
+    return {"reply": text, "mode": "model"}
+
+
 _NUM = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 
 
@@ -181,10 +223,17 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)
+        payload = report.to_dict()
+        # Keep it, so the next message can be a question about this answer.
+        if report.forecast_id is not None:
+            try:
+                state.reports.save(report.forecast_id, payload)
+            except Exception:  # noqa: BLE001 - a keepsake must not fail the turn
+                pass
     narrative, text = narrate(client, report)
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
-        "report": report.to_dict(),
+        "report": payload,
         "report_text": text,
         "narrative": narrative,
         "unverified_numbers": unverified_numbers(narrative, text),

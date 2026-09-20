@@ -140,3 +140,20 @@ def test_a_number_that_rounds_to_zero_is_not_written_as_a_loss():
     assert _pct(0.04) == "0.0%"
     assert _pct(-1.26) == "-1.3%"
     assert _pct(2.5) == "+2.5%"
+
+
+def test_a_size_written_without_a_k_or_a_dollar_sign_is_still_a_size():
+    """"long 20000 TSLA" is as plain as "long 20k TSLA", and used to parse as no size
+    at all - which meant the chat asked for a size the trader had already given."""
+    out = p("long 20000 TSLA overnight")
+    assert (out.kind, out.ticker, out.side, out.notional_quote) == ("analyze", "TSLA", "long", 20_000.0)
+    assert p("short 5000 NVDA for 12 hours").notional_quote == 5_000.0
+    assert p("buy 1500 MSFT, my account is 200000").notional_quote == 1_500.0
+
+
+def test_a_bare_number_that_is_not_a_size_is_left_alone():
+    assert p("long TSLA at 350").notional_quote is None  # a level
+    assert p("long TSLA 50").notional_quote is None  # nobody sizes at fifty dollars
+    assert p("short 3000 NVDA, stop at 180").stop_price == 180.0  # the stop keeps its number
+    assert p("short 3000 NVDA, stop at 180").notional_quote == 3_000.0
+    assert p("long 10k TSLA for 12 hours").horizon_hours == 12.0  # a duration is not money

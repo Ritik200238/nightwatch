@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from nightwatch import __version__
+from nightwatch.api import followup
 from nightwatch.api.sources import data_sources
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
@@ -82,6 +83,9 @@ class ChatMessage(BaseModel):
 class ChatIn(BaseModel):
     messages: list[ChatMessage]
     account_equity_quote: float | None = None
+    # The report the conversation is currently about, so a question can be answered from
+    # it. The desk already stores every report it produces; this is the key to one.
+    context_forecast_id: int | None = None
 
 
 class AppState:
@@ -345,11 +349,30 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         rules do the same two jobs with less range. The desk never goes silent, and the
         response says which one answered.
         """
-        from nightwatch.api.intake import rule_turn
-        from nightwatch.api.llm import chat_turn, credentials_present
+        from nightwatch.api.intake import is_a_new_idea, rule_turn
+        from nightwatch.api.llm import chat_turn, credentials_present, followup_turn
 
         s = st()
         messages = [m.model_dump() for m in body.messages]
+        latest = next((m["content"] for m in reversed(messages) if m.get("role") == "user" and (m.get("content") or "").strip()), "")
+
+        # A question about the report already on screen, rather than a new trade idea.
+        context = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
+        if context and latest and followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, list(s.ctx.tickers_with_data())):
+            found = followup.answer_or_menu(context, latest)
+            payload = {
+                "intent": {"kind": "followup", "question": found.kind, "missing_fields": [], "reply": found.text},
+                "ticket": None, "report": None, "narrative": None, "report_text": None,
+                "unverified_numbers": [], "reply": found.text, "mode": "rules",
+                "answered_about": body.context_forecast_id, "answer_kind": found.kind,
+            }
+            if credentials_present():
+                try:
+                    payload.update(followup_turn(context, latest, found))
+                except Exception as exc:  # noqa: BLE001 - the rules answer already stands
+                    log.warning("model follow-up fell back to rules: %s", exc)
+            return payload
+
         try:
             if credentials_present():
                 out = chat_turn(s, messages, account_equity=body.account_equity_quote)

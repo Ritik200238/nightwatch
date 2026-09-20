@@ -7,6 +7,15 @@ from nightwatch.config import Settings
 from tests.test_pipeline import AS_OF, seeded_store  # noqa: F401 - fixture
 
 
+@pytest.fixture(autouse=True)
+def _frozen_clock(monkeypatch):
+    """The chat entry has no as_of parameter: it always analyses "now", and the seeded
+    store ends at a fixed instant. Without pinning the clock these tests pass on the day
+    they are written and fail a week later on the staleness guard - which is exactly what
+    happened, quietly, in between two runs."""
+    monkeypatch.setattr("nightwatch.pipeline.analyze.utc_now", lambda: AS_OF)
+
+
 @pytest.fixture
 def client(seeded_store, monkeypatch):  # noqa: F811
     monkeypatch.setenv("NIGHTWATCH_LIVE_BOOK", "0")
@@ -160,3 +169,41 @@ def test_an_analysis_that_asked_not_to_be_recorded_is_not_kept(client):
     }
     r = client.post("/analyze", json=payload).json()
     assert r["forecast_id"] is None
+
+
+def test_the_chat_answers_a_question_about_the_report_it_just_gave(client, monkeypatch):
+    """The point of a conversation: ask the answer a question and get the answer's own
+    numbers back, not a fresh analysis and not an opinion."""
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
+    first = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20000 TSLA overnight"}], "account_equity_quote": 200000}).json()
+    assert first.get("report"), f"the chat did not produce a report: {first.get('reply')}"
+    fid = first["report"]["forecast_id"]
+    assert fid is not None, "a report produced through chat has to be kept, or it cannot be asked about"
+
+    asked = client.post(
+        "/chat",
+        json={
+            "messages": [{"role": "user", "content": "long 20000 TSLA overnight"}, {"role": "user", "content": "why not bigger?"}],
+            "account_equity_quote": 200000,
+            "context_forecast_id": fid,
+        },
+    ).json()
+    assert asked["answer_kind"] == "size" and asked["answered_about"] == fid
+    assert asked["report"] is None  # the report on screen stays; nothing was re-run
+    assert "cap" in asked["reply"]
+
+
+def test_a_question_about_another_token_runs_that_token_instead(client, monkeypatch):
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
+    first = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20000 TSLA overnight"}]}).json()
+    fid = first["report"]["forecast_id"]
+    moved = client.post(
+        "/chat",
+        json={
+            "messages": [{"role": "user", "content": "long 20000 TSLA overnight"}, {"role": "user", "content": "what about NVDA?"}],
+            "context_forecast_id": fid,
+        },
+    ).json()
+    # NVDA is a different token, so this is a new idea however it is phrased.
+    assert moved.get("answer_kind") is None
+    assert moved["intent"]["ticker"] == "NVDA"

@@ -14,12 +14,15 @@ job with more range; this is the floor, not the ceiling.
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.stress.scenarios import Side
+
+log = logging.getLogger(__name__)
 
 # A company's ordinary name is how people talk about these tokens.
 ALIASES: dict[str, str] = {
@@ -42,6 +45,12 @@ _STOP = re.compile(r"\bstop(?:[-\s]?loss)?\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 _EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?", re.I)
 _MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmb])?|\b([\d,]+(?:\.\d+)?)\s*([kmb])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
+# "long 20000 TSLA" states a size as plainly as "long 20k TSLA" does. A bare number is
+# read as one only when nothing else has claimed it and it is not a price: "long TSLA at
+# 350" is a level, and nobody sizes a position at fifty dollars.
+_BARE_MONEY = re.compile(r"(?<![$\d.])\b(\d[\d,]{2,})\b(?!\s*(?:%|bps))", re.I)
+_PRICE_WORD = re.compile(r"\b(?:at|@|price|near|around|above|below|under|over)\s*$", re.I)
+BARE_MONEY_FLOOR = 100.0
 _HOURS = re.compile(r"\b([\d.]+)\s*(?:hours?|hrs?|h)\b", re.I)
 _DAYS = re.compile(r"\b([\d.]+)\s*(?:days?|d)\b", re.I)
 _NEXT_OPEN = re.compile(r"\bovernight\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b|\bover\s+the\s+weekend\b", re.I)
@@ -155,6 +164,16 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         if value is not None and value != out.account_equity_quote:
             out.notional_quote = value
             break
+    if out.notional_quote is None:
+        for m in _BARE_MONEY.finditer(text):
+            if any(s <= m.start() < e for s, e in spent):
+                continue
+            if _PRICE_WORD.search(text[: m.start()]):
+                continue
+            value = float(m.group(1).replace(",", ""))
+            if value >= BARE_MONEY_FLOOR and value != out.account_equity_quote:
+                out.notional_quote = value
+                break
 
     hours, days = _HOURS.search(text), _DAYS.search(text)
     if _NEXT_OPEN.search(text):
@@ -271,6 +290,21 @@ def brief(report: Any) -> str:
     return "\n\n".join(lines)
 
 
+def is_a_new_idea(text: str, context: dict[str, Any], known_tickers: list[str]) -> bool:
+    """True when a message is a fresh trade idea rather than a question about the last one.
+
+    Naming a different token is enough, whether or not the rest of the ticket is there.
+    "what about 20k of NVDA?" is phrased as a question and means run it - and if the side
+    is missing, the right answer is to ask for the side, not to talk about TSLA. "What if
+    I do 40k" names no token and means ask the report on screen.
+    """
+    parsed = parse_message(text, known_tickers)
+    if not parsed.ticker:
+        return False
+    current = ((context.get("ticket") or {}).get("ticker") or "").upper()
+    return parsed.ticker.upper() != current
+
+
 def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None) -> dict[str, Any]:
     """One conversational turn with no model involved, in the same shape as the model's.
 
@@ -298,10 +332,17 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)
+        payload = report.to_dict()
+        # Keep it, so the next message can be a question about this answer.
+        if report.forecast_id is not None:
+            try:
+                state.reports.save(report.forecast_id, payload)
+            except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
+                log.warning("could not store the chat report: %s", exc)
     narrative = brief(report)
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
-        "report": report.to_dict(),
+        "report": payload,
         "report_text": render_text(report),
         "narrative": narrative,
         "reply": narrative,
