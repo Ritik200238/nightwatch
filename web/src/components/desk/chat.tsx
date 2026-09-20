@@ -9,6 +9,8 @@ interface Msg {
   role: "user" | "assistant";
   content: string;
   unverified?: string[];
+  /** Which part of the report this answer was read out of, when it answered a question. */
+  readFrom?: string;
 }
 
 interface Props {
@@ -20,8 +22,31 @@ interface Props {
 
 const STARTERS = ["Hold $20k of TSLA through the weekend, stop at 350", "Short 5k NVDA for the next 12 hours", "Long 10k SPY until Monday open, thesis: strong Friday close"];
 
+/** Offered once a report is on screen, because until then there is nothing to ask about. */
+const FOLLOW_UPS = ["Why not bigger?", "What if I double it?", "What if my stop were 6%?", "Has this setup burned me before?", "Talk me out of it", "Can I actually get out?"];
+
+/** What each kind of question was answered out of. Shown under the answer so the reader
+ *  can go and check it rather than take the sentence on trust. */
+const READ_FROM: Record<string, string> = {
+  size: "sizing caps and the size sweep",
+  stop: "the stop sweep",
+  worst: "stress presets and the simulation",
+  exit: "the order book and its archive",
+  history: "the analog cohort and the baseline test",
+  lessons: "scored post-mortems",
+  gate: "the discipline gate",
+  against: "the case against",
+  hedge: "the hedge quote",
+  regime: "the regime map",
+  moments: "the matched moments",
+  trust: "the tail adjustment",
+  now: "the snapshot",
+};
+
 export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
+  // The report the conversation is currently about. Questions are answered from it.
+  const [contextId, setContextId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   // null = not checked yet. The desk works without a model; only this tab needs one.
@@ -55,9 +80,14 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
       const res = await api.chat(
         next.map((m) => ({ role: m.role, content: m.content })),
         accountEquity,
+        contextId,
       );
-      setMessages([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers }]);
-      if (res.report) onReport(res.report);
+      setMessages([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? READ_FROM[res.answer_kind] : undefined }]);
+      // A follow-up answers about the report already on screen and leaves it there.
+      if (res.report) {
+        onReport(res.report);
+        setContextId((res.report.forecast_id as number | null) ?? null);
+      }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Something went wrong.";
       setError(msg);
@@ -96,9 +126,26 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}>
             <p className="whitespace-pre-wrap">{m.content}</p>
+            {m.readFrom ? <p className="mt-2 text-xs text-muted-foreground">Read out of {m.readFrom}.</p> : null}
             {m.unverified && m.unverified.length ? <p className="mt-2 text-xs text-status-warning">Numbers not found in the report: {m.unverified.join(", ")}</p> : null}
           </div>
         ))}
+        {/* Once there is a report, offer the questions it can answer about itself. Nobody
+            guesses that a stress tester will tell them what a 6% stop would do. */}
+        {contextId != null && !busy ? (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {FOLLOW_UPS.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => void send(q)}
+                className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {busy ? (
           <div className="mr-2 space-y-2 rounded-lg bg-muted px-3 py-2" aria-label="Working">
             <div className="h-3 w-3/4 animate-pulse rounded bg-background/60" />

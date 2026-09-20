@@ -553,6 +553,10 @@ export interface ChatResponse {
   reply: string;
   /** "model" when an Anthropic key answered, "rules" when the built-in parser did. */
   mode?: "model" | "rules";
+  /** Set when the turn answered a question about an existing report rather than running
+   *  a new one: the report it read, and which kind of question it took it to be. */
+  answered_about?: number | null;
+  answer_kind?: string | null;
 }
 
 export interface Coverage {
@@ -626,8 +630,12 @@ export const api = {
   sources: () => request<DataSource[]>("/sources"),
   report: (forecastId: string | number) => request<Report>(`/reports/${forecastId}`),
   analyze: (ticket: TicketInput) => request<Report>("/analyze", { method: "POST", body: JSON.stringify(ticket) }),
-  chat: (messages: { role: "user" | "assistant"; content: string }[], accountEquity?: number | null) =>
-    request<ChatResponse>("/chat", { method: "POST", body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null }) }),
+  chat: (messages: { role: "user" | "assistant"; content: string }[], accountEquity?: number | null, contextForecastId?: number | null) =>
+    request<ChatResponse>("/chat", {
+      method: "POST",
+      // The report already on screen, so "why not bigger" can be answered from it.
+      body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null }),
+    }),
   calibration: (ticker?: string, kind?: string) => {
     const q = new URLSearchParams();
     if (ticker) q.set("ticker", ticker);

@@ -142,8 +142,10 @@ def _a_stop(r: dict, q: str) -> Answer | None:
     if asked is not None and stops:
         p = _nearest(stops, "stop_distance_pct", asked)
         if p:
+            # Same courtesy as the size answer: say when a grid point is being quoted.
+            near = "" if abs(p["stop_distance_pct"] - asked) < 0.1 else f" (the nearest distance the sweep ran to your {asked:g}%)"
             bits = [
-                f"A stop {p['stop_distance_pct']:.2f}% away (at {p['stop_price']:.2f}) makes the verdict {p['verdict'].replace('_', ' ')}"
+                f"A stop {p['stop_distance_pct']:.2f}% away (at {p['stop_price']:.2f}){near} makes the verdict {p['verdict'].replace('_', ' ')}"
                 + (f", putting {p['risk_pct_of_equity']:.2f}% of equity at risk" if p.get("risk_pct_of_equity") is not None else "")
                 + "."
             ]
