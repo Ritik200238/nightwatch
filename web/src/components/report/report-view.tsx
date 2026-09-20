@@ -27,50 +27,134 @@ const VERDICT_TEXT: Record<Report["verdict"]["verdict"], string> = {
   REVIEW: "Fill in what is missing before deciding",
 };
 
-export function ReportView({ report }: { report: Report }) {
+/** The worst stress preset, in money, with the name of the scenario that caused it. */
+function worstPreset(report: Report): { name: string; quote: number; pct: number | null } | null {
+  const rows = report.stress.presets.map((p, i) => ({ p, imp: report.stress.impacts[i] })).filter((r) => r.imp?.total_pnl_quote != null);
+  if (!rows.length) return null;
+  const worst = rows.reduce((a, b) => ((a.imp.total_pnl_quote ?? 0) <= (b.imp.total_pnl_quote ?? 0) ? a : b));
+  return { name: worst.p.name, quote: worst.imp.total_pnl_quote as number, pct: worst.imp.total_pct_of_notional };
+}
+
+/** The cap that actually cuts the requested size, if one does. */
+function bindingCap(report: Report) {
+  const c = report.sizing.caps.find((x) => x.name === report.sizing.binding_cap);
+  if (!c || c.notional == null || c.notional >= report.ticket.notional_quote - 1) return null;
+  return c;
+}
+
+/** Everything a person needs in five seconds: what to do, what it costs to be wrong,
+ *  what could go worse, whether you can get out, and the best argument against it.
+ *  The twelve sections below are the evidence for this card, and they open on demand. */
+function DecisionCard({ report }: { report: Report }) {
   const v = report.verdict;
+  const t = report.ticket;
+  const worst = worstPreset(report);
+  const cap = bindingCap(report);
+  const exit = report.execution.exit_quote;
+  const against = report.second_opinion?.against?.[0];
+
+  return (
+    <Section
+      title={`${t.ticker} ${t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
+      subtitle={`Horizon ${report.primary_horizon} (${fmtHours(report.horizon_h)}) · as of ${fmtTime(report.as_of)} · ${report.snapshot.labels.session} session, ${report.snapshot.labels.regime_label} regime`}
+      action={<Pill tone={VERDICT_TONE[v.verdict]}>{v.verdict.replace("_", " ")}</Pill>}
+    >
+      <p className="text-2xl font-semibold leading-tight">
+        {VERDICT_TEXT[v.verdict]}
+        {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
+        {v.hedge_ratio ? <span className="text-muted-foreground"> → hedge {fmtRatio(v.hedge_ratio)} via perp</span> : null}
+      </p>
+      <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+        {v.reasons.map((r) => (
+          <li key={r} className="flex gap-2">
+            <span aria-hidden>–</span>
+            <span>{r}</span>
+          </li>
+        ))}
+      </ul>
+
+      {/* The four numbers, in money, because a percentage of a position is not a feeling. */}
+      <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <Stat
+          label="If it goes badly"
+          value={report.gate.risk_quote != null ? `−${fmtUsd(report.gate.risk_quote)}` : "—"}
+          hint={report.gate.risk_basis}
+          tone="warning"
+        />
+        <Stat
+          label="If it goes worst"
+          value={worst ? fmtUsd(worst.quote) : "—"}
+          hint={worst ? `${worst.name} · ${fmtPct(worst.pct, 1)} of the position` : "no priced scenario"}
+          tone="critical"
+        />
+        <Stat
+          label="Getting out costs"
+          value={exit?.total_cost_quote != null ? `−${fmtUsd(exit.total_cost_quote)}` : "—"}
+          hint={exit?.total_cost_bps != null ? `${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book` : "no order book"}
+        />
+        <Stat
+          label={cap ? "Size held down by" : "Size"}
+          value={cap ? fmtUsd(cap.notional as number) : fmtUsd(t.notional_quote)}
+          hint={cap ? `${titleCase(cap.name)} — ${cap.detail}` : "inside every cap"}
+          tone={cap ? "warning" : "good"}
+        />
+      </div>
+
+      {against ? (
+        <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">The best case against it: </span>
+          {against.text}
+        </p>
+      ) : null}
+
+      {report.forecast_id != null ? <TakenButton forecastId={report.forecast_id} /> : null}
+      {report.warnings.length ? (
+        <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
+          <p className="mb-1 flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> Caveats
+          </p>
+          <ul className="space-y-1 text-muted-foreground">
+            {report.warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </Section>
+  );
+}
+
+export function ReportView({ report }: { report: Report }) {
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
   const budget = 25;
+  // undefined = every section minds itself; true/false = the reader pressed one of the buttons.
+  const [openAll, setOpenAll] = useState<boolean | undefined>(undefined);
+  const f = report.snapshot.features;
 
   return (
     <div className="space-y-4">
-      {/* Verdict — the one number the page leads with. */}
-      <Section
-        title={`${t.ticker} ${t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
-        subtitle={`Horizon ${report.primary_horizon} (${fmtHours(report.horizon_h)}) · as of ${fmtTime(report.as_of)} · ${report.snapshot.labels.session} session, ${report.snapshot.labels.regime_label} regime`}
-        action={<Pill tone={VERDICT_TONE[v.verdict]}>{v.verdict.replace("_", " ")}</Pill>}
-      >
-        <p className="text-2xl font-semibold leading-tight">
-          {VERDICT_TEXT[v.verdict]}
-          {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
-          {v.hedge_ratio ? <span className="text-muted-foreground"> → hedge {fmtRatio(v.hedge_ratio)} via perp</span> : null}
-        </p>
-        <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-          {v.reasons.map((r) => (
-            <li key={r} className="flex gap-2">
-              <span aria-hidden>–</span>
-              <span>{r}</span>
-            </li>
-          ))}
-        </ul>
-        {report.forecast_id != null ? <TakenButton forecastId={report.forecast_id} /> : null}
-        {report.warnings.length ? (
-          <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
-            <p className="mb-1 flex items-center gap-2 font-medium">
-              <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> Caveats
-            </p>
-            <ul className="space-y-1 text-muted-foreground">
-              {report.warnings.map((w) => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </Section>
+      <DecisionCard report={report} />
+
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="text-xs text-muted-foreground">The evidence behind that answer. Open what you want to argue with.</p>
+        <button
+          type="button"
+          onClick={() => setOpenAll((o) => !o)}
+          className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {openAll ? "Collapse all" : "Expand all"}
+        </button>
+      </div>
 
       {/* Now */}
-      <Section title="Right now" subtitle={`Last completed bar ${fmtTime(report.snapshot.bar_ts)} · inputs hash ${report.snapshot.content_hash}`}>
+      <Section
+        openAll={openAll}
+        collapsible
+        summary={`${fmtPrice(report.snapshot.prices.spot_close)} · basis ${fmtBps(f.basis_index_bps, 0, true)} · vol pctl ${f.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.quality_flags.length ? `${report.snapshot.quality_flags.length} data flag${report.snapshot.quality_flags.length > 1 ? "s" : ""}` : "inputs complete"}`}
+        title="Right now"
+        subtitle={`Last completed bar ${fmtTime(report.snapshot.bar_ts)} · inputs hash ${report.snapshot.content_hash}`}
+      >
         {/* Seven tiles across a 820px column truncates every label: "Fair value (in…".
             Four columns and two rows keeps them readable at every width. */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -94,13 +178,23 @@ export function ReportView({ report }: { report: Report }) {
       </Section>
 
       {/* Analogs */}
-      <AnalogSection report={report} />
+      <AnalogSection report={report} openAll={openAll} />
 
       {/* Stress */}
-      <StressSection report={report} />
+      <StressSection report={report} openAll={openAll} />
 
       {/* Exit & hedge */}
-      <Section title="Getting out" subtitle={`${report.execution.book_source} order book${report.execution.book_ts ? ` · ${fmtTime(report.execution.book_ts)}` : ""}`}>
+      <Section
+        openAll={openAll}
+        collapsible
+        summary={
+          report.execution.exit_quote?.total_cost_bps != null
+            ? `${fmtBps(report.execution.exit_quote.total_cost_bps)} to exit ${fmtUsd(t.notional_quote)} · ${report.execution.exit_quote.fully_filled ? "fills" : "does not fill"} · largest inside budget ${fmtUsd(report.execution.max_notional_within_budget)}`
+            : "no order book available to cost the exit"
+        }
+        title="Getting out"
+        subtitle={`${report.execution.book_source} order book${report.execution.book_ts ? ` · ${fmtTime(report.execution.book_ts)}` : ""}`}
+      >
         {report.execution.exit_quote ? (
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             <div className="grid grid-cols-2 gap-2">
@@ -121,7 +215,13 @@ export function ReportView({ report }: { report: Report }) {
 
       {/* Gate + caps */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section title={`Discipline gate · ${report.gate.decision.replace("_", " ")}`} subtitle={report.gate.risk_quote != null ? `Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})` : undefined}>
+        <Section
+          openAll={openAll}
+          collapsible
+          summary={`${report.gate.rules.filter((r) => r.decision === "GO").length} of ${report.gate.rules.length} checks passed`}
+          title={`Discipline gate · ${report.gate.decision.replace("_", " ")}`}
+          subtitle={report.gate.risk_quote != null ? `Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})` : undefined}
+        >
           <ul className="space-y-2">
             {report.gate.rules.map((r) => (
               <li key={r.rule} className="flex items-start gap-2 text-sm">
@@ -135,6 +235,9 @@ export function ReportView({ report }: { report: Report }) {
           </ul>
         </Section>
         <Section
+          openAll={openAll}
+          collapsible
+          summary={bindingCap(report) ? `${titleCase(bindingCap(report)!.name)} binds at ${fmtUsd(bindingCap(report)!.notional as number)}` : `${report.sizing.caps.length} caps, none cuts the request`}
           title="Sizing caps"
           subtitle={
             report.verdict.recommended_notional != null && report.verdict.recommended_notional < t.notional_quote - 1
@@ -171,22 +274,22 @@ export function ReportView({ report }: { report: Report }) {
       </div>
 
       {/* The case against */}
-      <SecondOpinionSection report={report} />
+      <SecondOpinionSection report={report} openAll={openAll} />
 
       {/* The coarse map */}
-      <RegimeSection report={report} />
+      <RegimeSection report={report} openAll={openAll} />
 
       {/* The whole book */}
-      <PortfolioSection report={report} />
+      <PortfolioSection report={report} openAll={openAll} />
 
       {/* The trader's own record */}
-      <BreakerStrip report={report} />
+      <BreakerStrip report={report} openAll={openAll} />
 
       {/* What happened last time */}
-      <LessonsSection report={report} />
+      <LessonsSection report={report} openAll={openAll} />
 
       {/* What would change it */}
-      <SensitivitySection report={report} />
+      <SensitivitySection report={report} openAll={openAll} />
 
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
         <span>
@@ -200,7 +303,7 @@ export function ReportView({ report }: { report: Report }) {
   );
 }
 
-function AnalogSection({ report }: { report: Report }) {
+function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const a = report.analog;
   if (!a || !a.result.ok) {
     return (
@@ -220,8 +323,16 @@ function AnalogSection({ report }: { report: Report }) {
           { value: (primary?.p95_adjusted ?? c.p95) as number, label: primary?.p95_adjusted != null ? "p95 cal." : "p95" },
         ]
       : [];
+  const p5shown = primary?.p5_adjusted ?? c?.p5 ?? null;
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={
+        c && !c.insufficient
+          ? `${a.result.matches.length} past moments · median ${fmtPct(c.median_pct, 1)} · one in twenty worse than ${fmtPct(p5shown, 1)} · won ${c.win_rate != null ? `${(c.win_rate * 100).toFixed(0)}%` : "—"} of the time`
+          : "not enough distinct matches to answer"
+      }
       title="What history says"
       subtitle={`${a.result.matches.length} distinct past moments most like now (${a.scope === "pooled" ? "pooled across tokens" : "same token"}; ${a.result.n_candidates.toLocaleString()} candidate hours, ${a.result.n_distinct_available.toLocaleString()} distinct)`}
     >
@@ -389,11 +500,17 @@ const LESSON_LABEL: Record<string, string> = {
   no_distribution: "no forecast",
 };
 
-function SecondOpinionSection({ report }: { report: Report }) {
+function SecondOpinionSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const so = report.second_opinion;
   if (!so || (so.against.length === 0 && so.supporting.length === 0)) return null;
   return (
-    <Section title="The case against this" subtitle={so.summary}>
+    <Section
+      openAll={openAll}
+      collapsible
+      summary={`${so.against.length} point${so.against.length === 1 ? "" : "s"} against${so.against[0]?.magnitude_quote != null ? `, the largest worth ${fmtUsd(Math.abs(so.against[0].magnitude_quote))}` : ""}${so.supporting.length ? ` · ${so.supporting.length} for` : ""}`}
+      title="The case against this"
+      subtitle={so.summary}
+    >
       <ul className="space-y-2">
         {so.against.map((c) => (
           <li key={c.text} className="flex gap-2 text-sm">
@@ -464,13 +581,16 @@ function LiquidityByTimeOfWeek({ report }: { report: Report }) {
   );
 }
 
-function RegimeSection({ report }: { report: Report }) {
+function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const m = report.regimes;
   if (!m || m.regimes.length === 0) return null;
   const current = m.regimes.find((r) => r.id === m.current) ?? null;
   const nextLikely = m.current != null ? m.transitions[m.current].map((p, j) => ({ j, p })).filter((x) => x.j !== m.current).sort((a, b) => b.p - a.p).slice(0, 2) : [];
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={current ? `now: ${current.description} · ${fmtPct(current.share * 100, 0, false)} of the last ${m.n_fitted.toLocaleString()} hours · stays put ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}` : `${m.regimes.length} states over ${m.n_fitted.toLocaleString()} hours`}
       title="What kind of market this is"
       subtitle={`${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, basis, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`}
       action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>now: {current.description}</Pill> : null}
@@ -526,13 +646,16 @@ function RegimeSection({ report }: { report: Report }) {
   );
 }
 
-function PortfolioSection({ report }: { report: Report }) {
+function PortfolioSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const p = report.portfolio;
   if (!p) return null;
   const added = p.before.tail_loss_quote != null && p.after.tail_loss_quote != null ? p.after.tail_loss_quote - p.before.tail_loss_quote : null;
   const div = p.after.diversification_ratio;
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={`${p.positions.length} position${p.positions.length === 1 ? "" : "s"} · gross ${fmtUsd(p.after.gross_quote)}${added != null ? ` · this trade adds ${fmtUsd(Math.abs(added))} to the bad case` : ""}`}
       title="What it does to the book"
       subtitle={`Your ${p.positions.length} position${p.positions.length === 1 ? "" : "s"} together, over ${fmtHours(p.horizon_h)}. Correlations are measured on the tokens' own hourly history, not assumed.`}
       action={div != null ? <Pill tone={div > 0.9 ? "critical" : div > 0.75 ? "warning" : "good"}>{div > 0.9 ? "one bet" : div > 0.75 ? "thin diversification" : "diversified"}</Pill> : null}
@@ -659,7 +782,7 @@ function TakenButton({ forecastId }: { forecastId: number }) {
   );
 }
 
-function BreakerStrip({ report }: { report: Report }) {
+function BreakerStrip({ report, openAll }: { report: Report; openAll?: boolean }) {
   const b = report.breaker;
   if (!b) return null;
   // Nothing to say to someone who has not logged a trade yet.
@@ -667,6 +790,9 @@ function BreakerStrip({ report }: { report: Report }) {
   const tone = b.state === "HALTED" ? "critical" : b.state === "COOLDOWN" ? "warning" : "good";
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={`${b.state.toLowerCase()} · ${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} taken${b.losing_streak ? ` · ${b.losing_streak} losing in a row` : ""}`}
       title="Your recent record"
       subtitle={`${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} marked as taken. Only these count; analyses you did not act on are ignored.`}
       action={<Pill tone={tone}>{b.state.toLowerCase()}</Pill>}
@@ -691,11 +817,17 @@ function BreakerStrip({ report }: { report: Report }) {
   );
 }
 
-function LessonsSection({ report }: { report: Report }) {
+function LessonsSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const lessons = report.lessons ?? [];
   if (lessons.length === 0) return null;
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={`${lessons.length} past call${lessons.length === 1 ? "" : "s"} recalled${(() => {
+        const bad = lessons.filter((l) => l.classification === "worse_than_stress" || l.classification === "bad_tail").length;
+        return bad ? ` · ${bad} finished below the level they were sized against` : " · none breached the level they were sized against";
+      })()}`}
       title="What happened last time"
       subtitle="Past calls in conditions like these, scored after the fact. Each is one episode, not evidence: the distribution above is what you size against."
     >
@@ -711,13 +843,16 @@ function LessonsSection({ report }: { report: Report }) {
   );
 }
 
-function SensitivitySection({ report }: { report: Report }) {
+function SensitivitySection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const sen = report.sensitivity;
   if (!sen || sen.sizes.length === 0) return null;
   const requested = sen.requested_notional;
   const maxNotional = Math.max(...sen.sizes.map((p) => p.notional));
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={`${sen.sizes.length} sizes and ${sen.stops.length} stop distances, each re-run through the whole gate${sen.max_go_notional != null ? ` · a GO up to ${fmtUsd(sen.max_go_notional)}` : ""}`}
       title="What would change it"
       subtitle="The same gate, caps and verdict, re-run at other sizes and stops. Nothing here is an estimate of the verdict; it is the verdict."
       action={sen.max_go_notional != null ? <Pill tone="good">GO up to {fmtUsd(sen.max_go_notional)}</Pill> : <Pill tone="critical">no size is a GO</Pill>}
@@ -791,13 +926,19 @@ function SensitivitySection({ report }: { report: Report }) {
   );
 }
 
-function StressSection({ report }: { report: Report }) {
+function StressSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const s = report.stress;
   const mc = s.monte_carlo;
   const rows = s.presets.map((p, i) => ({ p, imp: s.impacts[i] }));
   const sevTone = (sev: string): "good" | "warning" | "critical" | "muted" => (sev === "extreme" ? "critical" : sev === "severe" ? "warning" : "muted");
   return (
     <Section
+      openAll={openAll}
+      collapsible
+      summary={`${s.presets.length} presets from this token's own history${(() => {
+        const w = worstPreset(report);
+        return w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : "";
+      })()}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`}
       title="What could go wrong"
       subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour basis observations`}
     >
