@@ -480,6 +480,36 @@ export interface SecondOpinion {
   summary: string;
 }
 
+export interface Watch {
+  ticker: string;
+  side: string;
+  notional_quote: number;
+  p5_pct: number | null;
+  p5_quote: number | null;
+  worst_preset: string | null;
+  worst_preset_quote: number | null;
+  exit_cost_bps: number | null;
+  exit_fills: boolean;
+  thin_share: number | null;
+  regime_label: string | null;
+  events: string[];
+  flags: string[];
+  headline: string;
+  attention: number;
+}
+
+export interface TonightReport {
+  as_of: string;
+  window_end: string | null;
+  hours: number;
+  market_is_open: boolean;
+  items: Watch[];
+  gross_quote: number;
+  tail_quote: number | null;
+  summary: string;
+  note: string;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -629,6 +659,8 @@ export const api = {
   universe: (core = true) => request<UniverseEntry[]>(`/universe?core=${core}`),
   sources: () => request<DataSource[]>("/sources"),
   report: (forecastId: string | number) => request<Report>(`/reports/${forecastId}`),
+  tonight: (positions: { ticker: string; side: string; notional_quote: number }[], accountEquity?: number | null) =>
+    request<TonightReport>("/tonight", { method: "POST", body: JSON.stringify({ positions, account_equity_quote: accountEquity ?? null }) }),
   analyze: (ticket: TicketInput) => request<Report>("/analyze", { method: "POST", body: JSON.stringify(ticket) }),
   chat: (messages: { role: "user" | "assistant"; content: string }[], accountEquity?: number | null, contextForecastId?: number | null) =>
     request<ChatResponse>("/chat", {

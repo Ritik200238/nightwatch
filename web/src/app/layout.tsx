@@ -28,6 +28,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <Link href="/" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Desk
                 </Link>
+                <Link href="/tonight" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:px-3">
+                  Tonight
+                </Link>
                 <Link href="/calibration" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Calibration
                 </Link>
