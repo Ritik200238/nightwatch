@@ -28,6 +28,7 @@ from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Venue
 from nightwatch.data.store import Store
 from nightwatch.data.sync import UniverseEntry, build_universe
+from nightwatch.decision import tonight as tonight_mod
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.features.snapshot import InsufficientData, build_snapshot
 from nightwatch.journal.calibration import calibrate
@@ -78,6 +79,11 @@ class TicketIn(BaseModel):
 class ChatMessage(BaseModel):
     role: str
     content: str
+
+
+class TonightIn(BaseModel):
+    positions: list[PositionIn] = Field(default_factory=list)
+    account_equity_quote: float | None = None
 
 
 class ChatIn(BaseModel):
@@ -176,6 +182,80 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": ob[0], "last_book_ts": last_book,
             "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": chat_ready,
         }
+
+    @app.post("/tonight")
+    def tonight(body: TonightIn) -> dict[str, Any]:
+        """What in this book needs looking at before the market opens again.
+
+        One full analysis per position, over the window between now and the next regular
+        open, so every number is the same number the desk would give if you asked about
+        that position directly. That costs about a second and a half each; this is a page
+        a person opens once in an evening, not something polled.
+        """
+        s = st()
+        held = [p for p in body.positions if p.notional_quote and p.ticker]
+        if not held:
+            return tonight_mod.build(None, [], note="no positions given").to_dict()
+
+        _, hours, _ = tonight_mod.window()
+        known = set(s.ctx.tickers_with_data())
+        judged: list[Any] = []
+        skipped: list[str] = []
+        for p in held[:12]:  # a book, not a portfolio; the page stays under twenty seconds
+            ticker = p.ticker.upper()
+            if ticker not in known:
+                skipped.append(ticker)
+                continue
+            ticket = TradeTicket(
+                ticker=ticker, side=Side(p.side), notional_quote=float(p.notional_quote),
+                account_equity_quote=body.account_equity_quote,
+                horizon_kind=HorizonKind.NEXT_OPEN,
+                thesis="already held", invalidation="already held",
+            )
+            try:
+                with s.lock:
+                    report = analyze(s.ctx, ticket, record=False)
+            except InsufficientData as exc:
+                log.info("tonight: skipping %s (%s)", ticker, exc)
+                skipped.append(ticker)
+                continue
+
+            horizon = (report.analog.horizons.get(report.primary_horizon) if report.analog else None)
+            p5 = None
+            if horizon is not None:
+                p5 = horizon.p5_adjusted if horizon.p5_adjusted is not None else horizon.cohort.p5
+
+            priced = [(sc, im) for sc, im in zip(report.stress.presets, report.stress.impacts, strict=False) if im.total_pnl_quote is not None]
+            worst = min(priced, key=lambda x: x[1].total_pnl_quote) if priced else None
+
+            q = report.execution.exit_quote
+            lh = report.execution.liquidity_history
+            bucket = None
+            if lh is not None and lh.buckets:
+                # The bucket the window actually falls in, not the average of all of them.
+                overnight = [b for b in lh.buckets if b.bucket in ("weeknight", "weekend", "friday_night", "sunday_night", "us_pre_market")]
+                bucket = max(overnight, key=lambda b: b.share_below_reference or 0.0) if overnight else None
+
+            judged.append(
+                tonight_mod.judge(
+                    ticker, p.side, float(p.notional_quote),
+                    p5_pct=p5,
+                    features=report.snapshot.features,
+                    labels=report.snapshot.labels,
+                    hours=hours,
+                    worst_preset=(worst[0].name, worst[1].total_pnl_quote) if worst else None,
+                    exit_cost_bps=q.total_cost_bps if q else None,
+                    exit_fills=bool(q and q.fully_filled),
+                    thin_share=bucket.share_below_reference if bucket else None,
+                )
+            )
+
+        note = ""
+        if skipped:
+            note = "No data for " + ", ".join(sorted(set(skipped))) + "."
+        if len(held) > 12:
+            note = (note + " Only the first twelve positions were judged.").strip()
+        return tonight_mod.build(None, judged, note=note).to_dict()
 
     @app.get("/sources")
     def sources() -> list[dict[str, Any]]:
