@@ -177,6 +177,7 @@ class AnalogSection:
     scope: str  # "same_ticker" | "pooled"
     horizons: dict[str, HorizonReport]
     matches_outcomes: list[MatchOutcome]
+    paths: Any = None  # nightwatch.analog.paths.ScenarioPaths, over the primary horizon
 
 
 @dataclass
@@ -251,7 +252,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 2. Analog search + outcomes.
     t0 = time.perf_counter()
     frame = ctx.feature_frame(ticket.ticker, as_of)
-    analog = _analog_section(ctx, ticket, snapshot, frame, as_of, horizon_h, primary, warnings)
+    analog = _analog_section(ctx, ticket, snapshot, frame, as_of, horizon_h, primary, warnings, entry_price=entry_price)
     timings["analog"] = _ms(t0)
 
     # 3. Order book (recorded, refreshed live if stale and a client exists).
@@ -416,7 +417,7 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
 # ------------------------------------------------------------------- sections
 
 
-def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str]) -> AnalogSection | None:
+def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str], *, entry_price: float = 0.0) -> AnalogSection | None:
     engine = AnalogEngine(ctx.analog_config)
     query_bucket = snapshot.labels.get("bucket")
     frames: dict[str, pd.DataFrame] = {ticket.ticker: frame}
@@ -496,7 +497,16 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison, p5_adjusted=p5_adj, p95_adjusted=p95_adj, adjustment=adjustment)
     if primary in horizons and horizons[primary].cohort.insufficient:
         warnings.append(f"analog cohort for the {primary} horizon is below the minimum sample; verdict falls back to the stop for risk")
-    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes)
+
+    # The scenarios as paths, over the ticket's own horizon only. Drawing all five
+    # horizons would multiply the report size for four pictures nobody asked for.
+    from nightwatch.analog import paths as paths_mod
+
+    scenario_paths = paths_mod.build(
+        result.matches, frames, horizon_h=float(ticket_h), side=ticket.side.value,
+        stop_price=ticket.stop_price, entry_price=entry_price,
+    )
+    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths)
 
 
 def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str]) -> StressSection:

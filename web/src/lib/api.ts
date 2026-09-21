@@ -131,6 +131,32 @@ export interface HorizonReport {
   adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
 }
 
+/** One retrieved scenario, drawn over the ticket's own horizon.
+ *
+ *  `values` is the token's move from that moment's entry close, in percent, on the
+ *  shared `hours` grid. `stopped_at_h` is judged on the highs and lows rather than on
+ *  the drawn line, because a close-to-close path understates how often a stop is hit.
+ */
+export interface ScenarioPath {
+  ts: string;
+  ticker: string;
+  distance: number;
+  /** 0 is the closest of all candidate hours, 100 the furthest. */
+  distance_percentile: number;
+  values: number[];
+  stopped_at_h: number | null;
+}
+
+export interface ScenarioPaths {
+  hours: number[];
+  paths: ScenarioPath[];
+  fan: { p5: number[]; p25: number[]; p50: number[]; p75: number[]; p95: number[] };
+  /** Signed distance of the stop from entry, in percent; null when no stop was given. */
+  stop_pct: number | null;
+  stopped: number;
+  n_dropped: number;
+}
+
 /** One falsifiable claim about the retrieval, tested against the desk's own history.
  *
  *  `consequence` is the part that stops these being decoration: every study says what
@@ -586,6 +612,7 @@ export interface Report {
     scope: "same_ticker" | "pooled";
     horizons: Record<string, HorizonReport>;
     matches_outcomes: MatchOutcome[];
+    paths: ScenarioPaths | null;
   } | null;
   stress: {
     presets: Scenario[];

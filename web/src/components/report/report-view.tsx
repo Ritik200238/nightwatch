@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import { useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
+import { Scenarios } from "@/components/charts/scenarios";
 import { ActOnIt } from "@/components/report/act-on-it";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
@@ -364,6 +365,33 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
       ) : (
         <p className="text-sm text-muted-foreground">Cohort for {report.primary_horizon} is below the minimum sample (n = {c?.n ?? 0}). No distribution is shown.</p>
       )}
+
+      {a.paths?.paths.length ? (
+        <div className="mt-6">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <p className="text-sm font-medium">The scenarios themselves</p>
+            <p className="text-xs text-muted-foreground">
+              {a.paths.stop_pct != null ? (
+                <>
+                  <span className={a.paths.stopped ? "text-status-warning" : "text-status-good"}>
+                    {a.paths.stopped} of {a.paths.paths.length}
+                  </span>{" "}
+                  would have taken out your stop before the horizon
+                </>
+              ) : (
+                "no stop given, so none is drawn"
+              )}
+            </p>
+          </div>
+          <Scenarios paths={a.paths} horizonLabel={report.primary_horizon} />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Each line is one of the retrieved moments, replayed from its own entry over the same {fmtHours(report.horizon_h)} you are holding for. The histogram above is where
+            these lines end up; this is how they got there — which is the difference between a slow bleed and a round trip that takes out a stop on the way to an unremarkable
+            close.
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-4 overflow-x-auto">
         <Table>
           <TableHeader>
