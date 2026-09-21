@@ -141,8 +141,14 @@ export interface ScenarioPath {
   ts: string;
   ticker: string;
   distance: number;
-  /** 0 is the closest of all candidate hours, 100 the furthest. */
+  /** Rank against every candidate hour searched: 0 the closest of hundreds of
+   *  thousands, 100 the furthest. Every retrieved analog sits in the bottom fraction
+   *  of this by construction, so it says how good the cohort is — not which half of
+   *  the cohort a given match is in. Do not colour by it. */
   distance_percentile: number;
+  /** Rank among the paths drawn here: 0 the closest, 1 the furthest. This is the one
+   *  that separates the near half from the far half. */
+  rank: number;
   values: number[];
   stopped_at_h: number | null;
 }

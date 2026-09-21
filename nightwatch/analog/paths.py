@@ -42,7 +42,14 @@ class ScenarioPath:
     ts: datetime
     ticker: str
     distance: float
+    # How far this match sat among *every* candidate hour searched: 0 is the closest of
+    # hundreds of thousands, 100 the furthest. Every retrieved analog is near the bottom
+    # of that scale by construction, so it says how good the cohort is - not which half
+    # of the cohort this one is in.
     distance_percentile: float
+    # Where it sits among the forty drawn here: 0 the closest, 1 the furthest. This is
+    # the one to colour by; the percentile above puts all forty in the same bucket.
+    rank: float
     values: tuple[float, ...]  # token move from entry, %, one per grid point
     stopped_at_h: float | None  # hours into the window the stop would have triggered
 
@@ -50,6 +57,7 @@ class ScenarioPath:
         return {
             "ts": self.ts.isoformat(), "ticker": self.ticker,
             "distance": round(self.distance, 4), "distance_percentile": round(self.distance_percentile, 1),
+            "rank": round(self.rank, 4),
             "values": [round(v, 3) for v in self.values],
             "stopped_at_h": self.stopped_at_h,
         }
@@ -170,11 +178,21 @@ def build(
             continue
         drawn.append(ScenarioPath(
             ts=m.ts, ticker=m.ticker, distance=float(m.distance),
-            distance_percentile=float(m.distance_percentile), values=tuple(values),
+            distance_percentile=float(m.distance_percentile), rank=0.0, values=tuple(values),
             stopped_at_h=_stop_hit(frame, m.ts, horizon_h, stop_pct, side) if stop_pct is not None else None,
         ))
     if not drawn:
         return None
+
+    # Rank within the drawn set. The engine's own percentile is against every candidate
+    # hour searched, so all forty retrieved analogs land in its bottom fraction and are
+    # indistinguishable from each other - useless for telling the near half from the far.
+    order = np.argsort([p.distance for p in drawn], kind="stable")
+    denom = max(1, len(drawn) - 1)
+    ranked = list(drawn)
+    for position, idx in enumerate(order):
+        ranked[int(idx)] = ScenarioPath(**{**drawn[int(idx)].__dict__, "rank": position / denom})
+    drawn = ranked
 
     stacked = np.vstack([p.values for p in drawn])
     fan = {f"p{p}": tuple(np.percentile(stacked, p, axis=0)) for p in PCTS}

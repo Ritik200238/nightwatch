@@ -154,3 +154,33 @@ def test_the_serialised_form_is_small_enough_to_ship_in_a_report():
     assert len(body) < 30_000, f"{len(body)} bytes of paths is too much of a report"
     # Values are rounded on the way out; a path of full-precision floats is twice the size.
     assert all(len(str(v).split(".")[-1]) <= 3 for v in out.to_dict()["paths"][0]["values"])
+
+
+def test_paths_are_ranked_against_each_other_not_against_all_of_history():
+    """The engine's distance_percentile is against every candidate hour searched, so
+    all forty retrieved analogs land in its bottom fraction and look identical. The
+    chart colours the near half against the far half, which needs a rank within the
+    drawn set - getting this wrong paints every line the same colour."""
+    f = frame([100.0 + i * 0.1 for i in range(60)])
+    # Every match reports the same near-zero global percentile, as the engine's would.
+    matches = [FakeMatch(T0 + timedelta(hours=i * 5), "X", distance=float(10 - i), distance_percentile=0.2) for i in range(8)]
+    out = mod.build(matches, {"X": f}, horizon_h=4)
+    assert out is not None and len(out.paths) == 8
+
+    ranks = [p.rank for p in out.paths]
+    assert min(ranks) == 0.0 and max(ranks) == 1.0
+    assert len(set(ranks)) == 8, "every path needs its own rank, or the split is arbitrary"
+    # The closest match by distance must be rank 0, the furthest rank 1.
+    closest = min(out.paths, key=lambda p: p.distance)
+    furthest = max(out.paths, key=lambda p: p.distance)
+    assert closest.rank == 0.0 and furthest.rank == 1.0
+    # And the split the chart draws has to actually split.
+    assert 0 < sum(1 for p in out.paths if p.rank < 0.5) < len(out.paths)
+    # The global percentile is left alone; it means something else and is still reported.
+    assert all(p.distance_percentile == 0.2 for p in out.paths)
+
+
+def test_a_single_path_is_ranked_without_dividing_by_zero():
+    f = frame([100.0, 101.0, 102.0])
+    out = mod.build([FakeMatch(T0, "X")], {"X": f}, horizon_h=2)
+    assert out is not None and out.paths[0].rank == 0.0

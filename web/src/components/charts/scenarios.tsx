@@ -23,12 +23,16 @@ interface Props {
   height?: number;
 }
 
-/** Near matches warm, far matches cool, so the spread between them is visible at a
- *  glance. `distance_percentile` is 0 for the closest of all candidates and 100 for the
- *  farthest, which is already the rank we want — no rescaling per report. */
-function pathColor(pct: number, highlighted: boolean): string {
-  const t = Math.max(0, Math.min(1, pct / 100));
-  return highlighted ? "var(--foreground)" : t < 0.5 ? "var(--chart-1)" : "var(--chart-3)";
+/** Near matches one colour, far matches another, so the spread between them is visible.
+ *
+ *  Coloured by `rank` — position among the forty drawn — and deliberately not by
+ *  `distance_percentile`, which ranks against every candidate hour searched. All forty
+ *  retrieved analogs sit in the bottom fraction of that scale by construction, so
+ *  colouring by it paints every line the same and says nothing.
+ */
+function pathColor(rank: number, highlighted: boolean): string {
+  if (highlighted) return "var(--foreground)";
+  return rank < 0.5 ? "var(--chart-1)" : "var(--chart-4)";
 }
 
 function hourLabel(h: number): string {
@@ -60,7 +64,7 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
   });
 
   const active = hover != null ? paths.paths[hover] : null;
-  const near = paths.paths.filter((p) => p.distance_percentile < 50).length;
+  const near = paths.paths.filter((p) => p.rank < 0.5).length;
 
   return (
     <figure className="w-full" aria-label={`${paths.paths.length} retrieved past scenarios over ${horizonLabel}, each drawn from its own entry`}>
@@ -80,15 +84,15 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
 
           {/* The forecast itself, under the paths it is made of. */}
           <Area dataKey="p5" stackId="fan" stroke="none" fill="none" isAnimationActive={false} />
-          <Area dataKey="band90" stackId="fan" stroke="none" fill="var(--chart-1)" fillOpacity={0.1} isAnimationActive={false} />
+          <Area dataKey="band90" stackId="fan" stroke="none" fill="var(--chart-1)" fillOpacity={0.18} isAnimationActive={false} />
           <Area dataKey="base50" stackId="inner" stroke="none" fill="none" isAnimationActive={false} />
-          <Area dataKey="band50" stackId="inner" stroke="none" fill="var(--chart-1)" fillOpacity={0.14} isAnimationActive={false} />
+          <Area dataKey="band50" stackId="inner" stroke="none" fill="var(--chart-1)" fillOpacity={0.28} isAnimationActive={false} />
 
           {paths.paths.map((p, j) => (
             <Line
               key={`${p.ticker}-${p.ts}`}
               dataKey={`s${j}`}
-              stroke={pathColor(p.distance_percentile, hover === j)}
+              stroke={pathColor(p.rank, hover === j)}
               strokeWidth={hover === j ? 2 : 1}
               strokeOpacity={hover == null ? 0.42 : hover === j ? 1 : 0.12}
               dot={false}
@@ -116,7 +120,7 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
       <figcaption className="mt-2 space-y-1 text-xs text-muted-foreground">
         <p>
           <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-1)" }} /> the {near} closest matches ·{" "}
-          <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-3)" }} /> the {paths.paths.length - near} furthest · shaded, the 5th–95th and
+          <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-4)" }} /> the {paths.paths.length - near} furthest · shaded, the 5th–95th and
           25th–75th of all of them · dashed, the median
         </p>
         {active ? (
