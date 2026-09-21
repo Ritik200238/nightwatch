@@ -1,15 +1,22 @@
-"""Move re-scored replay forecasts from one database into another.
+"""Move re-scored replay forecasts, and the studies built on them, into the live database.
 
 Replays are reproducible: they are what the engine would have said at past moments, so
 when the engine changes they have to be rebuilt or the calibration page describes a
 version that no longer exists. Rebuilding them takes about an hour of CPU, which is worth
 spending on a workstation and not on the small box that is serving the live demo.
 
-So: rebuild locally, extract the three tables that hold them, copy that across, and merge
-it in here. Ids are reassigned on insert, because the target has its own live tickets
-whose ids would otherwise collide, and the outcomes and lessons follow their forecast.
+The studies have exactly the same shape - half of them need a match-level sweep of the
+whole universe, which is twenty minutes the demo box should not spend - so they travel
+in the same file. They are copied wholesale rather than merged row by row, because a
+study is a statement about one engine against one history: a half-updated set would be
+the one thing worse than none.
+
+So: rebuild locally, extract, copy across, merge. Forecast ids are reassigned on insert,
+because the target has its own live tickets whose ids would otherwise collide, and the
+outcomes and lessons follow their forecast.
 
     # on the workstation
+    python -m nightwatch.cli replay --tickers ... && python -m nightwatch.cli studies
     python deploy/import_replays.py --extract data/nightwatch.sqlite replays.sqlite
     scp replays.sqlite ubuntu@<ip>:/tmp/
 
@@ -24,7 +31,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-TABLES = ("forecasts", "forecast_outcomes", "lessons")
+TABLES = ("forecasts", "forecast_outcomes", "lessons", "studies")
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
@@ -48,6 +55,7 @@ def extract(source: Path, dest: Path) -> int:
     if not ids:
         print("no replay forecasts to extract")
         return 0
+    _copy_studies(src, out)
     marks = ",".join("?" * len(ids))
     for table, where in (("forecasts", f"id IN ({marks})"), ("forecast_outcomes", f"forecast_id IN ({marks})"), ("lessons", f"forecast_id IN ({marks})")):
         cols = _columns(src, table)
@@ -63,12 +71,32 @@ def extract(source: Path, dest: Path) -> int:
     return len(ids)
 
 
+def _copy_studies(src: sqlite3.Connection, dst: sqlite3.Connection) -> int:
+    """Replace the destination's studies with the source's, whole.
+
+    Not merged key by key: a study is a statement about one engine measured against one
+    history, so a set where three rows describe the current engine and four describe a
+    previous one would read as a contradiction and be impossible to spot as one.
+    """
+    if not src.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='studies'").fetchone():
+        return 0
+    rows = src.execute("SELECT key, ran_at, body FROM studies").fetchall()
+    if not rows:
+        return 0
+    dst.execute("CREATE TABLE IF NOT EXISTS studies (key TEXT PRIMARY KEY, ran_at INTEGER NOT NULL, body BLOB NOT NULL)")
+    dst.execute("DELETE FROM studies")
+    dst.executemany("INSERT INTO studies (key, ran_at, body) VALUES (?,?,?)", rows)
+    print(f"  studies: {len(rows)} rows")
+    return len(rows)
+
+
 def merge(incoming: Path, target: Path) -> int:
     """Replace the target's replay forecasts with the ones in ``incoming``."""
     src = sqlite3.connect(f"file:{incoming}?mode=ro", uri=True)
     dst = sqlite3.connect(target)
     dst.execute("PRAGMA foreign_keys=ON")
 
+    _copy_studies(src, dst)
     old = [r[0] for r in dst.execute("SELECT id FROM forecasts WHERE kind='replay'").fetchall()]
     if old:
         marks = ",".join("?" * len(old))

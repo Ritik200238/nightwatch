@@ -174,3 +174,44 @@ def test_results_round_trip_through_the_store(tmp_path):
         # Re-running replaces rather than duplicating.
         ss.save([Study(**{**s.to_dict(), "finding": "different"})])
         assert len(ss.all()) == 1 and ss.all()[0]["finding"] == "different"
+
+
+def test_studies_travel_with_the_replays_they_were_built_on(tmp_path):
+    """The box must not spend twenty minutes recomputing these, so they ride along in
+    the replay extract - and they have to arrive whole, not half updated."""
+    import sqlite3
+    import sys
+
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1]))
+    from deploy.import_replays import extract, merge
+
+    source, target, transport = tmp_path / "work.sqlite", tmp_path / "box.sqlite", tmp_path / "out.sqlite"
+    for path, verdict in ((source, "no"), (target, "yes")):
+        with Store(path) as store:
+            from nightwatch.journal.journal import Journal
+
+            Journal(store)  # forecasts/outcomes/lessons tables
+            StudyStore(store).save([
+                Study(key="closer_is_not_tighter", title="t", question="q", method="m",
+                      finding=f"from {path.name}", consequence="c", verdict=verdict, n=1, stats={}),
+                *([Study(key="stale_one", title="t", question="q", method="m", finding="old",
+                         consequence="c", verdict="unclear", n=1, stats={})] if path is target else []),
+            ])
+            Journal(store).record_forecast(
+                kind="replay", ticker="TSLA", side="long", notional=1.0, as_of=T0, bar_ts=T0,
+                horizon_h=18.0, entry_price=1.0, snapshot_hash="h", analog_n=40, analog_scope="pooled",
+                quantiles={"p5": -1.0, "p25": -0.5, "p50": 0.0, "p75": 0.5, "p95": 1.0},
+                es5=None, mc_p5=None, mc_p95=None, verdict=None, recommended_notional=None, payload={},
+            )
+
+    assert extract(source, transport) == 1
+    assert merge(transport, target) == 1
+
+    conn = sqlite3.connect(target)
+    rows = conn.execute("SELECT key FROM studies").fetchall()
+    conn.close()
+    # The box's own older set is replaced wholesale, not merged key by key.
+    assert [r[0] for r in rows] == ["closer_is_not_tighter"]
+    with Store(target) as store:
+        got = StudyStore(store).all()
+    assert got[0]["finding"] == "from work.sqlite" and got[0]["verdict"] == "no"
