@@ -47,6 +47,18 @@ const STAT_LABEL: Record<string, string> = {
   boot_ci_high: "bootstrap interval, high",
 };
 
+/** The verdict in one line, for the collapsed header.
+ *
+ *  The header keeps showing its summary while the section is open, which is right when
+ *  the summary is a digest of stats and wrong when it is the finding itself — the whole
+ *  paragraph would then be printed twice, once small and grey and once properly. So the
+ *  header gets the answer and the body gets the argument.
+ */
+function firstSentence(text: string): string {
+  const m = text.match(/^.*?[.?!](?=\s|$)/);
+  return m ? m[0] : text;
+}
+
 /** Shares are printed as percentages and everything else at three places, because a
  *  t-statistic rendered as "215%" is worse than no label at all. */
 function statValue(key: string, v: number): string {
@@ -135,7 +147,7 @@ export default function StudiesPage() {
                 key={s.key}
                 collapsible
                 defaultOpen
-                summary={s.finding}
+                summary={firstSentence(s.finding)}
                 title={s.title}
                 subtitle={s.question}
                 action={
