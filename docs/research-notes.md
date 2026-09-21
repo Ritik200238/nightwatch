@@ -310,6 +310,117 @@ recorder re-syncs every four hours.
 
 Reproduce: `nightwatch filings --core`, then `GET /sources`.
 
+## 13. Testing the retrieval itself (2026-09-21)
+
+Everything above measures the *forecasts*. This measures the thing that makes them.
+Seven questions, each written so it could come back no, each recomputed from the stored
+bars and the journal by `nightwatch studies` and served at `/studies`. Five came back no.
+
+The match-level evidence is 960 point-in-time moments across 24 tokens, 40 retrieved
+analogs each. The journal-based questions use the 2,345 matured replays of §7.
+
+### 13.1 Closer analogs have **wider** outcomes, not tighter — verdict: no
+
+Split each retrieval at the median distance and compare the spread of what followed
+each half, paired inside the moment:
+
+| measure | near half ÷ far half | near tighter on |
+|---|---|---|
+| standard deviation | **1.14** | 38.0% of moments |
+| interquartile range | **1.22** | — |
+
+Clustered by token: **0 of 24** tokens have tighter outcomes when closer, t = −6.59.
+
+This is not a broken retrieval. The distance is dominated by the volatility features, so
+a query made in a wild moment retrieves wild neighbours — which is the retrieval working.
+It just is not "closer means calmer", and the difference matters for the next question.
+
+### 13.2 So weighting the close matches more makes the forecast worse — verdict: no
+
+Four weighting schemes scored against counting all forty equally, by pinball loss at the
+5th percentile against what actually happened:
+
+| scheme | pinball@5% | outcomes below p5 (target 5%) | t vs equal |
+|---|---|---|---|
+| **equal (shipped)** | **0.3455** | **5.9%** | — |
+| similarity (already computed) | 0.4097 | 11.0% | −4.50 |
+| gaussian, own median bandwidth | 0.3484 | 6.0% | −2.56 |
+| inverse distance | 0.3490 | 6.0% | −2.66 |
+| nearest half only | 0.3732 | 7.6% | −3.60 |
+
+None beat equal weighting. The engine's own similarity weights — sitting unused in
+`cohort.py` since the beginning — are the worst: they pull p5 in far enough to breach
+**1.9× as often**. Wiring them in would have broken the calibration the desk is judged on.
+They stay computed and unread, which is now a measurement rather than an oversight.
+
+### 13.3 One tail factor was hiding two opposite errors — verdict: no (and fixed)
+
+The §7 correction fitted a single k_lo across every holding period. Scored per period:
+
+| holding period | n | below p5, one factor | band width | below p5, per period | band width |
+|---|---|---|---|---|---|
+| overnight (18h) | 1,718 | 7.1% | 10.9% | **5.1%** | 12.4% |
+| multi-day (66–90h) | 353 | **0.2%** | **20.0%** | 6.5% | **10.6%** |
+| before either band had 120 matured | 230 | — | — | 7.4% | 14.1% |
+| **overall** | 2,301 | **5.6%** | 12.87% | 5.6% | 12.29% |
+
+The pooled 5.6% looked respectable and was an average of a too-narrow overnight band and
+a weekend band so wide it broke twice in 468 forecasts. Two wrongs cancelling is worse
+than either alone, because the headline hides both.
+
+Downstream, checked through the gate rather than inferred: TSLA, Saturday, 60k requested,
+no stop, 200k equity. The analog p5 the desk sizes against moves from −8.38% to −4.76%,
+and the binding risk-budget cap from **23,880 to 42,011 USDT**. The desk had been cutting
+weekend positions by 43% against a loss the history does not support.
+
+Reproduce: `nightwatch studies`, or `GET /calibration` and read the per-band rows.
+
+### 13.4 "No close analogs" does not warn of a bigger move — verdict: no
+
+Rank moments by how far their analogs sat, in units of that token's own typical distance:
+
+* Pooled: farthest quarter followed by a **2.56%** average move, closest quarter **1.76%**,
+  Welch t = **+3.60**. On its own that is a shippable warning.
+* Within tokens: **12 of 24** show it at all, clustered t = **−0.07**.
+
+The pooled result was measuring which tokens are volatile, not which moments are strange.
+Not shipped. The desk still refuses outright below 15 distinct episodes, which is a
+different claim and a verifiable one.
+
+### 13.5 Adaptive conformal inference adds nothing here — verdict: no
+
+Gibbs & Candès' online update is the published fix for a band that drifts, which is our
+symptom. Step size chosen on the first half of the matured replays, reported once on the
+second half it never saw:
+
+| | below p5 | above p95 | band width |
+|---|---|---|---|
+| batch refit (shipped) | 4.43% | 4.17% | 13.58% |
+| online, γ = 0.1 | 4.43% | 4.26% | 13.53% |
+
+Month by month it moves the worst month from 11.5% to 10.7% and the mean absolute miss
+from 0.029 to 0.028. Our miscalibration is not slow drift — it arrives in bursts a scalar
+nudge only reaches after the burst has passed. §13.3 is where the error actually was.
+
+*(Chosen on the whole sample instead, it would have read amber → green. That is what
+choosing a hyperparameter on the data you report it against buys you.)*
+
+### 13.6 The analogs do beat random hours, narrowly — verdict: yes
+
+Restating §8 with error bars that respect the data. Paired pinball loss at p5 over 2,325
+matured forecasts: analogs ahead by **+0.0153**. Clustered by token, t = +2.15 on 15 of 24
+tokens. Block-bootstrapped by week over 26 weeks, 95% interval **[+0.0011, +0.0303]** —
+excludes zero, but only just. A real edge at the edge of detectability. The naive t of
++2.09 across 2,325 overlapping forecasts would have overstated it.
+
+### 13.7 A token is not obviously best explained by its own past — verdict: unclear
+
+On 190 moments that retrieved at least 8 analogs from the token itself and 8 from others:
+same-token p5 breached 12.1% of the time against 6.8% cross-token, pinball 0.305 against
+0.259, t = 1.80. Directionally against restricting the search, not decisively. The search
+stays pooled, with the token's own history competing on distance like everything else —
+about 12% of retrieved matches come from the token being asked about.
+
 ## 10. Things that did not work, and what was done instead
 
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
