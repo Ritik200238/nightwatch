@@ -1,6 +1,6 @@
 # Demo recording script
 
-Target length 3:00, hard ceiling 4:00. Screen recording with voice-over, 1440×900 or
+Target length 3:20, hard ceiling 4:00. Screen recording with voice-over, 1440×900 or
 1920×1080, browser zoom 100%, dark theme. Record in one take if you can; the desk answers
 in about three seconds, so there is no dead air to cut.
 
@@ -114,6 +114,26 @@ submission form as the worked example — it reopens this exact verdict for anyo
 >
 > The journal is every call it has made, the hash of the inputs it used, and what actually
 > happened. The human still decides. Nightwatch never places an order.
+
+## 3:00–3:20 What we tested about the retrieval itself
+
+**Screen:** the **Studies** page. Scroll to the first two, which are the ones that matter.
+
+> The page before this one measures the forecasts. This one measures the thing that makes
+> them. Seven questions about the retrieval, each written so it could come back no. Five
+> did.
+>
+> This is the one I would lead with. Everyone assumes the closest matches are the most
+> informative — so we checked, and the near half of a retrieval has *wider* outcomes than
+> the far half, on every one of twenty-four tokens. Which means the obvious improvement,
+> weight the close ones more, makes the forecast measurably worse. We had those weights
+> already computed. They are still wired to nothing, and now that is a measurement rather
+> than an oversight.
+>
+> One of the seven found something. A single tail factor read on target overall while
+> being wrong in both directions underneath — too tight overnight, twice too wide at the
+> weekend. Fixing it changed what the desk allows on a weekend hold by seventy-six per
+> cent.
 
 ---
 
