@@ -9,6 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api, type CalibrationReport } from "@/lib/api";
 import { fmtPct, fmtRatio } from "@/lib/format";
 
+/** Horizon bands, said the way a person holding the position would say it. */
+const BAND_LABEL: Record<string, string> = {
+  overnight: "Overnight (under 40h)",
+  multi_day: "Weekend or longer (40h+)",
+  pooled: "Before there was enough of either",
+};
+
 const PIT_ORDER = ["<p5", "p5-p25", "p25-p50", "p50-p75", "p75-p95", ">p95"];
 const PIT_EXPECTED: Record<string, number> = { "<p5": 0.05, "p5-p25": 0.2, "p25-p50": 0.25, "p50-p75": 0.25, "p75-p95": 0.2, ">p95": 0.05 };
 
@@ -250,6 +257,48 @@ export default function CalibrationPage() {
                   </TableRow>
                 </TableBody>
               </Table>
+            </Section>
+          ) : null}
+
+          {rep.adjusted?.bands?.length ? (
+            <Section
+              title="The same, split by how long the position is held"
+              subtitle="A single factor fitted across every horizon is the average of two different corrections, and the average is nobody's number. An overnight hold and a weekend hold need opposite adjustments, so each gets its own — and the overall reading above is only trustworthy if these are too."
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Window</TableHead>
+                    <TableHead className="text-right">Scored</TableHead>
+                    <TableHead className="text-right">Below p5 (target 5%)</TableHead>
+                    <TableHead className="text-right">Above p95 (target 5%)</TableHead>
+                    <TableHead className="text-right">Width, raw → adjusted</TableHead>
+                    <TableHead className="text-right">k_lo</TableHead>
+                    <TableHead className="text-right">5% tail</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rep.adjusted.bands.map((b) => (
+                    <TableRow key={b.band}>
+                      <TableCell className="font-medium">{BAND_LABEL[b.band] ?? b.band}</TableCell>
+                      <TableCell className="tabular text-right">{b.n}</TableCell>
+                      <TableCell className="tabular text-right font-medium">{fmtPct(b.adj_lo_coverage * 100, 1, false)}</TableCell>
+                      <TableCell className="tabular text-right font-medium">{fmtPct(b.adj_hi_coverage * 100, 1, false)}</TableCell>
+                      <TableCell className="tabular text-right">
+                        {b.raw_width.toFixed(2)}% → <span className="font-medium">{b.adj_width.toFixed(2)}%</span>
+                      </TableCell>
+                      <TableCell className="tabular text-right">{b.k_lo.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <Pill tone={b.adj_tail_band === "green" ? "good" : b.adj_tail_band === "amber" ? "warning" : "critical"}>{b.adj_tail_band}</Pill>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="mt-3 text-xs text-muted-foreground">
+                A k_lo below 1 means the cohort&apos;s own p5 was already too pessimistic for that kind of window and gets pulled in, not pushed out. The &ldquo;before there was
+                enough&rdquo; row is every forecast made before its window had 120 matured examples of its own; those used the pooled factor, and they are shown rather than dropped.
+              </p>
             </Section>
           ) : null}
 

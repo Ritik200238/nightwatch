@@ -131,6 +131,25 @@ export interface HorizonReport {
   adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
 }
 
+/** One window length, scored on its own.
+ *
+ *  The overall reading can sit on target while both halves of it are wrong in
+ *  opposite directions, which is what a single pooled factor produced here. These
+ *  rows are how that stops being invisible.
+ */
+export interface BandEvaluation {
+  band: string;
+  n: number;
+  raw_lo_coverage: number;
+  adj_lo_coverage: number;
+  adj_hi_coverage: number;
+  raw_width: number;
+  adj_width: number;
+  adj_tail_band: string;
+  k_lo: number;
+  k_hi: number;
+}
+
 export interface AdjustedEvaluation {
   n_evaluated: number;
   raw_lo_coverage: number;
@@ -147,6 +166,7 @@ export interface AdjustedEvaluation {
   k_hi_last: number | null;
   lo_ci: [number, number];
   adj_lo_ci: [number, number];
+  bands: BandEvaluation[];
 }
 
 export interface QuantileSkill {
