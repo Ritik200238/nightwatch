@@ -75,6 +75,31 @@ def test_calibration_endpoint_shape(client):
     assert "coverage" in r and "tail" in r and r["tail"]["band"] in ("green", "amber", "red", "insufficient")
 
 
+def test_studies_says_it_is_empty_rather_than_inventing_one(client):
+    """A study page that renders nothing and says nothing is worse than one that says
+    the studies have not been run against this database."""
+    r = client.get("/studies").json()
+    assert r["studies"] == [] and r["last_run"] is None
+    assert "nightwatch studies" in r["note"]
+
+
+def test_studies_are_served_with_the_date_they_were_computed(client, seeded_store):  # noqa: F811
+    """Served from storage, so the answer has to carry when it was last true."""
+    from nightwatch.data.store import Store
+    from nightwatch.journal.studies import Study, StudyStore
+
+    with Store(seeded_store) as store:
+        StudyStore(store).save([
+            Study(key="closer_is_not_tighter", title="t", question="q", method="m", finding="f",
+                  consequence="c", verdict="no", n=960, stats={"sd_ratio_near_over_far": 1.14}),
+        ])
+    r = client.get("/studies").json()
+    assert len(r["studies"]) == 1 and r["last_run"] is not None
+    got = r["studies"][0]
+    assert got["verdict"] == "no" and got["n"] == 960
+    assert got["stats"]["sd_ratio_near_over_far"] == 1.14
+
+
 def test_chat_answers_with_rules_when_there_is_no_model(client, monkeypatch):
     """No key is not the same as no desk. The rules read the ticket and brief the answer."""
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)

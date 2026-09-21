@@ -131,6 +131,31 @@ export interface HorizonReport {
   adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
 }
 
+/** One falsifiable claim about the retrieval, tested against the desk's own history.
+ *
+ *  `consequence` is the part that stops these being decoration: every study says what
+ *  changed in the product because of it, including "nothing, and here is why".
+ */
+export interface Study {
+  key: string;
+  title: string;
+  question: string;
+  method: string;
+  finding: string;
+  consequence: string;
+  /** Answers the question in `title`, not whether the answer was good news. */
+  verdict: "yes" | "no" | "unclear";
+  n: number;
+  stats: Record<string, number>;
+  ran_at: string;
+}
+
+export interface StudiesResponse {
+  studies: Study[];
+  last_run: string | null;
+  note: string;
+}
+
 /** One window length, scored on its own.
  *
  *  The overall reading can sit on target while both halves of it are wrong in
@@ -695,6 +720,7 @@ export const api = {
     const s = q.toString();
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
+  studies: () => request<StudiesResponse>("/studies"),
   markTaken: (forecastId: number, taken = true) => request<{ forecast_id: number; taken: boolean }>(`/forecasts/${forecastId}/taken?taken=${taken}`, { method: "POST" }),
   forecasts: (limit = 100, ticker?: string, kind?: string) => {
     const q = new URLSearchParams({ limit: String(limit) });

@@ -257,6 +257,26 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             note = (note + " Only the first twelve positions were judged.").strip()
         return tonight_mod.build(None, judged, note=note).to_dict()
 
+    @app.get("/studies")
+    def studies() -> dict[str, Any]:
+        """What the desk has tested about its own retrieval, and what came back.
+
+        Served from stored results rather than computed on request: the match-level
+        sweep behind half of these takes minutes, and a study that quietly recomputed
+        itself differently every time nobody was looking would not be a study. The
+        answer carries the date it was last run so a stale one is visible as stale.
+        """
+        from nightwatch.journal.studies import StudyStore
+
+        s = st()
+        store = StudyStore(s.store)
+        last = store.last_run()
+        return {
+            "studies": store.all(),
+            "last_run": last.isoformat() if last else None,
+            "note": "" if last else "No studies have been run against this database yet; run `nightwatch studies`.",
+        }
+
     @app.get("/sources")
     def sources() -> list[dict[str, Any]]:
         """Every feed the desk reads, with how fresh it is. Judges and users can check
