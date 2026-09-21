@@ -283,6 +283,35 @@ def cmd_calibration(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def cmd_studies(args: argparse.Namespace, settings: Settings) -> int:
+    """Re-run every study of the retrieval and store what came back.
+
+    This walks the analog search again at match level, which the journal does not keep,
+    so it takes a few minutes rather than a few seconds. It is meant to be run when the
+    engine changes - a study computed against an older engine is worse than none.
+    """
+    from nightwatch.journal.journal import Journal
+    from nightwatch.journal.studies import StudyStore, run_all
+    from nightwatch.pipeline.analyze import AnalysisContext
+
+    with Store(settings.db_path) as store:
+        entries = _entries_from_store(store, settings)
+        journal = Journal(store)
+        ctx = AnalysisContext(store=store, entries=entries, journal=journal, frame_cache_size=128)
+        df = journal.forecasts(kind="replay", matured_only=True)
+        print(f"running studies over {len(df)} matured replay forecasts and a fresh match-level sweep...")
+        studies = run_all(ctx, df, max_points_per_ticker=args.points)
+        if args.dry_run:
+            print("(dry run: nothing stored)")
+        else:
+            print(f"stored {StudyStore(store).save(studies)} studies")
+        for s in studies:
+            print(f"\n[{s.verdict.upper()}] {s.title}  (n={s.n})")
+            print(f"  {s.finding}")
+            print(f"  -> {s.consequence}")
+    return 0
+
+
 def _entries_from_store(store: Store, settings: Settings) -> list[UniverseEntry]:
     from nightwatch.data.sync import build_universe
 
@@ -382,6 +411,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--ticker")
     sp.add_argument("--kind", choices=["ticket", "replay"])
     sp.set_defaults(func=cmd_calibration)
+
+    sp = sub.add_parser("studies", help="re-run the tests of the retrieval itself and store the results")
+    sp.add_argument("--points", type=int, default=40, help="replay points per ticker for the match-level sweep")
+    sp.add_argument("--dry-run", action="store_true", help="print the results without storing them")
+    sp.set_defaults(func=cmd_studies)
     return p
 
 
