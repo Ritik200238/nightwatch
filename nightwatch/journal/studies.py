@@ -76,7 +76,7 @@ class Study:
     method: str
     finding: str
     consequence: str
-    verdict: str  # supported | refuted | inconclusive
+    verdict: str  # yes | no | unclear - the answer to `title`, not a grade on the result
     n: int
     stats: dict[str, float] = field(default_factory=dict)
     ran_at: str = ""
@@ -661,9 +661,11 @@ def study_online_calibration_adds_nothing(forecasts: pd.DataFrame) -> Study:
     a_lo, a_hi, a_w = cov(runs[0.0].iloc[cut:])
     b_lo, b_hi, b_w = cov(runs[best].iloc[cut:])
     # Better means closer to target on the held-out half by a margin worth a moving
-    # part - a tenth of a point of coverage is not a reason to add one.
+    # part. A tenth of a point of coverage is not a reason to add one, so it is a no
+    # rather than a maybe: "unclear" is for not having the data, not for having it and
+    # finding the difference too small to matter.
     gain = (abs(a_lo - 0.05) + abs(a_hi - 0.05)) - (abs(b_lo - 0.05) + abs(b_hi - 0.05))
-    verdict = YES if gain > 0.01 else NO if gain <= 0.0 else UNCLEAR
+    verdict = YES if gain > 0.01 else NO
     if verdict == YES:
         finding = (
             f"Yes. With a step size of {best:g} chosen on the first half, the held-out half came in at {b_lo:.2%} of outcomes below "
