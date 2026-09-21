@@ -22,6 +22,11 @@ outcomes and lessons follow their forecast.
 
     # on the box
     docker compose run --rm -v /tmp:/src api python -m deploy.import_replays --merge /src/replays.sqlite
+
+When only the studies have been rerun - the usual case, because they are recomputed on
+every engine change while the replays behind them sit still - ``--studies-only`` moves
+those across and leaves the forecasts alone, rather than deleting and reinserting a few
+thousand of them under new ids to achieve nothing.
 """
 
 from __future__ import annotations
@@ -136,16 +141,36 @@ def merge(incoming: Path, target: Path) -> int:
     return n
 
 
+def merge_studies_only(incoming: Path, target: Path) -> int:
+    """Move the studies across and leave the forecasts alone.
+
+    The usual case once the box is in sync: the studies are recomputed whenever the
+    engine changes, the replays behind them have not moved, and a full merge would
+    delete and reinsert a few thousand forecasts under new ids to achieve nothing.
+    """
+    src = sqlite3.connect(f"file:{incoming}?mode=ro", uri=True)
+    dst = sqlite3.connect(target)
+    n = _copy_studies(src, dst)
+    dst.commit()
+    dst.close()
+    src.close()
+    print(f"copied {n} studies" if n else "no studies in the extract")
+    return n
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--extract", nargs=2, metavar=("SOURCE", "DEST"), help="pull replay rows out of a database")
+    ap.add_argument("--extract", nargs=2, metavar=("SOURCE", "DEST"), help="pull replay rows and studies out of a database")
     ap.add_argument("--merge", metavar="INCOMING", help="merge an extract into the live database")
+    ap.add_argument("--studies-only", metavar="INCOMING", help="copy just the studies across, leaving the forecasts untouched")
     ap.add_argument("--target", default="/data/nightwatch.sqlite", help="database to merge into")
     args = ap.parse_args()
     if args.extract:
         return 0 if extract(Path(args.extract[0]), Path(args.extract[1])) else 1
     if args.merge:
         return 0 if merge(Path(args.merge), Path(args.target)) else 1
+    if args.studies_only:
+        return 0 if merge_studies_only(Path(args.studies_only), Path(args.target)) else 1
     ap.print_help()
     return 1
 
