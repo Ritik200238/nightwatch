@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from nightwatch.journal.adjust import apply_factors, evaluate_expanding, factors_as_of, fit_factors
+from nightwatch.journal.adjust import apply_factors, evaluate_expanding, expanding_rows, factors_as_of, fit_factors
 
 UTC = UTC
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -45,4 +45,93 @@ def test_factors_as_of_uses_only_matured_history():
     df = synthetic(n=100)
     assert factors_as_of(df, T0 + timedelta(hours=10)) is None  # nothing matured yet
     late = factors_as_of(df, T0 + timedelta(hours=12 * 99))
-    assert late is not None and late.n_fit < 100  # the last forecast has not matured
+    assert late is not None and late.pooled is not None
+    assert late.pooled.n_fit < 100  # the last forecast has not matured
+
+
+def test_a_horizon_gets_the_factor_fitted_on_its_own_window_length():
+    """Two window lengths whose tails are wrong by different amounts.
+
+    One pooled factor has to split the difference and is wrong for both; the point of
+    bands is that each horizon is corrected by what its own kind of window did.
+    """
+    short = synthetic(n=400, seed=1, narrow=0.5)  # p5/p95 half as wide as they should be
+    short["horizon_h"] = 18.0
+    long_ = synthetic(n=400, seed=2, narrow=2.0)  # and twice as wide as they should be
+    long_["horizon_h"] = 66.0
+    long_["ticker"] = "Y"
+    df = pd.concat([short, long_], ignore_index=True).sort_values("as_of").reset_index(drop=True)
+
+    f = factors_as_of(df, T0 + timedelta(hours=12 * 799))
+    assert f is not None
+    assert set(f.bands) == {"overnight", "multi_day"}
+    assert f.bands["overnight"].k_lo > 1.5  # needs widening
+    assert f.bands["multi_day"].k_lo < 0.7  # needs narrowing
+    # And the caller gets the right one for the horizon it asks about.
+    assert f.for_hours(18.0).scope == "overnight"
+    assert f.for_hours(66.0).scope == "multi_day"
+    # A horizon we cannot place, or none at all, falls back rather than guessing.
+    assert f.for_hours(None) is f.pooled
+
+
+def test_a_thin_band_borrows_the_pooled_factor_instead_of_fitting_on_noise():
+    df = synthetic(n=400, narrow=0.5)
+    df["horizon_h"] = 18.0
+    df.loc[df.index[:20], "horizon_h"] = 66.0  # far below MIN_BAND_N
+    f = factors_as_of(df, T0 + timedelta(hours=12 * 399))
+    assert f is not None and "multi_day" not in f.bands
+    assert f.for_hours(66.0) is f.pooled
+
+
+def test_banding_changes_nothing_when_the_horizon_was_never_recorded():
+    """The journal did not always store a horizon; those rows must behave as before."""
+    df = synthetic(n=400, narrow=0.5)
+    banded = evaluate_expanding(df)
+    flat = evaluate_expanding(df, banded=False)
+    assert banded is not None and flat is not None
+    assert banded.adj_lo_coverage == flat.adj_lo_coverage
+    assert banded.bands == []
+
+
+def test_the_pooled_number_can_hide_two_opposite_errors():
+    """The reason bands exist, as a test.
+
+    Half the forecasts are far too narrow and half far too wide. Scored together under
+    one factor the breach rate lands near target while neither half is near it; scored
+    per band, both halves are.
+    """
+    short = synthetic(n=500, seed=3, narrow=0.45)  # tails far too tight
+    short["horizon_h"] = 18.0
+    long_ = synthetic(n=500, seed=4, narrow=1.6)  # tails far too wide
+    long_["horizon_h"] = 66.0
+    # Interleave rather than overlap, so a row can be traced back to its own band.
+    long_["as_of"] = long_["as_of"] + timedelta(hours=6)
+    long_["horizon_end"] = long_["horizon_end"] + timedelta(hours=6)
+    df = pd.concat([short, long_], ignore_index=True).sort_values("as_of").reset_index(drop=True)
+
+    flat = evaluate_expanding(df, banded=False)
+    assert flat is not None and flat.bands == []
+    rows = expanding_rows(df, banded=False).merge(df[["as_of", "horizon_h"]], on="as_of", how="left")
+    assert len(rows) == flat.n_evaluated  # the join stayed one to one
+    per = {h: (g["r"] < g["a5"]).mean() for h, g in rows.groupby("horizon_h")}
+    # One pooled factor: the average lands on target and neither half is anywhere near it.
+    assert abs(flat.adj_lo_coverage - 0.05) < 0.02
+    assert per[18.0] > 0.09  # the short band breaches nearly twice as often as it should
+    assert per[66.0] < 0.01  # the long band never breaches, because its band is absurd
+
+    banded = evaluate_expanding(df)
+    assert banded is not None
+    named = {b.band: b for b in banded.bands}
+    assert {"overnight", "multi_day"} <= set(named)
+    for name in ("overnight", "multi_day"):
+        assert abs(named[name].adj_lo_coverage - 0.05) < 0.02, f"{name} still off target"
+    # The over-wide band is narrowed, not widened - a factor below 1 has to be reachable.
+    assert named["multi_day"].adj_width < named["multi_day"].raw_width
+    assert named["multi_day"].k_lo < 1.0 < named["overnight"].k_lo
+    # Roughly halved here, which is the size of the error the pooled factor was hiding.
+    assert named["multi_day"].adj_width < 0.7 * per_band_width(rows, 66.0)
+
+
+def per_band_width(rows: pd.DataFrame, horizon_h: float) -> float:
+    g = rows[rows["horizon_h"] == horizon_h]
+    return float((g["a95"] - g["a5"]).mean())

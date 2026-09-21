@@ -479,11 +479,20 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         hours = float(table["hours"].mean()) if not table.empty else float("nan")
         p5_adj = p95_adj = None
         adjustment = None
-        if factors is not None and not stats.insufficient:
+        # Each horizon is widened by the factor fitted on windows of its own length. An
+        # overnight hold and a weekend hold need very different corrections, and the
+        # single pooled factor was the average of the two - too tight for one, roughly
+        # twice too wide for the other.
+        band_factors = factors.for_hours(hours) if factors is not None else None
+        if band_factors is not None and not stats.insufficient:
             from nightwatch.journal.adjust import apply_factors
 
-            p5_adj, p95_adj = apply_factors(stats.p5, stats.median_pct, stats.p95, factors)
-            adjustment = {"k_lo": factors.k_lo, "k_hi": factors.k_hi, "n_fit": factors.n_fit, "fitted_through": factors.fitted_through.isoformat() if factors.fitted_through else None, "scope": factors.scope}
+            p5_adj, p95_adj = apply_factors(stats.p5, stats.median_pct, stats.p95, band_factors)
+            adjustment = {
+                "k_lo": band_factors.k_lo, "k_hi": band_factors.k_hi, "n_fit": band_factors.n_fit,
+                "fitted_through": band_factors.fitted_through.isoformat() if band_factors.fitted_through else None,
+                "scope": band_factors.scope,
+            }
         horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison, p5_adjusted=p5_adj, p95_adjusted=p95_adj, adjustment=adjustment)
     if primary in horizons and horizons[primary].cohort.insufficient:
         warnings.append(f"analog cohort for the {primary} horizon is below the minimum sample; verdict falls back to the stop for risk")
