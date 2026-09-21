@@ -17,14 +17,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <header className="border-b border-border">
-          {/* Wraps rather than clips: at 390px the brand, three links and the status pill do not
-              fit on one line, and hiding "Journal" behind a scroll is worse than a taller header. */}
+          {/* Wraps rather than clips: at 390px the brand, the links and the status pill do not
+              fit on one line, and hiding a destination behind a scroll is worse than a taller
+              header. The nav inside wraps for the same reason, now that there are five. */}
           <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 md:flex-nowrap md:px-6 lg:px-8">
-            <div className="flex min-w-0 items-center gap-2 sm:gap-6">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 sm:gap-x-6">
               <Link href="/" className="rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none">
                 Nightwatch
               </Link>
-              <nav aria-label="Primary" className="flex items-center gap-1">
+              {/* Wraps for the same reason the header does. Five destinations do not fit
+                  on one line next to the brand at 375px, and a nav that runs off the
+                  screen edge is worse than one that takes a second line. */}
+              <nav aria-label="Primary" className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
                 <Link href="/" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Desk
                 </Link>
