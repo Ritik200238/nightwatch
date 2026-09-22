@@ -131,6 +131,32 @@ export interface HorizonReport {
   adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
 }
 
+/** A filing recent enough that the market has not priced it yet.
+ *
+ *  Two halves, deliberately separate. `category` and `headline` are the model's words
+ *  about text that was public when the filing landed. Everything prefixed `label_` is
+ *  not the model's: it is what this desk's bars did after every other filing the model
+ *  gave the same label to, which is the only reason the label is on the page.
+ *
+ *  No direction. The model offers one; it was measured at 49.5% against a coin.
+ */
+export interface FilingNote {
+  ticker: string;
+  accepted_at: string;
+  form: string;
+  items: string | null;
+  hours_ago: number;
+  inside_window: boolean;
+  market_was_shut: boolean;
+  category: string;
+  headline: string;
+  market_moving: "none" | "low" | "medium" | "high";
+  label_n: number | null;
+  label_p5_pct: number | null;
+  label_median_pct: number | null;
+  label_mean_abs_pct: number | null;
+}
+
 /** One retrieved scenario, drawn over the ticket's own horizon.
  *
  *  `values` is the token's move from that moment's entry close, in percent, on the
@@ -645,6 +671,7 @@ export interface Report {
   portfolio: PortfolioReport | null;
   regimes: RegimeMap | null;
   second_opinion: SecondOpinion | null;
+  filings: FilingNote[];
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

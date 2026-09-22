@@ -896,6 +896,15 @@ def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = No
         ]
     reads = filing_outcomes(ctx, getattr(ctx, "store", None))
     if not reads.empty:
+        # The distributions the report quotes next to a fresh filing. Recomputed here
+        # rather than at report time: it is a global summary over every scored filing,
+        # and an analysis should not pay for it on every request.
+        from nightwatch.features.filing_outcomes import save_labels, summarise_labels
+
+        try:
+            save_labels(ctx.store, summarise_labels(reads))
+        except Exception:  # noqa: BLE001 - a summary failure must not lose the studies
+            log.exception("filing label summary failed")
         jobs += [
             ("filing_read_predicts_size", lambda: study_the_model_spots_a_big_night(reads)),
             ("filing_read_calls_direction", lambda: study_the_model_calls_the_direction(reads)),

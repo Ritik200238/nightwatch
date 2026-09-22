@@ -18,6 +18,7 @@ is allowed to look forward - that is what makes it a label.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -106,6 +107,82 @@ def collect(ctx: Any, reads: pd.DataFrame) -> pd.DataFrame:  # noqa: ANN401
             "headline": getattr(r, "headline", ""), "market_was_shut": closed, **out,
         })
     return pd.DataFrame(rows)
+
+
+LABEL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS filing_label_stats (
+    label TEXT PRIMARY KEY,
+    n INTEGER NOT NULL,
+    median_pct REAL NOT NULL,
+    p5_pct REAL NOT NULL,
+    mean_abs_pct REAL NOT NULL,
+    computed_at INTEGER NOT NULL
+);
+"""
+
+# Below this a label's distribution is a handful of nights, and quoting a 5th percentile
+# off it would be quoting the second-worst of nine.
+MIN_LABEL_N = 40
+
+
+@dataclass(frozen=True)
+class LabelStats:
+    """What actually followed the filings the model gave one label to."""
+
+    label: str
+    n: int
+    median_pct: float
+    p5_pct: float
+    mean_abs_pct: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"label": self.label, "n": self.n, "median_pct": self.median_pct, "p5_pct": self.p5_pct, "mean_abs_pct": self.mean_abs_pct}
+
+
+def summarise_labels(outcomes: pd.DataFrame, *, min_n: int = MIN_LABEL_N) -> list[LabelStats]:
+    """One distribution per ``market_moving`` label, from the nights that followed.
+
+    This is the number the report is allowed to show next to a filing. The model
+    supplies the label and nothing else; the percentiles are what the token did after
+    every other filing that got the same label, measured from our own bars.
+    """
+    if outcomes.empty or "market_moving" not in outcomes:
+        return []
+    out: list[LabelStats] = []
+    for label, g in outcomes.dropna(subset=["ret_pct"]).groupby("market_moving"):
+        if len(g) < min_n:
+            continue
+        r = g["ret_pct"].to_numpy(dtype=float)
+        out.append(LabelStats(
+            label=str(label), n=len(r),
+            median_pct=float(np.median(r)), p5_pct=float(np.percentile(r, 5)),
+            mean_abs_pct=float(np.abs(r).mean()),
+        ))
+    return sorted(out, key=lambda s: s.p5_pct)
+
+
+def save_labels(store: Any, stats: list[LabelStats]) -> int:  # noqa: ANN401
+    from nightwatch.time_utils import utc_now
+
+    conn = store._conn
+    conn.executescript(LABEL_SCHEMA)
+    now = int(utc_now().timestamp() * 1000)
+    conn.execute("DELETE FROM filing_label_stats")
+    conn.executemany(
+        "INSERT INTO filing_label_stats (label, n, median_pct, p5_pct, mean_abs_pct, computed_at) VALUES (?,?,?,?,?,?)",
+        [(s.label, s.n, s.median_pct, s.p5_pct, s.mean_abs_pct, now) for s in stats],
+    )
+    conn.commit()
+    return len(stats)
+
+
+def load_labels(store: Any) -> dict[str, LabelStats]:  # noqa: ANN401
+    """The stored distributions, by label. Empty when they have never been computed."""
+    try:
+        rows = store._conn.execute("SELECT label, n, median_pct, p5_pct, mean_abs_pct FROM filing_label_stats").fetchall()
+    except Exception:  # noqa: BLE001 - the table not existing yet is not an error
+        return {}
+    return {r[0]: LabelStats(label=r[0], n=int(r[1]), median_pct=float(r[2]), p5_pct=float(r[3]), mean_abs_pct=float(r[4])) for r in rows}
 
 
 def load_reads(store: Any) -> pd.DataFrame:  # noqa: ANN401

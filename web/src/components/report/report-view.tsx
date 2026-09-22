@@ -127,6 +127,66 @@ function DecisionCard({ report }: { report: Report }) {
   );
 }
 
+const MOVING_TONE: Record<string, "critical" | "warning" | "muted"> = { high: "critical", medium: "warning", low: "muted", none: "muted" };
+
+/** A filing the market has not opened since.
+ *
+ *  This is the one place on the report where a model's judgement is shown, and it is
+ *  split down the middle on purpose. The headline and the flag are the model's, from
+ *  the filing's own words. The percentile beside them is not: it is what this desk's
+ *  own bars did after every other filing the model flagged the same way, which is the
+ *  only reason the flag is allowed on the page — see the Studies page, where the
+ *  flagged filings were followed by a 1.62× larger move on 18 of 20 tokens.
+ *
+ *  No direction is shown. The model offers one and it was measured at 49.5% against a
+ *  coin, so it does not travel.
+ */
+function FreshFilings({ report }: { report: Report }) {
+  const notes = report.filings ?? [];
+  if (!notes.length) return null;
+  const worst = notes.reduce((a, b) => (["high", "medium"].includes(b.market_moving) && !["high", "medium"].includes(a.market_moving) ? b : a));
+  const flagged = notes.some((n) => n.market_moving === "high" || n.market_moving === "medium");
+
+  return (
+    <Section
+      title={notes.length === 1 ? "A filing landed, and the market has not opened since" : `${notes.length} filings landed, and the market has not opened since`}
+      subtitle="Read from the filing's own text. The model says what it is; the history beside it says what followed the ones it flagged the same way."
+      action={<Pill tone={flagged ? MOVING_TONE[worst.market_moving] : "muted"}>{flagged ? `${worst.market_moving} impact` : "routine"}</Pill>}
+    >
+      <div className="space-y-3">
+        {notes.map((n) => (
+          <div key={`${n.accepted_at}-${n.form}`} className="rounded-lg border border-border bg-muted/20 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <p className="text-sm font-medium">{n.headline}</p>
+              <Pill tone={MOVING_TONE[n.market_moving] ?? "muted"}>{n.market_moving}</Pill>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {n.form}
+              {n.items ? ` item ${n.items}` : ""} · {titleCase(n.category)} · filed {fmtHours(n.hours_ago)} ago
+              {n.market_was_shut ? ", while the US market was shut" : ", during the US session"}
+              {n.inside_window ? " · inside your holding window" : ""}
+            </p>
+            {n.label_n != null && n.label_p5_pct != null ? (
+              <p className="mt-2 text-sm">
+                <span className="text-muted-foreground">What followed the others: </span>
+                the {n.label_n} filings it called <span className="font-medium">{n.market_moving}</span> were followed by a median of{" "}
+                <span className="tabular">{fmtPct(n.label_median_pct, 2)}</span> before the next open, and one in twenty was worse than{" "}
+                <span className="tabular font-medium text-status-critical">{fmtPct(n.label_p5_pct, 2)}</span>.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">Too few scored filings carry this label to quote a distribution, so none is shown.</p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        The model reads the text and nothing else — no price, and no knowledge of what happened next. It also offers a direction, which measured 49.5% against a coin, so it is not
+        shown and reaches nothing. None of this moved the verdict above.
+      </p>
+    </Section>
+  );
+}
+
 export function ReportView({ report }: { report: Report }) {
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
@@ -138,6 +198,7 @@ export function ReportView({ report }: { report: Report }) {
   return (
     <div className="space-y-4">
       <DecisionCard report={report} />
+      <FreshFilings report={report} />
 
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted-foreground">The evidence behind that answer. Open what you want to argue with.</p>

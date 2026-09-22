@@ -55,7 +55,7 @@ from nightwatch.stress.scenarios import (
     closed_window_returns,
     earnings_gaps,
 )
-from nightwatch.time_utils import ensure_utc, utc_now
+from nightwatch.time_utils import classify_session, ensure_utc, utc_now
 
 log = logging.getLogger(__name__)
 
@@ -181,6 +181,39 @@ class AnalogSection:
 
 
 @dataclass
+class FilingNote:
+    """A filing that landed recently enough to still be unpriced, and what it said.
+
+    Two halves, deliberately kept apart. ``headline`` and ``category`` are the model's
+    words about text that was public when the filing landed. ``p5_pct`` and the rest are
+    not the model's: they are what this desk's own bars did after every other filing the
+    model gave the same label to, which is why the label is allowed on the page at all.
+
+    No direction is carried. The model offers one and it was measured at 49.5% against a
+    coin, so it does not travel.
+    """
+
+    ticker: str
+    accepted_at: datetime
+    form: str
+    items: str | None
+    hours_ago: float
+    inside_window: bool
+    market_was_shut: bool
+    category: str
+    headline: str
+    market_moving: str
+    # From history, not from the model. None when that label has too few scored filings.
+    label_n: int | None = None
+    label_p5_pct: float | None = None
+    label_median_pct: float | None = None
+    label_mean_abs_pct: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**self.__dict__, "accepted_at": self.accepted_at.isoformat()}
+
+
+@dataclass
 class StressSection:
     presets: list[Scenario]
     impacts: list[ScenarioImpact]
@@ -223,6 +256,7 @@ class AnalysisReport:
     timings_ms: dict[str, int]
     forecast_id: int | None = None
     second_opinion: Any = None  # nightwatch.decision.devil.SecondOpinion
+    filings: list[FilingNote] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -368,11 +402,18 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             log.exception("sensitivity sweep failed")
             warnings.append("sensitivity sweep failed; the verdict above is unaffected")
     timings["sensitivity"] = _ms(t0)
+
+    # What the model made of any filing recent enough to still be unpriced. Reads only;
+    # nothing here has touched the verdict above, and the study that earned it a place
+    # on the page also says its directional call is a coin, so no direction travels.
+    t0 = time.perf_counter()
+    filings = _filing_notes(ctx, ticket, as_of, horizon_h)
+    timings["filings"] = _ms(t0)
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings,
     )
     # The case against whatever was just decided, from the report's own numbers.
     try:
@@ -415,6 +456,52 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
 
 
 # ------------------------------------------------------------------- sections
+
+
+# How far back a filing can be and still be worth putting on the report. Beyond a couple
+# of sessions the market has had a chance to price it and it is history, not news.
+FILING_LOOKBACK_H = 36.0
+
+
+def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, horizon_h: float) -> list[FilingNote]:
+    """Filings recent enough to still be unpriced, with what the model made of them.
+
+    Shown only when there is a stored read - the desk does not put "an 8-K landed" on a
+    page without being able to say what it was - and the numbers beside it come from the
+    measured distribution for that label, never from the model.
+    """
+    from nightwatch.features.filing_outcomes import load_labels
+    from nightwatch.features.filing_read import FilingReadStore
+
+    at = ensure_utc(as_of)
+    try:
+        recent = ctx.store.get_filings(ticket.ticker, start=at - timedelta(hours=FILING_LOOKBACK_H), end=at, as_of=at)
+    except Exception:  # noqa: BLE001 - a filing lookup must never fail an analysis
+        log.exception("filing lookup failed for %s", ticket.ticker)
+        return []
+    if not recent:
+        return []
+    reads = FilingReadStore(ctx.store)
+    labels = load_labels(ctx.store)
+    window_end = at + timedelta(hours=horizon_h)
+    notes: list[FilingNote] = []
+    for f in sorted(recent, key=lambda x: x.accepted_at, reverse=True):
+        read = reads.get(f.accession)
+        if read is None:
+            continue
+        stats = labels.get(read.market_moving)
+        notes.append(FilingNote(
+            ticker=f.ticker, accepted_at=f.accepted_at, form=f.form, items=f.items,
+            hours_ago=(at - ensure_utc(f.accepted_at)).total_seconds() / 3600.0,
+            inside_window=ensure_utc(f.accepted_at) <= window_end,
+            market_was_shut=classify_session(f.accepted_at).is_closed,
+            category=read.category, headline=read.headline, market_moving=read.market_moving,
+            label_n=stats.n if stats else None,
+            label_p5_pct=stats.p5_pct if stats else None,
+            label_median_pct=stats.median_pct if stats else None,
+            label_mean_abs_pct=stats.mean_abs_pct if stats else None,
+        ))
+    return notes[:3]
 
 
 def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str], *, entry_price: float = 0.0) -> AnalogSection | None:

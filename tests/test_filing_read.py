@@ -205,3 +205,60 @@ def test_the_worst_and_best_points_inside_the_window_are_reported():
     assert out is not None
     assert out["mae_pct"] == pytest.approx(-10.0) and out["mfe_pct"] == pytest.approx(15.0)
     assert out["ret_pct"] == pytest.approx(0.0)
+
+
+# --------------------------------------------------------------- the label summary
+
+
+def outcomes_frame(rows: list[tuple[str, str, float]]) -> pd.DataFrame:
+    return pd.DataFrame([{"ticker": t, "market_moving": m, "ret_pct": r} for t, m, r in rows])
+
+
+def test_a_label_with_too_few_filings_gets_no_distribution():
+    """Quoting a 5th percentile off nine nights is quoting the second-worst of nine."""
+    df = outcomes_frame([("T", "high", float(i)) for i in range(9)])
+    assert fo.summarise_labels(df) == []
+
+
+def test_the_distribution_is_of_the_nights_that_followed_that_label():
+    rng = np.random.default_rng(0)
+    rows = [("T", "high", float(x)) for x in rng.normal(0, 4, 60)]
+    rows += [("T", "low", float(x)) for x in rng.normal(0, 1, 60)]
+    stats = {s.label: s for s in fo.summarise_labels(outcomes_frame(rows), min_n=40)}
+    assert set(stats) == {"high", "low"}
+    assert stats["high"].n == 60 and stats["low"].n == 60
+    # The wide label has the worse tail and the bigger average move.
+    assert stats["high"].p5_pct < stats["low"].p5_pct
+    assert stats["high"].mean_abs_pct > stats["low"].mean_abs_pct
+
+
+def test_label_stats_round_trip_and_replace(tmp_path):
+    with Store(tmp_path / "s.sqlite") as store:
+        assert fo.load_labels(store) == {}
+        rows = [("T", "high", float(i - 30)) for i in range(60)]
+        assert fo.save_labels(store, fo.summarise_labels(outcomes_frame(rows), min_n=40)) == 1
+        got = fo.load_labels(store)
+        assert set(got) == {"high"} and got["high"].n == 60
+        # Recomputing replaces wholesale rather than accumulating stale labels.
+        rows2 = [("T", "low", 0.5) for _ in range(60)]
+        fo.save_labels(store, fo.summarise_labels(outcomes_frame(rows2), min_n=40))
+        assert set(fo.load_labels(store)) == {"low"}
+
+
+def test_a_report_note_carries_the_models_words_and_historys_numbers(tmp_path):
+    """The split that makes the panel honest: the label is the model's, the percentile
+    is not. A note that sourced both from the model would be an opinion wearing a
+    number, which is the thing this product exists not to print."""
+    from nightwatch.pipeline.analyze import FilingNote
+
+    n = FilingNote(
+        ticker="TSLA", accepted_at=datetime(2026, 9, 22, 1, 0, tzinfo=UTC), form="8-K", items="2.02",
+        hours_ago=4.6, inside_window=True, market_was_shut=True,
+        category="results", headline="Reports fourth quarter results.", market_moving="high",
+        label_n=146, label_p5_pct=-6.6, label_median_pct=-0.68, label_mean_abs_pct=3.15,
+    )
+    d = n.to_dict()
+    assert d["accepted_at"].startswith("2026-09-22")
+    assert d["market_moving"] == "high" and d["label_n"] == 146
+    # No direction anywhere: the model offers one and it measured as a coin.
+    assert "direction" not in d
