@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import UTC, datetime, timedelta
 
 from nightwatch.data.http import HttpClient
@@ -86,6 +87,85 @@ class SecFilingsClient:
             )
         out.sort(key=lambda f: f.accepted_at)
         return out
+
+
+    # -------------------------------------------------------------- documents
+
+    def document_text(self, cik: str, accession: str, *, max_chars: int = 40_000) -> str | None:
+        """The filing's own words, stripped to plain text.
+
+        The index we already store says *when* a filing landed and which items it
+        touched; it does not say what it said. For an 8-K those are different things -
+        item 5.02 covers both a routine board appointment and a chief executive leaving
+        overnight - and the difference is only in the prose.
+
+        Returns ``None`` when the primary document cannot be identified rather than
+        guessing at one, because the wrong document read confidently is worse than a
+        filing left unread.
+        """
+        base = f"/Archives/edgar/data/{int(cik)}/{accession.replace('-', '')}"
+        try:
+            listing = self._www.get_json(f"{base}/index.json")
+        except Exception:  # noqa: BLE001 - a missing filing is not a reason to stop a batch
+            log.info("sec: no index for %s", accession)
+            return None
+        names = [str(i.get("name", "")) for i in (listing.get("directory", {}).get("item") or [])]
+        wanted = readable_documents(names)
+        if not wanted:
+            return None
+        parts: list[str] = []
+        for name in wanted:
+            try:
+                parts.append(strip_html(self._www.get_text(f"{base}/{name}")))
+            except Exception:  # noqa: BLE001
+                log.info("sec: could not read %s/%s", accession, name)
+            if sum(len(p) for p in parts) >= max_chars:
+                break
+        text = "\n\n".join(p for p in parts if p).strip()
+        return text[:max_chars] or None
+
+
+# EDGAR renders every filing into per-fact XBRL viewer pages called R1.htm, R2.htm and
+# so on. They are a table of tagged values, not the filing, and picking one up instead of
+# the document is how you end up reading "Document Type 8-K Entity Registrant Name ...".
+_XBRL_RENDER = re.compile(r"^R\d+\.htm$", re.I)
+# The substance of an 8-K is often not in the 8-K. The shell says "see Exhibit 99.1" and
+# the press release underneath it is where the news actually is, so both are read.
+_EXHIBIT = re.compile(r"ex[-_]?99", re.I)
+
+
+def readable_documents(names: list[str], *, limit: int = 3) -> list[str]:
+    """The files in a filing worth reading, most substantive first.
+
+    Skips EDGAR's own index pages and its XBRL renderings, and puts any Exhibit 99
+    press release ahead of the 8-K shell that points at it.
+    """
+    candidates = [
+        n for n in names
+        if n.lower().endswith((".htm", ".html"))
+        and "index" not in n.lower()
+        and not _XBRL_RENDER.match(n)
+    ]
+    exhibits = [n for n in candidates if _EXHIBIT.search(n)]
+    rest = [n for n in candidates if n not in exhibits]
+    return (exhibits + rest)[:limit]
+
+
+_TAG = re.compile(r"<(script|style)\b.*?</\1>|<[^>]+>", re.S | re.I)
+_ENTITY = re.compile(r"&(?:#\d+|#x[0-9a-f]+|[a-z]+);", re.I)
+_SPACE = re.compile(r"\s+")
+
+
+def strip_html(html: str) -> str:
+    """Filing HTML as readable prose.
+
+    Deliberately not a full parser: EDGAR documents are generated HTML with inline XBRL
+    tags, and everything that matters here is the visible text. Script and style bodies
+    go first so their contents do not survive as words.
+    """
+    text = _TAG.sub(" ", html)
+    text = _ENTITY.sub(" ", text)
+    return _SPACE.sub(" ", text).strip()
 
 
 def _parse(value: str | None) -> datetime | None:

@@ -35,6 +35,9 @@ from nightwatch.recorder.orderbook_recorder import OrderBookRecorder, PeriodicJo
 from nightwatch.time_utils import UTC
 
 
+log = logging.getLogger(__name__)
+
+
 def _logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
@@ -312,6 +315,80 @@ def cmd_studies(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def cmd_read_filings(args: argparse.Namespace, settings: Settings) -> int:
+    """Have the model read the filings we have only ever timed.
+
+    Each filing is fetched from EDGAR, stripped to text and read once; the read is
+    stored against the accession so a rerun costs nothing for filings already done.
+    Failures are logged and skipped - one unreadable exhibit is not a reason to stop a
+    batch of five hundred.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from nightwatch.data.qwen import QwenClient, credentials_present
+    from nightwatch.data.sec import SecFilingsClient
+    from nightwatch.features.filing_read import FilingReadStore, ReadError, read_filing
+
+    if not credentials_present():
+        print("BITGET_QWEN_API_KEY is not set; nothing to read with.")
+        return 1
+
+    with Store(settings.db_path) as store:
+        reads = FilingReadStore(store)
+        done = reads.have()
+        forms = tuple(args.forms)
+        placeholders = ",".join("?" * len(forms))
+        rows = store._conn.execute(
+            f"SELECT ticker, cik, accession, form, items, accepted_at FROM filings "  # noqa: S608 - forms are argparse choices
+            f"WHERE form IN ({placeholders}) AND accepted_at >= ? ORDER BY accepted_at DESC",
+            (*forms, int(args.since_ms)),
+        ).fetchall()
+        todo = [r for r in rows if r[2] not in done]
+        if args.limit:
+            todo = todo[: args.limit]
+        print(f"{len(rows)} filings in range, {len(done)} already read, {len(todo)} to do")
+        if not todo:
+            return 0
+
+        sec = SecFilingsClient()
+        clients = [QwenClient(rate_per_sec=args.workers) for _ in range(args.workers)]
+        counts = {"ok": 0, "no_text": 0, "failed": 0}
+        tokens = [0, 0]
+
+        def work(job: tuple[int, tuple]) -> None:
+            i, (ticker, cik, accession, form, items, _at) = job
+            client = clients[i % len(clients)]
+            try:
+                text = sec.document_text(cik, accession)
+                if not text:
+                    counts["no_text"] += 1
+                    return
+                read, usage = read_filing(client, accession=accession, ticker=ticker, form=form, items=items, text=text)
+            except (ReadError, Exception) as exc:  # noqa: BLE001 - a bad filing must not stop the batch
+                counts["failed"] += 1
+                log.info("read failed for %s %s: %s", ticker, accession, exc)
+                return
+            reads.save(read, usage=usage)
+            tokens[0] += usage.prompt_tokens
+            tokens[1] += usage.completion_tokens
+            counts["ok"] += 1
+            n = sum(counts.values())
+            if n % 20 == 0:
+                print(f"  {n}/{len(todo)} · {counts['ok']} read · {tokens[0]:,}+{tokens[1]:,} tokens", flush=True)
+
+        try:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                list(pool.map(work, enumerate(todo)))
+        finally:
+            sec.close()
+            for c in clients:
+                c.close()
+        used_in, used_out = reads.tokens_used()
+        print(f"read {counts['ok']}, no text {counts['no_text']}, failed {counts['failed']}")
+        print(f"stored {reads.count()} reads total · {used_in:,} prompt + {used_out:,} completion tokens spent")
+    return 0
+
+
 def _entries_from_store(store: Store, settings: Settings) -> list[UniverseEntry]:
     from nightwatch.data.sync import build_universe
 
@@ -411,6 +488,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--ticker")
     sp.add_argument("--kind", choices=["ticket", "replay"])
     sp.set_defaults(func=cmd_calibration)
+
+    sp = sub.add_parser("read-filings", help="have the model read stored filings and classify what they say")
+    sp.add_argument("--forms", nargs="*", default=["8-K", "6-K"], help="which forms to read")
+    sp.add_argument("--since-ms", type=int, default=1735689600000, help="epoch ms; default is the start of the hourly bar history")
+    sp.add_argument("--limit", type=int, help="stop after this many new reads")
+    sp.add_argument("--workers", type=int, default=4, help="concurrent readers")
+    sp.set_defaults(func=cmd_read_filings)
 
     sp = sub.add_parser("studies", help="re-run the tests of the retrieval itself and store the results")
     sp.add_argument("--points", type=int, default=40, help="replay points per ticker for the match-level sweep")

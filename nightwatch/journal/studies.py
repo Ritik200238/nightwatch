@@ -37,6 +37,7 @@ import numpy as np
 import pandas as pd
 
 from nightwatch.data.store import Store
+from nightwatch.journal.calibration import wilson_interval
 from nightwatch.time_utils import utc_now
 
 log = logging.getLogger(__name__)
@@ -756,6 +757,100 @@ def study_analogs_beat_random_hours(forecasts: pd.DataFrame) -> Study:
 
 # --------------------------------------------------------------------------- runner
 
+def study_the_model_spots_a_big_night(outcomes: pd.DataFrame) -> Study:
+    """The model says a filing is market-moving. Is the night that follows bigger?"""
+    d = outcomes.dropna(subset=["ret_pct", "market_moving"]).copy()
+    if len(d) < 100:
+        return Study(
+            key="filing_read_predicts_size", title="Does the model spot a filing that matters?",
+            question="The model reads each filing and says how likely it is to move the share price. Do the ones it calls high-impact actually move more?",
+            method="Compare the size of the move from the filing to the next US open, between the filings it flagged and the ones it did not.",
+            finding=f"Only {len(d)} filings have both a read and a measurable window; not enough.",
+            consequence="The read is not shown as a risk signal.", verdict=UNCLEAR, n=len(d), stats={},
+        )
+    d["abs_ret"] = d["ret_pct"].abs()
+    flagged = d["market_moving"].isin(("high", "medium"))
+    hi, lo = d.loc[flagged, "abs_ret"], d.loc[~flagged, "abs_ret"]
+    if len(hi) < 20 or len(lo) < 20:
+        return Study(
+            key="filing_read_predicts_size", title="Does the model spot a filing that matters?",
+            question="Do the filings the model calls high-impact actually move more?",
+            method="Compare the move to the next US open between flagged and unflagged filings.",
+            finding=f"The model put {len(hi)} filings on one side and {len(lo)} on the other; too lopsided to compare.",
+            consequence="The read is not shown as a risk signal.", verdict=UNCLEAR, n=len(d), stats={},
+        )
+    # Clustered by token, because a volatile name files often and would otherwise decide this.
+    per = d.groupby("ticker").apply(
+        lambda x: x.loc[x["market_moving"].isin(("high", "medium")), "abs_ret"].mean()
+        - x.loc[~x["market_moving"].isin(("high", "medium")), "abs_ret"].mean(), include_groups=False).dropna()
+    clustered = _t(per.to_numpy()) if len(per) > 1 else float("nan")
+    ratio = float(hi.mean() / lo.mean()) if lo.mean() > 0 else float("nan")
+    verdict = YES if clustered > T_CONVINCING else NO if clustered < -T_CONVINCING else UNCLEAR
+    lead = {
+        YES: f"Yes. Filings it flagged were followed by a {hi.mean():.2f}% move against {lo.mean():.2f}% for the rest - {ratio:.2f} times as large - and the gap holds inside tokens ({int((per > 0).sum())} of {len(per)}, t={clustered:+.2f}).",
+        NO: f"No - the flagged ones moved *less*: {hi.mean():.2f}% against {lo.mean():.2f}% (t={clustered:+.2f} across {len(per)} tokens).",
+        UNCLEAR: f"Cannot be called. Flagged filings averaged {hi.mean():.2f}% against {lo.mean():.2f}%, but only {int((per > 0).sum())} of {len(per)} tokens agree (t={clustered:+.2f}).",
+    }[verdict]
+    return Study(
+        key="filing_read_predicts_size",
+        title="Does the model spot a filing that matters?",
+        question="99% of the 8-Ks in this history landed while the US market was shut, so the token carries them alone until the next open. The model reads each one and says how likely it is to move the share price. Do the ones it flags actually move more?",
+        method=f"{len(d)} filings read from their own text, with no price in the prompt. Each is scored on the token's move from the filing to the next US regular open, and the flagged ones ({len(hi)}) compared with the rest ({len(lo)}), clustered by token.",
+        finding=lead,
+        consequence=(
+            "The read is shown next to a fresh filing on the report, as the model's words with this number attached."
+            if verdict == YES
+            else "The read is stored and shown on this page, and does not reach the verdict or the sizing. It is an opinion that has not earned a number."
+        ),
+        verdict=verdict, n=int(len(d)),
+        stats={"move_flagged": float(hi.mean()), "move_rest": float(lo.mean()), "ratio": ratio,
+               "n_flagged": float(len(hi)), "n_rest": float(len(lo)), "clustered_t": clustered,
+               "tokens_agreeing": float((per > 0).sum()), "tokens": float(len(per))},
+    )
+
+
+def study_the_model_calls_the_direction(outcomes: pd.DataFrame) -> Study:
+    """It also says which way. That is a prediction, so it can be marked."""
+    d = outcomes.dropna(subset=["ret_pct", "direction"]).copy()
+    called = d[d["direction"].isin(("up", "down"))]
+    if len(called) < 60:
+        return Study(
+            key="filing_read_calls_direction", title="Does the model call the direction?",
+            question="On the filings where it commits to up or down, is it right more often than a coin?",
+            method="Score the sign of the move from the filing to the next US open against the direction it called.",
+            finding=f"Only {len(called)} filings got a directional call; not enough to mark.",
+            consequence="No directional read is shown.", verdict=UNCLEAR, n=len(called), stats={},
+        )
+    hit = np.where(called["direction"] == "up", called["ret_pct"] > 0, called["ret_pct"] < 0).astype(float)
+    called = called.assign(hit=hit)
+    rate = float(hit.mean())
+    per = called.groupby("ticker")["hit"].mean()
+    clustered = _t((per - 0.5).to_numpy()) if len(per) > 1 else float("nan")
+    lo_ci, hi_ci = wilson_interval(int(hit.sum()), len(hit))
+    verdict = YES if lo_ci > 0.5 and clustered > T_CONVINCING else NO if hi_ci < 0.5 else UNCLEAR
+    share_called = len(called) / max(1, len(d))
+    lead = {
+        YES: f"Yes. It called {rate:.1%} of them right, interval [{lo_ci:.1%}, {hi_ci:.1%}], and the edge survives clustering by token (t={clustered:+.2f}).",
+        NO: f"No - worse than a coin, at {rate:.1%} right, interval [{lo_ci:.1%}, {hi_ci:.1%}].",
+        UNCLEAR: f"No evidence either way. It called {rate:.1%} of them right on {len(called)} filings, and the interval [{lo_ci:.1%}, {hi_ci:.1%}] contains a coin toss (clustered t={clustered:+.2f}).",
+    }[verdict]
+    return Study(
+        key="filing_read_calls_direction",
+        title="Does the model call the direction?",
+        question="On top of how much a filing matters, the model says which way it points. That is a prediction with a right answer, so it can be marked.",
+        method=f"It declined to call {1 - share_called:.0%} of filings, answering 'unclear'; those are not scored. The {len(called)} it did commit to are scored on the sign of the token's move to the next US open, with a Wilson interval and a per-token check.",
+        finding=lead,
+        consequence=(
+            "Shown on the report as a directional read, with this hit rate printed beside it so nobody has to take it on faith."
+            if verdict == YES
+            else "No directional read reaches the report. A call that cannot be shown to beat a coin has no business next to a sized position."
+        ),
+        verdict=verdict, n=int(len(called)),
+        stats={"hit_rate": rate, "ci_low": lo_ci, "ci_high": hi_ci, "clustered_t": clustered,
+               "share_committed": share_called, "n_called": float(len(called)), "n_read": float(len(d))},
+    )
+
+
 ORDER = (
     "closer_is_not_tighter",
     "weighting_does_not_help",
@@ -764,7 +859,20 @@ ORDER = (
     "distance_does_not_warn",
     "one_factor_hid_two_errors",
     "online_calibration_adds_nothing",
+    "filing_read_predicts_size",
+    "filing_read_calls_direction",
 )
+
+
+def filing_outcomes(ctx: Any, store: Any) -> pd.DataFrame:  # noqa: ANN401
+    """Every filing the model read, joined to what the token did before the next open."""
+    from nightwatch.features import filing_outcomes as fo
+
+    try:
+        reads = fo.load_reads(store)
+    except Exception:  # noqa: BLE001 - no reads table yet is not an error
+        return pd.DataFrame()
+    return fo.collect(ctx, reads) if not reads.empty else pd.DataFrame()
 
 
 def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = None, max_points_per_ticker: int = 40) -> list[Study]:
@@ -785,6 +893,12 @@ def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = No
             ("one_factor_hid_two_errors", lambda: study_one_factor_hid_two_errors(forecasts)),
             ("online_calibration_adds_nothing", lambda: study_online_calibration_adds_nothing(forecasts)),
             ("analogs_beat_random_hours", lambda: study_analogs_beat_random_hours(forecasts)),
+        ]
+    reads = filing_outcomes(ctx, getattr(ctx, "store", None))
+    if not reads.empty:
+        jobs += [
+            ("filing_read_predicts_size", lambda: study_the_model_spots_a_big_night(reads)),
+            ("filing_read_calls_direction", lambda: study_the_model_calls_the_direction(reads)),
         ]
     out: list[Study] = []
     for key, fn in jobs:
