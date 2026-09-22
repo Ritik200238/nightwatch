@@ -45,6 +45,17 @@ const STAT_LABEL: Record<string, string> = {
   breach_other_tokens: "outcomes below p5, other-token analogs",
   boot_ci_low: "bootstrap interval, low",
   boot_ci_high: "bootstrap interval, high",
+  move_flagged: "move after a flagged filing",
+  move_rest: "move after the rest",
+  n_flagged: "filings flagged",
+  n_rest: "filings not flagged",
+  tokens_agreeing: "tokens where it holds",
+  hit_rate: "directional calls correct",
+  ci_low: "interval, low",
+  ci_high: "interval, high",
+  share_committed: "filings it committed to",
+  n_called: "directional calls made",
+  n_read: "filings read",
 };
 
 /** The verdict in one line, for the collapsed header.
@@ -62,9 +73,18 @@ function firstSentence(text: string): string {
 /** Shares are printed as percentages and everything else at three places, because a
  *  t-statistic rendered as "215%" is worse than no label at all. */
 function statValue(key: string, v: number): string {
-  const isShare = key.startsWith("breach_") || key.startsWith("pooled_lo") || key.startsWith("banded_lo") || key.startsWith("heldout_lo") || key === "share_near_tighter";
+  const isShare =
+    key.startsWith("breach_") ||
+    key.startsWith("pooled_lo") ||
+    key.startsWith("banded_lo") ||
+    key.startsWith("heldout_lo") ||
+    key === "share_near_tighter" ||
+    key === "hit_rate" ||
+    key === "ci_low" ||
+    key === "ci_high" ||
+    key === "share_committed";
   if (isShare) return `${(v * 100).toFixed(1)}%`;
-  if (key.includes("width") || key.startsWith("mean_move")) return `${v.toFixed(2)}%`;
+  if (key.includes("width") || key.startsWith("mean_move") || key.startsWith("move_")) return `${v.toFixed(2)}%`;
   return Number.isInteger(v) ? String(v) : v.toFixed(3);
 }
 
