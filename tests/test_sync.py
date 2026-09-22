@@ -160,3 +160,45 @@ def test_recorder_runs_periodic_jobs_on_their_own_cadence_and_isolates_failures(
         jobs[2].last_run -= 3601
         rec.tick()
         assert calls["a"] == 3 and jobs[2].runs == 1
+
+
+# --------------------------------------------------- deferred jobs across a restart
+
+
+def test_a_deferred_job_that_is_overdue_on_disk_runs_at_once():
+    """A four-hourly job measuring its wait from process start gets another four hours
+    of silence on every deploy. On a box that redeploys per commit that is how a feed
+    goes days stale while every health check stays green."""
+    from nightwatch.recorder.orderbook_recorder import PeriodicJob
+
+    overdue = PeriodicJob("filings", 4 * 3600, lambda: None, run_at_start=False, age_at_start=9 * 3600)
+    assert overdue.due(50_000.0) is True
+
+
+def test_a_deferred_job_part_way_through_its_period_waits_out_the_remainder():
+    from nightwatch.recorder.orderbook_recorder import PeriodicJob
+
+    j = PeriodicJob("filings", 4 * 3600, lambda: None, run_at_start=False, age_at_start=3600)
+    now = 50_000.0
+    assert j.due(now) is False
+    # It has one hour of credit, so it is due three hours from now, not four.
+    assert j.due(now + 3 * 3600 - 5) is False
+    assert j.due(now + 3 * 3600 + 5) is True
+
+
+def test_a_deferred_job_with_no_history_still_waits_a_full_period():
+    """First ever start: nothing on disk, so the old behaviour is the right one."""
+    from nightwatch.recorder.orderbook_recorder import PeriodicJob
+
+    j = PeriodicJob("filings", 4 * 3600, lambda: None, run_at_start=False, age_at_start=None)
+    now = 50_000.0
+    assert j.due(now) is False
+    assert j.due(now + 4 * 3600 - 5) is False
+    assert j.due(now + 4 * 3600 + 5) is True
+
+
+def test_a_run_at_start_job_is_unaffected():
+    """`now` is a monotonic clock, already large when the recorder starts."""
+    from nightwatch.recorder.orderbook_recorder import PeriodicJob
+
+    assert PeriodicJob("mature", 900, lambda: None).due(50_000.0) is True

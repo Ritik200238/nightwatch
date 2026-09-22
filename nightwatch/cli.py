@@ -32,7 +32,7 @@ from nightwatch.data.sync import (
 )
 from nightwatch.data.yahoo import YahooChartClient
 from nightwatch.recorder.orderbook_recorder import OrderBookRecorder, PeriodicJob
-from nightwatch.time_utils import UTC
+from nightwatch.time_utils import UTC, utc_now
 
 log = logging.getLogger(__name__)
 
@@ -147,15 +147,23 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
             nasdaq = NasdaqEarningsClient()
             tickers = [e.ticker for e in entries]
             journal = Journal(store)
+
+            def age_of(task: str) -> float | None:
+                """Seconds since that task last finished, from the store rather than
+                from this process - so a redeploy does not hand a slow job another
+                full period of silence."""
+                last = store.last_sync(task)
+                return None if last is None else max(0.0, (utc_now() - last).total_seconds())
+
             jobs = [
                 # Earnings dates move and macro releases get scheduled; six-hourly is plenty.
-                PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False),
-                PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False),
+                PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False, age_at_start=age_of("earnings_calendar")),
+                PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False, age_at_start=age_of("news")),
                 # The native stock's own bars: hourly while the US market is open, and a
                 # no-op the rest of the time because the missing-range check finds nothing.
-                PeriodicJob("equity-bars", 3600, lambda: sync_equity_universe(store, YahooChartClient(), entries), run_at_start=False),
+                PeriodicJob("equity-bars", 3600, lambda: sync_equity_universe(store, YahooChartClient(), entries), run_at_start=False, age_at_start=age_of("bars")),
                 # Filings arrive at any hour; four-hourly keeps "was there an 8-K last night" current.
-                PeriodicJob("filings", 4 * 3600, lambda: sync_filings(store, SecFilingsClient(), tickers), run_at_start=False),
+                PeriodicJob("filings", 4 * 3600, lambda: sync_filings(store, SecFilingsClient(), tickers), run_at_start=False, age_at_start=age_of("filings")),
                 # Score live tickets as soon as their horizon has passed so calibration stays current.
                 PeriodicJob("mature-forecasts", 900, lambda: mature_and_learn(journal, spot_symbol_for={e.ticker: e.spot_symbol for e in entries})),
             ]

@@ -56,13 +56,22 @@ class PeriodicJob:
     every_sec: float
     fn: Callable[[], object]
     run_at_start: bool = True
+    # How long ago this job last actually ran, in seconds, read from the store at
+    # construction. Without it a job that defers its first run measures the wait from
+    # *process start*, so every deploy pushes it back another full period - and on a box
+    # that redeploys on every commit, a four-hourly job can go days without firing. That
+    # is how the filing feed went eight days stale while looking healthy.
+    age_at_start: float | None = None
     last_run: float = field(default=0.0, init=False)
     runs: int = field(default=0, init=False)
     failures: int = field(default=0, init=False)
 
     def due(self, now: float) -> bool:
         if self.runs == 0 and not self.run_at_start and self.last_run == 0.0:
-            self.last_run = now  # first run happens one full period from now
+            if self.age_at_start is not None and self.age_at_start >= self.every_sec:
+                return True  # overdue on disk: the restart does not buy it another period
+            # Otherwise wait out the remainder of the period it was already part-way through.
+            self.last_run = now - min(self.age_at_start or 0.0, self.every_sec)
             return False
         return now - self.last_run >= self.every_sec
 
