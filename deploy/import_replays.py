@@ -36,7 +36,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-TABLES = ("forecasts", "forecast_outcomes", "lessons", "studies")
+TABLES = ("forecasts", "forecast_outcomes", "lessons", "studies", "filing_reads", "filing_label_stats")
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> list[str]:
@@ -76,23 +76,35 @@ def extract(source: Path, dest: Path) -> int:
     return len(ids)
 
 
-def _copy_studies(src: sqlite3.Connection, dst: sqlite3.Connection) -> int:
-    """Replace the destination's studies with the source's, whole.
+# Tables that travel whole rather than row by row. A study is a statement about one
+# engine measured against one history; a filing read cost real tokens and is keyed to
+# text that does not change. In both cases a half-updated set is worse than none,
+# because nothing in it announces which half is stale.
+WHOLESALE = ("studies", "filing_reads", "filing_label_stats")
 
-    Not merged key by key: a study is a statement about one engine measured against one
-    history, so a set where three rows describe the current engine and four describe a
-    previous one would read as a contradiction and be impossible to spot as one.
-    """
-    if not src.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='studies'").fetchone():
-        return 0
-    rows = src.execute("SELECT key, ran_at, body FROM studies").fetchall()
-    if not rows:
-        return 0
-    dst.execute("CREATE TABLE IF NOT EXISTS studies (key TEXT PRIMARY KEY, ran_at INTEGER NOT NULL, body BLOB NOT NULL)")
-    dst.execute("DELETE FROM studies")
-    dst.executemany("INSERT INTO studies (key, ran_at, body) VALUES (?,?,?)", rows)
-    print(f"  studies: {len(rows)} rows")
-    return len(rows)
+
+def _copy_wholesale(src: sqlite3.Connection, dst: sqlite3.Connection) -> int:
+    """Replace the destination's copies of the wholesale tables with the source's."""
+    moved = 0
+    for table in WHOLESALE:
+        ddl = src.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone()
+        if ddl is None:
+            continue
+        rows = src.execute(f"SELECT * FROM {table}").fetchall()  # noqa: S608 - name from a fixed tuple
+        if not rows:
+            continue
+        dst.execute(ddl[0].replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS "))
+        dst.execute(f"DELETE FROM {table}")  # noqa: S608
+        cols = _columns(src, table)
+        dst.executemany(f"INSERT INTO {table} ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", rows)  # noqa: S608
+        print(f"  {table}: {len(rows)} rows")
+        moved += len(rows)
+    return moved
+
+
+def _copy_studies(src: sqlite3.Connection, dst: sqlite3.Connection) -> int:
+    """Kept as the name the rest of this file calls; the set it moves has grown."""
+    return _copy_wholesale(src, dst)
 
 
 def merge(incoming: Path, target: Path) -> int:
@@ -150,11 +162,11 @@ def merge_studies_only(incoming: Path, target: Path) -> int:
     """
     src = sqlite3.connect(f"file:{incoming}?mode=ro", uri=True)
     dst = sqlite3.connect(target)
-    n = _copy_studies(src, dst)
+    n = _copy_wholesale(src, dst)
     dst.commit()
     dst.close()
     src.close()
-    print(f"copied {n} studies" if n else "no studies in the extract")
+    print(f"copied {n} rows" if n else "nothing to copy in the extract")
     return n
 
 
@@ -162,7 +174,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--extract", nargs=2, metavar=("SOURCE", "DEST"), help="pull replay rows and studies out of a database")
     ap.add_argument("--merge", metavar="INCOMING", help="merge an extract into the live database")
-    ap.add_argument("--studies-only", metavar="INCOMING", help="copy just the studies across, leaving the forecasts untouched")
+    ap.add_argument("--studies-only", metavar="INCOMING", help="copy the studies and filing reads across, leaving the forecasts untouched")
     ap.add_argument("--target", default="/data/nightwatch.sqlite", help="database to merge into")
     args = ap.parse_args()
     if args.extract:
