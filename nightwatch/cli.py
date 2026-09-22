@@ -34,7 +34,6 @@ from nightwatch.data.yahoo import YahooChartClient
 from nightwatch.recorder.orderbook_recorder import OrderBookRecorder, PeriodicJob
 from nightwatch.time_utils import UTC
 
-
 log = logging.getLogger(__name__)
 
 

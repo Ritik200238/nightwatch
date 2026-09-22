@@ -15,10 +15,9 @@ import pytest
 
 from nightwatch.data import qwen
 from nightwatch.data.sec import readable_documents, strip_html
-from nightwatch.features import filing_outcomes as fo
-from nightwatch.features.filing_read import CATEGORIES, FilingRead, FilingReadStore, ReadError, parse_read, read_filing
 from nightwatch.data.store import Store
-
+from nightwatch.features import filing_outcomes as fo
+from nightwatch.features.filing_read import CATEGORIES, FilingReadStore, ReadError, parse_read, read_filing
 
 # ------------------------------------------------------------------- the transport
 
