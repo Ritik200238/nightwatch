@@ -220,6 +220,10 @@ export function ReportView({ report }: { report: Report }) {
     <div className="space-y-4">
       <Hypothetical report={report} />
       <DecisionCard report={report} />
+      {/* Above the disclosures on purpose. Narrowing the search changes what every
+          number below it means, so it cannot sit behind a section a reader has to
+          open before the summary stops being misleading. */}
+      <LensNote report={report} />
       <FreshFilings report={report} />
 
       <div className="flex items-center justify-between gap-3 px-1">
@@ -430,7 +434,6 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
   if (!a || !a.result.ok) {
     return (
       <Section title="What history says" subtitle="Nearest past moments to now">
-        <LensNote report={report} />
         <p className="text-sm text-muted-foreground">No analog cohort: {a?.result.reason ?? "search did not run"}. The verdict uses the stop for risk.</p>
       </Section>
     );
@@ -459,7 +462,6 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
       title="What history says"
       subtitle={`${a.result.matches.length} distinct past moments most like now (${a.scope === "pooled" ? "pooled across tokens" : "same token"}; ${a.result.n_candidates.toLocaleString()} candidate hours, ${a.result.n_distinct_available.toLocaleString()} distinct)`}
     >
-      <LensNote report={report} />
       {c && !c.insufficient ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <div>
