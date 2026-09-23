@@ -856,6 +856,7 @@ ORDER = (
     "weighting_does_not_help",
     "analogs_beat_random_hours",
     "pooling_beats_own_history",
+    "narrowing_gives_a_truer_tail",
     "distance_does_not_warn",
     "one_factor_hid_two_errors",
     "online_calibration_adds_nothing",
@@ -875,12 +876,19 @@ def filing_outcomes(ctx: Any, store: Any) -> pd.DataFrame:  # noqa: ANN401
     return fo.collect(ctx, reads) if not reads.empty else pd.DataFrame()
 
 
-def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = None, max_points_per_ticker: int = 40) -> list[Study]:
+def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = None, max_points_per_ticker: int = 40, lens_rows: pd.DataFrame | None = None) -> list[Study]:
     """Every study, recomputed. Anything that fails is reported as inconclusive rather
     than dropped, so a study cannot quietly disappear because it stopped working."""
+    from nightwatch.journal import lens_study
+
     ev = evidence if evidence is not None else collect_evidence(ctx, max_points_per_ticker=max_points_per_ticker)
     ran = utc_now().isoformat()
     jobs: list[tuple[str, Any]] = []
+    # The narrowing sweep runs two searches per qualifying night across the whole
+    # history, so it is the slow one; a caller that already has the rows passes them in.
+    lr = lens_rows if lens_rows is not None else lens_study.collect(ctx)
+    if not lr.empty:
+        jobs.append((lens_study.KEY, lambda: lens_study.study(lr)))
     if ev.ok:
         jobs += [
             ("closer_is_not_tighter", lambda: study_closer_is_not_tighter(ev)),
