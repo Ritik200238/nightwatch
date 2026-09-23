@@ -22,6 +22,13 @@ if [ "$(free -m | awk 'NR==2 {print $2}')" -lt 1800 ]; then
   echo "  memory at once; 4 GB is the comfortable size. Continuing anyway."
 fi
 
+say "Keeping the API in memory"
+# See deploy/sysctl-nightwatch.conf for the measurement behind this.
+if [ -f "$(dirname "$0")/sysctl-nightwatch.conf" ]; then
+  sudo cp "$(dirname "$0")/sysctl-nightwatch.conf" /etc/sysctl.d/60-nightwatch.conf
+  sudo sysctl -q -p /etc/sysctl.d/60-nightwatch.conf || true
+fi
+
 say "Installing Docker"
 if ! command -v docker >/dev/null 2>&1; then
   sudo apt-get update -qq

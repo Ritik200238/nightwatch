@@ -25,6 +25,10 @@ services:
       BITGET_QWEN_API_KEY: ${BITGET_QWEN_API_KEY:-}
       NIGHTWATCH_LLM_PROVIDER: ${NIGHTWATCH_LLM_PROVIDER:-auto}
       FRED_API_KEY: ${FRED_API_KEY:-}
+      # How many feature frames the API keeps. Frames are keyed by hour, so with room for
+      # more than the 24 tokens the previous hour's set lingers after every hourly warm-up
+      # and doubles the working set; on a 1 GB box that is what pushes it into swap.
+      NIGHTWATCH_FRAME_CACHE: ${NIGHTWATCH_FRAME_CACHE:-64}
     volumes:
       - nightwatch-data:/data
     logging: &logging
