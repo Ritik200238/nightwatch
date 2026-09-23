@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { HorizonKind, Side, TicketInput, UniverseEntry } from "@/lib/api";
+import { api, type HorizonKind, type Lens, type Side, type TicketInput, type UniverseEntry } from "@/lib/api";
 
 interface Props {
   universe: UniverseEntry[];
@@ -16,6 +16,100 @@ interface Props {
 }
 
 type Errors = Partial<Record<"ticker" | "notional" | "equity" | "stop" | "hours", string>>;
+
+interface Menu {
+  lenses: Lens[];
+  counts: Record<string, number>;
+  floor: number;
+  suggested: string[];
+}
+
+/** Which past moments the search is allowed to compare against.
+ *
+ *  The same seventeen conditions the model picks from when a trader asks for one in
+ *  words, offered as a list so the feature is not hidden behind knowing to ask. Each
+ *  one carries how many hours of this token's own history it leaves, because that is
+ *  the cost: narrow far enough and there is no evidence left to answer from.
+ */
+function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: string[]; onChange: (names: string[]) => void }) {
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    if (!ticker) return;
+    let live = true;
+    void api
+      .lenses(ticker)
+      .then((r) => {
+        if (live) setMenu({ lenses: r.lenses, counts: r.counts ?? {}, floor: r.floor_hours, suggested: r.suggested ?? [] });
+      })
+      .catch(() => {
+        // A missing menu is not worth blocking a ticket over; the chat path still works.
+        if (live) setMenu(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [ticker]);
+
+  if (!menu) return null;
+
+  const suggested = menu.lenses.filter((x) => menu.suggested.includes(x.name) || chosen.includes(x.name));
+  const rest = menu.lenses.filter((x) => !suggested.includes(x));
+  const shown = showAll ? [...suggested, ...rest] : suggested;
+  const thin = chosen.filter((n) => (menu.counts[n] ?? 0) < menu.floor);
+
+  function toggle(name: string) {
+    onChange(chosen.includes(name) ? chosen.filter((x) => x !== name) : [...chosen, name]);
+  }
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <Label>Compare against</Label>
+        <button
+          type="button"
+          className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll ? "Fewer" : `All ${menu.lenses.length}`}
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {shown.map((x) => {
+          const on = chosen.includes(x.name);
+          const n = menu.counts[x.name];
+          return (
+            <button
+              key={x.name}
+              type="button"
+              aria-pressed={on}
+              title={`${x.definition}${n != null ? ` — ${n.toLocaleString()} past hours in ${ticker}` : ""}`}
+              onClick={() => toggle(x.name)}
+              className={`rounded-full border px-2 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {x.label}
+              {n != null ? <span className="ml-1 opacity-60 tabular-nums">{n.toLocaleString()}h</span> : null}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {chosen.length === 0 ? (
+          <>All past hours ranked by how much they resemble now. Pick a condition to rank inside it instead.</>
+        ) : thin.length > 0 ? (
+          <>
+            Under {menu.floor.toLocaleString()} hours left in {ticker}&apos;s own past, so the search widens across tokens — or says it cannot answer.
+          </>
+        ) : (
+          <>Ranked inside that history only, and the report says what it cost.</>
+        )}
+      </p>
+    </div>
+  );
+}
 
 export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
   const [ticker, setTicker] = useState(initial?.ticker ?? "TSLA");
@@ -27,6 +121,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
   const [stop, setStop] = useState(initial?.stop_price ? String(initial.stop_price) : "");
   const [thesis, setThesis] = useState(initial?.thesis ?? "");
   const [invalidation, setInvalidation] = useState(initial?.invalidation ?? "");
+  const [lenses, setLenses] = useState<string[]>(initial?.lenses ?? []);
   const [errors, setErrors] = useState<Errors>({});
 
   const available = universe.filter((u) => u.has_data);
@@ -54,6 +149,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
       stop_price: st,
       thesis,
       invalidation,
+      lenses,
     };
   }
 
@@ -160,6 +256,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
         </div>
         <Textarea id="thesis" rows={2} value={thesis} onChange={(e) => setThesis(e.target.value)} placeholder="One line. The gate needs a written reason." />
       </div>
+      <LensPicker ticker={ticker} chosen={lenses} onChange={setLenses} />
       <div className="space-y-1">
         <Label htmlFor="invalidation">What proves it wrong</Label>
         <Textarea id="invalidation" rows={2} value={invalidation} onChange={(e) => setInvalidation(e.target.value)} placeholder="e.g. a close below 350" />

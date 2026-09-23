@@ -367,11 +367,47 @@ export function ReportView({ report }: { report: Report }) {
   );
 }
 
+/** What the search was narrowed to, said plainly, with the cost in evidence.
+ *
+ *  A narrowed cohort answers a different question from the unfiltered one, so it can
+ *  never be invisible: the page names the conditions, prints the definition each one
+ *  resolved to, and says how much history is left. When the request could not be
+ *  honoured it says that instead of quietly answering the wider question.
+ */
+function LensNote({ report }: { report: Report }) {
+  const l = report.analog?.lens;
+  if (!l || !l.lenses.length) return null;
+  const share = l.n_before > 0 ? l.n_after / l.n_before : 0;
+  return (
+    <div className={`mb-4 rounded-lg border p-3 text-sm ${l.applied ? "border-primary/40 bg-primary/5" : "border-status-warning/40 bg-status-warning/5"}`}>
+      <p className="font-medium">
+        {l.applied ? <>Narrowed to {l.description}</> : <>Could not narrow to {l.description}</>}
+      </p>
+      {l.applied ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {l.n_after.toLocaleString()} of {l.n_before.toLocaleString()} past hours qualify ({(share * 100).toFixed(1)}%). Everything below is that cohort, not the general one —
+          the distance ranking happened inside it.
+        </p>
+      ) : (
+        <p className="mt-1 text-xs text-muted-foreground">{l.refused || "the filter left too little history to search"}</p>
+      )}
+      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+        {l.lenses.map((x) => (
+          <li key={x.name}>
+            <span className="text-foreground">{x.label}</span> — {x.definition}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean }) {
   const a = report.analog;
   if (!a || !a.result.ok) {
     return (
       <Section title="What history says" subtitle="Nearest past moments to now">
+        <LensNote report={report} />
         <p className="text-sm text-muted-foreground">No analog cohort: {a?.result.reason ?? "search did not run"}. The verdict uses the stop for risk.</p>
       </Section>
     );
@@ -400,6 +436,7 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
       title="What history says"
       subtitle={`${a.result.matches.length} distinct past moments most like now (${a.scope === "pooled" ? "pooled across tokens" : "same token"}; ${a.result.n_candidates.toLocaleString()} candidate hours, ${a.result.n_distinct_available.toLocaleString()} distinct)`}
     >
+      <LensNote report={report} />
       {c && !c.insufficient ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <div>

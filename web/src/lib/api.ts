@@ -43,6 +43,7 @@ export interface TicketInput {
   as_of?: string | null;
   record?: boolean;
   open_positions?: { ticker: string; side: Side; notional_quote: number }[];
+  lenses?: string[];
 }
 
 export interface UniverseEntry {
@@ -129,6 +130,34 @@ export interface HorizonReport {
   p5_adjusted: number | null;
   p95_adjusted: number | null;
   adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
+}
+
+/** One named condition narrowing which past moments count as comparable.
+ *
+ *  The model picks these by name from a fixed list; it never writes a threshold or a
+ *  column. `definition` is shown beside the result so "only earnings nights" resolves
+ *  to something a reader can check rather than a query nobody can see.
+ */
+export interface Lens {
+  name: string;
+  label: string;
+  definition: string;
+}
+
+/** What a narrowed search found, and what it cost in evidence.
+ *
+ *  `applied` false with lenses present means the desk could not honour the request:
+ *  narrowing left too little history to build a distribution from, and it says so
+ *  rather than answering from a handful of hours.
+ */
+export interface LensResult {
+  lenses: Lens[];
+  names: string[];
+  description: string;
+  n_before: number;
+  n_after: number;
+  applied: boolean;
+  refused: string;
 }
 
 /** A filing recent enough that the market has not priced it yet.
@@ -645,6 +674,7 @@ export interface Report {
     horizons: Record<string, HorizonReport>;
     matches_outcomes: MatchOutcome[];
     paths: ScenarioPaths | null;
+    lens: LensResult | null;
   } | null;
   stress: {
     presets: Scenario[];
@@ -781,6 +811,17 @@ export const api = {
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
   studies: () => request<StudiesResponse>("/studies"),
+  lenses: (ticker?: string) =>
+    request<{
+      lenses: Lens[];
+      counts: Record<string, number>;
+      floor_hours: number;
+      suggested?: string[];
+      history_hours?: number;
+      note?: string;
+    }>(
+      `/lenses${ticker ? `?ticker=${ticker}` : ""}`,
+    ),
   markTaken: (forecastId: number, taken = true) => request<{ forecast_id: number; taken: boolean }>(`/forecasts/${forecastId}/taken?taken=${taken}`, { method: "POST" }),
   forecasts: (limit = 100, ticker?: string, kind?: string) => {
     const q = new URLSearchParams({ limit: String(limit) });
