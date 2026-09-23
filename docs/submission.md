@@ -44,27 +44,48 @@ moments that looked like this, and can I survive the bad cases?** Given a trade 
    summary: forty past windows replayed from their own entry over the same holding
    period, with the outcome fan and the trader's own stop drawn across them, so the
    answer includes how many of them would have taken the stop out on the way.
-3. Measures what followed each match over the trade's own horizon: return, worst
+3. **Lets the trader change what counts as comparable, in words.** "Only show me what
+   happened on earnings nights" narrows the searched history *before* the ranking runs,
+   so the answer is the forty nearest earnings nights rather than the survivors of an
+   unfiltered search - two different cohorts, and only the first answers the question.
+   Seventeen named conditions; the model picks names from that list and never writes a
+   threshold or a column, so each one prints the predicate it resolved to next to the
+   result. Narrowing costs evidence and the desk says what it cost: TSLA's own past holds
+   96 hours with earnings ahead against 1,752 across the universe, which is why that
+   question is answered from the pooled history and the page says so. Asking for
+   something too rare - FOMC ahead *and* volatile, 44 hours out of 15,129 - is refused
+   rather than answered from a handful of hours.
+4. Measures what followed each match over the trade's own horizon: return, worst
    point in the window, excess over the native stock, with bootstrap confidence
    intervals and a permutation test against random hours from the same time-of-week
    bucket.
-4. Runs preset stress tests calibrated from the token's own history: closed-window gap
+5. Runs preset stress tests calibrated from the token's own history: closed-window gap
    percentiles, worst and typical earnings gaps, volatility spikes, basis blowouts,
    liquidity drought, cannot-exit-for-24h, funding spike on the hedge leg, plus a
    block-bootstrap Monte Carlo and a reverse stress ("what move loses 5%").
-5. Walks the recorded live order book for the ticket size and quotes the real cost of
+6. Walks the recorded live order book for the ticket size and quotes the real cost of
    getting out, and the cost of hedging with the perpetual.
-6. Reads any SEC filing the market has not opened since. 99% of the 8-Ks in this
+7. Reads any SEC filing the market has not opened since. 99% of the 8-Ks in this
    history landed while the US market was shut, and until now the desk only knew *when*
    one arrived — item 5.02 covers a routine board appointment and a chief executive
    resigning overnight. A model reads the filing's own words and says what it is and how
    much it matters; the number beside it is not the model's, but what this token's own
    bars did after every other filing given that same label.
-7. Passes the ticket through a nine-rule discipline gate and five independent sizing
+8. Passes the ticket through a nine-rule discipline gate and five independent sizing
    caps, and returns a verdict: go, reduce to a size, hedge a ratio, or do not trade.
    The gate is built to decide, not to abstain: where a missing input is a caution rather
    than a danger - no stop given, thin weekend trading - it says so in the verdict and
    sizes against the calibrated 5th percentile instead of refusing.
+9. **Re-runs itself when the trader asks a what-if.** "What if I only held it six
+   hours?", "was it worse on earnings nights?" - none of those are a rearrangement of a
+   report that has already been computed, so the desk computes another one against the
+   same moment. The model names what changed, from a fixed set of fields; the engine does
+   everything that follows and the comparison is assembled from the two reports' own
+   fields. What moves is not only the distribution. On TSLA at 2026-09-19T02:00Z, 60,000
+   USDT requested against 200,000 of equity, narrowing to earnings nights takes the 5th
+   percentile from **-3.33% to -10.72%** and the size the desk will allow from **50,000
+   to 18,655 USDT**, with the binding cap changing from concentration to the risk budget.
+   Both runs are reproducible against the public API by passing `lenses` and that `as_of`.
 
 The core hypothesis is that a forecast which is never scored is a guess. So every
 verdict is journaled before its outcome is known and scored when the horizon passes. The
@@ -281,15 +302,26 @@ wrong, and that is the problem.
 
 ## Field 2: Role of the LLM in Your Project
 
-**The deployed demo runs on Qwen 3.8 Max.** Two jobs, one rule that governs both: **a
-model may read text and write English. It may not produce a number that reaches a
-decision.** Every figure in the product comes from stored market data or from a
-measurement over it.
+**The deployed demo runs on Qwen 3.8 Max.** Four jobs, one rule that governs all of
+them: **a model may read text, choose from a vocabulary this codebase defines, and write
+English. It may not produce a number, write a filter, or pick a threshold.** Every figure
+in the product comes from stored market data or from a measurement over it, and every
+condition the search can be narrowed to is a predicate written in Python with its
+definition printed next to the result.
 
-Both of Qwen's jobs are also *scored*, which is the part we would most like to be judged
-on. Its filing judgement is graded against what the token actually did; its speed was
-measured and found wanting for one job, so that job stayed on the rules. Neither is an
-assertion.
+That second clause is the one we would most like to be argued with. The sub-theme asks
+how AI retrieves historically similar scenarios, and the tempting answer is to let a
+model write the query. We think that is the wrong answer: a model that can write a filter
+can write one that flatters the result, and nobody reading the output can see what it
+did. So the model picks *names* - "earnings_soon", "thin_liquidity" - from a fixed list
+of seventeen, and each name resolves to a predicate a reader can check. The model decides
+**which history is comparable**. It never decides what comparable means.
+
+Every one of the four jobs is also *scored or bounded*, never asserted. The filing
+judgement is graded against what the token actually did. The speed of writing was
+measured and found wanting, so that job stayed on the rules. The retrieval vocabulary is
+closed, and a name outside it is dropped before the engine sees it. And a what-if runs
+the real engine, so its numbers are the desk's, not the model's.
 
 ### Qwen 3.8 Max — reading the filings (Alibaba Cloud, via the Bitget hackathon gateway)
 
@@ -347,6 +379,65 @@ sentence. The rule-based parser underneath it reads the shapes traders usually t
 would have missed that one. `GET /health` names the provider and model, so anyone can
 check which is answering.
 
+### Qwen 3.8 Max — steering the retrieval (live in the demo)
+
+This is the sub-theme's own question, so it is the job we care most about. A trader who
+is carrying a position into an earnings night does not want the average of every night.
+Those are two different distributions, and until this layer existed there was no way to
+ask for the second one.
+
+> *"only show me what happened on earnings nights"* → `["earnings_soon"]`
+> *"only compare against weekends when the book was thin"* → `["weekend", "thin_liquidity"]`
+> *"long 20k TSLA into Monday"* → `[]`
+
+Names, not filters. The model is shown seventeen conditions with their definitions and
+the phrasings traders use for them, and returns names from that list. A name it invents
+is resolved away before the engine sees it. The instruction is explicit that describing a
+situation is not asking for a filter - a trader saying "earnings are tomorrow" wants the
+general answer with that fact in view - and the third example above is the model getting
+that right.
+
+The narrowing then happens **before** the ranking, not after it. Filtering the matches
+that come back from an unfiltered search would give the survivors of the wrong ranking:
+the forty nearest hours overall, minus the ones that were not earnings nights. What the
+trader asked for is the forty nearest earnings nights, which is a different set.
+
+What it costs is on the page, because narrowing thins the evidence fast:
+
+| asked for | hours left | searched | 5th percentile | size allowed |
+|---|---|---|---|---|
+| nothing | 15,026 of 15,026 | TSLA's own past | −3.33% | 50,000 USDT |
+| thin book | 2,829 of 15,026 | TSLA's own past | −2.53% | 50,000 USDT |
+| earnings ahead | 1,752 of 323,520 | pooled, 24 tokens | **−10.72%** | **18,655 USDT** |
+| FOMC ahead **and** volatile | 44 of 15,026 | refused | — | — |
+
+(TSLA, `as_of` 2026-09-19T02:00Z, 60,000 USDT requested against 200,000 of equity;
+observed, and reproducible against the public API.) Two things there matter more than the
+numbers. TSLA's own history holds 96 hours with earnings ahead, which is not enough to
+build a distribution from, so the desk widens to the pooled history across 24 tokens and
+*says on the page that it did*. And "FOMC ahead and volatile" leaves 44 hours out of
+15,129, so it is **refused** — the desk answers the unfiltered question out loud instead
+of quietly passing off a distribution built from 44 hours as the answer to a narrower
+question. Being told there is not enough evidence is a correct outcome, and the common one.
+
+### Qwen 3.8 Max — running the counterfactual (live in the demo)
+
+The report on screen can be quoted and rearranged, and thirteen kinds of follow-up are
+answered that way with no model involved. *"What if I only held it six hours?"* is not
+one of them: it is a different report. So the model names what changed - from a closed
+set of five fields, the same restraint as the lenses - and the engine runs a second,
+complete analysis against the same moment. The comparison a trader reads is assembled
+from the two reports' own fields, which is why the answer carries no unverified numbers:
+there is no step at which one could be written. A test asserts that by running the
+comparison through the same invented-number check the narrator is held to.
+
+Two deliberate limits. A what-if is never journalled, because a forecast nobody took
+should not be scored, and a cohort narrowed by a lens is a different estimator from the
+one that sizes real trades - scoring them together would corrupt the calibration both
+depend on. And size and stop are not variable here, because the sensitivity sweep already
+ran the whole gate across a grid of both; re-running for those would be slower and no
+more correct.
+
 ### What the model is *not* allowed to do, measured rather than asserted
 
 Qwen reasons before it answers, and here the reasoning dominates: rewriting a full report
@@ -372,6 +463,12 @@ flagged, and the deterministic answer ships instead. The deployed demo runs on Q
 Retrieval, cohort statistics, calibration, stress presets, Monte Carlo, order-book
 walking, the discipline gate, the sizing caps, and the verdict. All deterministic, all
 journaled, all scored independently of any model.
+
+That holds even where a model steers. When the search is narrowed, the model has supplied
+a list of names and nothing else: the predicates, the distance metric, the episode
+de-duplication, the minimum sample, the refusal rule and every statistic on the far side
+are the same code that runs when nobody asks for anything. The model changes which rows
+are searched. It does not touch how they are ranked or what is measured about them.
 
 Both language jobs also have a rule-based implementation, and the desk falls back to it
 when no provider has credentials or the provider is unreachable. The parser reads the shapes a trader
