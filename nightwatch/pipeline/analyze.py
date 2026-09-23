@@ -533,7 +533,9 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     # to a question nobody asked is not an answer.
     lens_needs_more = bool(ticket.lenses) and not lens_result.applied
     if not result.ok or result.n < ctx.analog_config.k or lens_needs_more:
-        pooled_parts = [(ticket.ticker, searchable)]
+        # The unfiltered frame: the lens is applied to every part below, and counting
+        # "of how many" from an already-narrowed one would understate what it cost.
+        pooled_parts = [(ticket.ticker, frame)]
         tickers = ctx.pooled_tickers or ctx.tickers_with_data()
         for t in tickers:
             if t == ticket.ticker:
@@ -545,12 +547,13 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
             frames[t] = f
             pooled_parts.append((t, f))
         if len(pooled_parts) > 1:
-            pooled = pooled_history(pooled_parts)
             # The same lens, across the wider history. A condition that is too rare in one
             # token's past is often common enough across twenty-four of them - earnings
             # nights are 96 hours for TSLA alone and 1,752 pooled - so this is usually
-            # where a narrow question becomes answerable at all.
-            pooled, pooled_lens = lens_mod.apply(pooled, list(ticket.lenses), min_rows=floor)
+            # where a narrow question becomes answerable at all. Narrowing each part before
+            # stacking gives the same rows without building the whole haystack first.
+            pooled_parts, pooled_lens = lens_mod.apply_to_parts(pooled_parts, list(ticket.lenses), min_rows=floor)
+            pooled = pooled_history(pooled_parts)
             pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
             # A pooled cohort that honours the lens beats a same-ticker one that ignores
             # it, whatever their sizes: they are answers to different questions.

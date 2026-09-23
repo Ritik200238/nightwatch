@@ -127,6 +127,44 @@ def test_the_result_serialises_with_its_definitions():
     assert d["lenses"][0]["definition"], "the page shows what the filter actually was"
 
 
+def test_narrowing_each_part_first_gives_the_same_rows_as_narrowing_the_stack():
+    """The pooled search filters each token's history before stacking, because the stack
+    is 326,016 rows and the answer is 1,752 of them. It has to be the same 1,752."""
+    import pandas as pd
+
+    parts = [
+        ("TSLA", frame(hours_to_earnings=[6.0] * 300 + [999.0] * 700)),
+        ("NVDA", frame(hours_to_earnings=[6.0] * 400 + [999.0] * 600)),
+    ]
+    stacked = pd.concat([f for _, f in parts], ignore_index=True)
+    one_shot, r1 = lens.apply(stacked, ["earnings_soon"], min_rows=100)
+    per_part, r2 = lens.apply_to_parts(parts, ["earnings_soon"], min_rows=100)
+    assert len(one_shot) == sum(len(f) for _, f in per_part) == 700
+    assert (r1.n_before, r1.n_after, r1.applied) == (r2.n_before, r2.n_after, r2.applied)
+
+
+def test_a_token_left_with_nothing_is_not_counted_as_searched():
+    parts = [("TSLA", frame(hours_to_earnings=[6.0] * 500)), ("NVDA", frame(hours_to_earnings=[999.0] * 500))]
+    kept, result = lens.apply_to_parts(parts, ["earnings_soon"], min_rows=100)
+    assert [t for t, _ in kept] == ["TSLA"] and result.applied is True
+    assert result.n_before == 1000 and result.n_after == 500
+
+
+def test_too_thin_pooled_is_refused_with_every_part_intact():
+    """The unfiltered pooled search is what runs when the narrow one cannot, so the
+    parts that come back have to be the ones that went in."""
+    parts = [("TSLA", frame(hours_to_earnings=[6.0] * 5 + [999.0] * 495)), ("NVDA", frame(bucket=["weeknight"] * 500))]
+    kept, result = lens.apply_to_parts(parts, ["earnings_soon"], min_rows=100)
+    assert result.applied is False and "5 past hours" in result.refused
+    assert [(t, len(f)) for t, f in kept] == [("TSLA", 500), ("NVDA", 500)]
+
+
+def test_no_lens_leaves_the_parts_exactly_as_they_were():
+    parts = [("TSLA", frame(bucket=["weeknight"] * 10))]
+    kept, result = lens.apply_to_parts(parts, [], min_rows=1)
+    assert [(t, len(f)) for t, f in kept] == [("TSLA", 10)] and result.applied is False
+
+
 # ------------------------------------------------------------------- the offering
 
 

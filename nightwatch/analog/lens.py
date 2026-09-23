@@ -25,7 +25,7 @@ ranking. Those give different cohorts, and only the first is the cohort asked fo
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -229,6 +229,13 @@ class LensResult:
         }
 
 
+def _too_thin(lenses: list[Lens], n_after: int) -> str:
+    return (
+        f"only {n_after} past hours match {describe(lenses)}, which is too few to build a "
+        f"distribution from; the answer below is the unfiltered one"
+    )
+
+
 def apply(frame: pd.DataFrame, names: list[str] | None, *, min_rows: int) -> tuple[pd.DataFrame, LensResult]:
     """Narrow the searchable history, or explain why it was not narrowed.
 
@@ -243,14 +250,31 @@ def apply(frame: pd.DataFrame, names: list[str] | None, *, min_rows: int) -> tup
     keep = mask(frame, lenses)
     n_after = int(keep.sum())
     if n_after < min_rows:
-        return frame, LensResult(
-            lenses, len(frame), n_after, applied=False,
-            refused=(
-                f"only {n_after} past hours match {describe(lenses)}, which is too few to build a "
-                f"distribution from; the answer below is the unfiltered one"
-            ),
-        )
+        return frame, LensResult(lenses, len(frame), n_after, applied=False, refused=_too_thin(lenses, n_after))
     return frame[keep], LensResult(lenses, len(frame), n_after, applied=True)
+
+
+def apply_to_parts(parts: Sequence[tuple[str, pd.DataFrame]], names: list[str] | None, *, min_rows: int) -> tuple[list[tuple[str, pd.DataFrame]], LensResult]:
+    """The same narrowing, done to each token's history before they are stacked.
+
+    Identical rows to filtering the stack afterwards - a row filter commutes with a
+    concatenation - without copying and sorting 326,016 rows to keep 1,752 of them. That
+    is a memory saving on a 1 GB box, not a speed one: measured, the search time barely
+    moved (9.4s to 9.1s cold). A cold narrowed search is slow because the other 23
+    tokens' feature frames are rebuilt for the new hour; warm, the same query takes 3.0s.
+    """
+    lenses = resolve(names)
+    n_before = sum(len(f) for _, f in parts)
+    if not lenses:
+        return list(parts), LensResult([], n_before, n_before, applied=False)
+    kept = [(t, f[mask(f, lenses)]) for t, f in parts]
+    n_after = sum(len(f) for _, f in kept)
+    if n_after < min_rows:
+        return list(parts), LensResult(lenses, n_before, n_after, applied=False, refused=_too_thin(lenses, n_after))
+    # A token with nothing left is a token that contributed nothing, and the report says
+    # how many were searched. Keeping its empty frame would inflate that count and give
+    # the stack a column of all-null dtypes to reconcile.
+    return [(t, f) for t, f in kept if len(f)], LensResult(lenses, n_before, n_after, applied=True)
 
 
 MAX_SUGGESTIONS = 4
