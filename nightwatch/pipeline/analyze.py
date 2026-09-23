@@ -148,13 +148,30 @@ class AnalysisContext:
             cov = self.store.bar_coverage(Venue.BITGET_SPOT, spec.spot_symbol, Interval.H1)
             if cov is None:
                 raise InsufficientData(f"no stored bars for {spec.spot_symbol}")
-            frame = compute_feature_frame(self.store, spec, cov[0], end)
+            frame = _compact(compute_feature_frame(self.store, spec, cov[0], end))
         self._frames[key] = frame  # re-insert as most recent
         while len(self._frames) > self.frame_cache_size:
             self._frames.pop(next(iter(self._frames)))
         while len(self._factors_cache) > 64:
             self._factors_cache.pop(next(iter(self._factors_cache)))
         return frame
+
+
+def _compact(frame: pd.DataFrame) -> pd.DataFrame:
+    """The same frame with its label columns stored as categories.
+
+    Six text columns - the time-of-week bucket and the regime labels - repeat a handful
+    of values across fifteen thousand rows and were half of every frame's 11.7 MB. On the
+    1 GB box the API keeps twenty-four of these, and that was enough to push them into
+    swap and make the first narrowed search of an hour take 18-23 s. As categories the
+    values, comparisons and filters are unchanged; only the storage is.
+    """
+    out = frame.copy()
+    for col in out.columns:
+        if out[col].dtype == object or pd.api.types.is_string_dtype(out[col].dtype):
+            if out[col].nunique(dropna=True) <= 64:
+                out[col] = out[col].astype("category")
+    return out
 
 
 # ------------------------------------------------------------------ report types
