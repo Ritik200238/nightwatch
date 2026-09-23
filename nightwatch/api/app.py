@@ -119,6 +119,20 @@ class AppState:
         self.calibration_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
         self.warm_thread: threading.Thread | None = None
         self.warm_status: dict[str, Any] = {"state": "idle", "done": 0, "total": 0}
+        # A what-if is a report the trader did not ask the desk to stand behind, so it is
+        # not journalled and has no forecast id. It still has to be reachable, because the
+        # next question is usually about it. Negative keys say which reports those are:
+        # below zero means nothing was recorded and nothing will be scored.
+        self._hypothetical = 0
+
+    def keep_hypothetical(self, payload: dict[str, Any]) -> int:
+        """Store a report that was never journalled, under a key that says so."""
+        with self.lock:
+            self._hypothetical -= 1
+            key = self._hypothetical
+        payload["forecast_id"] = key
+        self.reports.save(key, payload)
+        return key
 
     def warm(self) -> None:
         tickers = self.ctx.tickers_with_data()
@@ -151,6 +165,69 @@ class AppState:
 
     def close(self) -> None:
         self.store.close()
+
+
+def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[str, Any] | None:
+    """Answer a counterfactual by running it, or return None if it is not one.
+
+    The report on the screen is a fixed object: it can be quoted and rearranged, and
+    that is what the follow-up layer does. A question like "was it worse on earnings
+    nights" is not a rearrangement of it - it is a different report - so the desk runs
+    one against the same moment and reports what moved.
+
+    Two guards keep this from answering the wrong question well. The model only fills
+    fields from a fixed schema, so it can name a change but never invent a computation.
+    And an empty change - the model saying "they are asking about the trade as it is" -
+    hands the question straight back to the layer that reads the report.
+
+    The re-run is not journalled. A what-if is a forecast nobody took, and a cohort
+    narrowed by a lens is a different estimator from the one that sizes real trades;
+    scoring them together would corrupt the calibration that both depend on.
+    """
+    import json
+
+    from nightwatch.api import whatif
+    from nightwatch.api.llm import parse_change
+    from nightwatch.api.providers import select
+
+    base = whatif.ticket_from(context)
+    if base is None:
+        return None
+    tickers = list(state.ctx.tickers_with_data())
+    if not whatif.looks_like_a_what_if(question, tickers=tuple(tickers), current=base.ticker):
+        return None
+    provider = select()
+    if provider is None:
+        return None
+    change = parse_change(provider, question, context.get("ticket") or {}, tickers)
+    if change.empty:
+        return None
+
+    ticket = change.apply_to(base)
+    with state.lock:
+        report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
+        payload = report.to_dict()
+    state.keep_hypothetical(payload)
+    answer = whatif.compare(context, payload, change)
+    return {
+        "intent": {"kind": "what_if", "question": answer.kind, "missing_fields": [], "reply": answer.text},
+        "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
+        "report": payload,
+        "report_text": None,
+        "narrative": answer.text,
+        # Nothing to verify: every number was copied out of one of the two reports by
+        # code, not written by a model.
+        "unverified_numbers": [],
+        "reply": answer.text,
+        "mode": "what_if",
+        "answer_kind": "what_if",
+        "answered_about": context.get("forecast_id"),
+        "changed": {k: v for k, v in change.__dict__.items() if v},
+        "parsed_by": provider.name,
+        "written_by": "rules",
+        "provider": provider.name,
+        "model": provider.model,
+    }
 
 
 def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAPI:
@@ -500,6 +577,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # A question about the report already on screen, rather than a new trade idea.
         context = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
         if context and latest and followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, list(s.ctx.tickers_with_data())):
+            # "What if I held it twelve hours", "was it worse on earnings nights". The
+            # report on screen cannot answer those - they are a different report - so the
+            # desk runs one. The model names what changed and the engine does the rest.
+            if credentials_present():
+                try:
+                    hypothetical = _what_if(s, context, latest)
+                except InsufficientData as exc:
+                    hypothetical = {"reply": f"I could not run that one: {exc}", "mode": "what_if", "intent": {"kind": "followup", "reply": str(exc), "missing_fields": []}}
+                except Exception as exc:  # noqa: BLE001 - the report on screen still answers
+                    log.warning("what-if fell back to the report on screen: %s", exc)
+                    hypothetical = None
+                if hypothetical:
+                    return hypothetical
+
             found = followup.answer_or_menu(context, latest)
             payload = {
                 "intent": {"kind": "followup", "question": found.kind, "missing_fields": [], "reply": found.text},
