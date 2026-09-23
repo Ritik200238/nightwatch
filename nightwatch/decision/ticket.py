@@ -38,6 +38,10 @@ class TradeTicket:
     created_at: datetime | None = None
     # What the trader already holds, so the desk can judge the book and not just the trade.
     open_positions: tuple[tuple[str, str, float], ...] = ()  # (ticker, side, notional)
+    # Named conditions narrowing which past moments count as comparable - "only earnings
+    # nights", "only when the basis was stretched". Names from nightwatch.analog.lens;
+    # anything else is dropped rather than guessed at.
+    lenses: tuple[str, ...] = ()
     extra: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:

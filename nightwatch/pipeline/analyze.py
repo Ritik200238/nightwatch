@@ -178,6 +178,9 @@ class AnalogSection:
     horizons: dict[str, HorizonReport]
     matches_outcomes: list[MatchOutcome]
     paths: Any = None  # nightwatch.analog.paths.ScenarioPaths, over the primary horizon
+    # Which named conditions narrowed the search, what they cost in evidence, and
+    # whether they could be honoured at all. nightwatch.analog.lens.LensResult.
+    lens: Any = None
 
 
 @dataclass
@@ -505,15 +508,32 @@ def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, ho
 
 
 def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str], *, entry_price: float = 0.0) -> AnalogSection | None:
+    from nightwatch.analog import lens as lens_mod
+
     engine = AnalogEngine(ctx.analog_config)
     query_bucket = snapshot.labels.get("bucket")
     frames: dict[str, pd.DataFrame] = {ticket.ticker: frame}
 
-    result = engine.search(frame.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
+    # Narrow the searchable history *before* ranking, so the distances are measured
+    # inside the cohort the trader asked for rather than picking the survivors of an
+    # unfiltered ranking. Those are different cohorts and only the first answers the
+    # question. The floor keeps a filter from leaving too little to search at all.
+    floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h
+    searchable, lens_result = lens_mod.apply(frame, list(ticket.lenses), min_rows=floor)
+    if lens_result.refused:
+        warnings.append(lens_result.refused)
+
+    result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
     scope = "same_ticker"
     same_ticker_episodes = result.n_distinct_available if result.ok else result.n_distinct_available
-    if not result.ok or result.n < ctx.analog_config.k:
-        pooled_parts = [(ticket.ticker, frame)]
+    # A lens the token's own past cannot support is the main reason to widen. TSLA has 96
+    # earnings hours and the universe has 1,752, so "only earnings nights" is unanswerable
+    # on one name and perfectly answerable across twenty-four. Widening for that is worth
+    # doing even when the unfiltered same-ticker search succeeded, because a good answer
+    # to a question nobody asked is not an answer.
+    lens_needs_more = bool(ticket.lenses) and not lens_result.applied
+    if not result.ok or result.n < ctx.analog_config.k or lens_needs_more:
+        pooled_parts = [(ticket.ticker, searchable)]
         tickers = ctx.pooled_tickers or ctx.tickers_with_data()
         for t in tickers:
             if t == ticket.ticker:
@@ -526,13 +546,33 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
             pooled_parts.append((t, f))
         if len(pooled_parts) > 1:
             pooled = pooled_history(pooled_parts)
+            # The same lens, across the wider history. A condition that is too rare in one
+            # token's past is often common enough across twenty-four of them - earnings
+            # nights are 96 hours for TSLA alone and 1,752 pooled - so this is usually
+            # where a narrow question becomes answerable at all.
+            pooled, pooled_lens = lens_mod.apply(pooled, list(ticket.lenses), min_rows=floor)
             pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
-            if pooled_result.ok and (not result.ok or pooled_result.n > result.n):
-                result, scope = pooled_result, "pooled"
-                warnings.append(f"same-ticker history has only {same_ticker_episodes} distinct episodes; using pooled history across {len(pooled_parts)} tickers")
+            # A pooled cohort that honours the lens beats a same-ticker one that ignores
+            # it, whatever their sizes: they are answers to different questions.
+            honours_lens = lens_needs_more and pooled_lens.applied
+            if pooled_result.ok and (honours_lens or not result.ok or pooled_result.n > result.n):
+                if honours_lens:
+                    # The pooled search honoured what the token's own past could not, so
+                    # the refusal recorded a moment ago is no longer true. Dropped before
+                    # lens_result is replaced, or it would be the wrong string by then.
+                    stale = lens_result.refused
+                    if stale:
+                        warnings[:] = [w for w in warnings if w != stale]
+                    warnings.append(
+                        f"{lens_mod.describe(pooled_lens.lenses)} is too rare in {ticket.ticker}'s own past; "
+                        f"searched the pooled history across {len(pooled_parts)} tokens instead"
+                    )
+                else:
+                    warnings.append(f"same-ticker history has only {same_ticker_episodes} distinct episodes; using pooled history across {len(pooled_parts)} tickers")
+                result, scope, lens_result = pooled_result, "pooled", pooled_lens
     if not result.ok:
         warnings.append(f"analog search refused: {result.reason}")
-        return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[])
+        return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[], lens=lens_result)
 
     # The ticket's own horizon length is applied uniformly to every analog (that is the
     # cohort the verdict uses); the structural horizons are each analog's *own* next
@@ -593,7 +633,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         result.matches, frames, horizon_h=float(ticket_h), side=ticket.side.value,
         stop_price=ticket.stop_price, entry_price=entry_price,
     )
-    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths)
+    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result)
 
 
 def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str]) -> StressSection:
