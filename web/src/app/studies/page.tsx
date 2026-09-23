@@ -67,7 +67,7 @@ const STAT_LABEL: Record<string, string> = {
  *  same two columns for each condition: how often the unfiltered tail was breached and
  *  how often the narrowed one was, against a target of 5%.
  */
-function ConditionTable({ stats }: { stats: Record<string, number> }) {
+function ConditionTable({ stats, labels }: { stats: Record<string, number>; labels: Record<string, string> }) {
   const byCondition = new Map<string, Record<string, number>>();
   for (const [k, v] of Object.entries(stats)) {
     const dot = k.indexOf(".");
@@ -97,7 +97,7 @@ function ConditionTable({ stats }: { stats: Record<string, number> }) {
         <tbody className="tabular">
           {rows.map(([name, r]) => (
             <tr key={name} className="border-b border-border/50">
-              <td className="py-1 pr-3">{name.replace(/_/g, " ")}</td>
+              <td className="py-1 pr-3">{labels[name] ?? name.replace(/_/g, " ")}</td>
               <td className="py-1 pr-3 text-right">{num(r.n, 0)}</td>
               <td className="py-1 pr-3 text-right">{pct(r.breach_all)}</td>
               <td className="py-1 pr-3 text-right">
@@ -150,12 +150,19 @@ function statValue(key: string, v: number): string {
 export default function StudiesPage() {
   const [rep, setRep] = useState<StudiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lensLabels, setLensLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api
       .studies()
       .then(setRep)
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load the studies."));
+    // The names a trader sees for each condition. Missing labels fall back to the
+    // machine name, so a failed request costs wording, not the table.
+    api
+      .lenses()
+      .then((r) => setLensLabels(Object.fromEntries(r.lenses.map((l) => [l.name, l.label]))))
+      .catch(() => undefined);
   }, []);
 
   const yes = rep?.studies.filter((s) => s.verdict === "yes").length ?? 0;
@@ -252,7 +259,7 @@ export default function StudiesPage() {
                   {Object.keys(s.stats).length ? (
                     <div>
                       <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">The numbers ({s.n.toLocaleString()} observations)</p>
-                      <ConditionTable stats={s.stats} />
+                      <ConditionTable stats={s.stats} labels={lensLabels} />
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs lg:grid-cols-3">
                         {Object.entries(s.stats).filter(([k]) => !k.includes(".")).map(([k, val]) => (
                           <div key={k} className="flex items-baseline justify-between gap-2 border-b border-border/50 py-1">
