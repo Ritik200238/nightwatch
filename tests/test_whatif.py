@@ -163,6 +163,17 @@ def test_a_lens_that_could_not_be_honoured_is_refused_not_answered():
     assert "-3.3" not in text, "the unfiltered answer must not be quoted as the narrow one"
 
 
+def test_a_changed_holding_period_names_both_windows():
+    """The two medians are measured over different things once the horizon moves, and a
+    sentence that names only the new one compares them as though they were not."""
+    after = report(primary_horizon="6h", analog={
+        "scope": "same_ticker", "lens": None, "result": {"ok": True},
+        "horizons": {"6h": {"cohort": {"n": 27, "median_pct": 0.0}, "p5_adjusted": -2.9}},
+    })
+    text = whatif.compare(report(), after, whatif.Change(horizon_hours=6.0)).text
+    assert "from +0.2% over 8h to 0.0% over 6h" in text
+
+
 def test_a_re_run_with_no_cohort_says_so_rather_than_comparing_nothing():
     after = report(analog={
         "scope": "same_ticker", "lens": None,

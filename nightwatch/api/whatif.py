@@ -210,15 +210,18 @@ def compare(before: dict, after: dict, change: Change) -> Answer:
 
     cb, ca = _cohort(before), _cohort(after)
     hb, ha = before.get("primary_horizon"), after.get("primary_horizon")
-    horizon = f" over {ha}" if ha and ha != hb else ""
-    same = cb.get("median_pct") == ca.get("median_pct") and _p5(before) == _p5(after)
-    if same:
+    # Changing how long the position is held changes what the two medians are measured
+    # over, so both windows are named. "Moves from +0.2% to 0.0% over 6h" would quietly
+    # compare two numbers that are not measured over the same thing.
+    from_h = f" over {hb}" if hb and ha and hb != ha else ""
+    to_h = f" over {ha}" if ha and (not hb or hb != ha) else ""
+    if cb.get("median_pct") == ca.get("median_pct") and _p5(before) == _p5(after):
         # A lens that filtered nothing, or a change the distribution did not feel. Saying
         # "moves from -3.3% to -3.3%" is true and reads like a mistake.
-        bits.append(f"The middle outcome{horizon} and the one-in-twenty loss are unchanged, at {_pct(ca.get('median_pct'))} and {_pct(_p5(after))}.")
+        bits.append(f"The middle outcome{to_h} and the one-in-twenty loss are unchanged, at {_pct(ca.get('median_pct'))} and {_pct(_p5(after))}.")
     else:
         bits.append(
-            f"The middle outcome{horizon} moves from {_pct(cb.get('median_pct'))} to {_pct(ca.get('median_pct'))}, "
+            f"The middle outcome moves from {_pct(cb.get('median_pct'))}{from_h} to {_pct(ca.get('median_pct'))}{to_h}, "
             f"and the one-in-twenty loss from {_pct(_p5(before))} to {_pct(_p5(after))}."
         )
 
