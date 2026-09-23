@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from nightwatch.analog import lens
+from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
 
 
 def frame(**cols) -> pd.DataFrame:  # noqa: ANN003
@@ -246,3 +247,39 @@ def test_no_lens_is_dead_on_a_history_that_should_trigger_it(name):
         "risk_off": {"vix_pctl_1y": [90.0]},
     }[name]
     assert lens.BY_NAME[name].mask(frame(**satisfying)).tolist() == [True]
+
+
+# ------------------------------------------------------- enough hours, too few events
+
+
+def test_a_condition_with_hours_but_no_separate_events_falls_back_and_says_why(seeded_store, monkeypatch):  # noqa: F811
+    """FOMC nights fall on the same dates for every token, so a condition can clear the
+    hour floor and still be a dozen events. The engine refuses a dozen, as it should;
+    the desk used to answer nothing at all. It now gives the unfiltered answer, labelled
+    as such, with the reason that actually decided it."""
+    from nightwatch.decision.ticket import HorizonKind, TradeTicket
+    from nightwatch.pipeline.analyze import analyze
+    from nightwatch.stress.scenarios import Side
+    from tests.test_pipeline import AS_OF, _ctx
+
+    ctx = _ctx(seeded_store)
+    floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h
+
+    def two_blocks(f):  # noqa: ANN001, ANN202
+        # Two runs of consecutive hours, far apart: plenty of rows, very few episodes.
+        idx = pd.Series(range(len(f)), index=f.index)
+        return (idx.between(500, 500 + floor // 2 + 20) | idx.between(3000, 3000 + floor // 2 + 20)).to_numpy()
+
+    clumped = lens.Lens("clumped", "clumped", "two blocks of hours", lambda f: pd.Series(two_blocks(f), index=f.index), says=("clumped",))
+    monkeypatch.setitem(lens.BY_NAME, "clumped", clumped)
+
+    ticket = TradeTicket(
+        ticker="TSLA", side=Side.LONG, notional_quote=10_000.0, account_equity_quote=200_000.0,
+        horizon_kind=HorizonKind.NEXT_OPEN, thesis="t", invalidation="i", lenses=("clumped",),
+    )
+    report = analyze(ctx, ticket, as_of=AS_OF, record=False).to_dict()
+    a = report["analog"]
+    assert a["result"]["ok"], "an unanswerable condition must not take the whole history section with it"
+    assert a["lens"]["applied"] is False
+    assert "distinct episodes" in a["lens"]["refused"] and "unfiltered" in a["lens"]["refused"]
+    assert any("distinct episodes" in w for w in report["warnings"])

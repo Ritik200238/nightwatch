@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -519,60 +519,92 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     # unfiltered ranking. Those are different cohorts and only the first answers the
     # question. The floor keeps a filter from leaving too little to search at all.
     floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h
-    searchable, lens_result = lens_mod.apply(frame, list(ticket.lenses), min_rows=floor)
-    if lens_result.refused:
-        warnings.append(lens_result.refused)
 
-    result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
-    scope = "same_ticker"
-    same_ticker_episodes = result.n_distinct_available if result.ok else result.n_distinct_available
-    # A lens the token's own past cannot support is the main reason to widen. TSLA has 96
-    # earnings hours and the universe has 1,752, so "only earnings nights" is unanswerable
-    # on one name and perfectly answerable across twenty-four. Widening for that is worth
-    # doing even when the unfiltered same-ticker search succeeded, because a good answer
-    # to a question nobody asked is not an answer.
-    lens_needs_more = bool(ticket.lenses) and not lens_result.applied
-    if not result.ok or result.n < ctx.analog_config.k or lens_needs_more:
-        # The unfiltered frame: the lens is applied to every part below, and counting
-        # "of how many" from an already-narrowed one would understate what it cost.
-        pooled_parts = [(ticket.ticker, frame)]
-        tickers = ctx.pooled_tickers or ctx.tickers_with_data()
-        for t in tickers:
-            if t == ticket.ticker:
-                continue
-            try:
-                f = ctx.feature_frame(t, as_of)
-            except InsufficientData:
-                continue
-            frames[t] = f
-            pooled_parts.append((t, f))
-        if len(pooled_parts) > 1:
-            # The same lens, across the wider history. A condition that is too rare in one
-            # token's past is often common enough across twenty-four of them - earnings
-            # nights are 96 hours for TSLA alone and 1,752 pooled - so this is usually
-            # where a narrow question becomes answerable at all. Narrowing each part before
-            # stacking gives the same rows without building the whole haystack first.
-            pooled_parts, pooled_lens = lens_mod.apply_to_parts(pooled_parts, list(ticket.lenses), min_rows=floor)
-            pooled = pooled_history(pooled_parts)
-            pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
-            # A pooled cohort that honours the lens beats a same-ticker one that ignores
-            # it, whatever their sizes: they are answers to different questions.
-            honours_lens = lens_needs_more and pooled_lens.applied
-            if pooled_result.ok and (honours_lens or not result.ok or pooled_result.n > result.n):
-                if honours_lens:
-                    # The pooled search honoured what the token's own past could not, so
-                    # the refusal recorded a moment ago is no longer true. Dropped before
-                    # lens_result is replaced, or it would be the wrong string by then.
-                    stale = lens_result.refused
-                    if stale:
-                        warnings[:] = [w for w in warnings if w != stale]
-                    warnings.append(
-                        f"{lens_mod.describe(pooled_lens.lenses)} is too rare in {ticket.ticker}'s own past; "
-                        f"searched the pooled history across {len(pooled_parts)} tokens instead"
+    def search_with(names: tuple[str, ...]) -> tuple[Any, str, Any, list[str]]:
+        notes: list[str] = []
+        searchable, lens_result = lens_mod.apply(frame, list(names), min_rows=floor)
+        if lens_result.refused:
+            notes.append(lens_result.refused)
+
+        result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
+        scope = "same_ticker"
+        same_ticker_episodes = result.n_distinct_available
+        # A lens the token's own past cannot support is the main reason to widen. TSLA has 96
+        # earnings hours and the universe has 1,752, so "only earnings nights" is unanswerable
+        # on one name and perfectly answerable across twenty-four. Widening for that is worth
+        # doing even when the unfiltered same-ticker search succeeded, because a good answer
+        # to a question nobody asked is not an answer.
+        lens_needs_more = bool(names) and not lens_result.applied
+        if not result.ok or result.n < ctx.analog_config.k or lens_needs_more:
+            # The unfiltered frame: the lens is applied to every part below, and counting
+            # "of how many" from an already-narrowed one would understate what it cost.
+            pooled_parts = [(ticket.ticker, frame)]
+            tickers = ctx.pooled_tickers or ctx.tickers_with_data()
+            for t in tickers:
+                if t == ticket.ticker:
+                    continue
+                try:
+                    f = frames[t] if t in frames else ctx.feature_frame(t, as_of)
+                except InsufficientData:
+                    continue
+                frames[t] = f
+                pooled_parts.append((t, f))
+            if len(pooled_parts) > 1:
+                # The same lens, across the wider history. A condition that is too rare in one
+                # token's past is often common enough across twenty-four of them - earnings
+                # nights are 96 hours for TSLA alone and 1,752 pooled - so this is usually
+                # where a narrow question becomes answerable at all. Narrowing each part before
+                # stacking gives the same rows without building the whole haystack first.
+                pooled_parts, pooled_lens = lens_mod.apply_to_parts(pooled_parts, list(names), min_rows=floor)
+                pooled = pooled_history(pooled_parts)
+                pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
+                # A pooled cohort that honours the lens beats a same-ticker one that ignores
+                # it, whatever their sizes: they are answers to different questions.
+                honours_lens = lens_needs_more and pooled_lens.applied
+                if pooled_result.ok and (honours_lens or not result.ok or pooled_result.n > result.n):
+                    if honours_lens:
+                        # The pooled search honoured what the token's own past could not, so
+                        # the refusal recorded a moment ago is no longer true.
+                        notes = [w for w in notes if w != lens_result.refused]
+                        notes.append(
+                            f"{lens_mod.describe(pooled_lens.lenses)} is too rare in {ticket.ticker}'s own past; "
+                            f"searched the pooled history across {len(pooled_parts)} tokens instead"
+                        )
+                    else:
+                        notes.append(f"same-ticker history has only {same_ticker_episodes} distinct episodes; using pooled history across {len(pooled_parts)} tickers")
+                    result, scope, lens_result = pooled_result, "pooled", pooled_lens
+                elif lens_needs_more and pooled_lens.applied and not pooled_result.ok:
+                    # The pooled history had the hours but not the separate events, so the
+                    # unfiltered same-token answer stands - and the reason given has to be
+                    # the one that decided it, not the "too few hours" from one token.
+                    why = (
+                        f"{lens_mod.describe(pooled_lens.lenses)} covers {pooled_lens.n_after:,} past hours across the pooled history, "
+                        f"but {pooled_result.reason} - they fall on too few separate dates to count as independent evidence; "
+                        f"the answer below is the unfiltered one"
                     )
-                else:
-                    warnings.append(f"same-ticker history has only {same_ticker_episodes} distinct episodes; using pooled history across {len(pooled_parts)} tickers")
-                result, scope, lens_result = pooled_result, "pooled", pooled_lens
+                    notes = [w for w in notes if w != lens_result.refused] + [why]
+                    lens_result = replace(lens_result, refused=why, n_before=pooled_lens.n_before, n_after=pooled_lens.n_after)
+        return result, scope, lens_result, notes
+
+    result, scope, lens_result, notes = search_with(tuple(ticket.lenses))
+    if ticket.lenses and lens_result.applied and not result.ok:
+        # Enough hours, too few separate events. FOMC nights fall on the same dates for
+        # every token, so a thousand pooled hours can be a dozen meetings, and the engine
+        # rightly refuses to call a dozen a distribution. Measured across every past
+        # overnight hold, this happened on 471 of 474 FOMC nights. Answering nothing would
+        # be the worst response to it; the unfiltered answer, labelled as such, is the
+        # same one given when a condition leaves too few hours.
+        narrowed_reason = result.reason
+        result, scope, _, notes = search_with(())
+        lens_result = replace(
+            lens_result, applied=False,
+            refused=(
+                f"{lens_mod.describe(lens_result.lenses)} covers {lens_result.n_after:,} past hours, but {narrowed_reason} - "
+                f"they fall on too few separate dates to count as independent evidence; the answer below is the unfiltered one"
+            ),
+        )
+        notes.append(lens_result.refused)
+    warnings.extend(notes)
     if not result.ok:
         warnings.append(f"analog search refused: {result.reason}")
         return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[], lens=lens_result)
