@@ -210,7 +210,9 @@ def study(rows: pd.DataFrame) -> Study:
         "Every overnight hold since each token had 120 days of history where a condition was true at the close: the desk's "
         "5th percentile computed twice from the history before that moment, once from all past hours and once from only the "
         "hours where the condition also held, both from the same pooled engine. Scored against what the token actually did "
-        "by the next open, on breach rate (target 5%) and pinball loss at 0.05, with significance clustered by token."
+        "by the next open, on breach rate (target 5%) and pinball loss at 0.05, with significance clustered by token. Both arms "
+        "are the raw retrieval, before the tail widening the desk applies, so they are compared on equal terms. Weekend and "
+        "weeknight are not tested: every decision moment here is the close of a session."
     )
     if table.empty or int(table["n"].sum()) < MIN_PAIRS:
         return Study(
@@ -245,10 +247,21 @@ def study(rows: pd.DataFrame) -> Study:
     if len(worse):
         bits.append("It scored worse for " + "; ".join(line(r) for _, r in worse.iterrows()) + ".")
     undecided = table[table["verdict"] == UNCLEAR]
-    if len(undecided):
-        bits.append("Not separable for " + ", ".join(
-            f"{label[r['lens']]} (n={int(r['n'])}" + (f", t={r['t_clustered']:+.1f})" if np.isfinite(r.get("t_clustered", np.nan)) else ")")
-            for _, r in undecided.iterrows()
+    # "Too few to judge" and "judged, no difference" are different answers. Folding a
+    # 24-night result with t=+3.0 into "not separable" would understate it; calling it
+    # a yes would be choosing the threshold after seeing the number. So it is named for
+    # what it is, with its numbers, and left undecided.
+    thin = undecided[(undecided["n"] < MIN_PAIRS) | (undecided["tokens"] < MIN_TOKENS)]
+    flat = undecided.drop(thin.index)
+    if len(flat):
+        bits.append("No separable difference for " + ", ".join(
+            f"{label[r['lens']]} (n={int(r['n'])}, t={r['t_clustered']:+.1f})" for _, r in flat.iterrows()
+        ) + ".")
+    shown_thin = thin[thin["n"] > 0]
+    if len(shown_thin):
+        bits.append(f"Too few nights to judge (under {MIN_PAIRS}) for " + "; ".join(
+            f"{label[r['lens']]}: breached {r['breach_lens']:.1%} narrowed against {r['breach_all']:.1%} unfiltered, n={int(r['n'])}"
+            for _, r in shown_thin.iterrows()
         ) + ".")
     finding = {YES: "Yes, where it could be decided. ", NO: "No. ", UNCLEAR: "Mixed. "}[verdict] + " ".join(bits)
 
@@ -264,6 +277,18 @@ def study(rows: pd.DataFrame) -> Study:
         )
     else:
         consequence = "Nothing is claimed for narrowing either way; the desk shows the narrowed answer only when asked for it."
+
+    # The sweep also measured how often a condition could not be narrowed at all, and
+    # one of those reasons was a bug: enough hours on too few separate dates used to
+    # return no history section. That is fixed, and the count is why.
+    episodes = table[table["too_few_episodes"] > 0].sort_values("too_few_episodes", ascending=False)
+    if len(episodes):
+        worst = episodes.iloc[0]
+        consequence += (
+            f" The sweep also found that {label[worst['lens']]} had enough past hours but too few separate dates on "
+            f"{int(worst['too_few_episodes'])} of {int(worst['asked'])} nights, and the desk used to answer those with no history "
+            f"at all. It now gives the unfiltered answer and says why."
+        )
 
     stats: dict[str, float] = {"conditions_judged": float(decided), "conditions_better": float(len(better)), "conditions_worse": float(len(worse))}
     for _, r in table.iterrows():
