@@ -153,9 +153,10 @@ LENSES: tuple[Lens, ...] = (
 )
 
 # There is no "in the news" lens, and that is a data fact rather than an oversight. The
-# headline feed carries 200 rows across the whole universe, so news_count_24h peaks at 2
-# and averages 0.0006: a lens built on it would match nothing on 325,992 pooled hours.
-# Offering a filter that always returns nothing is worse than not offering it.
+# headline feed is thin against fifteen thousand hours of history: on TSLA 0.5% of hours
+# carry any tagged headline at all, none carry two, and the mean is 0.005. A lens built
+# on it would leave 72 hours out of 15,129 and be refused every time it was asked for.
+# Offering a filter that can only ever say no is worse than not offering it.
 
 BY_NAME: dict[str, Lens] = {x.name: x for x in LENSES}
 
