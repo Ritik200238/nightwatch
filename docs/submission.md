@@ -96,11 +96,13 @@ applies them to new verdicts. Judges can see the before and after.
 The second hypothesis follows from the first, and is the one we would most like to be
 judged on: **if a forecast that is never scored is a guess, so is a retrieval engine that
 is never tested.** So the engine is put through the same treatment as its own forecasts.
-Nine falsifiable questions about it — does closeness predict a tighter outcome, does
+Ten falsifiable questions about it — does closeness predict a tighter outcome, does
 weighting the close matches help, does one tail factor fit every holding period, does a
-model reading a filing spot a night that matters — each recomputed from the stored data,
-each published whichever way it came out. Six came back no, including the one that would
-have made the product look cleverer, and each one says what changed because of it. The
+model reading a filing spot a night that matters, does narrowing the search to the nights
+a trader asks about give a truer loss tail — each recomputed from the stored data, each
+published whichever way it came out. Five came back no, including the one that would
+have made the product look cleverer, two could not be decided, and each one says what
+changed because of it. The
 page is at `/studies` and the failures are the point of it.
 
 ### 2. Target user and product value
@@ -155,10 +157,10 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
     from **23,880 to 42,011 USDT**. The desk had been cutting weekend positions by 43%
     against a loss the history does not support.
   * Median absolute error of the median forecast: 2.22 percentage points.
-* **We tested the retrieval itself, and published what failed.** Nine falsifiable
+* **We tested the retrieval itself, and published what failed.** Ten falsifiable
   questions about the engine, each recomputed from the stored bars and the journal by
-  `nightwatch studies`, each reported whichever way it came out. **Six came back no.**
-  The two that cost us most:
+  `nightwatch studies`, each reported whichever way it came out. **Five came back no and
+  two could not be decided.** The two that cost us most:
   * *Do closer analogs have tighter outcomes?* **No — the opposite.** The near half of a
     retrieval is 14% wider by standard deviation and 22% by interquartile range, and
     **not one of 24 tokens goes the other way** (clustered t = −6.59, n = 960). The
@@ -177,6 +179,18 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
     symptom, gave 4.43% against 4.43% on a held-out half. Not adopted. Chosen on the
     whole sample instead it would have read amber → green, which is what picking a
     hyperparameter on the data you report it against buys you.
+* **Narrowing the search is scored, not assumed.** Every past overnight hold where a
+  condition was true, 1,419 of them across 24 tokens, with the desk's 5th percentile
+  computed twice from the history before that moment: once from all past hours, once
+  from only the hours where the condition also held. On nights with earnings due within
+  three days the unfiltered tail was breached **22.0%** of the time against a 5% target;
+  the narrowed one **7.0%** (n = 100, 12 of 18 tokens better, clustered t = +2.9). On the
+  night before earnings itself it was **54.2% against 4.2%** — but on 24 nights, under the
+  30-night bar set before the run, so it is reported and not counted. Volatile nights
+  improved narrowly (15.8% to 13.9%, t = +2.0); five other conditions showed no separable
+  difference, and none scored worse. The same sweep found a bug: "FOMC ahead" had enough
+  hours but only a dozen separate meeting dates on 471 of 474 nights, and the desk used to
+  return no history at all for it. It now answers unfiltered and says why.
 * Does the retrieval beat not bothering? Each replay point is paired with the
   distribution of random past hours from the same time-of-week bucket, and both are
   scored with the pinball loss on the same outcome (2,325 pairs). Averaged over the five
@@ -281,8 +295,8 @@ Behind the Submission Materials Link:
    as forecasts mature — including the split by holding period, where the pooled figure
    was hiding two opposite errors.
 6. **What we tested about our own retrieval:**
-   https://nightwatch-gules.vercel.app/studies — nine falsifiable questions about the
-   engine, six answered no, each with the method, the numbers and what changed in the
+   https://nightwatch-gules.vercel.app/studies — ten falsifiable questions about the
+   engine, five answered no and two undecided, each with the method, the numbers and what changed in the
    product because of it. Recomputed by `nightwatch studies`; nothing on it is typed in.
 7. One worked verdict, fixed in place: `https://nightwatch-gules.vercel.app/r/<forecast id>`. Every analysis the
    desk produces gets a link that reopens it exactly as it was argued — same analogs,
@@ -497,16 +511,16 @@ compliance requirement and a reply does not satisfy it.
 **1/**
 
 > We built a decision stress tester for tokenized US stocks, then tested the engine
-> itself with 9 falsifiable questions.
+> itself with 10 falsifiable questions.
 >
-> 6 came back NO.
+> 5 came back NO. 2 we could not decide.
 >
 > Including the one that would have made us look clever. All of them are published.
 >
 > https://nightwatch-gules.vercel.app/studies
 > #BitgetHackathon @Bitget_AI
 
-*Attach: screenshot of the Studies scoreboard — 9 asked, 2 yes, 6 no.*
+*Attach: screenshot of the Studies scoreboard — 10 asked, 3 yes, 5 no, 2 cannot tell yet.*
 
 **2/**
 
