@@ -28,6 +28,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from nightwatch.analog import lens as lens_mod
+from nightwatch.api import whatif
 from nightwatch.api.providers import Provider, ProviderRefusal, as_provider, select
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.pipeline.analyze import AnalysisReport, analyze
@@ -107,6 +108,59 @@ def parse_intent(provider: Provider, messages: list[dict[str, str]], tickers: li
     return parsed
 
 
+class ParsedChange(BaseModel):
+    """What a trader's what-if question asks the desk to vary, and nothing else."""
+
+    ticker: str | None = Field(default=None, description="a different token to run the same idea on, if they named one")
+    side: str | None = Field(default=None, description="'long' or 'short', only if they asked about the other direction")
+    horizon_kind: str | None = Field(default=None, description="'next_open', 'window_end' or 'hours', only if they asked to hold it for a different length of time")
+    horizon_hours: float | None = Field(default=None, description="how many hours, when they named a number of hours")
+    lenses: list[str] = Field(default_factory=list, description="names of conditions narrowing which past moments count as comparable, from the list given and no other")
+
+
+def _change_system(ticket: dict, tickers: list[str]) -> str:
+    """The prompt for the what-if parse.
+
+    Every instruction here is about restraint. The failure that matters is not missing a
+    change; it is inventing one, because an invented change produces a real re-run whose
+    numbers are correct for a question nobody asked.
+    """
+    return (
+        "You turn a trader's follow-up question into a list of what CHANGED about a trade the desk has already analysed. "
+        "You do not answer the question and you do not compute anything.\n\n"
+        f"The trade on screen: {json.dumps(ticket, default=str)}\n"
+        f"Tokens with data: {', '.join(tickers)}\n\n"
+        "Set ONLY the fields the trader explicitly asked to vary. Leave every other field null or empty - an unset field "
+        "means 'as it already is'. If they are asking about the trade as it stands rather than a variation of it, set "
+        "nothing at all; that is the correct answer and something else will handle the question.\n"
+        "Never change the size or the stop here: those are answered elsewhere and setting them does nothing.\n\n"
+        "They may ask to compare against a narrower slice of history - 'was it worse on earnings nights', 'only weekends'. "
+        "Put those in `lenses`, from this list and no other:\n"
+        + lens_mod.prompt_menu()
+    )
+
+
+def parse_change(provider: Provider, question: str, ticket: dict, tickers: list[str]) -> whatif.Change:
+    """What the trader asked to vary, or an empty change when they did not ask for one."""
+    try:
+        parsed = provider.parse([{"role": "user", "content": question}], system=_change_system(ticket, tickers), schema=ParsedChange, max_tokens=600)
+    except ProviderRefusal:
+        return whatif.Change()
+    if parsed is None:
+        return whatif.Change()
+    known = {t.upper() for t in tickers}
+    asked = (parsed.ticker or "").upper()
+    return whatif.Change(
+        # A token the desk has no data for is not a what-if it can run, and running the
+        # original one under that name would answer the wrong question silently.
+        ticker=asked if asked in known and asked != str(ticket.get("ticker", "")).upper() else None,
+        side=parsed.side if parsed.side in ("long", "short") and parsed.side != ticket.get("side") else None,
+        horizon_kind=parsed.horizon_kind if parsed.horizon_kind in ("next_open", "window_end", "hours") else None,
+        horizon_hours=float(parsed.horizon_hours) if parsed.horizon_hours and parsed.horizon_hours > 0 else None,
+        lenses=tuple(x.name for x in lens_mod.resolve(parsed.lenses)),
+    )
+
+
 def intent_to_ticket(p: ParsedIntent, account_equity: float | None) -> TradeTicket:
     kind = HorizonKind(p.horizon_kind) if p.horizon_kind in ("next_open", "window_end", "hours") else HorizonKind.NEXT_OPEN
     return TradeTicket(
@@ -161,7 +215,11 @@ def followup_turn(report: dict, question: str, grounded: Any) -> dict:  # noqa: 
     figure it prints that is not in the report or in that answer comes back flagged.
     """
     provider = select()
-    if provider is None:
+    if provider is None or not getattr(provider, "narrates", True):
+        # A provider that cannot write a paragraph while someone waits must not be asked
+        # to. The grounded answer is already complete and already correct; spending a
+        # minute to have it rephrased, and then discarding the result on timeout, is the
+        # worst of both. Same rule the briefing path uses.
         return {}
     report_text = json.dumps(report, default=str)
     try:
