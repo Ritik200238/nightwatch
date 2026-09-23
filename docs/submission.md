@@ -281,9 +281,15 @@ wrong, and that is the problem.
 
 ## Field 2: Role of the LLM in Your Project
 
-Two models, three jobs, and one rule that governs all of them: **a model may read text
-and write English. It may not produce a number that reaches a decision.** Every figure in
-the product comes from stored market data or from a measurement over it.
+**The deployed demo runs on Qwen 3.8 Max.** Two jobs, one rule that governs both: **a
+model may read text and write English. It may not produce a number that reaches a
+decision.** Every figure in the product comes from stored market data or from a
+measurement over it.
+
+Both of Qwen's jobs are also *scored*, which is the part we would most like to be judged
+on. Its filing judgement is graded against what the token actually did; its speed was
+measured and found wanting for one job, so that job stayed on the rules. Neither is an
+assertion.
 
 ### Qwen 3.8 Max — reading the filings (Alibaba Cloud, via the Bitget hackathon gateway)
 
@@ -329,15 +335,37 @@ reporting: its content filter rejected **31 of 706** legitimate SEC filings as
 that returns its thinking in a separate field, so a naive integration reads the wrong one.
 Both were handled; neither is a reason not to use it.
 
-### Claude Opus 5 — the language layer (Anthropic)
+### Qwen 3.8 Max — understanding the trader (live in the demo)
 
-1. **Intent parsing.** A trader types "long 20k TSLA into Monday, out if it loses 350".
-   The model returns a structured ticket using constrained structured output, and asks
-   for any missing field.
-2. **Narration and follow-ups.** After the numeric pipeline produces the report, the
-   model writes a plain-language briefing and answers questions about it. Every number it
-   prints is checked against the report, and an answer containing a figure the report does
-   not contain is **discarded**, not flagged — the deterministic answer ships instead.
+The same model also runs the chat. A trader types
+
+> *"im nervous about the fed thing wednesday, thinking 15k nvidia short overnight"*
+
+and Qwen returns NVDA, **short**, 15,000 USDT, held to the next US open, with the thesis
+kept — in 12 seconds, from lowercase, unpunctuated text with the direction buried mid
+sentence. The rule-based parser underneath it reads the shapes traders usually type and
+would have missed that one. `GET /health` names the provider and model, so anyone can
+check which is answering.
+
+### What the model is *not* allowed to do, measured rather than asserted
+
+Qwen reasons before it answers, and here the reasoning dominates: rewriting a full report
+took **88 seconds**, with 3,311 of 3,562 completion tokens spent thinking, against a
+gateway that returns 504 at about 120. Stripped to a 739-character digest and a lean
+instruction it still took 34.
+
+Thirty-four seconds to rephrase text the desk already has instantly is a bad trade, so
+the written briefing stays on the deterministic path — assembled from the report's own
+fields, which is structurally incapable of inventing a number. The provider declares
+`narrates=False` and the response says `parsed_by: qwen, written_by: rules`. **The desk
+never makes a person wait on a model.**
+
+### Claude Opus 5 — supported, second in line (Anthropic)
+
+The layer is provider-shaped, not vendor-shaped. With an Anthropic key present, Claude
+takes both jobs including the briefing, and every number it prints is checked against the
+report — an answer containing a figure the report does not contain is **discarded**, not
+flagged, and the deterministic answer ships instead. The deployed demo runs on Qwen.
 
 ### What no model does
 
@@ -345,8 +373,8 @@ Retrieval, cohort statistics, calibration, stress presets, Monte Carlo, order-bo
 walking, the discipline gate, the sizing caps, and the verdict. All deterministic, all
 journaled, all scored independently of any model.
 
-Both Claude jobs also have a rule-based implementation, and the desk falls back to it when
-there is no API key or the provider is unreachable. The parser reads the shapes a trader
+Both language jobs also have a rule-based implementation, and the desk falls back to it
+when no provider has credentials or the provider is unreachable. The parser reads the shapes a trader
 actually types, names any field it is missing rather than guessing, and invents nothing.
 The briefing is assembled from the report's own fields, so the rule the model is held to
 is structurally unbreakable there. The response says which one answered. The point is not
