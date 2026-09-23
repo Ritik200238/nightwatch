@@ -124,6 +124,10 @@ class AppState:
         # next question is usually about it. Negative keys say which reports those are:
         # below zero means nothing was recorded and nothing will be scored.
         self._hypothetical = 0
+        # When this process came up. The box redeploys on a cron, so "is the fix live
+        # yet" has no answer from the outside without it - the routes do not change on
+        # most deploys, and a stale container answers exactly like a fresh one.
+        self.started_at = utc_now()
 
     def keep_hypothetical(self, payload: dict[str, Any]) -> int:
         """Store a report that was never journalled, under a key that says so."""
@@ -265,6 +269,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         llm = describe_llm()
         return {
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": ob[0], "last_book_ts": last_book,
+            "started_at": s.started_at.isoformat(), "uptime_s": int((utc_now() - s.started_at).total_seconds()),
             "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
         }
 
