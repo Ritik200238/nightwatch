@@ -19,7 +19,11 @@ services:
     environment:
       NIGHTWATCH_DATA_DIR: /data
       NIGHTWATCH_CORS: ${NIGHTWATCH_CORS:-*}
+      # The language layer picks whichever of these has a key; with neither, the desk
+      # answers from the rules and /health says so rather than claiming a model.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      BITGET_QWEN_API_KEY: ${BITGET_QWEN_API_KEY:-}
+      NIGHTWATCH_LLM_PROVIDER: ${NIGHTWATCH_LLM_PROVIDER:-auto}
       FRED_API_KEY: ${FRED_API_KEY:-}
     volumes:
       - nightwatch-data:/data
