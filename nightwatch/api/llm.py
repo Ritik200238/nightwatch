@@ -7,8 +7,15 @@ Division of labour (deliberate):
   in the report. A post-check lists any figure in the narrative that cannot be found
   in the report so the UI can flag it.
 
-Model: Claude Opus 5 with server-side refusal fallbacks enabled (``fallbacks="default"``).
-Credentials come from ``ANTHROPIC_API_KEY`` or an ``ant auth login`` profile.
+Which model does it is not this module's business. ``providers`` picks whichever has
+credentials - Claude Opus 5, or Qwen 3.8 Max through the hackathon gateway - and both
+are held to the same rule: the model may read text and write English, and any figure it
+prints that is not in the report is discarded rather than shown.
+
+That separation matters beyond tidiness. The deployed box had no Anthropic key, so
+every conversational answer was coming from the rule-based fallback while the product
+claimed a language layer. A provider that can be swapped is how "is the chat live"
+stops depending on one vendor.
 """
 
 from __future__ import annotations
@@ -18,9 +25,9 @@ import logging
 import re
 from typing import Any
 
-import anthropic
 from pydantic import BaseModel, Field
 
+from nightwatch.api.providers import Provider, ProviderRefusal, as_provider, select
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.pipeline.analyze import AnalysisReport, analyze
 from nightwatch.pipeline.render import render_text
@@ -28,9 +35,6 @@ from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import utc_now
 
 log = logging.getLogger(__name__)
-
-MODEL = "claude-opus-5"
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 class ParsedIntent(BaseModel):
@@ -52,16 +56,11 @@ class ParsedIntent(BaseModel):
     reply: str = Field(description="a short reply to the trader: a clarifying question when kind is 'clarify', an answer when 'question', or a one-line acknowledgement when 'analyze'")
 
 
-def _client() -> anthropic.Anthropic:
-    return anthropic.Anthropic()
-
-
 def credentials_present() -> bool:
-    """True when the SDK can find credentials (an API key or a logged-in profile)."""
-    try:
-        return _client().api_key is not None
-    except Exception:  # noqa: BLE001 - the SDK raises when nothing is configured
-        return False
+    """True when any provider can answer; the caller uses the rules when it is False."""
+    from nightwatch.api.providers import credentials_present as any_provider
+
+    return any_provider()
 
 
 def _parse_system(tickers: list[str], account_equity: float | None) -> str:
@@ -71,24 +70,23 @@ def _parse_system(tickers: list[str], account_equity: float | None) -> str:
         "Turn the trader's latest message, in the context of the conversation, into a structured ticket. "
         f"Current time: {now:%Y-%m-%d %H:%M} UTC. Available tickers (only these can be analysed): {', '.join(tickers)}. "
         "Defaults when unstated: side long; horizon_kind next_open (hold until the next US regular open) — use 'window_end' if the trader says 'until the close' during a session, "
-        "and 'hours' with horizon_hours when they give a number of hours or days (24h per day). "
+        "and 'hours' with horizon_hours ONLY when they give an explicit number of hours or days (24h per day). "
+        "'overnight', 'over the weekend', 'through the weekend', 'into Monday' and 'until the market opens' are all next_open, not a number of hours: "
+        "they mean the position is carried until the US market can price it again, which is what the desk measures. "
         + (f"The trader's account equity is {account_equity:,.0f} USDT unless they say otherwise. " if account_equity else "")
         + "Required to analyse: ticker, side, notional_quote. If any is missing, set kind='clarify', list them in missing_fields and ask for them in reply (one short question). "
         "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words."
     )
 
 
-def parse_intent(client: anthropic.Anthropic, messages: list[dict[str, str]], tickers: list[str], account_equity: float | None) -> ParsedIntent:
-    response = client.messages.parse(
-        model=MODEL,
-        max_tokens=2000,
-        system=_parse_system(tickers, account_equity),
-        messages=[{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")],
-        output_format=ParsedIntent,
-    )
-    if response.stop_reason == "refusal":
+def parse_intent(provider: Provider, messages: list[dict[str, str]], tickers: list[str], account_equity: float | None) -> ParsedIntent:
+    """``provider`` may also be a raw vendor client; it is wrapped either way."""
+    try:
+        parsed = as_provider(provider).parse(messages, system=_parse_system(tickers, account_equity), schema=ParsedIntent, max_tokens=2000)
+    except ProviderRefusal:
+        # The model would not engage. Saying "which token and what size?" here would
+        # describe a failure that did not happen.
         return ParsedIntent(kind="question", reply="I can't help with that request.")
-    parsed = response.parsed_output
     if parsed is None:
         return ParsedIntent(kind="clarify", missing_fields=["ticker", "side", "notional_quote"], reply="Which token, which direction, and what size?")
     return parsed
@@ -114,19 +112,16 @@ NARRATE_SYSTEM = (
 )
 
 
-def narrate(client: anthropic.Anthropic, report: AnalysisReport) -> tuple[str, str]:
+def narrate(provider: Provider, report: AnalysisReport) -> tuple[str, str]:
+    """``provider`` may also be a raw vendor client; it is wrapped either way."""
     text = render_text(report)
-    response = client.beta.messages.create(
-        model=MODEL,
-        max_tokens=1500,
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
-        system=NARRATE_SYSTEM,
-        messages=[{"role": "user", "content": f"REPORT\n\n{text}"}],
-    )
-    if response.stop_reason == "refusal":
+    try:
+        narrative = as_provider(provider).write(system=NARRATE_SYSTEM, user=f"REPORT\n\n{text}", max_tokens=1500)
+    except ProviderRefusal:
+        narrative = None
+    if not narrative:
+        # The report is complete without a narrative; the prose is the optional part.
         return "The explainer declined to narrate this report; the numbers above stand on their own.", text
-    narrative = "".join(block.text for block in response.content if block.type == "text").strip()
     return narrative, text
 
 
@@ -148,19 +143,18 @@ def followup_turn(report: dict, question: str, grounded: Any) -> dict:  # noqa: 
     fluency, not arithmetic, so it is handed that answer and told to keep its numbers; any
     figure it prints that is not in the report or in that answer comes back flagged.
     """
-    client = _client()
-    report_text = json.dumps(report, default=str)
-    response = client.beta.messages.create(
-        model=MODEL,
-        max_tokens=800,
-        betas=[FALLBACK_BETA],
-        fallbacks="default",
-        system=FOLLOWUP_SYSTEM,
-        messages=[{"role": "user", "content": f"QUESTION\n\n{question}\n\nGROUNDED ANSWER\n\n{grounded.text}\n\nREPORT\n\n{report_text[:120000]}"}],
-    )
-    if response.stop_reason == "refusal":
+    provider = select()
+    if provider is None:
         return {}
-    text = "".join(b.text for b in response.content if b.type == "text").strip()
+    report_text = json.dumps(report, default=str)
+    try:
+        text = provider.write(
+            system=FOLLOWUP_SYSTEM,
+            user=f"QUESTION\n\n{question}\n\nGROUNDED ANSWER\n\n{grounded.text}\n\nREPORT\n\n{report_text[:120000]}",
+            max_tokens=800,
+        )
+    except ProviderRefusal:
+        return {}
     if not text:
         return {}
     unverified = unverified_numbers(text, f"{grounded.text} {report_text}")
@@ -169,7 +163,7 @@ def followup_turn(report: dict, question: str, grounded: Any) -> dict:  # noqa: 
         # model made up. The answer that cannot do that is the one that ships.
         log.warning("model follow-up invented %s; keeping the grounded answer", unverified)
         return {}
-    return {"reply": text, "mode": "model"}
+    return {"reply": text, "mode": "model", "provider": provider.name, "model": provider.model}
 
 
 _NUM = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
@@ -203,16 +197,19 @@ def unverified_numbers(narrative: str, report_text: str) -> list[str]:
     return out
 
 
-def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None, client: anthropic.Anthropic | None = None) -> dict[str, Any]:
-    """One conversational turn. ``client`` is injectable so the flow can be tested
-    without credentials; in production it is built from the environment."""
-    client = client or _client()
+def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None, client: Any = None, provider: Provider | None = None) -> dict[str, Any]:  # noqa: ANN401
+    """One conversational turn.
+
+    ``provider`` is what production passes. ``client`` is still accepted and wrapped,
+    because the existing tests inject an Anthropic-shaped double and it is better for
+    them to exercise the real dispatch than a parallel one written to suit them.
+    """
+    provider = provider or (as_provider(client) if client is not None else select())
+    if provider is None:
+        raise RuntimeError("no language provider has credentials (set BITGET_QWEN_API_KEY or ANTHROPIC_API_KEY)")
     tickers = list(state.ctx.tickers_with_data())
-    try:
-        intent = parse_intent(client, messages, tickers, account_equity)
-    except anthropic.AuthenticationError as exc:
-        raise RuntimeError("Anthropic credentials missing or invalid (set ANTHROPIC_API_KEY or run `ant auth login`)") from exc
-    result: dict[str, Any] = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": []}
+    intent = parse_intent(provider, messages, tickers, account_equity)
+    result: dict[str, Any] = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
     if intent.kind != "analyze" or intent.missing_fields or not intent.ticker or not intent.notional_quote:
         result["reply"] = intent.reply
         return result
@@ -230,13 +227,26 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.reports.save(report.forecast_id, payload)
             except Exception:  # noqa: BLE001 - a keepsake must not fail the turn
                 pass
-    narrative, text = narrate(client, report)
+    # The model understood the sentence; whether it also writes the briefing depends on
+    # whether it can do that while someone waits. A provider that cannot says so, and the
+    # briefing is assembled from the report's own fields instead - instantly, and with
+    # nothing to verify because nothing was written.
+    if getattr(provider, "narrates", True):
+        narrative, text = narrate(provider, report)
+        wrote = provider.name
+    else:
+        from nightwatch.api.intake import brief
+
+        narrative, text = brief(report), render_text(report)
+        wrote = "rules"
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,
         "report_text": text,
         "narrative": narrative,
-        "unverified_numbers": unverified_numbers(narrative, text),
+        "unverified_numbers": unverified_numbers(narrative, text) if wrote != "rules" else [],
         "reply": narrative,
+        "parsed_by": provider.name,
+        "written_by": wrote,
     })
     return result

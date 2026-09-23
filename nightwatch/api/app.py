@@ -171,16 +171,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     @app.get("/health")
     def health() -> dict[str, Any]:
-        from nightwatch.api.llm import credentials_present
+        from nightwatch.api.providers import describe as describe_llm
+
         s = st()
         c = s.store._conn
         bars = c.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
         ob = c.execute("SELECT COUNT(*), MAX(ts) FROM orderbook_snapshots").fetchone()
         last_book = datetime.fromtimestamp(ob[1] / 1000, tz=UTC).isoformat() if ob[1] else None
-        chat_ready = credentials_present()
+        # Which model is answering, not just whether one is. "chat_ready: true" with no
+        # way to see who is behind it was how the box ran on the rule-based fallback for
+        # days without anyone noticing.
+        llm = describe_llm()
         return {
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": ob[0], "last_book_ts": last_book,
-            "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": chat_ready,
+            "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
         }
 
     @app.post("/tonight")
