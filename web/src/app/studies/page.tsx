@@ -56,7 +56,66 @@ const STAT_LABEL: Record<string, string> = {
   share_committed: "filings it committed to",
   n_called: "directional calls made",
   n_read: "filings read",
+  conditions_judged: "conditions with a decided answer",
+  conditions_better: "narrowing scored better",
+  conditions_worse: "narrowing scored worse",
 };
+
+/** Per-condition results, for a study whose stats are keyed "condition.metric".
+ *
+ *  Sixty numbers in a grid would bury the one comparison that matters, which is the
+ *  same two columns for each condition: how often the unfiltered tail was breached and
+ *  how often the narrowed one was, against a target of 5%.
+ */
+function ConditionTable({ stats }: { stats: Record<string, number> }) {
+  const byCondition = new Map<string, Record<string, number>>();
+  for (const [k, v] of Object.entries(stats)) {
+    const dot = k.indexOf(".");
+    if (dot < 0) continue;
+    const name = k.slice(0, dot);
+    const row = byCondition.get(name) ?? {};
+    row[k.slice(dot + 1)] = v;
+    byCondition.set(name, row);
+  }
+  if (!byCondition.size) return null;
+  const rows = [...byCondition.entries()].sort((a, b) => (b[1].n ?? 0) - (a[1].n ?? 0));
+  const pct = (v: number | undefined) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
+  const num = (v: number | undefined, d = 2) => (v == null || !Number.isFinite(v) ? "—" : v.toFixed(d));
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] text-xs">
+        <thead>
+          <tr className="border-b border-border text-left text-muted-foreground">
+            <th className="py-1 pr-3 font-medium">condition</th>
+            <th className="py-1 pr-3 text-right font-medium">nights</th>
+            <th className="py-1 pr-3 text-right font-medium">below p5, all hours</th>
+            <th className="py-1 pr-3 text-right font-medium">below p5, narrowed</th>
+            <th className="py-1 pr-3 text-right font-medium">typical p5, all → narrowed</th>
+            <th className="py-1 text-right font-medium">t, by token</th>
+          </tr>
+        </thead>
+        <tbody className="tabular">
+          {rows.map(([name, r]) => (
+            <tr key={name} className="border-b border-border/50">
+              <td className="py-1 pr-3">{name.replace(/_/g, " ")}</td>
+              <td className="py-1 pr-3 text-right">{num(r.n, 0)}</td>
+              <td className="py-1 pr-3 text-right">{pct(r.breach_all)}</td>
+              <td className="py-1 pr-3 text-right">
+                {pct(r.breach_lens)}
+                {r.breach_lens_lo != null ? <span className="text-muted-foreground"> [{pct(r.breach_lens_lo)}–{pct(r.breach_lens_hi)}]</span> : null}
+              </td>
+              <td className="py-1 pr-3 text-right">
+                {r.p5_all_median != null ? `${num(r.p5_all_median, 1)}% → ${num(r.p5_lens_median, 1)}%` : "—"}
+              </td>
+              <td className="py-1 text-right">{num(r.t_clustered, 1)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-1 text-muted-foreground">Target for both breach columns is 5%. A positive t means the narrowed tail scored better.</p>
+    </div>
+  );
+}
 
 /** The verdict in one line, for the collapsed header.
  *
@@ -193,8 +252,9 @@ export default function StudiesPage() {
                   {Object.keys(s.stats).length ? (
                     <div>
                       <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">The numbers ({s.n.toLocaleString()} observations)</p>
+                      <ConditionTable stats={s.stats} />
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs lg:grid-cols-3">
-                        {Object.entries(s.stats).map(([k, val]) => (
+                        {Object.entries(s.stats).filter(([k]) => !k.includes(".")).map(([k, val]) => (
                           <div key={k} className="flex items-baseline justify-between gap-2 border-b border-border/50 py-1">
                             <span className="min-w-0 text-muted-foreground">{STAT_LABEL[k] ?? k.replace(/_/g, " ")}</span>
                             <span className="tabular shrink-0 font-medium">{statValue(k, val)}</span>
