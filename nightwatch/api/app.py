@@ -66,6 +66,9 @@ class TicketIn(BaseModel):
     as_of: datetime | None = None
     record: bool = True
     open_positions: list[PositionIn] = Field(default_factory=list)
+    # Named conditions narrowing which past moments count as comparable. Unknown names
+    # are dropped by the engine rather than rejected, so a stale client cannot 422.
+    lenses: list[str] = Field(default_factory=list)
 
     def to_ticket(self) -> TradeTicket:
         return TradeTicket(
@@ -73,6 +76,7 @@ class TicketIn(BaseModel):
             horizon_kind=self.horizon_kind, horizon_hours=self.horizon_hours, entry_price=self.entry_price, stop_price=self.stop_price,
             target_price=self.target_price, thesis=self.thesis, invalidation=self.invalidation, hedge_ratio=self.hedge_ratio,
             open_positions=tuple((p.ticker.upper(), p.side.value, p.notional_quote) for p in self.open_positions),
+            lenses=tuple(self.lenses),
         )
 
 
@@ -260,6 +264,39 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if len(held) > 12:
             note = (note + " Only the first twelve positions were judged.").strip()
         return tonight_mod.build(None, judged, note=note).to_dict()
+
+    @app.get("/lenses")
+    def lenses(ticker: str | None = None) -> dict[str, Any]:
+        """The conditions a search can be narrowed to, and what each costs in evidence.
+
+        The cost is the point. Narrowing thins the comparable history fast, and a reader
+        deciding whether to ask "only earnings nights" should be able to see that it
+        leaves 1,752 hours across the universe and 96 in one token's own past.
+        """
+        from nightwatch.analog import lens as lens_mod
+
+        s = st()
+        cfg = s.ctx.analog_config
+        # Below this many surviving hours the pipeline stops trusting one token's own
+        # past and widens to the pooled history. The interface shows the same number so
+        # the cost of a narrow question is visible before it is asked.
+        out: dict[str, Any] = {
+            "lenses": lens_mod.menu(),
+            "counts": {},
+            "floor_hours": int(cfg.min_matches * cfg.min_separation_h),
+        }
+        if ticker:
+            try:
+                with s.lock:
+                    frame = s.ctx.feature_frame(ticker.upper(), utc_now())
+                out["counts"] = lens_mod.sample_sizes(frame)
+                out["history_hours"] = len(frame)
+                # Which of them the present hour actually satisfies, so the interface can
+                # offer the question a trader would think to ask rather than all seventeen.
+                out["suggested"] = lens_mod.suggest_now(frame)
+            except (InsufficientData, KeyError) as exc:
+                out["note"] = str(exc)
+        return out
 
     @app.get("/studies")
     def studies() -> dict[str, Any]:
