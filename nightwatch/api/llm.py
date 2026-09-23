@@ -27,6 +27,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from nightwatch.analog import lens as lens_mod
 from nightwatch.api.providers import Provider, ProviderRefusal, as_provider, select
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
 from nightwatch.pipeline.analyze import AnalysisReport, analyze
@@ -53,6 +54,14 @@ class ParsedIntent(BaseModel):
     invalidation: str | None = Field(default=None, description="what would prove the idea wrong, if stated")
     hedge_ratio: float | None = Field(default=None, description="share of the position to hedge with the perp, 0..1, if the trader asked for a hedge")
     missing_fields: list[str] = Field(default_factory=list, description="required fields still missing: ticker, side, notional_quote")
+    lenses: list[str] = Field(
+        default_factory=list,
+        description=(
+            "names of conditions narrowing which past moments count as comparable, ONLY when the trader "
+            "asked for a narrower comparison ('only earnings nights', 'just weekends', 'when it was volatile'). "
+            "Empty unless they asked. Names only, from the list given."
+        ),
+    )
     reply: str = Field(description="a short reply to the trader: a clarifying question when kind is 'clarify', an answer when 'question', or a one-line acknowledgement when 'analyze'")
 
 
@@ -75,7 +84,13 @@ def _parse_system(tickers: list[str], account_equity: float | None) -> str:
         "they mean the position is carried until the US market can price it again, which is what the desk measures. "
         + (f"The trader's account equity is {account_equity:,.0f} USDT unless they say otherwise. " if account_equity else "")
         + "Required to analyse: ticker, side, notional_quote. If any is missing, set kind='clarify', list them in missing_fields and ask for them in reply (one short question). "
-        "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words."
+        "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words.\n\n"
+        'The trader may also narrow which past moments count as comparable - "only earnings nights", '
+        '"just weekends", "when it was volatile". Put the matching names in `lenses`, from this list and '
+        "no other. Leave it empty unless they actually asked to narrow the comparison: describing their "
+        "situation is not the same as asking for a filter, and a lens nobody asked for answers a different "
+        "question than the one they put.\n"
+        + lens_mod.prompt_menu()
     )
 
 
@@ -98,6 +113,8 @@ def intent_to_ticket(p: ParsedIntent, account_equity: float | None) -> TradeTick
         ticker=(p.ticker or "").upper(), side=Side(p.side or "long"), notional_quote=float(p.notional_quote or 0.0),
         account_equity_quote=p.account_equity_quote or account_equity, horizon_kind=kind, horizon_hours=p.horizon_hours,
         stop_price=p.stop_price, target_price=p.target_price, thesis=p.thesis or "", invalidation=p.invalidation or "", hedge_ratio=p.hedge_ratio,
+        # Names the model invented are dropped here rather than reaching the engine.
+        lenses=tuple(x.name for x in lens_mod.resolve(p.lenses)),
     )
 
 
