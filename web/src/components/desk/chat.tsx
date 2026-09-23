@@ -23,7 +23,7 @@ interface Props {
 const STARTERS = ["Hold $20k of TSLA through the weekend, stop at 350", "Short 5k NVDA for the next 12 hours", "Long 10k SPY until Monday open, thesis: strong Friday close"];
 
 /** Offered once a report is on screen, because until then there is nothing to ask about. */
-const FOLLOW_UPS = ["Why not bigger?", "What if I double it?", "What if my stop were 6%?", "Has this setup burned me before?", "Talk me out of it", "Can I actually get out?"];
+const FOLLOW_UPS = ["Why not bigger?", "What if I double it?", "Was it worse on earnings nights?", "What if I only held it 6 hours?", "Has this setup burned me before?", "Talk me out of it"];
 
 /** What each kind of question was answered out of. Shown under the answer so the reader
  *  can go and check it rather than take the sentence on trust. */
@@ -41,6 +41,7 @@ const READ_FROM: Record<string, string> = {
   moments: "the matched moments",
   trust: "the tail adjustment",
   now: "the snapshot",
+  what_if: "a fresh run of the desk against the same moment",
 };
 
 export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {

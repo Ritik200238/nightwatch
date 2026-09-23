@@ -716,12 +716,16 @@ export interface ChatResponse {
   report_text: string | null;
   unverified_numbers: string[];
   reply: string;
-  /** "model" when an Anthropic key answered, "rules" when the built-in parser did. */
-  mode?: "model" | "rules";
+  /** "model" when the language layer answered, "rules" when the built-in parser did,
+   *  "what_if" when the question was a counterfactual and the desk ran it. */
+  mode?: "model" | "rules" | "what_if";
   /** Set when the turn answered a question about an existing report rather than running
    *  a new one: the report it read, and which kind of question it took it to be. */
   answered_about?: number | null;
   answer_kind?: string | null;
+  /** On a what-if, which fields of the ticket the question asked to vary. The model
+   *  named them; it did not compute anything that follows from them. */
+  changed?: Record<string, unknown>;
 }
 
 export interface Coverage {

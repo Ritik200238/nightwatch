@@ -110,7 +110,10 @@ function DecisionCard({ report }: { report: Report }) {
       ) : null}
 
       <ActOnIt report={report} />
-      {report.forecast_id != null ? <TakenButton forecastId={report.forecast_id} /> : null}
+      {/* A what-if was never journalled, so there is no forecast to mark taken and
+          nothing to score it against later. Offering the button would put a trade the
+          trader never made into the circuit breaker's count. */}
+      {report.forecast_id != null && report.forecast_id > 0 ? <TakenButton forecastId={report.forecast_id} /> : null}
       {report.warnings.length ? (
         <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
           <p className="mb-1 flex items-center gap-2 font-medium">
@@ -187,6 +190,24 @@ function FreshFilings({ report }: { report: Report }) {
   );
 }
 
+/** A report the desk ran because it was asked to, not because a trade was proposed.
+ *
+ *  Every forecast this desk produces is journalled and scored later, and the calibration
+ *  that sizes real trades is fitted on those scores. A what-if is a forecast nobody took,
+ *  and a cohort narrowed by a lens is a different estimator from the one being calibrated,
+ *  so neither is recorded. That exemption is worth saying on the page rather than leaving
+ *  a reader to assume this one counts like the others.
+ */
+function Hypothetical({ report }: { report: Report }) {
+  if (report.forecast_id == null || report.forecast_id >= 0) return null;
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">A what-if.</span> The desk ran this against the same moment as the report you asked about. It is not journaled and will not be
+      scored, because nobody proposed it as a trade.
+    </div>
+  );
+}
+
 export function ReportView({ report }: { report: Report }) {
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
@@ -197,6 +218,7 @@ export function ReportView({ report }: { report: Report }) {
 
   return (
     <div className="space-y-4">
+      <Hypothetical report={report} />
       <DecisionCard report={report} />
       <FreshFilings report={report} />
 
@@ -358,9 +380,10 @@ export function ReportView({ report }: { report: Report }) {
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
         <span>
           Computed in {report.timings_ms.total} ms · sources: {report.sources.map((s) => String(s.kind)).join(", ")}
-          {report.forecast_id != null ? ` · journaled as forecast #${report.forecast_id}` : ""}
+          {report.forecast_id != null && report.forecast_id > 0 ? ` · journaled as forecast #${report.forecast_id}` : ""}
+          {report.forecast_id != null && report.forecast_id < 0 ? " · a what-if: not journaled, never scored" : ""}
         </span>
-        {report.forecast_id != null ? <Permalink forecastId={report.forecast_id} /> : null}
+        {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} /> : null}
       </p>
       {primary ? null : null}
     </div>
