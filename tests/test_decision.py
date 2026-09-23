@@ -72,7 +72,16 @@ def test_gate_uses_analog_p5_when_no_stop_and_flags_liquidity():
 def test_gate_risk_budget_no_go():
     # 20k with a 14/364 stop = 769 risk = 0.38% of 200k -> fine; with 20k equity it is 3.8% -> NO_GO.
     rep = evaluate_gate(ticket(account_equity_quote=20_000.0), inputs(equity=20_000.0), GatePolicy(max_position_pct_of_equity=100.0))
-    assert rep.decision == GateDecision.NO_GO and any("risk_budget" in r for r in rep.reasons)
+    assert rep.decision == GateDecision.NO_GO and any("risk budget" in r for r in rep.reasons)
+
+
+def test_gate_reasons_do_not_leak_identifiers_into_the_answer():
+    """Rule names are identifiers; the reasons are printed straight into the chat reply.
+    "written_plan: missing invalidation" reads as a leaked variable, not an answer."""
+    rep = evaluate_gate(ticket(thesis="", invalidation=""), inputs())
+    assert rep.reasons, "a ticket with no plan should give the gate something to say"
+    for reason in rep.reasons:
+        assert "_" not in reason.split(":")[0], f"identifier leaked into the reply: {reason}"
 
 
 def sizing_inputs(**kw) -> SizingInputs:

@@ -91,7 +91,13 @@ class GateReport:
 
     @property
     def reasons(self) -> list[str]:
-        return [f"{r.rule}: {r.reason}" for r in self.rules if r.decision != GateDecision.GO]
+        """Why the gate did not simply say go, in words a person reads.
+
+        Rule names are identifiers - ``written_plan``, ``market_posture`` - and they were
+        being printed verbatim into the chat reply, where "written_plan: missing
+        invalidation" reads as a leaked variable rather than an answer.
+        """
+        return [f"{r.rule.replace('_', ' ')}: {r.reason}" for r in self.rules if r.decision != GateDecision.GO]
 
 
 def _worst(rules: list[RuleResult]) -> GateDecision:
