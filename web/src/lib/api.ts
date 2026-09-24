@@ -647,6 +647,18 @@ export interface TonightReport {
   note: string;
 }
 
+export interface PlanCheck {
+  invalidation: string;
+  kind: "level" | "moving_average" | "move" | "wrong_side" | "untested";
+  level: number | null;
+  distance_pct: number | null;
+  crossed: number | null;
+  of: number | null;
+  already: boolean;
+  note: string;
+  thesis_mismatch: string;
+}
+
 /** Bitget's view of the underlying stock right now. None of it reaches the size. */
 export interface StreetView {
   ticker: string;
@@ -743,6 +755,9 @@ export interface Report {
   /** Analysts, insiders, market mood and a live quote for the stock, from Bitget's
    *  US-stock data. Context only; null for past moments and when the service is down. */
   street?: StreetView | null;
+  /** The trader's invalidation read for a testable level and measured; plus a flag when
+   *  the stated reason reads against the position. */
+  plan_check?: PlanCheck | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

@@ -48,6 +48,40 @@ function bindingCap(report: Report) {
 /** Everything a person needs in five seconds: what to do, what it costs to be wrong,
  *  what could go worse, whether you can get out, and the best argument against it.
  *  The twelve sections below are the evidence for this card, and they open on demand. */
+/** The trader's own plan, measured where it can be.
+ *
+ *  "Wrong if it closes below 350" is a level the desk can put a distance and a history
+ *  on; "if the story changes" is not, and saying so is better than pretending. A reason
+ *  that reads against the position is flagged, because that is usually a typo in the side.
+ */
+function PlanNote({ report }: { report: Report }) {
+  const c = report.plan_check;
+  if (!c) return null;
+  let line: string | null = null;
+  if (c.kind === "untested" && c.invalidation) {
+    line = `“${c.invalidation}” is not something the desk can test against data, so it stays as your note.`;
+  } else if ((c.kind === "level" || c.kind === "moving_average") && c.level != null && c.distance_pct != null) {
+    const what = c.note ? `${c.note} (${fmtPrice(c.level)})` : fmtPrice(c.level);
+    line = c.already
+      ? `Your invalidation, ${what}, is already crossed at the current price.`
+      : `Your invalidation, ${what}, is ${Math.abs(c.distance_pct).toFixed(1)}% away${c.crossed != null ? `; ${c.crossed} of ${c.of} past moments like this crossed it inside the hold` : ""}.`;
+  } else if (c.kind === "move" && c.distance_pct != null) {
+    line = `Your invalidation is a ${Math.abs(c.distance_pct).toFixed(1)}% adverse move${c.crossed != null ? `; ${c.crossed} of ${c.of} past moments like this saw one inside the hold` : ""}.`;
+  } else if (c.kind === "wrong_side" && c.level != null) {
+    line = `Your invalidation, ${fmtPrice(c.level)}, is ${c.note} the current price - for this direction that reads like a target, not what would prove you wrong.`;
+  }
+  if (!line && !c.thesis_mismatch) return null;
+  return (
+    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
+      <span className="font-medium text-foreground">Your plan, checked: </span>
+      <span className="text-muted-foreground">
+        {line}
+        {c.thesis_mismatch ? ` Note: ${c.thesis_mismatch}.` : ""}
+      </span>
+    </div>
+  );
+}
+
 function DecisionCard({ report }: { report: Report }) {
   const v = report.verdict;
   const t = report.ticket;
@@ -110,6 +144,7 @@ function DecisionCard({ report }: { report: Report }) {
         </p>
       ) : null}
 
+      <PlanNote report={report} />
       <ActOnIt report={report} />
       {/* A what-if was never journalled, so there is no forecast to mark taken and
           nothing to score it against later. Offering the button would put a trade the
