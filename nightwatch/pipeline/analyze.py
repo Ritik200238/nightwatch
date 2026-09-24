@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, fields, replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -85,6 +86,8 @@ class AnalysisContext:
     _with_data: tuple[str, ...] | None = None
     _factors_cache: dict[str, Any] = field(default_factory=dict)
     _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
+    _profiles: dict[str, tuple[datetime, dict[str, float]]] = field(default_factory=dict)
+    _degraded: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
 
     def street_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=2), fetch: bool = True):  # noqa: ANN201
         """Street context for a ticker, from cache when fresh enough.
@@ -184,6 +187,35 @@ class AnalysisContext:
             touched += 1
         return touched
 
+    def _checked(self, ticker: str, end: datetime, frame: pd.DataFrame, rebuild: Callable[[], pd.DataFrame]) -> pd.DataFrame:
+        """A freshly built frame, checked for gaps the previous build did not have.
+
+        On 2026-09-24 at 06:21 UTC the live desk answered a TSLA overnight hold from 2,462
+        candidate hours where the same moment replayed later had 7,977: the cached frame
+        was missing features for thousands of past hours, the search fell back on weekend
+        hours, and the loss tail came out at -0.2% against a true -2.2%. The cause was not
+        found. So each build is compared with the last one for the same token (a build for
+        a nearby end, not an old replay), and a feature that is suddenly missing for far
+        more of the history triggers one rebuild; if it persists, the token is marked so
+        the report says its history was incomplete instead of answering quietly.
+        """
+        profile = _gap_profile(frame)
+        prev = self._profiles.get(ticker)
+        near = prev is not None and abs((ensure_utc(end) - prev[0]).total_seconds()) <= PROFILE_WINDOW_S
+        worse = _worse_gaps(prev[1], profile) if near else {}
+        if worse:
+            log.warning("feature frame for %s came back with new gaps %s; rebuilding once", ticker, worse)
+            frame = rebuild()
+            profile = _gap_profile(frame)
+            worse = _worse_gaps(prev[1], profile)
+        if worse:
+            log.error("feature frame for %s still has new gaps after a rebuild: %s", ticker, worse)
+            self._degraded[ticker] = worse
+            return frame  # keep the old profile as the reference for the next build
+        self._degraded.pop(ticker, None)
+        self._profiles[ticker] = (ensure_utc(end), profile)
+        return frame
+
     def feature_frame(self, ticker: str, end: datetime) -> pd.DataFrame:
         """Full-history feature frame for a ticker, cached per process per end-hour.
 
@@ -198,12 +230,29 @@ class AnalysisContext:
             if cov is None:
                 raise InsufficientData(f"no stored bars for {spec.spot_symbol}")
             frame = _compact(compute_feature_frame(self.store, spec, cov[0], end))
+            frame = self._checked(ticker, end, frame, lambda: _compact(compute_feature_frame(self.store, spec, cov[0], end)))
         self._frames[key] = frame  # re-insert as most recent
         while len(self._frames) > self.frame_cache_size:
             self._frames.pop(next(iter(self._frames)))
         while len(self._factors_cache) > 64:
             self._factors_cache.pop(next(iter(self._factors_cache)))
         return frame
+
+
+# A search feature missing for this many more percentage points of a token's history
+# than in the previous build is a broken build, not an hour of new data.
+GAP_JUMP = 0.05
+PROFILE_WINDOW_S = 48 * 3600
+
+
+def _gap_profile(frame: pd.DataFrame) -> dict[str, float]:
+    from nightwatch.features.snapshot import SEARCH_COLUMNS
+
+    return {c: float(frame[c].isna().mean()) for c in SEARCH_COLUMNS if c in frame.columns and len(frame)}
+
+
+def _worse_gaps(before: dict[str, float], after: dict[str, float]) -> dict[str, tuple[float, float]]:
+    return {c: (round(before[c], 3), round(after[c], 3)) for c in after if c in before and after[c] - before[c] > GAP_JUMP}
 
 
 def _compact(frame: pd.DataFrame) -> pd.DataFrame:
@@ -358,6 +407,12 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 2. Analog search + outcomes.
     t0 = time.perf_counter()
     frame = ctx.feature_frame(ticket.ticker, as_of)
+    gaps = ctx._degraded.get(ticket.ticker)
+    if gaps:
+        warnings.append(
+            f"part of {ticket.ticker}'s stored history was incomplete when this ran ({', '.join(sorted(gaps))} missing for more "
+            f"of it than usual), so the comparison is drawn from a narrower history than normal; treat the distribution with caution"
+        )
     # On nights where the unfiltered answer has been measured to be wrong, the desk
     # narrows the search itself, unless the trader named conditions or turned it off.
     # The report says it did, and why, next to the verdict.

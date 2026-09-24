@@ -166,3 +166,42 @@ def test_touching_the_frame_cache_reads_every_frame_and_changes_nothing(seeded_s
     assert ctx.touch_frames() == 2
     for k, v in ctx._frames.items():
         pd.testing.assert_frame_equal(v, before[k])
+
+
+def test_a_build_with_sudden_new_gaps_is_rebuilt_then_flagged(seeded_store):
+    """A frame missing a search feature for far more of the history than the build
+    before it is rebuilt once; if the gaps persist the token is marked, and the report
+    says so rather than answering quietly from a damaged history."""
+    import numpy as np
+
+    from nightwatch.decision.ticket import HorizonKind, TradeTicket
+    from nightwatch.pipeline.analyze import analyze
+    from nightwatch.stress.scenarios import Side
+
+    ctx = _ctx(seeded_store)
+    good = ctx.feature_frame("TSLA", AS_OF)
+    broken = good.copy()
+    broken.loc[broken.index[: len(broken) // 2], "rv_24h"] = np.nan
+    calls = []
+
+    def rebuild_fixes():
+        calls.append(1)
+        return good
+
+    assert ctx._checked("TSLA", AS_OF, broken, rebuild_fixes) is good and calls == [1]
+    assert "TSLA" not in ctx._degraded
+
+    assert ctx._checked("TSLA", AS_OF, broken, lambda: broken) is broken
+    assert "rv_24h" in ctx._degraded["TSLA"]
+    ctx._frames.clear()
+    ctx._frames[f"TSLA|{AS_OF.replace(minute=0, second=0, microsecond=0).isoformat()}"] = broken
+    ticket = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=10_000.0, account_equity_quote=200_000.0,
+                         horizon_kind=HorizonKind.NEXT_OPEN, thesis="t", invalidation="i")
+    warnings = analyze(ctx, ticket, as_of=AS_OF, record=False).warnings
+    assert any("incomplete when this ran" in w and "rv_24h" in w for w in warnings)
+
+
+def test_an_ordinary_new_build_is_not_mistaken_for_a_broken_one(seeded_store):
+    ctx = _ctx(seeded_store)
+    frame = ctx.feature_frame("TSLA", AS_OF)
+    assert ctx._checked("TSLA", AS_OF, frame, lambda: frame) is frame and not ctx._degraded
