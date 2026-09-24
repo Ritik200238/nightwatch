@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from nightwatch.api.intake import parse_message, read_conversation
+from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
 
 TICKERS = "AAPL AMD AMZN AVGO BABA COIN CRCL GOOGL HOOD INTC META MSFT MSTR MU NFLX NVDA PLTR QQQ SMCI SPY SQQQ TQQQ TSLA TSM".split()
 
@@ -157,3 +158,77 @@ def test_a_bare_number_that_is_not_a_size_is_left_alone():
     assert p("short 3000 NVDA, stop at 180").stop_price == 180.0  # the stop keeps its number
     assert p("short 3000 NVDA, stop at 180").notional_quote == 3_000.0
     assert p("long 10k TSLA for 12 hours").horizon_hours == 12.0  # a duration is not money
+
+
+def test_through_the_weekend_on_a_weekday_runs_to_the_open_after_it(monkeypatch):
+    """"Hold through the weekend" said on a Thursday means Monday's open. It used to be
+    read as the next open - seven hours later, on Thursday."""
+    from datetime import datetime, timedelta
+
+    from nightwatch.api import intake as it
+    from nightwatch.time_utils import UTC
+
+    thursday = datetime(2026, 9, 24, 6, 21, tzinfo=UTC)
+    monkeypatch.setattr("nightwatch.time_utils.utc_now", lambda: thursday)
+    for text in ("Hold $20k of TSLA through the weekend, stop at 350", "short 5k NVDA into Monday", "long 10k AAPL over the weekend"):
+        i = it.parse_message(text, ["TSLA", "NVDA", "AAPL"])
+        t = it.intent_to_ticket(i, 200_000.0)
+        end = thursday + timedelta(hours=t.horizon_hours)
+        assert t.horizon_kind.value == "hours" and end.weekday() == 0 and end.hour == 13, text
+        assert t.extra.get("horizon_label", "").startswith("through the weekend")
+    # "Overnight" is still the next open.
+    assert it.intent_to_ticket(it.parse_message("long 20k TSLA overnight", ["TSLA"]), None).horizon_kind.value == "next_open"
+
+
+def test_the_language_is_read_from_the_message():
+    from nightwatch.api import intake as it
+
+    assert it.language_of("我想周末持有特斯拉") == "zh" and it.language_of("long 20k TSLA") == "en"
+
+
+def test_the_model_is_needed_only_for_what_the_rules_cannot_read():
+    from nightwatch.api import intake as it
+
+    assert not it.needs_the_model("long 20k TSLA overnight, stop 350")
+    assert it.needs_the_model("long 20k TSLA, only earnings nights")
+    assert it.needs_the_model("我想做多特斯拉")
+
+
+def _report(store_path, **kw):  # noqa: ANN001, ANN003, ANN202
+    from nightwatch.decision.ticket import HorizonKind, TradeTicket
+    from nightwatch.pipeline.analyze import analyze
+    from nightwatch.stress.scenarios import Side
+    from tests.test_pipeline import AS_OF, _ctx
+
+    base = {"ticker": "TSLA", "side": Side.LONG, "notional_quote": 10_000.0, "account_equity_quote": 200_000.0, "horizon_kind": HorizonKind.NEXT_OPEN}
+    return analyze(_ctx(store_path), TradeTicket(**{**base, **kw}), as_of=AS_OF, record=False)
+
+
+def test_the_briefing_mentions_the_traders_own_stop(seeded_store):  # noqa: F811
+    from nightwatch.api import intake as it
+
+    r = _report(seeded_store, stop_price=100.0, thesis="t", invalidation="i")
+    text = it.brief(r)
+    assert "Your stop at 100.00" in text and "past moments like this would have hit it" in text
+
+
+def test_a_review_for_a_missing_plan_says_how_to_clear_it(seeded_store):  # noqa: F811
+    """"Why: written plan: missing thesis" names a rule. The trader needs to be told
+    what to type."""
+    from nightwatch.api import intake as it
+
+    text = it.brief(_report(seeded_store))
+    assert "To clear the review, tell me why you want this trade and what would prove it wrong" in text
+    assert "written plan" not in text
+
+
+def test_the_chinese_briefing_carries_the_same_numbers(seeded_store):  # noqa: F811
+    import re
+
+    from nightwatch.api import intake as it
+
+    r = _report(seeded_store, stop_price=100.0)
+    en, zh = it.brief(r), it.brief(r, "zh")
+    nums = lambda s: set(re.findall(r"[-+]?\d[\d,]*\.\d+%?", s))  # noqa: E731
+    assert "历史" in zh and "要通过复核" in zh
+    assert nums(zh) <= nums(en) | nums(it.brief(r)), "only the words change"
