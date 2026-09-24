@@ -271,12 +271,21 @@ verdict still comes back.
 stops at 90 days and the search covers twenty months; it would have to be imputed. Per
 token tail factors, until each token has enough scored forecasts of its own.
 
-**Stack:** Python 3.11, numpy/pandas, SQLite, FastAPI; Next.js 16, Recharts. Two models,
-neither of which produces a number: Qwen 3.8 Max reads SEC filings, Claude Opus 5 parses
-intent and narrates. Six live data sources, all listed with their
-freshness on the desk itself and at `/sources`: Bitget public API (spot, USDT perps with
-index and mark candles, order books, funding), Yahoo chart API, Nasdaq earnings calendar,
-FRED, RSS headlines, and SEC EDGAR filings timed to the second they were accepted.
+**Stack:** Python 3.11, numpy/pandas, SQLite, FastAPI; Next.js 16, Recharts. Qwen 3.8 Max,
+which produces no number: it reads SEC filings, and parses the messages the rule parser
+cannot (Claude is supported as a second provider). Seven live data sources, all listed
+with their freshness on the desk itself and at `/sources`: Bitget public API (spot, USDT
+perps with index and mark candles, order books, funding), **Bitget's US-stock data service
+(`bitget-mcp-server`)**, Yahoo chart API, Nasdaq earnings calendar, FRED, RSS headlines, and
+SEC EDGAR filings timed to the second they were accepted.
+
+**Two MCP integrations, both directions.** The desk *reads* Bitget's MCP server on every
+analysis of today: the stock's live price while the US market is shut, analyst ratings
+and targets, insider trades and market fear & greed. And the desk *is* an MCP server:
+`claude mcp add nightwatch --transport http https://nightwatch-gules.vercel.app/api/mcp`
+gives Claude, Cursor or any MCP client three read-only tools - `stress_test`,
+`list_conditions`, `list_tokens` - answering a full stress test in 2.6 s (observed,
+through the public URL).
 
 ### 5. Deliverables
 
@@ -383,15 +392,22 @@ Both were handled; neither is a reason not to use it.
 
 ### Qwen 3.8 Max — understanding the trader (live in the demo)
 
-The same model also runs the chat. A trader types
+The same model reads the chat, but only when it has to. Measured on the live desk, Qwen
+took 15-57 s to parse a message, and a trader waiting a minute to be told what they just
+typed is a bad conversation. So the rule parser goes first: it reads the shapes traders
+usually type ("long 20k TSLA overnight, stop 350") in milliseconds, and a whole turn -
+parse, analysis, briefing - now comes back in 3.6-5.4 s (observed). Qwen is asked when the
+rules cannot finish the job: a message they cannot complete, a request to narrow the
+history ("only earnings nights"), or a message in Chinese:
 
-> *"im nervous about the fed thing wednesday, thinking 15k nvidia short overnight"*
+> *"我想周末持有两万美元的特斯拉，风险大吗？"* ("I want to hold $20k of Tesla over the weekend - how risky is it?")
 
-and Qwen returns NVDA, **short**, 15,000 USDT, held to the next US open, with the thesis
-kept — in 12 seconds, from lowercase, unpunctuated text with the direction buried mid
-sentence. The rule-based parser underneath it reads the shapes traders usually type and
-would have missed that one. `GET /health` names the provider and model, so anyone can
-check which is answering.
+Qwen returns TSLA, long, 20,000 USDT, held through the weekend, and the trader gets the
+briefing in Chinese: the same fields and the same numbers, other words. When the model
+narrowed that question to "weekends only" on its own, the desk undid it - describing a
+holding period is not asking for a filter, and a check now holds the model to that.
+`GET /health` names the provider and model; each chat response says `parsed_by` and
+`written_by`.
 
 ### Qwen 3.8 Max — steering the retrieval (live in the demo)
 
