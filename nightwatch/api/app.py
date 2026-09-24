@@ -261,10 +261,15 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     # condition but asks about the report, not for a different one.
     if any(kind == "street" and pattern.search(question) for kind, pattern, _ in followup.ROUTES):
         return None
-    provider = select()
-    if provider is None:
-        return None
-    change = parse_change(provider, question, context.get("ticket") or {}, tickers)
+    # Rules first: the common changes are shapes the intake rules already read, in
+    # milliseconds. The model, which takes 10-60 s, is asked only when they find none.
+    change = whatif.rule_change(question, context.get("ticket") or {}, tickers)
+    provider = None
+    if change.empty:
+        provider = select()
+        if provider is None:
+            return None
+        change = parse_change(provider, question, context.get("ticket") or {}, tickers)
     if change.empty:
         return None
 
@@ -273,7 +278,9 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
         payload = report.to_dict()
     state.keep_hypothetical(payload)
-    answer = whatif.compare(context, payload, change)
+    from nightwatch.api.intake import language_of
+
+    answer = whatif.compare(context, payload, change, language_of(question))
     return {
         "intent": {"kind": "what_if", "question": answer.kind, "missing_fields": [], "reply": answer.text},
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
@@ -288,10 +295,10 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         "answer_kind": "what_if",
         "answered_about": context.get("forecast_id"),
         "changed": {k: v for k, v in change.__dict__.items() if v},
-        "parsed_by": provider.name,
+        "parsed_by": provider.name if provider else "rules",
         "written_by": "rules",
-        "provider": provider.name,
-        "model": provider.model,
+        "provider": provider.name if provider else None,
+        "model": provider.model if provider else None,
     }
 
 
@@ -686,25 +693,32 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             # "What if I held it twelve hours", "was it worse on earnings nights". The
             # report on screen cannot answer those - they are a different report - so the
             # desk runs one. The model names what changed and the engine does the rest.
-            if credentials_present():
-                try:
-                    hypothetical = _what_if(s, context, latest)
-                except InsufficientData as exc:
-                    hypothetical = {"reply": f"I could not run that one: {exc}", "mode": "what_if", "intent": {"kind": "followup", "reply": str(exc), "missing_fields": []}}
-                except Exception as exc:  # noqa: BLE001 - the report on screen still answers
-                    log.warning("what-if fell back to the report on screen: %s", exc)
-                    hypothetical = None
-                if hypothetical:
-                    return hypothetical
+            # No key needed: the rules read most what-ifs, and the model is asked only
+            # when they cannot (in which case no key simply means no re-run).
+            try:
+                hypothetical = _what_if(s, context, latest)
+            except InsufficientData as exc:
+                hypothetical = {"reply": f"I could not run that one: {exc}", "mode": "what_if", "intent": {"kind": "followup", "reply": str(exc), "missing_fields": []}}
+            except Exception as exc:  # noqa: BLE001 - the report on screen still answers
+                log.warning("what-if fell back to the report on screen: %s", exc)
+                hypothetical = None
+            if hypothetical:
+                return hypothetical
 
-            found = followup.answer_or_menu(context, latest)
+            from nightwatch.api import followup_zh
+            from nightwatch.api.intake import language_of
+
+            chinese = language_of(latest) == "zh"
+            # A Chinese question gets a Chinese answer from the same fields; a kind that is
+            # not translated gets the Chinese menu of what can be asked, not a guess.
+            found = (followup_zh.answer(context, latest) or followup_zh.answer_or_menu(context, "")) if chinese else followup.answer_or_menu(context, latest)
             payload = {
                 "intent": {"kind": "followup", "question": found.kind, "missing_fields": [], "reply": found.text},
                 "ticket": None, "report": None, "narrative": None, "report_text": None,
                 "unverified_numbers": [], "reply": found.text, "mode": "rules",
                 "answered_about": body.context_forecast_id, "answer_kind": found.kind,
             }
-            if credentials_present():
+            if credentials_present() and not chinese:
                 try:
                     payload.update(followup_turn(context, latest, found))
                 except Exception as exc:  # noqa: BLE001 - the rules answer already stands

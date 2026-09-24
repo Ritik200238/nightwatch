@@ -430,7 +430,7 @@ MENU = (
 
 # A question, rather than a new trade idea. Deliberately loose: the caller only reaches
 # here when there is a report to ask about and no new ticker was named.
-_QUESTIONY = re.compile(r"\?|^\s*(why|what|how|when|which|who|where|can|could|should|would|is|are|do|does|did|tell|show|explain|talk)\b", re.I)
+_QUESTIONY = re.compile(r"\?|？|^\s*(why|what|how|when|which|who|where|can|could|should|would|is|are|do|does|did|tell|show|explain|talk)\b|吗|呢|什么|为什么|怎么|多少|能不能|是否|如何|会不会", re.I)
 
 
 def looks_like_a_question(text: str) -> bool:

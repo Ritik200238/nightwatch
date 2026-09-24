@@ -43,7 +43,8 @@ _MARKERS = (
     r"what if", r"what about", r"how about", r"instead", r"rather than", r"compared? (?:to|with)",
     r"\bonly\b", r"\bjust\b", r"\bversus\b", r"\bvs\.?\b", r"would it", r"\bif i (?:held|hold|went|go|was|were|did)\b",
 )
-_WHATIF = re.compile("|".join(_MARKERS), re.I)
+_MARKERS_ZH = ("如果", "要是", "假如", "换成", "改成", "只看", "只比较", "呢")
+_WHATIF = re.compile("|".join(_MARKERS + _MARKERS_ZH), re.I)
 
 
 def looks_like_a_what_if(question: str, *, tickers: tuple[str, ...] = (), current: str = "") -> bool:
@@ -97,16 +98,22 @@ class Change:
             bits.append("held to the end of this closed window")
         elif self.horizon_kind == "next_open":
             bits.append("held to the next US open")
+        elif self.horizon_kind == "through_weekend":
+            bits.append("held through the weekend")
         if self.lenses:
             bits.append(lens_mod.describe(lens_mod.resolve(list(self.lenses))))
         return ", ".join(bits)
 
     def apply_to(self, ticket: TradeTicket) -> TradeTicket:
         """The same ticket with the asked-for fields replaced, and nothing else touched."""
-        kind = HorizonKind(self.horizon_kind) if self.horizon_kind else ticket.horizon_kind
+        kind = HorizonKind(self.horizon_kind) if self.horizon_kind and self.horizon_kind != "through_weekend" else ticket.horizon_kind
         hours = self.horizon_hours if self.horizon_hours else ticket.horizon_hours
         if self.horizon_hours:
             kind = HorizonKind.HOURS
+        if self.horizon_kind == "through_weekend":
+            from nightwatch.api.intake import horizon_fields
+
+            kind, hours, _label = horizon_fields("through_weekend", None)
         return replace(
             ticket,
             ticker=(self.ticker or ticket.ticker).upper(),
@@ -117,6 +124,32 @@ class Change:
             # they are on the way in from a ticket.
             lenses=tuple(x.name for x in lens_mod.resolve(list(self.lenses))) if self.lenses else ticket.lenses,
         )
+
+
+def rule_change(question: str, ticket: dict, tickers: list[str]) -> Change:
+    """The change a what-if asks for, read by rules; empty when they find none.
+
+    The model takes 10-60 s to name a change. The common ones - a holding period, the
+    other direction, another token, "only earnings nights" - are shapes the intake rules
+    already read, so they are tried first and the model is asked only when they find
+    nothing. Anything the question does not state is left as it was.
+    """
+    from nightwatch.api import intake
+
+    parsed = intake.parse_message(question, tickers)
+    cur_ticker = str(ticket.get("ticker") or "").upper()
+    ticker = parsed.ticker if parsed.ticker and parsed.ticker.upper() != cur_ticker else None
+    side = parsed.side if parsed.side and parsed.side != ticket.get("side") else None
+    # "What if I held it" names a holding verb, not a direction: only an explicit flip counts.
+    if side == "long" and not re.search(r"\blong\b|\bbuy\b|做多|买入", question, re.I):
+        side = None
+    kind, hours = parsed.horizon_kind, parsed.horizon_hours
+    lenses: tuple[str, ...] = ()
+    if intake.asks_to_narrow(question) or re.search(r"\bworse\b|\bbetter\b|更差|更好", question, re.I):
+        low = question.lower()
+        lenses = tuple(dict.fromkeys(x.name for x in lens_mod.LENSES if any(p in low for p in x.says)))
+    return Change(ticker=ticker, side=side, horizon_kind=kind if kind in ("next_open", "window_end", "hours", "through_weekend") else None,
+                  horizon_hours=hours if kind == "hours" else None, lenses=lenses)
 
 
 def ticket_from(report: dict) -> TradeTicket | None:
@@ -187,60 +220,116 @@ def _lens_note(after: dict) -> str:
     return ""
 
 
-def compare(before: dict, after: dict, change: Change) -> Answer:
+VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+
+
+def _describe_zh(change: Change) -> str:
+    bits = []
+    if change.ticker:
+        bits.append(f"换成 {change.ticker.upper()}")
+    if change.side:
+        bits.append("改为做空" if change.side == "short" else "改为做多")
+    if change.horizon_hours:
+        bits.append(f"持有 {change.horizon_hours:g} 小时")
+    elif change.horizon_kind == "through_weekend":
+        bits.append("持有过周末")
+    elif change.horizon_kind == "next_open":
+        bits.append("持有到下一次开盘")
+    elif change.horizon_kind == "window_end":
+        bits.append("持有到本时段结束")
+    if change.lenses:
+        bits.append("只比较：" + lens_mod.describe(lens_mod.resolve(list(change.lenses))))
+    return "，".join(bits)
+
+
+def _verdict_zh(v: str) -> str:
+    return VERDICT_ZH.get(v, v)
+
+
+def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answer:
     """What changed between two reports of the same night, in the order a trader reads.
 
     Every number is copied from one of the two reports. The only judgement this function
     makes is which of them are worth printing, and that judgement is the same every time.
+    ``lang`` changes the words, never the numbers.
     """
-    what = change.describe() or "that change"
+    zh = lang == "zh"
+    what = (_describe_zh(change) if zh else change.describe()) or ("这个改动" if zh else "that change")
     refused = _lens_note(after)
     if refused:
-        return Answer("what_if", f"I cannot answer that one honestly: {refused}.", ("analog cohort",))
+        text = f"这个问题我无法如实回答：{refused}。" if zh else f"I cannot answer that one honestly: {refused}."
+        return Answer("what_if", text, ("analog cohort",))
 
-    bits = [f"Re-run with {what}, against the same moment:"]
+    bits = [f"按“{what}”在同一时刻重新计算：" if zh else f"Re-run with {what}, against the same moment:"]
+    join = "" if zh else " "
 
     nb, na = _n(before), _n(after)
     scope = (after.get("analog") or {}).get("scope")
     if na is None:
         reason = ((after.get("analog") or {}).get("result") or {}).get("reason", "too few matches")
-        bits.append(f"there were not enough distinct past moments to answer ({reason}).")
-        return Answer("what_if", " ".join(bits), ("analog cohort",))
-    if nb is not None and nb != na:
-        bits.append(f"the cohort is {na} past moments instead of {nb}")
+        bits.append(f"相似的历史时刻不够多，无法回答（{reason}）。" if zh else f"there were not enough distinct past moments to answer ({reason}).")
+        return Answer("what_if", join.join(bits), ("analog cohort",))
+    widened = scope == "pooled" and (before.get("analog") or {}).get("scope") != "pooled"
+    if zh:
+        cohort = f"相似时刻 {na} 个（原来 {nb} 个）" if nb is not None and nb != na else f"相似时刻 {na} 个"
+        if widened:
+            cohort += "，因单一代币历史不足，改用所有代币的合并历史"
+        bits.append(cohort + "。")
     else:
-        bits.append(f"the cohort is {na} past moments")
-    if scope == "pooled" and (before.get("analog") or {}).get("scope") != "pooled":
-        bits[-1] += ", searched across the pooled history because one token's own past does not hold enough of them"
-    bits[-1] += "."
+        cohort = f"the cohort is {na} past moments instead of {nb}" if nb is not None and nb != na else f"the cohort is {na} past moments"
+        if widened:
+            cohort += ", searched across the pooled history because one token's own past does not hold enough of them"
+        bits.append(cohort + ".")
 
     cb, ca = _cohort(before), _cohort(after)
     hb, ha = before.get("primary_horizon"), after.get("primary_horizon")
     # Changing how long the position is held changes what the two medians are measured
     # over, so both windows are named. "Moves from +0.2% to 0.0% over 6h" would quietly
     # compare two numbers that are not measured over the same thing.
-    from_h = f" over {hb}" if hb and ha and hb != ha else ""
-    to_h = f" over {ha}" if ha and (not hb or hb != ha) else ""
-    if cb.get("median_pct") == ca.get("median_pct") and _p5(before) == _p5(after):
-        # A lens that filtered nothing, or a change the distribution did not feel. Saying
-        # "moves from -3.3% to -3.3%" is true and reads like a mistake.
-        bits.append(f"The middle outcome{to_h} and the one-in-twenty loss are unchanged, at {_pct(ca.get('median_pct'))} and {_pct(_p5(after))}.")
+    moved_h = bool(hb and ha and hb != ha)
+    unchanged = cb.get("median_pct") == ca.get("median_pct") and _p5(before) == _p5(after)
+    if zh:
+        fh, th = (f"（{hb}）", f"（{ha}）") if moved_h else ("", "")
+        if unchanged:
+            bits.append(f"中位结果和最差二十分之一不变：{_pct(ca.get('median_pct'))} 和 {_pct(_p5(after))}。")
+        else:
+            bits.append(f"中位结果从 {_pct(cb.get('median_pct'))}{fh} 变为 {_pct(ca.get('median_pct'))}{th}，最差二十分之一从 {_pct(_p5(before))} 变为 {_pct(_p5(after))}。")
     else:
-        bits.append(
-            f"The middle outcome moves from {_pct(cb.get('median_pct'))}{from_h} to {_pct(ca.get('median_pct'))}{to_h}, "
-            f"and the one-in-twenty loss from {_pct(_p5(before))} to {_pct(_p5(after))}."
-        )
+        from_h = f" over {hb}" if moved_h else ""
+        to_h = f" over {ha}" if ha and (not hb or hb != ha) else ""
+        if unchanged:
+            # A lens that filtered nothing, or a change the distribution did not feel.
+            # Saying "moves from -3.3% to -3.3%" is true and reads like a mistake.
+            bits.append(f"The middle outcome{to_h} and the one-in-twenty loss are unchanged, at {_pct(ca.get('median_pct'))} and {_pct(_p5(after))}.")
+        else:
+            bits.append(
+                f"The middle outcome moves from {_pct(cb.get('median_pct'))}{from_h} to {_pct(ca.get('median_pct'))}{to_h}, "
+                f"and the one-in-twenty loss from {_pct(_p5(before))} to {_pct(_p5(after))}."
+            )
 
     vb, va = (before.get("verdict") or {}), (after.get("verdict") or {})
     if va.get("verdict"):
         cap = (after.get("sizing") or {}).get("binding_cap")
-        held = f", held by the {cap.replace('_', ' ')} cap" if cap else ""
-        if vb.get("verdict") and (vb.get("verdict") != va.get("verdict") or abs((vb.get("recommended_notional") or 0) - (va.get("recommended_notional") or 0)) > 1):
-            bits.append(
-                f"The verdict moves from {vb['verdict']} at {_usd(vb.get('recommended_notional'))} "
-                f"to {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}."
-            )
+        moved = bool(vb.get("verdict")) and (
+            vb.get("verdict") != va.get("verdict") or abs((vb.get("recommended_notional") or 0) - (va.get("recommended_notional") or 0)) > 1
+        )
+        if zh:
+            held = f"，受{cap.replace('_', ' ')}上限约束" if cap else ""
+            if moved:
+                bits.append(
+                    f"结论从 {_verdict_zh(vb['verdict'])}（{_usd(vb.get('recommended_notional'))}）"
+                    f"变为 {_verdict_zh(va['verdict'])}（{_usd(va.get('recommended_notional'))}）{held}。"
+                )
+            else:
+                bits.append(f"结论不变：{_verdict_zh(va['verdict'])}，{_usd(va.get('recommended_notional'))}{held}。")
         else:
-            bits.append(f"The verdict is unchanged: {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}.")
+            held = f", held by the {cap.replace('_', ' ')} cap" if cap else ""
+            if moved:
+                bits.append(
+                    f"The verdict moves from {vb['verdict']} at {_usd(vb.get('recommended_notional'))} "
+                    f"to {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}."
+                )
+            else:
+                bits.append(f"The verdict is unchanged: {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}.")
 
-    return Answer("what_if", " ".join(bits), ("analog cohort", "gate and sizing", "re-run"))
+    return Answer("what_if", join.join(bits), ("analog cohort", "gate and sizing", "re-run"))

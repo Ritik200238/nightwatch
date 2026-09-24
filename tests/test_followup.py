@@ -284,3 +284,18 @@ def test_a_report_without_street_data_says_why():
 
     a = fu.answer({"street": None}, "what do analysts think?")
     assert a.kind == "street" and "no street data" in a.text
+
+
+def test_chinese_questions_are_recognised_and_answered_in_chinese():
+    from nightwatch.api import followup as fu
+    from nightwatch.api import followup_zh as zh
+
+    assert fu.looks_like_a_question("风险大吗？") and fu.looks_like_a_question("为什么需要复核")
+    r = {"primary_horizon": "8h", "analog": {"horizons": {"8h": {"cohort": {"n": 40, "median_pct": 0.2, "win_rate": 0.55}, "p5_adjusted": -3.3}}},
+         "gate": {"rules": [{"rule": "written_plan", "decision": "REVIEW_REQUIRED", "reason": "missing thesis"}]},
+         "verdict": {"verdict": "REVIEW"}}
+    h = zh.answer(r, "历史上怎么样？")
+    assert h.kind == "history" and "40" in h.text and "-3.3%" in h.text
+    g = zh.answer(r, "为什么需要复核？")
+    assert g.kind == "gate" and "书面计划" in g.text and "要通过复核" in g.text
+    assert zh.answer_or_menu(r, "天气如何").kind == "menu"

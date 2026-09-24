@@ -309,3 +309,39 @@ def test_a_question_with_no_counterfactual_in_it_never_costs_a_model_call(state,
     monkeypatch.setattr("nightwatch.api.providers.select", lambda preferred=None: provider)
     assert app_mod._what_if(state, _seed_report(state), "why not bigger?") is None
     assert provider.calls == []
+
+
+
+@pytest.mark.parametrize(("q", "field", "value"), [
+    ("what if I held it for 6 hours?", "horizon_hours", 6.0),
+    ("what about short instead?", "side", "short"),
+    ("was it worse on earnings nights?", "lenses", ("earnings_soon",)),
+    ("如果只持有6小时呢？", "horizon_hours", 6.0),
+    ("做空呢？", "side", "short"),
+    ("只看财报前呢？", "lenses", ("earnings_soon",)),
+    ("换成英伟达呢", "ticker", "NVDA"),
+])
+def test_common_what_ifs_are_read_without_the_model(q, field, value):
+    assert getattr(whatif.rule_change(q, TICKET, ["TSLA", "NVDA"]), field) == value
+
+
+def test_holding_it_is_not_read_as_asking_to_go_long():
+    """"What if I held it" names a holding verb; the trade is already long."""
+    assert whatif.rule_change("what if I held it for 6 hours?", {**TICKET, "side": "short"}, ["TSLA"]).side is None
+
+
+def test_a_question_with_no_change_in_it_is_left_for_the_model():
+    assert whatif.rule_change("what if I am wrong about all of this?", TICKET, ["TSLA"]).empty
+
+
+def test_the_chinese_comparison_carries_the_same_numbers():
+    after = report(
+        analog={"scope": "pooled", "lens": {"names": ["earnings_soon"], "applied": True, "refused": ""}, "result": {"ok": True},
+                "horizons": {"8h": {"cohort": {"n": 28, "median_pct": -1.2}, "p5_adjusted": -10.6}}},
+        verdict={"verdict": "REDUCE", "recommended_notional": 6200.0}, sizing={"binding_cap": "risk_budget"},
+    )
+    en = whatif.compare(report(), after, whatif.Change(lenses=("earnings_soon",))).text
+    zh = whatif.compare(report(), after, whatif.Change(lenses=("earnings_soon",)), "zh").text
+    for n in ("-3.3%", "-10.6%", "6,200"):
+        assert n in en and n in zh
+    assert "重新计算" in zh and "建议减仓" in zh
