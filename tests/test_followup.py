@@ -265,3 +265,22 @@ def test_the_engine_reads_nothing_but_the_dict_it_is_given(report):
     got = answer_or_menu({}, "what is the worst case")
     assert got.kind == "menu"
     assert numbers(got.text) == []
+
+
+def test_street_questions_are_answered_from_bitgets_data_and_said_to_be_context():
+    from nightwatch.api import followup as fu
+
+    r = {"street": {"token_vs_live_bps": 5.6, "token_vs_close_bps": -63.0, "n_firms": 12, "bullish": 5, "neutral": 5, "bearish": 2,
+                    "median_target": 360.0, "target_gap_pct": -4.7, "insider_sells": 3, "insider_buys": 0,
+                    "insider_sold_value": 2_100_000.0, "insider_bought_value": 0.0, "mood_score": 34.6, "mood_rating": "fear"}}
+    a = fu.answer(r, "what do analysts think?")
+    assert a.kind == "street" and "12 analyst firms" in a.text and "$360" in a.text
+    assert "None of this moved the size" in a.text
+    assert fu.answer(r, "are insiders selling?").kind == "street"
+
+
+def test_a_report_without_street_data_says_why():
+    from nightwatch.api import followup as fu
+
+    a = fu.answer({"street": None}, "what do analysts think?")
+    assert a.kind == "street" and "no street data" in a.text

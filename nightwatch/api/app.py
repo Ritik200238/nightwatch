@@ -118,6 +118,7 @@ class AppState:
             spot_client=BitgetPublicClient(Venue.BITGET_SPOT, rate_per_sec=4) if live else None,
             perp_client=BitgetPublicClient(Venue.BITGET_UMCBL, rate_per_sec=4) if live else None,
             frame_cache_size=settings.frame_cache_size,
+            street_client=_street_client(),
         )
         self.lock = threading.Lock()  # serialises analyses that share the frame cache
         # Scoring the whole journal takes seconds; it only changes when forecasts mature.
@@ -155,6 +156,13 @@ class AppState:
                 log.warning("warm %s failed: %s", t, exc)
             self.warm_status["done"] = i
         self.warm_status["state"] = "done"
+        # Street context is network-bound, not lock-bound, so it is refreshed after the
+        # frames and outside the lock: an analysis arriving meanwhile is never held up.
+        for t in tickers:
+            try:
+                self.ctx.street_for(t, max_age=timedelta(minutes=50))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("street %s failed: %s", t, exc)
 
     def warm_forever(self) -> None:
         """Warm now, then again just after every hour boundary.
@@ -181,6 +189,15 @@ class AppState:
 
     def close(self) -> None:
         self.store.close()
+
+
+def _street_client():  # noqa: ANN202
+    """Bitget's US-stock data service, unless turned off (NIGHTWATCH_BITGET_MCP=0)."""
+    if os.environ.get("NIGHTWATCH_BITGET_MCP", "1") != "1":
+        return None
+    from nightwatch.data.bitget_mcp import BitgetMcpClient
+
+    return BitgetMcpClient()
 
 
 def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[str, Any] | None:
@@ -211,6 +228,10 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         return None
     tickers = list(state.ctx.tickers_with_data())
     if not whatif.looks_like_a_what_if(question, tickers=tuple(tickers), current=base.ticker):
+        return None
+    # "What's the fear and greed reading" shares a word with the "market nervous"
+    # condition but asks about the report, not for a different one.
+    if any(kind == "street" and pattern.search(question) for kind, pattern, _ in followup.ROUTES):
         return None
     provider = select()
     if provider is None:
@@ -416,7 +437,21 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     def sources() -> list[dict[str, Any]]:
         """Every feed the desk reads, with how fresh it is. Judges and users can check
         the numbers on a report are backed by live data, not a fixture."""
-        return data_sources(st().store)
+        s = st()
+        out = data_sources(s.store)
+        # Bitget's US-stock data has no table here: it is fetched per token, held in
+        # memory for an hour, and never stored, because it describes today only.
+        cached = [(ts, v) for ts, v in s.ctx._street.values()]
+        if s.ctx.street_client is not None:
+            newest = max((ts for ts, _ in cached), default=None)
+            out.append({
+                "key": "bitget_mcp", "label": "Bitget US-stock data",
+                "what": "Live quote for the underlying, analyst ratings and targets, insider trades, market fear & greed (bitget-mcp-server)",
+                "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
+                "rows": len(cached), "latest": newest.isoformat() if newest else None,
+                "latest_label": f"{len(cached)} tokens with current street data", "url": "https://agent.bitget.com/mcp",
+            })
+        return out
 
     @app.get("/universe")
     def universe(core: bool = True) -> list[dict[str, Any]]:

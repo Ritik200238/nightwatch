@@ -367,7 +367,45 @@ def _a_now(r: dict, _q: str) -> Answer | None:
 # ------------------------------------------------------------------------ the routing
 
 # Ordered: the first pattern that matches wins, so the specific ones come first.
+def _dollars(v: float | None) -> str:
+    """Stock prices and insider values are in dollars, not the USDT the positions are in."""
+    return "-" if v is None else f"${v:,.0f}"
+
+
+def _a_street(r: dict, q: str) -> Answer | None:
+    s = r.get("street") or {}
+    if not s:
+        return Answer("street", "There is no street data on this report: Bitget's US-stock data was not reachable, or this is a past moment it cannot describe.", ())
+    bits = []
+    if s.get("token_vs_live_bps") is not None:
+        bits.append(
+            f"The token trades {_bps(s['token_vs_live_bps'])} from the stock's live price on Bitget"
+            + (f", and {_bps(s['token_vs_close_bps'])} from its last close." if s.get("token_vs_close_bps") is not None else ".")
+        )
+    if s.get("n_firms"):
+        bits.append(
+            f"{s['n_firms']} analyst firms rated it in the last 90 days: {s['bullish']} buy, {s['neutral']} hold, {s['bearish']} sell"
+            + (f", with a median target of {_dollars(s['median_target'])} ({_pct(s.get('target_gap_pct'))} from here)." if s.get("median_target") else ".")
+        )
+        if s.get("upgrades_recent") or s.get("downgrades_recent"):
+            bits.append(f"In the last 30 days: {s.get('upgrades_recent', 0)} upgrades, {s.get('downgrades_recent', 0)} downgrades.")
+    elif re.search(r"analyst|rating|target|upgrade|downgrade", q, re.I):
+        bits.append("No analyst firm has rated it in the last 90 days in Bitget's data.")
+    if s.get("insider_sells") or s.get("insider_buys"):
+        bits.append(
+            f"Insiders made {s.get('insider_sells', 0)} open-market sales ({_dollars(s.get('insider_sold_value'))}) and "
+            f"{s.get('insider_buys', 0)} purchases ({_dollars(s.get('insider_bought_value'))}) in the last 90 days."
+        )
+    elif re.search(r"insider", q, re.I):
+        bits.append("No open-market insider trades in the last 90 days.")
+    if s.get("mood_score") is not None:
+        bits.append(f"Market-wide fear and greed reads {s['mood_score']:.0f} ({s.get('mood_rating') or ''}).")
+    bits.append("None of this moved the size - it has not been tested against what the token did overnight.")
+    return Answer("street", " ".join(bits), ("Bitget US-stock data",))
+
+
 ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
+    ("street", re.compile(r"\banalysts?\b|\bratings?\b|\bprice targets?\b|\bupgrade\w*\b|\bdowngrade\w*\b|\binsiders?\b|\bthe street\b|\bwall street\b|\bfear\b|\bgreed\b|\bsentiment\b|\blive price\b", re.I), _a_street),
     ("stop", re.compile(r"\bstops?\b|\bstop[- ]loss\b|\btighter\b|\bwider\b", re.I), _a_stop),
     ("size", re.compile(r"\bbigger\b|\bsmaller\b|\bmore\b|\bless\b|\bsize\b|\bwhy not\b.*\b(bigger|more)\b|\bcap\b|\bwhat if i (do|did|put|go|went|buy|bought)\b|\bdouble\b|\bhalve\b", re.I), _a_size),
     ("against", re.compile(r"\bcase against\b|\btalk me out\b|\bdevil\b|\bargue\b|\bwhy shouldn.?t\b|\bwhat.?s wrong\b|\bdownside\b", re.I), _a_against),
@@ -387,7 +425,7 @@ MENU = (
     "I can answer from this report: why the size is what it is, what a different size or stop would do, "
     "what the worst cases are, what it costs to get out, what history says and how significant that is, "
     "whether this setup has burned you before, the case against it, what hedging costs, what kind of market "
-    "this is, and how far to trust any of it."
+    "this is, what analysts and insiders are doing, and how far to trust any of it."
 )
 
 # A question, rather than a new trade idea. Deliberately loose: the caller only reaches

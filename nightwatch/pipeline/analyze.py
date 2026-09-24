@@ -74,12 +74,41 @@ class AnalysisContext:
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
     pooled_tickers: tuple[str, ...] | None = None  # None = all entries with data
     journal: Any = None  # nightwatch.journal.journal.Journal, optional
+    # Bitget's US-stock data service (nightwatch.data.bitget_mcp.BitgetMcpClient), for the
+    # street and insider context and an independent quote. Optional: without it the
+    # report simply has no street section.
+    street_client: Any = None
     sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
     _book_windows: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
     _factors_cache: dict[str, Any] = field(default_factory=dict)
+    _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
+
+    def street_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=2), fetch: bool = True):  # noqa: ANN201
+        """Street context for a ticker, from cache when fresh enough.
+
+        The warm-up loop refreshes every token hourly, so a request normally reads the
+        cache. A miss fetches once, with the client's short timeout, rather than making
+        the analysis wait on a context feed for longer than it takes to be useful.
+        """
+        if self.street_client is None:
+            return None
+        hit = self._street.get(ticker)
+        if hit and utc_now() - hit[0] <= max_age:
+            return hit[1]
+        if not fetch:
+            return hit[1] if hit else None
+        from nightwatch.features import street as street_mod
+
+        try:
+            view = street_mod.build(self.street_client, ticker)
+        except Exception:  # noqa: BLE001 - context must never fail an analysis
+            log.exception("street context for %s failed", ticker)
+            return hit[1] if hit else None
+        self._street[ticker] = (utc_now(), view)
+        return view
 
     def tail_factors(self, as_of: datetime):  # noqa: ANN201
         """Tail-calibration factors fitted on replay forecasts matured before ``as_of``
@@ -297,6 +326,9 @@ class AnalysisReport:
     forecast_id: int | None = None
     second_opinion: Any = None  # nightwatch.decision.devil.SecondOpinion
     filings: list[FilingNote] = field(default_factory=list)
+    # nightwatch.features.street.StreetView as a dict: analysts, insiders, market mood and
+    # an independent quote, from Bitget's data. Context only; None for past moments.
+    street: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -465,11 +497,35 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     t0 = time.perf_counter()
     filings = _filing_notes(ctx, ticket, as_of, horizon_h)
     timings["filings"] = _ms(t0)
+
+    # Street context. Current data describes today, so it is attached only to an
+    # analysis of today; a replay of a past night showing today's targets would be
+    # lookahead dressed as context.
+    t0 = time.perf_counter()
+    street = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        from nightwatch.features import street as street_mod
+
+        view = ctx.street_for(ticket.ticker)
+        if view is not None and not view.empty:
+            street = view.to_dict()
+            sources.append({"kind": "bitget_mcp", "ticker": ticket.ticker, "fetched_at": view.fetched_at})
+            native = snapshot.prices.get("native_close")
+            gap = street_mod.quote_disagreement_bps(view, native, snapshot.features.get("native_close_age_h"))
+            street["quote_gap_bps"] = gap
+            street["token_vs_live_bps"] = street_mod.token_vs_live_bps(view, snapshot.prices.get("spot_close"))
+            street["token_vs_close_bps"] = ((snapshot.prices["spot_close"] / native - 1.0) * 10_000.0) if native and snapshot.prices.get("spot_close") else None
+            if gap is not None and abs(gap) > street_mod.QUOTE_DISAGREE_BPS:
+                warnings.append(
+                    f"the native close fair value is built on ({native:.2f}) is {gap:+.0f} bps from Bitget's figure for the same close; "
+                    f"one of them is wrong, so read the basis with care"
+                )
+    timings["street"] = _ms(t0)
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street,
     )
     # The case against whatever was just decided, from the report's own numbers.
     try:
@@ -517,6 +573,8 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
 # How far back a filing can be and still be worth putting on the report. Beyond a couple
 # of sessions the market has had a chance to price it and it is history, not news.
 FILING_LOOKBACK_H = 36.0
+# How close to now an analysis must be for today's street data to belong on it.
+STREET_FRESH_S = 6 * 3600
 
 
 def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, horizon_h: float) -> list[FilingNote]:
