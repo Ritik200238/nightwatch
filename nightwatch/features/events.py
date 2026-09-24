@@ -93,6 +93,12 @@ def add_event_columns(
     f["hours_since_earnings"] = np.minimum(_hours_since_last(index, earnings), EARNINGS_CAP_H)
     f["earnings_within_72h"] = (f["hours_to_earnings"] <= 72).astype(float)
 
+    # The 30-day look-ahead leaves hours_to_fomc empty in the last stretch of a gap
+    # between meetings (they can be seven weeks apart), and the search then runs without
+    # it. That is deliberate, not an oversight: on 820 replayed moments, filling it in
+    # scored worse (p5 breaches 6.0% -> 6.5%, pinball t = -1.44), and capping it at 30
+    # days like earnings scored worse again (7.0%, t = -1.65). A meeting more than a
+    # month out carries no information the search can use. Tested 2026-09-24.
     lo = index[0].to_pydatetime() - timedelta(days=30)
     hi = index[-1].to_pydatetime() + timedelta(days=30)
     macro: list[MacroRelease] = store.get_macro(lo, hi, series=list(macro_series))
