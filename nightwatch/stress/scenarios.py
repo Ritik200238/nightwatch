@@ -195,6 +195,10 @@ class EmpiricalInputs:
     rv_24h_now: float  # annualised
     horizon_h: float  # the ticket's horizon
     funding_rate_abs_p95: float = 0.0
+    # Where the nearest report is. None means unknown, and an unknown date cannot rule
+    # an earnings gap out.
+    hours_to_earnings: float | None = None
+    hours_since_earnings: float | None = None
 
 
 def closed_window_returns(frame: pd.DataFrame) -> np.ndarray:
@@ -264,6 +268,26 @@ def _ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
+# Slack around the report instant: a report date is known to the day, and an
+# after-the-close report is priced at the next open, up to a day later.
+EARNINGS_SLACK_H = 24.0
+
+
+def earnings_in_window(inp: EmpiricalInputs) -> bool:
+    """Whether an earnings reaction can land inside this hold.
+
+    A report due inside the holding period, or one already out that the market has not
+    yet opened on, can gap the position. One a month away cannot, and a preset built on
+    it was being quoted as the worst case - and as "the case against" - on nights with
+    no report anywhere near them. An unknown date keeps the presets: absence of a date
+    is not evidence of no report.
+    """
+    to, since = inp.hours_to_earnings, inp.hours_since_earnings
+    if to is None and since is None:
+        return True
+    return (to is not None and to <= inp.horizon_h + EARNINGS_SLACK_H) or (since is not None and since <= EARNINGS_SLACK_H)
+
+
 def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     """Presets calibrated from the ticker's own history. Each records its source."""
     presets: list[Scenario] = []
@@ -280,7 +304,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
                 price_move_pct=move, probability_note=f"{p}% of {r.size} past closed windows were worse",
                 calibration={"source": "spot close→open across closed windows", "n": int(r.size), "percentile": p},
             ))
-    if inp.earnings_gap_pct.size >= 4:
+    if inp.earnings_gap_pct.size >= 4 and earnings_in_window(inp):
         g = inp.earnings_gap_pct
         worst = float(np.min(g))
         presets.append(Scenario(

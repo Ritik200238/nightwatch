@@ -1194,7 +1194,15 @@ function StressSection({ report, openAll }: { report: Report; openAll?: boolean 
         return w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : "";
       })()}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`}
       title="What could go wrong"
-      subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour basis observations`}
+      subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour basis observations${
+        s.inputs_summary.earnings_in_window === false
+          ? `. Earnings presets left out: no report falls inside this hold${
+              typeof s.inputs_summary.hours_to_earnings === "number" && s.inputs_summary.hours_to_earnings < 700
+                ? ` (next in about ${Math.round(s.inputs_summary.hours_to_earnings / 24)} days)`
+                : ""
+            }`
+          : ""
+      }`}
     >
       <div className="space-y-4">
         <div className="overflow-x-auto">

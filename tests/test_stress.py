@@ -159,3 +159,24 @@ def test_the_monte_carlo_does_not_ship_its_paths():
     assert sum(hist["counts"]) == len(mc.terminal_ret_pct)
     assert d["p5"] == mc.p5 and d["drawdown_p5"] == mc.drawdown_p5
     assert len(json.dumps(d)) < 4000
+
+
+def test_earnings_presets_only_when_a_report_can_hit_the_hold():
+    """An earnings gap a month away was being quoted as the worst case, and as the case
+    against, on nights with no report anywhere near them."""
+    import numpy as np
+
+    from nightwatch.stress.scenarios import EmpiricalInputs, build_presets, earnings_in_window
+
+    def inp(to, since, h=12.0):  # noqa: ANN001, ANN202
+        return EmpiricalInputs(closed_window_ret_pct=np.array([]), earnings_gap_pct=np.array([-9.0, -3.0, 2.0, 4.0, -1.0]),
+                               abs_basis_closed_bps=np.array([]), rv_24h_now=0.0, horizon_h=h,
+                               hours_to_earnings=to, hours_since_earnings=since)
+
+    ids = lambda i: {p.id for p in build_presets(i)}  # noqa: E731
+    assert "earnings_gap_worst" not in ids(inp(720.0, 720.0)), "a month away"
+    assert "earnings_gap_worst" in ids(inp(10.0, 720.0)), "due inside the hold"
+    assert "earnings_gap_worst" in ids(inp(30.0, 720.0)), "an after-close report priced at the next open, within a day"
+    assert "earnings_gap_worst" in ids(inp(720.0, 8.0)), "out last night, and the market has not opened on it"
+    assert earnings_in_window(inp(None, None)), "an unknown date cannot rule it out"
+    assert "earnings_gap_worst" in ids(inp(80.0, 720.0, h=102.0)), "a weekend hold that spans the report"

@@ -56,6 +56,7 @@ from nightwatch.stress.scenarios import (
     build_presets,
     closed_window_returns,
     earnings_gaps,
+    earnings_in_window,
 )
 from nightwatch.time_utils import classify_session, ensure_utc, utc_now
 
@@ -869,7 +870,8 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
         fr = ctx.store.get_funding(Venue.BITGET_UMCBL, spec.perp_symbol)
         if not fr.empty:
             funding_p95 = float(fr["rate"].abs().quantile(0.95))
-    inp = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=gaps, abs_basis_closed_bps=basis_closed, rv_24h_now=float(snapshot.features.get("rv_24h") or 0.0), horizon_h=horizon_h, funding_rate_abs_p95=funding_p95)
+    inp = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=gaps, abs_basis_closed_bps=basis_closed, rv_24h_now=float(snapshot.features.get("rv_24h") or 0.0), horizon_h=horizon_h, funding_rate_abs_p95=funding_p95,
+                          hours_to_earnings=snapshot.features.get("hours_to_earnings"), hours_since_earnings=snapshot.features.get("hours_since_earnings"))
     presets = build_presets(inp)
     position = Position(ticket.ticker, ticket.side, ticket.notional_quote, entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
     impacts = [apply_scenario(position, p, book=book, taker_fee=taker_fee) for p in presets]
@@ -885,7 +887,8 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
     reverse = reverse_stress(position, book=book, taker_fee=taker_fee, target_loss_pct=ctx.sizing_policy.max_stress_loss_pct, horizon_h=horizon_h) if book is not None else None
     return StressSection(
         presets=presets, impacts=impacts, monte_carlo=mc, reverse_move_pct_for_5pct_loss=reverse,
-        inputs_summary={"closed_windows_n": int(closed.size), "earnings_gaps_n": int(gaps.size), "closed_basis_obs_n": int(basis_closed.size), "rv_24h": inp.rv_24h_now, "funding_abs_p95": funding_p95, "mc_source_hours": int(rets.size)},
+        inputs_summary={"closed_windows_n": int(closed.size), "earnings_gaps_n": int(gaps.size), "closed_basis_obs_n": int(basis_closed.size), "rv_24h": inp.rv_24h_now, "funding_abs_p95": funding_p95, "mc_source_hours": int(rets.size),
+                        "earnings_in_window": earnings_in_window(inp), "hours_to_earnings": inp.hours_to_earnings},
     )
 
 

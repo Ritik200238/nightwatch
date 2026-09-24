@@ -719,7 +719,7 @@ export interface Report {
     impacts: ScenarioImpact[];
     monte_carlo: MonteCarlo | null;
     reverse_move_pct_for_5pct_loss: number | null;
-    inputs_summary: Record<string, number>;
+    inputs_summary: Record<string, number> & { earnings_in_window?: boolean; hours_to_earnings?: number | null };
   };
   execution: {
     exit_quote: ExitQuote | null;
