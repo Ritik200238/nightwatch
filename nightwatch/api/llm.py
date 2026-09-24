@@ -311,6 +311,11 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             result["reply"] = f"{intent.ticker.upper()} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'…' if len(tickers) > 20 else ''}."
             result["intent"]["kind"] = "clarify"
             return result
+        if intent.lenses and not intake.asks_to_narrow(latest):
+            # The model narrowed a comparison nobody asked to narrow ("hold it over the
+            # weekend" became "compare only against weekends"). That answers a different
+            # question from the one put, so it is undone here rather than trusted.
+            intent = intent.model_copy(update={"lenses": []})
         ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)

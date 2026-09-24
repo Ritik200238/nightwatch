@@ -266,6 +266,20 @@ VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对�
 _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
 
+# How a trader asks to narrow the comparison, in either language the desk answers in.
+_NARROW = re.compile(r"\bonly\b|\bjust\b|\bexcept\b|\bexclud\w*\b|\bcompare\b|只|仅|对比|除了", re.I)
+
+
+def asks_to_narrow(text: str) -> bool:
+    """Whether the message asks to compare against only some past moments.
+
+    Describing the situation is not asking for a filter: "hold TSLA over the weekend"
+    says when, not "compare only against weekends". The model is told the same, and
+    this is the check that holds it to it.
+    """
+    return bool(_NARROW.search(text or ""))
+
+
 def needs_the_model(text: str) -> bool:
     """Whether a message has something in it the rules cannot read.
 
@@ -280,7 +294,7 @@ def needs_the_model(text: str) -> bool:
         return True
     # Condition phrases alone are not enough: "long 20k TSLA overnight" names a night
     # without asking to be compared only against nights. People asking to narrow say so.
-    if re.search(r"\bonly\b|\bjust\b|\bexcept\b|\bexclud\w*\b|\bcompare\b", low):
+    if asks_to_narrow(low):
         return True
     return False
 
@@ -402,7 +416,12 @@ def brief(report: Any, lang: str = "en") -> str:
     if reasons:
         lines.append(("原因：" if zh else "Why: ") + "; ".join(reasons[:3]) + ("。" if zh else "."))
     if report.second_opinion and report.second_opinion.against:
-        lines.append(("反方观点：" if zh else "Case against: ") + report.second_opinion.against[0].text)
+        against = report.second_opinion.against[0].text
+        # Often the case against is the worst stress preset again, already said above; and
+        # its text is English, which a Chinese reader has just been spared everywhere else.
+        repeats = bool(priced) and against.startswith(name)
+        if not repeats and not zh:
+            lines.append("Case against: " + against)
     if plan_missing:
         if zh:
             lines.append("要通过复核：告诉我你为什么做这笔交易，以及什么情况说明你错了——例如“因为……，如果收盘跌破……就算错”——我会重新检查。")

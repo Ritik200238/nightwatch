@@ -158,3 +158,13 @@ def test_a_trader_who_writes_in_chinese_is_answered_in_chinese(state):
     out = chat_turn(state, [{"role": "user", "content": "我想周末持有两万美元的特斯拉，风险大吗？"}], account_equity=200_000.0, client=client)
     assert out["language"] == "zh" and "历史" in out["reply"] and "English narrative" not in out["reply"]
     assert out["unverified_numbers"] == [], "the Chinese reply is assembled from the report's fields, not written"
+
+
+def test_a_narrowing_nobody_asked_for_is_undone(state):
+    """"Hold TSLA over the weekend" says when, not "compare only against weekends". The
+    live model narrowed it anyway; the desk now holds it to the instruction."""
+    intent = ParsedIntent(kind="analyze", ticker="TSLA", side="long", notional_quote=20_000.0, lenses=["weekend"], reply="好")
+    out = chat_turn(state, [{"role": "user", "content": "我想周末持有两万美元的特斯拉"}], account_equity=200_000.0, client=FakeClient(intent))
+    assert list(out["ticket"]["lenses"]) == []
+    asked = chat_turn(state, [{"role": "user", "content": "只看周末：持有两万美元的特斯拉"}], account_equity=200_000.0, client=FakeClient(intent))
+    assert list(asked["ticket"]["lenses"]) == ["weekend"]
