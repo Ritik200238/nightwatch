@@ -16,8 +16,9 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from nightwatch import __version__
@@ -432,6 +433,27 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             "last_run": last.isoformat() if last else None,
             "note": "" if last else "No studies have been run against this database yet; run `nightwatch studies`.",
         }
+
+    @app.post("/mcp")
+    async def mcp(request: Request) -> Response:
+        """The desk as MCP tools, for Claude, Cursor or any other MCP client.
+
+        Stateless streamable HTTP: one JSON-RPC message (or a batch) per POST, one JSON
+        reply. See nightwatch.api.mcp_server for the tools and why they are shaped so.
+        """
+        from starlette.concurrency import run_in_threadpool
+
+        from nightwatch.api.mcp_server import handle_body
+
+        status, reply = await run_in_threadpool(handle_body, st(), await request.body())
+        if reply is None:
+            return Response(status_code=status)
+        return JSONResponse(reply, status_code=status)
+
+    @app.get("/mcp")
+    def mcp_get() -> Response:
+        # No server-initiated stream: every reply goes back on the POST that asked.
+        return Response(status_code=405, headers={"allow": "POST"})
 
     @app.get("/sources")
     def sources() -> list[dict[str, Any]]:

@@ -50,6 +50,23 @@ It also keeps track of the things a single trade cannot see:
   reopens that exact verdict — same analogs, same stress table, same book, same hash of
   the inputs, nothing recomputed.
 
+## Use it from your own AI tool
+
+The desk is also an MCP server, so Claude, Cursor or any MCP client can call it directly:
+
+```bash
+claude mcp add nightwatch --transport http https://nightwatch-gules.vercel.app/api/mcp
+```
+
+Three read-only tools: `stress_test` (the full analysis - verdict, history, stress tests,
+exit cost), `list_conditions` (what the search can be narrowed to, and what each costs in
+evidence) and `list_tokens`. The calling model picks the tool and fills in the trade;
+every number in the reply comes from the engine. Nothing here can place an order.
+
+It reads the other way too: every analysis of today pulls Bitget's own US-stock data
+(`bitget-mcp-server`) for the stock's live price while the US market is shut, analyst
+ratings and targets, insider trades and market fear & greed.
+
 ## Does it work?
 
 Every forecast is journaled before its outcome is known and scored when the horizon
