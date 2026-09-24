@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
@@ -10,7 +11,7 @@ import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, type Report } from "@/lib/api";
+import { api, type Report, type TicketInput } from "@/lib/api";
 import { bucketLabel, fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
 
 const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
@@ -208,7 +209,7 @@ function Hypothetical({ report }: { report: Report }) {
   );
 }
 
-export function ReportView({ report }: { report: Report }) {
+export function ReportView({ report, onRerun }: { report: Report; onRerun?: (patch: Partial<TicketInput>) => void }) {
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
   const budget = 25;
@@ -223,7 +224,7 @@ export function ReportView({ report }: { report: Report }) {
       {/* Above the disclosures on purpose. Narrowing the search changes what every
           number below it means, so it cannot sit behind a section a reader has to
           open before the summary stops being misleading. */}
-      <LensNote report={report} />
+      <LensNote report={report} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} />
 
       <div className="flex items-center justify-between gap-3 px-1">
@@ -401,7 +402,7 @@ export function ReportView({ report }: { report: Report }) {
  *  resolved to, and says how much history is left. When the request could not be
  *  honoured it says that instead of quietly answering the wider question.
  */
-function LensNote({ report }: { report: Report }) {
+function LensNote({ report, onUnfiltered }: { report: Report; onUnfiltered?: () => void }) {
   const l = report.analog?.lens;
   if (!l || !l.lenses.length) return null;
   const share = l.n_before > 0 ? l.n_after / l.n_before : 0;
@@ -409,7 +410,29 @@ function LensNote({ report }: { report: Report }) {
     <div className={`mb-4 rounded-lg border p-3 text-sm ${l.applied ? "border-primary/40 bg-primary/5" : "border-status-warning/40 bg-status-warning/5"}`}>
       <p className="font-medium">
         {l.applied ? <>Narrowed to {l.description}</> : <>Could not narrow to {l.description}</>}
+        {l.auto ? <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-normal">automatic</span> : null}
       </p>
+      {l.auto ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          The desk {l.auto.replace(/^narrowed/, "narrowed this")}. The evidence is on the{" "}
+          <Link href="/studies" className="underline underline-offset-2 hover:text-foreground">
+            studies page
+          </Link>
+          .
+          {onUnfiltered ? (
+            <>
+              {" "}
+              <button
+                type="button"
+                onClick={onUnfiltered}
+                className="rounded underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                Show the unfiltered answer instead
+              </button>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       {l.applied ? (
         <p className="mt-1 text-xs text-muted-foreground">
           {l.n_after.toLocaleString()} of {l.n_before.toLocaleString()} past hours qualify ({(share * 100).toFixed(1)}%). Everything below is that cohort, not the general one —

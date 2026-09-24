@@ -44,6 +44,8 @@ export interface TicketInput {
   record?: boolean;
   open_positions?: { ticker: string; side: Side; notional_quote: number }[];
   lenses?: string[];
+  /** False asks for the unfiltered answer even on a night the desk would narrow. */
+  auto_lens?: boolean;
 }
 
 export interface UniverseEntry {
@@ -158,6 +160,9 @@ export interface LensResult {
   n_after: number;
   applied: boolean;
   refused: string;
+  /** Set when the desk narrowed the search itself, with the reason. Empty when the
+   *  trader asked for the condition. */
+  auto?: string;
 }
 
 /** A filing recent enough that the market has not priced it yet.

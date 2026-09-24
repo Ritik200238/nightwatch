@@ -116,7 +116,15 @@ export default function DeskPage() {
         ) : null}
         {report ? (
           <div className={busy ? "opacity-60 transition-opacity" : ""}>
-            <ReportView report={report} />
+            <ReportView
+              report={report}
+              onRerun={(patch) => {
+                // The same trade at the same moment, with one thing changed. A report from
+                // chat has no form ticket behind it, so its own ticket is the base.
+                const base = lastTicket ?? (report.ticket as unknown as TicketInput);
+                void run({ ...base, ...patch, as_of: report.as_of });
+              }}
+            />
           </div>
         ) : !busy && !error ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
