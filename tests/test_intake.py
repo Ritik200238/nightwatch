@@ -191,7 +191,9 @@ def test_the_model_is_needed_only_for_what_the_rules_cannot_read():
 
     assert not it.needs_the_model("long 20k TSLA overnight, stop 350")
     assert it.needs_the_model("long 20k TSLA, only earnings nights")
-    assert it.needs_the_model("我想做多特斯拉")
+    # Chinese is read by rules too now; only a request to narrow still needs the model.
+    assert not it.needs_the_model("我想做多特斯拉")
+    assert it.needs_the_model("只看财报前：做多特斯拉两万")
 
 
 def _report(store_path, **kw):  # noqa: ANN001, ANN003, ANN202
@@ -232,3 +234,37 @@ def test_the_chinese_briefing_carries_the_same_numbers(seeded_store):  # noqa: F
     nums = lambda s: set(re.findall(r"[-+]?\d[\d,]*\.\d+%?", s))  # noqa: E731
     assert "历史" in zh and "要通过复核" in zh
     assert nums(zh) <= nums(en) | nums(it.brief(r)), "only the words change"
+
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("我想周末持有两万美元的特斯拉，风险大吗？", ("TSLA", "long", 20000.0, "through_weekend")),
+    ("做空英伟达5000U，过夜，止损230", ("NVDA", "short", 5000.0, "next_open")),
+    ("买入1.5万美元苹果，持有8小时", ("AAPL", "long", 15000.0, "hours")),
+    ("做多TSLA 3万", ("TSLA", "long", 30000.0, None)),
+])
+def test_chinese_trade_messages_are_read_without_the_model(text, expected):
+    from nightwatch.api import intake as it
+
+    i = it.parse_message(text, ["TSLA", "NVDA", "AAPL"])
+    assert (i.ticker, i.side, i.notional_quote, i.horizon_kind) == expected and i.kind == "analyze"
+
+
+def test_chinese_numbers_and_the_stop_are_read():
+    from nightwatch.api import intake_zh as zh
+
+    assert zh.chinese_number("两万") == 20000 and zh.chinese_number("五千") == 5000 and zh.chinese_number("三十") == 30
+    fields = zh.read("做空英伟达5000U，止损230，因为估值太高，如果涨破240就算错", {"NVDA"})
+    assert fields["stop_price"] == 230.0 and fields["thesis"] == "估值太高" and fields["invalidation"] == "涨破240"
+
+
+def test_a_price_on_its_own_is_not_taken_for_a_size():
+    from nightwatch.api import intake_zh as zh
+
+    assert "notional_quote" not in zh.read("做多特斯拉，止损350", {"TSLA"})
+
+
+def test_a_missing_field_is_asked_for_in_chinese():
+    from nightwatch.api import intake_zh as zh
+
+    assert "做多还是做空" in zh.ask(["side"]) and "USDT" in zh.ask(["notional_quote"])

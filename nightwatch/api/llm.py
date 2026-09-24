@@ -296,6 +296,16 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     # they could not complete, one not in English, or a request to narrow the history.
     rules = intake.read_conversation(messages, tickers, account_equity)
     fast = rules.kind == "analyze" and (rules.ticker or "").upper() in tickers and not intake.needs_the_model(latest)
+    if lang == "zh" and not fast and rules.ticker and rules.missing_fields and not intake.needs_the_model(latest):
+        # A Chinese message that named a stock but not the rest: the question to ask is
+        # known, and asking it through the model costs the trader a minute for nothing.
+        from nightwatch.api import intake_zh
+
+        return {
+            "intent": {**rules.as_dict(), "reply": intake_zh.ask(rules.missing_fields)}, "ticket": None, "report": None,
+            "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model,
+            "reply": intake_zh.ask(rules.missing_fields), "parsed_by": "rules", "language": lang,
+        }
     if fast:
         ticket = intake.intent_to_ticket(rules, account_equity)
         parsed_by = "rules"

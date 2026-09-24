@@ -31,6 +31,12 @@ _BARE_LEVEL = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)|\b(\d{2,}(?:\.\d+)?)\b(?!\s
 _MA = re.compile(r"(\d{1,3})\s*[- ]?\s*(?:day|d)\s*(?:simple\s+)?(?:moving\s+)?(?:average|avg|ma|sma)\b|(\d{1,3})\s*dma\b|(?:moving\s+)?average", re.I)
 _PCT = re.compile(r"(?:drops?|falls?|loses?|down|declines?|slides?|rises?|rallies|up|gains?)\s+(?:by\s+|more than\s+|over\s+)?(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s*(?:drop|fall|decline|move|loss|lower|down|up|higher|rally|gain)", re.I)
 
+# The same three shapes as a Chinese trader writes them.
+_LEVEL_ZH_DOWN = re.compile(r"(?:跌破|跌穿|跌到|跌至|低于|破)\s*\$?\s*(\d[\d,]*(?:\.\d+)?)")
+_LEVEL_ZH_UP = re.compile(r"(?:涨破|突破|涨到|涨至|高于|站上)\s*\$?\s*(\d[\d,]*(?:\.\d+)?)")
+_MA_ZH = re.compile(r"(\d{1,3})\s*(?:日|天)\s*(?:均线|平均线|移动平均)")
+_PCT_ZH = re.compile(r"(?:跌|下跌|跌幅|回撤|涨|上涨|涨幅)\s*(?:超过|达到)?\s*(\d+(?:\.\d+)?)\s*%")
+
 _BULLISH = re.compile(r"\b(?:strength|strong|bullish|breakout|rally|rallies|momentum up|higher|upside|beat|squeeze|bounce|rebound|buy(?:ers|ing)? the dip|uptrend)\b", re.I)
 _BEARISH = re.compile(r"\b(?:weakness|weak|bearish|breakdown|sell[- ]?off|selloff|lower|downside|miss|dump|fade|crash|downtrend|overbought|topping)\b", re.I)
 
@@ -94,11 +100,11 @@ def check(invalidation: str, thesis: str, *, long: bool, price: float | None, fr
     # Which way "wrong" is: a long is proved wrong by a fall, a short by a rise.
     downward = long
 
-    pct = _PCT.search(text)
-    ma = _MA.search(text)
-    level = _LEVEL.search(text)
+    pct = _PCT.search(text) or _PCT_ZH.search(text)
+    ma = _MA.search(text) or _MA_ZH.search(text)
+    level = _LEVEL.search(text) or _LEVEL_ZH_DOWN.search(text) or _LEVEL_ZH_UP.search(text)
     if pct:
-        move = _num(pct.group(1) or pct.group(2))
+        move = _num(next(g for g in pct.groups() if g))
         signed = -move if downward else move
         out.kind, out.distance_pct = "move", signed
         crossed = _paths_crossing(paths, signed, downward=downward)
@@ -106,7 +112,7 @@ def check(invalidation: str, thesis: str, *, long: bool, price: float | None, fr
             out.crossed, out.of = crossed
         return out
     if ma:
-        days = int(ma.group(1) or ma.group(2) or 30)
+        days = int(next((g for g in ma.groups() if g), 30))
         value = _moving_average(frame, days)
         if value is not None and price:
             out.kind, out.level = "moving_average", value

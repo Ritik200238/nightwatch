@@ -219,6 +219,14 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     thesis, invalid = _THESIS.search(text), _INVALID.search(text)
     out.thesis = thesis.group(1).strip() if thesis else None
     out.invalidation = invalid.group(1).strip() if invalid else None
+    if _CJK.search(text):
+        # A Chinese message: read it with the Chinese rules, filling only what the
+        # English rules did not find (a ticker written as TSLA reads the same either way).
+        from nightwatch.api import intake_zh
+
+        for key, value in intake_zh.read(text, {t.upper() for t in known_tickers}).items():
+            if getattr(out, key) in (None, ""):
+                setattr(out, key, value)
     return _settle(out)
 
 
@@ -285,13 +293,11 @@ def needs_the_model(text: str) -> bool:
 
     The rules read the shapes traders type - "long 20k TSLA overnight, stop 350" - and
     they read them in milliseconds. The model reads anything, in 10-60 s. So the model is
-    asked only when there is something only it can do: a message not in English, or a
-    request to narrow which past moments count, which the rules have no vocabulary for.
-    Anything the rules cannot complete goes to the model anyway.
+    asked only when there is something only it can do: a request to narrow which past
+    moments count, which the rules have no vocabulary for. Anything the rules cannot
+    complete - in English or Chinese - goes to the model anyway.
     """
     low = (text or "").lower()
-    if _CJK.search(low):
-        return True
     # Condition phrases alone are not enough: "long 20k TSLA overnight" names a night
     # without asking to be compared only against nights. People asking to narrow say so.
     if asks_to_narrow(low):
