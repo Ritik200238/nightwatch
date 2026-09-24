@@ -326,7 +326,23 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 2. Analog search + outcomes.
     t0 = time.perf_counter()
     frame = ctx.feature_frame(ticket.ticker, as_of)
+    # On nights where the unfiltered answer has been measured to be wrong, the desk
+    # narrows the search itself, unless the trader named conditions or turned it off.
+    # The report says it did, and why, next to the verdict.
+    auto_reason = ""
+    if not ticket.lenses and ticket.auto_lens:
+        from nightwatch.analog import lens as lens_mod
+
+        hits = lens_mod.automatic_for(snapshot.features)
+        if hits:
+            ticket = replace(ticket, lenses=tuple(x.name for x in hits))
+            auto_reason = (
+                f"narrowed automatically because {lens_mod.describe(hits)} holds tonight: on past nights like this "
+                f"the unfiltered 5% loss line was broken far more often than 5%, and the narrowed one close to it"
+            )
     analog = _analog_section(ctx, ticket, snapshot, frame, as_of, horizon_h, primary, warnings, entry_price=entry_price)
+    if auto_reason and analog is not None and analog.lens is not None:
+        analog.lens = replace(analog.lens, auto=auto_reason)
     timings["analog"] = _ms(t0)
 
     # 3. Order book (recorded, refreshed live if stale and a client exists).

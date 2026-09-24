@@ -283,3 +283,66 @@ def test_a_condition_with_hours_but_no_separate_events_falls_back_and_says_why(s
     assert a["lens"]["applied"] is False
     assert "distinct episodes" in a["lens"]["refused"] and "unfiltered" in a["lens"]["refused"]
     assert any("distinct episodes" in w for w in report["warnings"])
+
+
+# ------------------------------------------------------------ narrowing unasked
+
+
+def test_the_desk_narrows_itself_only_where_a_study_showed_it_should():
+    assert [x.name for x in lens.automatic_for({"hours_to_earnings": 30.0})] == ["earnings_this_week"]
+    assert lens.automatic_for({"hours_to_earnings": 400.0}) == []
+    assert lens.automatic_for({"hours_to_earnings": None}) == [], "an unknown date is not an earnings week"
+    assert lens.automatic_for({}) == []
+
+
+def _auto_ctx(store_path, monkeypatch):  # noqa: ANN001, ANN202
+    """A context where the automatic condition holds for half of all hours, so the
+    narrowed search has plenty to work with on the seeded history."""
+    from tests.test_pipeline import _ctx
+
+    half = lens.Lens("half", "half the hours", "every other hour", lambda f: pd.Series([i % 2 == 0 for i in range(len(f))], index=f.index), says=("half",))
+    monkeypatch.setitem(lens.BY_NAME, "half", half)
+    monkeypatch.setattr(lens, "AUTOMATIC", ("half",))
+    monkeypatch.setattr(lens, "automatic_for", lambda features: [half])
+    return _ctx(store_path)
+
+
+def _ticket(**kw):  # noqa: ANN003, ANN202
+    from nightwatch.decision.ticket import HorizonKind, TradeTicket
+    from nightwatch.stress.scenarios import Side
+
+    return TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=10_000.0, account_equity_quote=200_000.0,
+                       horizon_kind=HorizonKind.NEXT_OPEN, thesis="t", invalidation="i", **kw)
+
+
+def test_an_automatic_narrowing_says_it_was_automatic(seeded_store, monkeypatch):  # noqa: F811
+    from nightwatch.pipeline.analyze import analyze
+    from tests.test_pipeline import AS_OF
+
+    ctx = _auto_ctx(seeded_store, monkeypatch)
+    lz = analyze(ctx, _ticket(), as_of=AS_OF, record=False).to_dict()["analog"]["lens"]
+    assert lz["names"] == ["half"] and lz["applied"] is True
+    assert lz["auto"].startswith("narrowed automatically"), "the page has to say the desk chose this, not the trader"
+
+
+def test_a_trader_who_names_conditions_or_turns_it_off_is_not_overridden(seeded_store, monkeypatch):  # noqa: F811
+    from nightwatch.pipeline.analyze import analyze
+    from tests.test_pipeline import AS_OF
+
+    ctx = _auto_ctx(seeded_store, monkeypatch)
+    off = analyze(ctx, _ticket(auto_lens=False), as_of=AS_OF, record=False).to_dict()["analog"]["lens"]
+    assert off["names"] == [] and not off["auto"]
+    named = analyze(ctx, _ticket(lenses=("weekend",)), as_of=AS_OF, record=False).to_dict()["analog"]["lens"]
+    assert named["names"] == ["weekend"] and not named["auto"]
+
+
+def test_a_what_if_on_an_automatic_report_decides_the_narrowing_again():
+    """Carried into the re-run as if requested, the condition would lose the note that
+    says why it is there."""
+    from nightwatch.api import whatif
+
+    report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 1.0, "lenses": ["earnings_this_week"]},
+              "analog": {"lens": {"names": ["earnings_this_week"], "auto": "narrowed automatically because ..."}}}
+    assert whatif.ticket_from(report).lenses == ()
+    report["analog"]["lens"]["auto"] = ""
+    assert whatif.ticket_from(report).lenses == ("earnings_this_week",)

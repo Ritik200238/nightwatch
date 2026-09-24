@@ -72,6 +72,8 @@ class TicketIn(BaseModel):
     # Named conditions narrowing which past moments count as comparable. Unknown names
     # are dropped by the engine rather than rejected, so a stale client cannot 422.
     lenses: list[str] = Field(default_factory=list)
+    # False asks for the unfiltered answer even on a night the desk would narrow itself.
+    auto_lens: bool = True
 
     def to_ticket(self) -> TradeTicket:
         return TradeTicket(
@@ -79,7 +81,7 @@ class TicketIn(BaseModel):
             horizon_kind=self.horizon_kind, horizon_hours=self.horizon_hours, entry_price=self.entry_price, stop_price=self.stop_price,
             target_price=self.target_price, thesis=self.thesis, invalidation=self.invalidation, hedge_ratio=self.hedge_ratio,
             open_positions=tuple((p.ticker.upper(), p.side.value, p.notional_quote) for p in self.open_positions),
-            lenses=tuple(self.lenses),
+            lenses=tuple(self.lenses), auto_lens=self.auto_lens,
         )
 
 

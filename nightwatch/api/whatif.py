@@ -128,6 +128,11 @@ def ticket_from(report: dict) -> TradeTicket | None:
     t = report.get("ticket") or {}
     if not t.get("ticker"):
         return None
+    # A narrowing the desk chose itself is not part of what the trader asked for. Left in
+    # the rebuilt ticket it would come back as a requested condition, without the note
+    # saying why it is there; dropped, the re-run decides again by the same rule.
+    lens_ = ((report.get("analog") or {}).get("lens") or {})
+    asked_lenses = () if lens_.get("auto") else tuple(t.get("lenses") or ())
     try:
         return TradeTicket(
             ticker=str(t["ticker"]).upper(),
@@ -141,7 +146,8 @@ def ticket_from(report: dict) -> TradeTicket | None:
             thesis=t.get("thesis") or "",
             invalidation=t.get("invalidation") or "",
             hedge_ratio=t.get("hedge_ratio"),
-            lenses=tuple(t.get("lenses") or ()),
+            lenses=asked_lenses,
+            auto_lens=bool(t.get("auto_lens", True)),
         )
     except (TypeError, ValueError):
         return None

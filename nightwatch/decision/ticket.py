@@ -42,6 +42,10 @@ class TradeTicket:
     # nights", "only when the basis was stretched". Names from nightwatch.analog.lens;
     # anything else is dropped rather than guessed at.
     lenses: tuple[str, ...] = ()
+    # Whether the desk may narrow the search itself when the evidence says the unfiltered
+    # answer is wrong for tonight (see nightwatch.analog.lens.AUTOMATIC). A trader who
+    # wants the unfiltered answer anyway turns this off; one who names lenses overrides it.
+    auto_lens: bool = True
     extra: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
