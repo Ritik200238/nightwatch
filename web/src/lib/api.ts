@@ -647,6 +647,39 @@ export interface TonightReport {
   note: string;
 }
 
+/** Bitget's view of the underlying stock right now. None of it reaches the size. */
+export interface StreetView {
+  ticker: string;
+  fetched_at: string;
+  last_price: number | null;
+  prev_close: number | null;
+  n_ratings: number;
+  n_firms: number;
+  bullish: number;
+  neutral: number;
+  bearish: number;
+  median_target: number | null;
+  target_gap_pct: number | null;
+  upgrades_recent: number;
+  downgrades_recent: number;
+  recent_changes: { date: string; firm: string; action: string; rating: string; target: number | null }[];
+  insider_buys: number;
+  insider_sells: number;
+  insider_bought_value: number;
+  insider_sold_value: number;
+  insider_latest: { date: string; name: string; title: string; side: "buy" | "sell"; shares: number; price: number | null }[];
+  mood_score: number | null;
+  mood_rating: string | null;
+  mood_week_ago: number | null;
+  mood_month_ago: number | null;
+  source: string;
+  /** Desk's native close against Bitget's figure for the same close, in bps. */
+  quote_gap_bps?: number | null;
+  /** The token against the stock's live price and against the last close, in bps. */
+  token_vs_live_bps?: number | null;
+  token_vs_close_bps?: number | null;
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -707,6 +740,9 @@ export interface Report {
   regimes: RegimeMap | null;
   second_opinion: SecondOpinion | null;
   filings: FilingNote[];
+  /** Analysts, insiders, market mood and a live quote for the stock, from Bitget's
+   *  US-stock data. Context only; null for past moments and when the service is down. */
+  street?: StreetView | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

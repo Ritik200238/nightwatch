@@ -145,6 +145,83 @@ const MOVING_TONE: Record<string, "critical" | "warning" | "muted"> = { high: "c
  *  No direction is shown. The model offers one and it was measured at 49.5% against a
  *  coin, so it does not travel.
  */
+/** What the street and the insiders are doing, from Bitget's own US-stock data.
+ *
+ *  Shown next to the verdict and said to be context, because none of it has been
+ *  measured to predict an overnight move and so none of it reaches the size. The part
+ *  that does work is the first line: while the US market is shut, Bitget's quote keeps
+ *  moving with the stock's overnight trading, which makes it a live fair value where the
+ *  desk otherwise only has yesterday's close.
+ */
+function StreetSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+  const s = report.street;
+  if (!s) return null;
+  const live = s.token_vs_live_bps;
+  const close = s.token_vs_close_bps;
+  const mood = s.mood_score != null ? `${Math.round(s.mood_score)} (${s.mood_rating ?? ""})` : null;
+  const summary = [
+    live != null ? `token ${fmtBps(live, 0)} from the live stock price` : null,
+    s.n_firms ? `${s.n_firms} analysts, median target ${fmtUsd(s.median_target, 0)}` : null,
+    s.insider_sells || s.insider_buys ? `insiders ${s.insider_sells} sells / ${s.insider_buys} buys` : null,
+    mood ? `market mood ${mood}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <Section
+      openAll={openAll}
+      collapsible
+      title="The stock right now, and what the street thinks"
+      subtitle="From Bitget's US-stock data. Context beside the verdict, not an input to it."
+      summary={summary}
+    >
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label="Token vs the stock, live"
+          value={live != null ? fmtBps(live, 0) : "—"}
+          hint={close != null ? `against yesterday's close it is ${fmtBps(close, 0)}` : undefined}
+        />
+        <Stat
+          label={`Analysts, last 90 days (${s.n_firms} firms)`}
+          value={s.n_firms ? `${s.bullish} buy · ${s.neutral} hold · ${s.bearish} sell` : "no coverage"}
+          hint={s.median_target != null ? `median target ${fmtUsd(s.median_target, 0)}${s.target_gap_pct != null ? `, ${fmtPct(s.target_gap_pct, 1)} from here` : ""}` : undefined}
+        />
+        <Stat
+          label="Insiders, last 90 days"
+          value={s.insider_sells || s.insider_buys ? `${s.insider_sells} sells · ${s.insider_buys} buys` : "none on the open market"}
+          hint={s.insider_sold_value || s.insider_bought_value ? `sold ${fmtUsd(s.insider_sold_value, 0)}, bought ${fmtUsd(s.insider_bought_value, 0)}` : undefined}
+        />
+        <Stat
+          label="Market mood (fear & greed)"
+          value={mood ?? "—"}
+          hint={s.mood_week_ago != null ? `a week ago ${Math.round(s.mood_week_ago)}, a month ago ${Math.round(s.mood_month_ago ?? 0)}` : undefined}
+        />
+      </div>
+      {s.recent_changes.length ? (
+        <ul className="mt-3 space-y-1 text-sm">
+          {s.recent_changes.map((c) => (
+            <li key={`${c.date}-${c.firm}`}>
+              <span className="tabular text-muted-foreground">{c.date}</span> · {c.firm} {c.action} {c.rating}
+              {c.target != null ? <> · target {fmtUsd(c.target, 0)}</> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {s.insider_latest.length ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Latest insider trade: {s.insider_latest[0].name}
+          {s.insider_latest[0].title ? ` (${s.insider_latest[0].title})` : ""} {s.insider_latest[0].side === "sell" ? "sold" : "bought"}{" "}
+          {Math.round(s.insider_latest[0].shares).toLocaleString()} shares on {s.insider_latest[0].date}.
+        </p>
+      ) : null}
+      <p className="mt-3 text-xs text-muted-foreground">
+        Nothing in this section moved the size: none of it has been tested against what the token did overnight. The live price does change what the basis means, and a
+        disagreement between the two sources over the last close is raised as a caveat above.
+      </p>
+    </Section>
+  );
+}
+
 function FreshFilings({ report }: { report: Report }) {
   const notes = report.filings ?? [];
   if (!notes.length) return null;
@@ -226,6 +303,7 @@ export function ReportView({ report, onRerun }: { report: Report; onRerun?: (pat
           open before the summary stops being misleading. */}
       <LensNote report={report} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} />
+      <StreetSection report={report} openAll={openAll} />
 
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted-foreground">The evidence behind that answer. Open what you want to argue with.</p>
