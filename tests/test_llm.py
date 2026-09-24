@@ -81,7 +81,8 @@ def test_unknown_ticker_is_refused_with_the_available_list(state):
 def test_full_turn_runs_the_pipeline_and_flags_invented_numbers(state):
     intent = ParsedIntent(kind="analyze", ticker="TSLA", side="long", notional_quote=20_000.0, account_equity_quote=200_000.0, thesis="momentum", invalidation="close below", reply="running it")
     client = FakeClient(intent, narrative="Verdict stands. Sharpe of 4.9137 says buy.")
-    out = chat_turn(state, [{"role": "user", "content": "long 20k TSLA into Monday"}], account_equity=200_000.0, client=client)
+    # A message the rules cannot finish (no direction, size in words), so the model parses it.
+    out = chat_turn(state, [{"role": "user", "content": "thinking about tesla, twenty grand, till the open"}], account_equity=200_000.0, client=client)
     assert out["report"] is not None and out["ticket"]["ticker"] == "TSLA"
     assert "VERDICT:" in out["report_text"]
     assert "4.9137" in out["unverified_numbers"]  # a number the report never contained
@@ -132,3 +133,28 @@ def test_unverified_numbers_tolerates_formatting_but_catches_invention():
     assert unverified_numbers("(1) verdict (2) history", report) == []  # numbered parts
     assert unverified_numbers("size 1 lot", report) == []  # 1 is allowed, 16,338 is not 1
     assert unverified_numbers("size 100", report) == ["100"]  # not a truncation of 10
+
+
+def test_an_ordinary_trade_message_never_waits_on_the_model(state):
+    """The rules read "long 20k TSLA overnight, stop 350" in milliseconds and the model
+    takes 10-60 s, so a message the rules can finish is not sent to the model at all."""
+    client = FakeClient(ParsedIntent(kind="clarify", reply="should not be asked"), narrative="ok")
+    out = chat_turn(state, [{"role": "user", "content": "long 20k TSLA overnight, stop 150"}], account_equity=200_000.0, client=client)
+    assert out["report"] is not None and out["parsed_by"] == "rules"
+    assert client.messages.calls == [], "the parse was skipped"
+
+
+def test_a_request_to_narrow_the_history_still_goes_to_the_model(state):
+    intent = ParsedIntent(kind="analyze", ticker="TSLA", side="long", notional_quote=20_000.0, lenses=["earnings_soon"], reply="ok")
+    client = FakeClient(intent, narrative="ok")
+    out = chat_turn(state, [{"role": "user", "content": "long 20k TSLA overnight, only earnings nights"}], account_equity=200_000.0, client=client)
+    assert client.messages.calls and out["parsed_by"] == "anthropic"
+    assert out["ticket"]["lenses"] == ["earnings_soon"] or out["ticket"]["lenses"] == ("earnings_soon",)
+
+
+def test_a_trader_who_writes_in_chinese_is_answered_in_chinese(state):
+    intent = ParsedIntent(kind="analyze", ticker="TSLA", side="long", notional_quote=20_000.0, reply="好")
+    client = FakeClient(intent, narrative="English narrative the Chinese reader should not get")
+    out = chat_turn(state, [{"role": "user", "content": "我想周末持有两万美元的特斯拉，风险大吗？"}], account_equity=200_000.0, client=client)
+    assert out["language"] == "zh" and "历史" in out["reply"] and "English narrative" not in out["reply"]
+    assert out["unverified_numbers"] == [], "the Chinese reply is assembled from the report's fields, not written"

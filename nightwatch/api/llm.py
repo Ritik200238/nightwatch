@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 from nightwatch.analog import lens as lens_mod
 from nightwatch.api import whatif
 from nightwatch.api.providers import Provider, ProviderRefusal, as_provider, select
-from nightwatch.decision.ticket import HorizonKind, TradeTicket
+from nightwatch.decision.ticket import TradeTicket
 from nightwatch.pipeline.analyze import AnalysisReport, analyze
 from nightwatch.pipeline.render import render_text
 from nightwatch.stress.scenarios import Side
@@ -47,7 +47,7 @@ class ParsedIntent(BaseModel):
     side: str | None = Field(default=None, description="'long' or 'short'")
     notional_quote: float | None = Field(default=None, description="position size in USDT")
     account_equity_quote: float | None = Field(default=None, description="trader's account equity in USDT, if stated")
-    horizon_kind: str | None = Field(default=None, description="'next_open' (hold until the next US regular open), 'window_end', or 'hours'")
+    horizon_kind: str | None = Field(default=None, description="'next_open' (hold until the next US regular open), 'through_weekend' (until the first open after the coming weekend), 'window_end', or 'hours'")
     horizon_hours: float | None = Field(default=None, description="only when horizon_kind is 'hours'")
     stop_price: float | None = None
     target_price: float | None = None
@@ -81,8 +81,9 @@ def _parse_system(tickers: list[str], account_equity: float | None) -> str:
         f"Current time: {now:%Y-%m-%d %H:%M} UTC. Available tickers (only these can be analysed): {', '.join(tickers)}. "
         "Defaults when unstated: side long; horizon_kind next_open (hold until the next US regular open) — use 'window_end' if the trader says 'until the close' during a session, "
         "and 'hours' with horizon_hours ONLY when they give an explicit number of hours or days (24h per day). "
-        "'overnight', 'over the weekend', 'through the weekend', 'into Monday' and 'until the market opens' are all next_open, not a number of hours: "
-        "they mean the position is carried until the US market can price it again, which is what the desk measures. "
+        "'overnight' and 'until the market opens' are next_open. 'Over the weekend', 'through the weekend', 'into Monday' and "
+        "'until Monday' are through_weekend: said on a Thursday they mean Monday's open, not Thursday's. Neither is a number of hours. "
+        "Write `reply` in the language the trader wrote in. "
         + (f"The trader's account equity is {account_equity:,.0f} USDT unless they say otherwise. " if account_equity else "")
         + "Required to analyse: ticker, side, notional_quote. If any is missing, set kind='clarify', list them in missing_fields and ask for them in reply (one short question). "
         "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words.\n\n"
@@ -162,10 +163,13 @@ def parse_change(provider: Provider, question: str, ticket: dict, tickers: list[
 
 
 def intent_to_ticket(p: ParsedIntent, account_equity: float | None) -> TradeTicket:
-    kind = HorizonKind(p.horizon_kind) if p.horizon_kind in ("next_open", "window_end", "hours") else HorizonKind.NEXT_OPEN
+    from nightwatch.api.intake import horizon_fields
+
+    kind, hours, label = horizon_fields(p.horizon_kind, p.horizon_hours)
     return TradeTicket(
         ticker=(p.ticker or "").upper(), side=Side(p.side or "long"), notional_quote=float(p.notional_quote or 0.0),
-        account_equity_quote=p.account_equity_quote or account_equity, horizon_kind=kind, horizon_hours=p.horizon_hours,
+        account_equity_quote=p.account_equity_quote or account_equity, horizon_kind=kind, horizon_hours=hours,
+        extra={"horizon_label": label} if label else {},
         stop_price=p.stop_price, target_price=p.target_price, thesis=p.thesis or "", invalidation=p.invalidation or "", hedge_ratio=p.hedge_ratio,
         # Names the model invented are dropped here rather than reaching the engine.
         lenses=tuple(x.name for x in lens_mod.resolve(p.lenses)),
@@ -282,17 +286,32 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     provider = provider or (as_provider(client) if client is not None else select())
     if provider is None:
         raise RuntimeError("no language provider has credentials (set BITGET_QWEN_API_KEY or ANTHROPIC_API_KEY)")
+    from nightwatch.api import intake
+
     tickers = list(state.ctx.tickers_with_data())
-    intent = parse_intent(provider, messages, tickers, account_equity)
-    result: dict[str, Any] = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
-    if intent.kind != "analyze" or intent.missing_fields or not intent.ticker or not intent.notional_quote:
-        result["reply"] = intent.reply
-        return result
-    if intent.ticker.upper() not in tickers:
-        result["reply"] = f"{intent.ticker.upper()} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'…' if len(tickers) > 20 else ''}."
-        result["intent"]["kind"] = "clarify"
-        return result
-    ticket = intent_to_ticket(intent, account_equity)
+    latest = next((m["content"] for m in reversed(messages) if m.get("role") == "user" and (m.get("content") or "").strip()), "")
+    lang = intake.language_of(latest)
+    # The rules read an ordinary trade message in milliseconds and the model takes
+    # 10-60 s, so the model is asked only when the rules cannot finish the job: a message
+    # they could not complete, one not in English, or a request to narrow the history.
+    rules = intake.read_conversation(messages, tickers, account_equity)
+    fast = rules.kind == "analyze" and (rules.ticker or "").upper() in tickers and not intake.needs_the_model(latest)
+    if fast:
+        ticket = intake.intent_to_ticket(rules, account_equity)
+        parsed_by = "rules"
+        result: dict[str, Any] = {"intent": rules.as_dict(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
+    else:
+        intent = parse_intent(provider, messages, tickers, account_equity)
+        parsed_by = provider.name
+        result = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
+        if intent.kind != "analyze" or intent.missing_fields or not intent.ticker or not intent.notional_quote:
+            result["reply"] = intent.reply
+            return result
+        if intent.ticker.upper() not in tickers:
+            result["reply"] = f"{intent.ticker.upper()} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'…' if len(tickers) > 20 else ''}."
+            result["intent"]["kind"] = "clarify"
+            return result
+        ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)
         payload = report.to_dict()
@@ -306,13 +325,12 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     # whether it can do that while someone waits. A provider that cannot says so, and the
     # briefing is assembled from the report's own fields instead - instantly, and with
     # nothing to verify because nothing was written.
-    if getattr(provider, "narrates", True):
+    # A trader who wrote in Chinese is answered in Chinese, from the same fields.
+    if getattr(provider, "narrates", True) and lang == "en":
         narrative, text = narrate(provider, report)
         wrote = provider.name
     else:
-        from nightwatch.api.intake import brief
-
-        narrative, text = brief(report), render_text(report)
+        narrative, text = intake.brief(report, lang), render_text(report)
         wrote = "rules"
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
@@ -321,7 +339,8 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         "narrative": narrative,
         "unverified_numbers": unverified_numbers(narrative, text) if wrote != "rules" else [],
         "reply": narrative,
-        "parsed_by": provider.name,
+        "parsed_by": parsed_by,
         "written_by": wrote,
+        "language": lang,
     })
     return result
