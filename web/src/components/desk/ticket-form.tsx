@@ -22,6 +22,8 @@ interface Menu {
   counts: Record<string, number>;
   floor: number;
   suggested: string[];
+  pooled: Record<string, { hours: number; episodes: number }>;
+  minEpisodes: number;
 }
 
 /** Which past moments the search is allowed to compare against.
@@ -41,7 +43,15 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
     void api
       .lenses(ticker)
       .then((r) => {
-        if (live) setMenu({ lenses: r.lenses, counts: r.counts ?? {}, floor: r.floor_hours, suggested: r.suggested ?? [] });
+        if (live)
+          setMenu({
+            lenses: r.lenses,
+            counts: r.counts ?? {},
+            floor: r.floor_hours,
+            suggested: r.suggested ?? [],
+            pooled: r.pooled ?? {},
+            minEpisodes: r.min_episodes ?? 15,
+          });
       })
       .catch(() => {
         // A missing menu is not worth blocking a ticket over; the chat path still works.
@@ -79,19 +89,33 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
         {shown.map((x) => {
           const on = chosen.includes(x.name);
           const n = menu.counts[x.name];
+          // Hours are not the limit once the search pools across tokens; separate events
+          // are. FOMC nights fall on the same dates for every token, so thousands of
+          // hours can still be fourteen meetings - too few to answer from.
+          const events = menu.pooled[x.name]?.episodes;
+          const unanswerable = events != null && events < menu.minEpisodes;
           return (
             <button
               key={x.name}
               type="button"
               aria-pressed={on}
-              title={`${x.definition}${n != null ? ` — ${n.toLocaleString()} past hours in ${ticker}` : ""}`}
+              disabled={unanswerable && !on}
+              title={
+                unanswerable
+                  ? `${x.definition} — only ${events} separate past events across every token, and the search needs ${menu.minEpisodes}. It cannot answer this yet.`
+                  : `${x.definition}${n != null ? ` — ${n.toLocaleString()} past hours in ${ticker}` : ""}`
+              }
               onClick={() => toggle(x.name)}
-              className={`rounded-full border px-2 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+              className={`rounded-full border px-2 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
                 on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
               {x.label}
-              {n != null ? <span className="ml-1 opacity-60 tabular-nums">{n.toLocaleString()}h</span> : null}
+              {unanswerable ? (
+                <span className="ml-1 opacity-70">· {events} events, too few</span>
+              ) : n != null ? (
+                <span className="ml-1 opacity-60 tabular-nums">{n.toLocaleString()}h</span>
+              ) : null}
             </button>
           );
         })}

@@ -135,6 +135,7 @@ class AppState:
         # yet" has no answer from the outside without it - the routes do not change on
         # most deploys, and a stale container answers exactly like a fresh one.
         self.started_at = utc_now()
+        self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
 
     def keep_hypothetical(self, payload: dict[str, Any]) -> int:
         """Store a report that was never journalled, under a key that says so."""
@@ -157,6 +158,24 @@ class AppState:
                 log.warning("warm %s failed: %s", t, exc)
             self.warm_status["done"] = i
         self.warm_status["state"] = "done"
+    def pooled_lens_availability(self) -> dict[str, dict[str, int]]:
+        """Hours and separate events per condition across every token, cached per hour."""
+        from nightwatch.analog import lens as lens_mod
+
+        key = utc_now().replace(minute=0, second=0, microsecond=0)
+        if self._lens_availability and self._lens_availability[0] == key:
+            return self._lens_availability[1]
+        frames = {}
+        for t in self.ctx.tickers_with_data():
+            try:
+                with self.lock:
+                    frames[t] = self.ctx.feature_frame(t, utc_now())
+            except (InsufficientData, KeyError):
+                continue
+        value = lens_mod.pooled_availability(frames, self.ctx.analog_config.min_separation_h)
+        self._lens_availability = (key, value)
+        return value
+
     def refresh_street(self) -> None:
         """Street context for every token, fetched in parallel.
 
@@ -420,6 +439,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 out["suggested"] = lens_mod.suggest_now(frame)
             except (InsufficientData, KeyError) as exc:
                 out["note"] = str(exc)
+        # Across every token: hours are not the constraint once the search pools, separate
+        # events are. A condition with too few of them cannot be answered however many
+        # hours it covers, and the interface should say so before it is asked.
+        out["pooled"] = s.pooled_lens_availability()
+        out["min_episodes"] = int(cfg.min_matches)
         return out
 
     @app.get("/studies")

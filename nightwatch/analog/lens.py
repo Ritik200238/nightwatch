@@ -29,6 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 # Nights and weekends when the US market is shut - the windows this desk exists for.
@@ -331,6 +332,47 @@ def suggest_now(frame: pd.DataFrame) -> list[str]:
         scored.append((share, x.name))
     scored.sort()
     return [name for _, name in scored[:MAX_SUGGESTIONS]]
+
+
+def episodes(timestamps: pd.DatetimeIndex, separation_h: float) -> int:
+    """A conservative count of the separate matches a set of hours can supply.
+
+    The search keeps one match per episode - matches closer than ``separation_h`` count
+    once - and refuses below a minimum number. Hours are grouped into runs (a gap of at
+    least ``separation_h`` starts a new one), and a run of D hours is credited with
+    ceil(D / (2 x separation_h)) matches, at least one: what a distance-ordered pick can
+    be relied on to get out of it, not the most a time-ordered pick could squeeze.
+
+    That is what makes the count honest where the hour count is not. "FOMC ahead" covers
+    14,847 pooled hours and comes to 14 runs - one per meeting, the same dates for every
+    token - under the 15 the search needs, which is why it was refused on 471 of 474
+    FOMC nights. Pooling adds hours, not meetings.
+    """
+    if len(timestamps) == 0:
+        return 0
+    from nightwatch.time_utils import index_epoch_ns
+
+    ns = np.unique(index_epoch_ns(pd.DatetimeIndex(timestamps)))
+    sep = np.int64(round(separation_h * 3600)) * 1_000_000_000
+    breaks = np.flatnonzero(np.diff(ns) >= sep)
+    starts = np.concatenate(([0], breaks + 1))
+    ends = np.concatenate((breaks, [len(ns) - 1]))
+    span_h = (ns[ends] - ns[starts]) / 3.6e12
+    return int(np.maximum(1, np.ceil(span_h / (2 * separation_h))).sum())
+
+
+def pooled_availability(frames: dict[str, pd.DataFrame], separation_h: float) -> dict[str, dict[str, int]]:
+    """Per condition, the hours and the separate events across every token's history."""
+    out: dict[str, dict[str, int]] = {}
+    for x in LENSES:
+        hours, stamps = 0, []
+        for f in frames.values():
+            m = x.mask(f)
+            hours += int(m.sum())
+            stamps.append(f.index[np.asarray(m, dtype=bool)])
+        idx = stamps[0].append(stamps[1:]) if stamps else pd.DatetimeIndex([])
+        out[x.name] = {"hours": hours, "episodes": episodes(idx, separation_h)}
+    return out
 
 
 def sample_sizes(frame: pd.DataFrame) -> dict[str, int]:

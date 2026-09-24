@@ -861,6 +861,10 @@ export const api = {
       lenses: Lens[];
       counts: Record<string, number>;
       floor_hours: number;
+      /** Per condition across every token: hours, and the separate past events those
+       *  hours amount to. Below min_episodes the search cannot answer it. */
+      pooled?: Record<string, { hours: number; episodes: number }>;
+      min_episodes?: number;
       suggested?: string[];
       history_hours?: number;
       note?: string;

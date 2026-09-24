@@ -346,3 +346,35 @@ def test_a_what_if_on_an_automatic_report_decides_the_narrowing_again():
     assert whatif.ticket_from(report).lenses == ()
     report["analog"]["lens"]["auto"] = ""
     assert whatif.ticket_from(report).lenses == ("earnings_this_week",)
+
+
+# ------------------------------------------------------------- separate events
+
+
+def test_hours_on_the_same_dates_are_one_event_each():
+    """Pooling adds hours, not meetings: twelve tokens with the same 48 FOMC hours are
+    still one event."""
+    import pandas as pd
+
+    block = pd.date_range("2026-01-27 00:00", periods=48, freq="h", tz="UTC")
+    idx = block.append([block] * 11)
+    assert lens.episodes(idx, 36) == 1
+
+
+def test_separate_runs_count_separately_and_long_runs_count_for_more():
+    import pandas as pd
+
+    runs = [pd.date_range(f"2026-{m:02d}-10", periods=24, freq="h", tz="UTC") for m in range(1, 7)]
+    idx = runs[0].append(runs[1:])
+    assert lens.episodes(idx, 36) == 6
+    long_run = pd.date_range("2026-01-01", periods=720, freq="h", tz="UTC")  # 30 days
+    assert lens.episodes(long_run, 36) == 10, "ceil(719 / 72)"
+    assert lens.episodes(pd.DatetimeIndex([], tz="UTC"), 36) == 0
+
+
+def test_pooled_availability_reports_hours_and_events_per_condition():
+    f1 = frame(hours_to_fomc=[10.0] * 30 + [999.0] * 70)
+    f1.index = pd.date_range("2026-01-01", periods=100, freq="h", tz="UTC")
+    f2 = f1.copy()
+    a = lens.pooled_availability({"A": f1, "B": f2}, 36)
+    assert a["fomc_soon"] == {"hours": 60, "episodes": 1}
