@@ -314,7 +314,9 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
             vb.get("verdict") != va.get("verdict") or abs((vb.get("recommended_notional") or 0) - (va.get("recommended_notional") or 0)) > 1
         )
         if zh:
-            held = f"，受{cap.replace('_', ' ')}上限约束" if cap else ""
+            from nightwatch.api.intake import CAP_ZH
+
+            held = f"，受{CAP_ZH.get(cap, cap.replace('_', ' '))}上限约束" if cap else ""
             if moved:
                 bits.append(
                     f"结论从 {_verdict_zh(vb['verdict'])}（{_usd(vb.get('recommended_notional'))}）"

@@ -4,8 +4,8 @@ The same rule as the English answers: every number is read from the report's own
 and formatted the same way, so a Chinese reader and an English one are told the same
 figures. Only the words around them differ. The questions traders ask most - how big,
 where is the stop, how bad can it get, can I get out, what does history say, why the
-review, what are analysts saying - are covered; anything else falls back to the English
-answer rather than to a guess.
+review, what are analysts saying - are covered; anything else gets the Chinese menu of
+what can be asked, rather than a guess.
 """
 
 from __future__ import annotations
@@ -34,7 +34,9 @@ def _a_size(r: dict, _q: str) -> Answer | None:
     requested = (r.get("ticket") or {}).get("notional_quote")
     bits = []
     if binding and requested is not None and binding["notional"] < requested - 1:
-        bits.append(f"限制仓位的是{binding['name'].replace('_', ' ')}上限：{_usd(binding['notional'])}。")
+        from nightwatch.api.intake import CAP_ZH
+
+        bits.append(f"限制仓位的是{CAP_ZH.get(binding['name'], binding['name'].replace('_', ' '))}上限：{_usd(binding['notional'])}。")
     elif requested is not None:
         bits.append(f"{_usd(requested)} 没有被任何上限削减。")
     if sen.get("max_go_notional") is not None:

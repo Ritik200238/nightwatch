@@ -271,6 +271,11 @@ def _pct(v: float, digits: int = 1) -> str:
 # The verdict names in Chinese, for a trader who wrote in Chinese. The numbers are the
 # same numbers, formatted the same way; only the words around them change.
 VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+CAP_ZH = {"risk_budget": "风险预算", "concentration": "集中度", "regime": "市场状态", "exit_liquidity": "平仓流动性", "stress": "压力测试", "breaker": "熔断"}
+RULE_ZH = {
+    "written_plan": "书面计划", "stop": "止损", "position_size": "仓位大小", "market_posture": "市场状态",
+    "liquidity": "流动性", "circuit_breaker": "熔断", "basis": "价差", "event": "事件", "data_quality": "数据质量",
+}
 _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
 
@@ -420,7 +425,7 @@ def brief(report: Any, lang: str = "en") -> str:
         binding = min(capped, key=lambda c: c.notional)
         if binding.notional < t.notional_quote - 1:  # a cap above the request binds nothing
             if zh:
-                lines.append(f"限制仓位的是 {binding.name.replace('_', ' ')} 上限：{binding.detail}。")
+                lines.append(f"限制仓位的是{CAP_ZH.get(binding.name, binding.name.replace('_', ' '))}上限：{binding.notional:,.0f} USDT。")
             else:
                 lines.append(f"The cap that binds is {binding.name.replace('_', ' ')}: {binding.detail}.")
 
@@ -428,8 +433,14 @@ def brief(report: Any, lang: str = "en") -> str:
     # message, so say how rather than printing the rule's name at them.
     plan_missing = [r for r in report.gate.rules if r.rule == "written_plan" and r.decision.value != "GO"]
     reasons = [r for r in v.reasons if not r.startswith("written plan")]
-    if reasons:
-        lines.append(("原因：" if zh else "Why: ") + "; ".join(reasons[:3]) + ("。" if zh else "."))
+    if zh:
+        # The gate's reasons are written in English; name the checks that did not pass
+        # instead, which is the part a reader needs, rather than mix languages.
+        failed = [RULE_ZH.get(r.rule, r.rule.replace("_", " ")) for r in report.gate.rules if r.decision.value != "GO" and r.rule != "written_plan"]
+        if failed:
+            lines.append("未通过的检查：" + "、".join(failed) + "。")
+    elif reasons:
+        lines.append("Why: " + "; ".join(reasons[:3]) + ".")
     if report.second_opinion and report.second_opinion.against:
         against = report.second_opinion.against[0].text
         # Often the case against is the worst stress preset again, already said above; and
