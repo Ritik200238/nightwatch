@@ -157,13 +157,19 @@ class AppState:
                 log.warning("warm %s failed: %s", t, exc)
             self.warm_status["done"] = i
         self.warm_status["state"] = "done"
-        # Street context is network-bound, not lock-bound, so it is refreshed after the
-        # frames and outside the lock: an analysis arriving meanwhile is never held up.
-        for t in tickers:
-            try:
-                self.ctx.street_for(t, max_age=timedelta(minutes=50))
-            except Exception as exc:  # noqa: BLE001
-                log.warning("street %s failed: %s", t, exc)
+    def refresh_street(self) -> None:
+        """Street context for every token, fetched in parallel.
+
+        Network-bound and slow per call (the analyst feed takes 1-9 s), so a handful of
+        workers fill the cache in seconds rather than a sequential minute or two, and it
+        runs outside the analysis lock so a request arriving meanwhile is never held up.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        tickers = self.ctx.tickers_with_data()
+        with ThreadPoolExecutor(max_workers=6, thread_name_prefix="street") as pool:
+            for t in tickers:
+                pool.submit(self.ctx.street_for, t, max_age=timedelta(minutes=50))
 
     def warm_forever(self) -> None:
         """Warm now, then again just after every hour boundary.
@@ -172,6 +178,8 @@ class AppState:
         the first request for it pays a few seconds. A judge's first click should not be
         the one that pays, so the cache is refilled in the background before they arrive."""
         while True:
+            if self.ctx.street_client is not None:
+                threading.Thread(target=self.refresh_street, name="street-refresh", daemon=True).start()
             self.warm()
             now = utc_now()
             next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, seconds=45))

@@ -13,6 +13,7 @@ and say which was used.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields, replace
@@ -86,15 +87,17 @@ class AnalysisContext:
     _with_data: tuple[str, ...] | None = None
     _factors_cache: dict[str, Any] = field(default_factory=dict)
     _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
+    _street_pending: set[str] = field(default_factory=set)
     _profiles: dict[str, tuple[datetime, dict[str, float]]] = field(default_factory=dict)
     _degraded: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
 
     def street_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=2), fetch: bool = True):  # noqa: ANN201
         """Street context for a ticker, from cache when fresh enough.
 
-        The warm-up loop refreshes every token hourly, so a request normally reads the
-        cache. A miss fetches once, with the client's short timeout, rather than making
-        the analysis wait on a context feed for longer than it takes to be useful.
+        ``fetch=True`` fetches on a miss and waits for it; the warm-up does that. An
+        analysis passes ``fetch=False``: the analyst feed takes 1-9 s to answer, measured,
+        and a request must not wait on a context feed, so a miss returns what is cached (or
+        nothing) and asks for a background refresh instead.
         """
         if self.street_client is None:
             return None
@@ -102,16 +105,34 @@ class AnalysisContext:
         if hit and utc_now() - hit[0] <= max_age:
             return hit[1]
         if not fetch:
+            self.refresh_street_later(ticker)
             return hit[1] if hit else None
+        return self._fetch_street(ticker) or (hit[1] if hit else None)
+
+    def _fetch_street(self, ticker: str):  # noqa: ANN202
         from nightwatch.features import street as street_mod
 
         try:
             view = street_mod.build(self.street_client, ticker)
         except Exception:  # noqa: BLE001 - context must never fail an analysis
             log.exception("street context for %s failed", ticker)
-            return hit[1] if hit else None
+            return None
         self._street[ticker] = (utc_now(), view)
         return view
+
+    def refresh_street_later(self, ticker: str) -> None:
+        """Fetch one token's street context in the background, once at a time."""
+        if self.street_client is None or ticker in self._street_pending:
+            return
+        self._street_pending.add(ticker)
+
+        def run() -> None:
+            try:
+                self._fetch_street(ticker)
+            finally:
+                self._street_pending.discard(ticker)
+
+        threading.Thread(target=run, name=f"street-{ticker}", daemon=True).start()
 
     def tail_factors(self, as_of: datetime):  # noqa: ANN201
         """Tail-calibration factors fitted on replay forecasts matured before ``as_of``
@@ -561,7 +582,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
         from nightwatch.features import street as street_mod
 
-        view = ctx.street_for(ticket.ticker)
+        view = ctx.street_for(ticket.ticker, fetch=False)
         if view is not None and not view.empty:
             street = view.to_dict()
             sources.append({"kind": "bitget_mcp", "ticker": ticket.ticker, "fetched_at": view.fetched_at})

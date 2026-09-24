@@ -159,6 +159,7 @@ def _analyse(store_path, monkeypatch, *, now):  # noqa: ANN001, ANN202
     monkeypatch.setattr("nightwatch.pipeline.analyze.utc_now", lambda: now)
     ctx = _ctx(store_path)
     ctx.street_client = FakeClient()
+    ctx.street_for("TSLA")  # the warm-up's job: an analysis itself never waits on the feed
     ticket = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=10_000.0, account_equity_quote=200_000.0,
                          horizon_kind=HorizonKind.NEXT_OPEN, thesis="t", invalidation="i")
     return analyze(ctx, ticket, as_of=AS_OF, record=False).to_dict()
@@ -180,3 +181,29 @@ def test_a_past_moment_never_gets_todays_street(seeded_store, monkeypatch):  # n
 
     r = _analyse(seeded_store, monkeypatch, now=AS_OF + timedelta(days=30))
     assert r["street"] is None
+
+
+def test_an_analysis_never_waits_on_the_street_feed(seeded_store, monkeypatch):  # noqa: F811
+    """The analyst feed takes 1-9 s. A cold cache means no street section this time and a
+    background refresh, not a request that sits waiting for a context feed."""
+    import threading
+
+    from tests.test_pipeline import _ctx
+
+    gate = threading.Event()
+
+    class Slow(FakeClient):
+        def query(self, entry_id, **params):  # noqa: ANN001, ANN003, ANN201
+            gate.wait(5)
+            return super().query(entry_id, **params)
+
+    ctx = _ctx(seeded_store)
+    ctx.street_client = Slow()
+    assert ctx.street_for("TSLA", fetch=False) is None, "returned at once, with nothing cached"
+    assert "TSLA" in ctx._street_pending
+    gate.set()
+    for _ in range(100):
+        if "TSLA" in ctx._street:
+            break
+        threading.Event().wait(0.05)
+    assert ctx.street_for("TSLA", fetch=False) is not None, "the background refresh filled it"
