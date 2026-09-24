@@ -22,7 +22,7 @@ return and are deliberately simple and stated, not tuned.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -73,6 +73,28 @@ def structural_horizons(ts: datetime) -> dict[str, float]:
     # exact time to the next regular open.
     nxt = classify_session(info.regular_close_utc)
     return {"next_open": to_close + nxt.seconds_until_open / 3600.0, "window_end": to_close}
+
+
+def hours_through_weekend(ts: datetime) -> float:
+    """Hours from ``ts`` to the first US regular open after the coming weekend.
+
+    "Hold it through the weekend" said on a Thursday means until Monday's open, not
+    Thursday's - which is what "next open" would give. From Friday evening, Saturday or
+    Sunday the two agree. Holidays come from the session calendar, so a long weekend runs
+    to Tuesday.
+    """
+    now = ensure_utc(ts)
+    days_to_saturday = (5 - now.weekday()) % 7
+    if now.weekday() == 6:  # Sunday: this weekend is already under way
+        days_to_saturday = -1
+    saturday = (now + timedelta(days=days_to_saturday)).date()
+    at = now
+    for _ in range(10):  # a week of sessions is more than enough to get past a weekend
+        opens = at + timedelta(hours=structural_horizons(at)["next_open"])
+        if opens.date() > saturday:
+            return (opens - now).total_seconds() / 3600.0
+        at = opens + timedelta(minutes=5)  # inside that session, so the next open is the following one
+    return structural_horizons(now)["next_open"]
 
 
 def tag_outcome(ret_pct: float, mfe_pct: float, mae_pct: float) -> str:
