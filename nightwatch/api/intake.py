@@ -370,6 +370,15 @@ def brief(report: Any, lang: str = "en") -> str:
         else:
             lines.append(f"Your stop at {t.stop_price:,.2f} is {abs(paths.stop_pct):.1f}% away; {paths.stopped} of {n} past moments like this would have hit it on the way.")
 
+    plan = getattr(report, "plan_check", None)
+    if plan:
+        from nightwatch.decision.plan_check import PlanCheck
+        from nightwatch.decision.plan_check import describe as describe_plan
+
+        said = describe_plan(PlanCheck(**plan), lang)
+        if said:
+            lines.append(said)
+
     priced = [i for i in report.stress.impacts if i.total_pnl_quote is not None]
     if priced:
         worst = min(priced, key=lambda i: i.total_pnl_quote)

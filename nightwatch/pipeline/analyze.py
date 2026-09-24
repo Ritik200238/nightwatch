@@ -400,6 +400,9 @@ class AnalysisReport:
     # nightwatch.features.street.StreetView as a dict: analysts, insiders, market mood and
     # an independent quote, from Bitget's data. Context only; None for past moments.
     street: dict | None = None
+    # The trader's invalidation read for a testable level and measured against the
+    # analogs; plus a flag when the stated reason reads against the position.
+    plan_check: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -453,6 +456,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     if auto_reason and analog is not None and analog.lens is not None:
         analog.lens = replace(analog.lens, auto=auto_reason)
     timings["analog"] = _ms(t0)
+
+    from nightwatch.decision import plan_check as plan_mod
+
+    plan = plan_mod.check(
+        ticket.invalidation, ticket.thesis, long=ticket.closing_long, price=entry_price or None,
+        frame=frame, paths=getattr(analog, "paths", None) if analog else None,
+    )
 
     # 3. Order book (recorded, refreshed live if stale and a client exists).
     t0 = time.perf_counter()
@@ -603,6 +613,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
         stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street,
+        plan_check=plan.to_dict() if plan else None,
     )
     # The case against whatever was just decided, from the report's own numbers.
     try:
