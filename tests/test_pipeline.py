@@ -152,3 +152,17 @@ def test_feature_frame_cache_is_bounded_and_lru(seeded_store):
     keys = [k.split("|")[0] for k in ctx._frames]
     assert keys == ["TSLA", "AAPL"]
     ctx.store.close()
+
+
+def test_touching_the_frame_cache_reads_every_frame_and_changes_nothing(seeded_store):
+    """The idle API re-reads its cached frames so the kernel keeps them in memory. It
+    must visit every one, and it must not alter a value the search then reads."""
+    ctx = _ctx(seeded_store)
+    for t in ("TSLA", "NVDA"):
+        ctx.feature_frame(t, AS_OF)
+    import pandas as pd
+
+    before = {k: v.copy() for k, v in ctx._frames.items()}
+    assert ctx.touch_frames() == 2
+    for k, v in ctx._frames.items():
+        pd.testing.assert_frame_equal(v, before[k])

@@ -29,6 +29,11 @@ services:
       # more than the 24 tokens the previous hour's set lingers after every hourly warm-up
       # and doubles the working set; on a 1 GB box that is what pushes it into swap.
       NIGHTWATCH_FRAME_CACHE: ${NIGHTWATCH_FRAME_CACHE:-64}
+      # glibc gives each thread its own heap arena and rarely hands freed memory back,
+      # so every large temporary frame leaves the process bigger than before it. Two
+      # arenas and a lower trim threshold keep freed memory freed on a 1 GB box.
+      MALLOC_ARENA_MAX: "2"
+      MALLOC_TRIM_THRESHOLD_: "131072"
     volumes:
       - nightwatch-data:/data
     logging: &logging

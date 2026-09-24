@@ -41,6 +41,9 @@ from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import UTC, utc_now
 
 log = logging.getLogger(__name__)
+
+# How often the idle API re-reads its cached frames so they are not swapped out.
+TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
 
 
@@ -161,7 +164,14 @@ class AppState:
             self.warm()
             now = utc_now()
             next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, seconds=45))
-            threading.Event().wait(max(30.0, (next_hour - now).total_seconds()))
+            # Between rebuilds, keep the frames resident: warm is not the same as in
+            # memory on a box that swaps. See AnalysisContext.touch_frames.
+            while (wait := (next_hour - utc_now()).total_seconds()) > 0:
+                threading.Event().wait(min(TOUCH_EVERY_S, max(1.0, wait)))
+                try:
+                    self.ctx.touch_frames()
+                except RuntimeError:
+                    pass  # the cache changed under us; the next pass catches it
 
     def start_warm(self) -> None:
         self.warm_thread = threading.Thread(target=self.warm_forever, name="warm-frames", daemon=True)

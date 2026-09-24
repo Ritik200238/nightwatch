@@ -135,6 +135,26 @@ class AnalysisContext:
             self._book_windows.pop(next(iter(self._book_windows)))
         return cached
 
+    def touch_frames(self) -> int:
+        """Read every cached frame once, so the kernel keeps it in memory.
+
+        On the 1 GB box the API needs more than the memory left over, and the kernel
+        moves whatever was least recently used to swap. An hour of nobody asking is
+        enough for that to be the frames, and the next narrowed search - which reads all
+        twenty-four of them - then spent 18-25 s paging them back in; measured at 2 s
+        once they were resident. Reading each column's values every few minutes keeps
+        them the most recently used pages, so what goes to swap is memory nothing is
+        using. Returns the number of frames touched.
+        """
+        touched = 0
+        for frame in list(self._frames.values()):
+            for col in frame.columns:
+                values = frame[col].to_numpy() if frame[col].dtype.kind in "fiub" else None
+                if values is not None and values.size:
+                    values.sum()
+            touched += 1
+        return touched
+
     def feature_frame(self, ticker: str, end: datetime) -> pd.DataFrame:
         """Full-history feature frame for a ticker, cached per process per end-hour.
 
