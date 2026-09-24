@@ -72,6 +72,10 @@ CREATE TABLE IF NOT EXISTS orderbook_snapshots (
     levels TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ob_symbol_ts ON orderbook_snapshots (venue, symbol, ts);
+-- Covering index for the liquidity archive, which reads five small columns of a month
+-- of snapshots. Each row also carries ~2 KB of level JSON, so without this the read
+-- pulled ~17k bulky rows off disk: 12 s per token on the live box, 0.04 s with it.
+CREATE INDEX IF NOT EXISTS ob_metrics ON orderbook_snapshots (venue, symbol, ts, spread_bps, depth_bid_25bps, depth_ask_25bps, bid_notional_total);
 
 CREATE TABLE IF NOT EXISTS funding (
     venue TEXT NOT NULL, symbol TEXT NOT NULL, ts INTEGER NOT NULL,
