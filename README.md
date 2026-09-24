@@ -10,8 +10,10 @@ Nightwatch takes a trade idea in plain language — typed as a sentence or fille
 form — and answers four questions with data:
 
 1. **What happened before?** It finds the past moments that looked like now — same
-   volatility, same gap between token and fair value, same time-of-week, same distance to
-   earnings — and shows what followed, with sample sizes and confidence intervals.
+   volatility, same gap between token and fair value, same liquidity, same distance to
+   earnings and to the Fed — and shows what followed, with sample sizes and confidence
+   intervals. (Time of week is deliberately *not* a condition: replayed over 610 past
+   moments, restricting matches to the same slot of the week gave no truer loss tail.)
 2. **What could go wrong?** Preset stress tests built from real token data: weekend gap,
    earnings gap, volatility spike, token-vs-fair-value blowout, liquidity drought, exchange
    halt.
