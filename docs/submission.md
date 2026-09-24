@@ -395,17 +395,16 @@ Both were handled; neither is a reason not to use it.
 The same model reads the chat, but only when it has to. Measured on the live desk, Qwen
 took 15-57 s to parse a message, and a trader waiting a minute to be told what they just
 typed is a bad conversation. So the rule parser goes first: it reads the shapes traders
-usually type ("long 20k TSLA overnight, stop 350") in milliseconds, and a whole turn -
-parse, analysis, briefing - now comes back in 3.6-5.4 s (observed). Qwen is asked when the
-rules cannot finish the job: a message they cannot complete, a request to narrow the
-history ("only earnings nights"), or a message in Chinese:
-
-> *"我想周末持有两万美元的特斯拉，风险大吗？"* ("I want to hold $20k of Tesla over the weekend - how risky is it?")
-
-Qwen returns TSLA, long, 20,000 USDT, held through the weekend, and the trader gets the
-briefing in Chinese: the same fields and the same numbers, other words. When the model
-narrowed that question to "weekends only" on its own, the desk undid it - describing a
-holding period is not asking for a filter, and a check now holds the model to that.
+usually type ("long 20k TSLA overnight, stop 350") in milliseconds, in English and in
+Chinese ("我想周末持有两万美元的特斯拉，止损350"), and a whole turn - parse, analysis,
+briefing - comes back in 3.6-5.4 s (observed; a Chinese trade with a stop and a written
+plan, 4.5 s). Qwen is asked when the rules cannot finish the job: a message they cannot
+complete, or a request to narrow the history ("only earnings nights"). A trader who
+writes in Chinese is answered in Chinese - the briefing, follow-up questions and
+what-ifs - from the same fields with the same numbers. When the model once narrowed a
+Chinese "hold it over the weekend" to "weekends only" on its own, the desk undid it:
+describing a holding period is not asking for a filter, and a check holds the model to
+that.
 `GET /health` names the provider and model; each chat response says `parsed_by` and
 `written_by`.
 
