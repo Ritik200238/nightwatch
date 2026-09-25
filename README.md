@@ -91,8 +91,12 @@ uncomfortable one included:
 
 * **The raw tails were wrong.** Across 2,345 scored replays, 8.5% of outcomes fell below
   the stated 5th percentile instead of 5%. Factors fitted only on already-matured
-  forecasts bring that to 5.6% out of sample, which moves the tail light from red to
-  amber — most of the way, not all of it, and the page says which.
+  forecasts brought that to 5.6% out of sample — and that number was hiding a second
+  error: the narrowest third of forecasts still breached 8.2% of the time and the widest
+  third 2.7%, because a multiplicative factor keeps a narrow forecast narrow. An absolute
+  margin, solved so the narrow half breaches 5% too, takes the narrowest third to 5.5%,
+  the whole set to 5.4% (green), and does it with a *narrower* average tail. Measured
+  before it shipped: better on 20 of 24 tokens, clustered t = +3.75.
 * **The analogs do not predict direction.** Scored against random hours of the same kind,
   they are indistinguishable over the distribution as a whole. Where they win is the loss
   tail: 8.4% of outcomes below their 5th percentile against 10.2% below the random one.

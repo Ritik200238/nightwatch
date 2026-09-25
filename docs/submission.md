@@ -136,10 +136,17 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
     Tail band: red. The median is inside its interval, so the centre is right and the
     tails are not.
   * With tail factors fitted only on forecasts that had matured earlier (expanding
-    window, out of sample, 2,301 forecasts): **5.6% below p5, 5.8% above p95.** Tail
-    band: amber — most of the way from red, not all of it. Aiming the fit slightly under
-    5% would show green, and would be choosing the target by looking at the
-    out-of-sample answer, so it was not done.
+    window, out of sample, 2,302 forecasts): **5.4% below p5, 5.8% above p95.** Tail
+    band: green. The target was never moved to get there: the fit aims at exactly 5%,
+    and the last step (below) came from finding a hidden error, not from re-aiming.
+  * **The factor alone was hiding a third error, by forecast width.** With only a
+    multiplicative widening the out-of-sample rate read 5.6%, but the narrowest third of
+    forecasts breached 8.2% of the time and the widest third 2.7%: a narrow cohort
+    widened by 1.3× is still narrow on a night that gaps 4%. Each fit now also solves an
+    absolute margin so the narrower half of the fit set breaches 5% too. Out of sample
+    that takes the narrowest third to 5.5%, improves the 5%-quantile pinball loss on 20
+    of 24 tokens (clustered t = +3.75), and *narrows* the average tail from −5.1% to
+    −4.5%, because the margin lands only where the factor could not reach.
   * **That pooled number was hiding two opposite errors, and we found it by testing for
     it.** One tail factor was fitted across every holding period. Split by how long the
     position is actually held, the same 2,301 forecasts read: **7.1% breaches on
@@ -608,7 +615,7 @@ compliance requirement and a reply does not satisfy it.
 > Live, no login, nothing to install:
 > https://nightwatch-gules.vercel.app
 >
-> Calibration (still amber, and it says so):
+> Calibration (green now, and the page shows the two errors it had to find first):
 > https://nightwatch-gules.vercel.app/calibration
 >
 > Code: https://github.com/Ritik200238/nightwatch
