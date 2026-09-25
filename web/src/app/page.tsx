@@ -144,7 +144,7 @@ export default function DeskPage() {
               </li>
             </ol>
             <Button
-              className="mt-2"
+              className="mt-2 h-auto max-w-full whitespace-normal py-2 text-center"
               disabled={busy}
               onClick={() =>
                 void run({
