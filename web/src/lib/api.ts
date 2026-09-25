@@ -647,6 +647,17 @@ export interface TonightReport {
   note: string;
 }
 
+/** The model's reading of a finished report. Written in the background; never changes
+ *  the verdict, and any sentence citing a number not in the report is removed. */
+export interface AnalystTake {
+  status: "pending" | "done" | "failed" | "unavailable" | "none";
+  text?: string;
+  removed?: number;
+  model?: string;
+  seconds?: number;
+  lang?: string;
+}
+
 export interface PlanCheck {
   invalidation: string;
   kind: "level" | "moving_average" | "move" | "wrong_side" | "untested";
@@ -871,6 +882,8 @@ export const api = {
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
   studies: () => request<StudiesResponse>("/studies"),
+  analystStart: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`, { method: "POST" }),
+  analystGet: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`),
   lenses: (ticker?: string) =>
     request<{
       lenses: Lens[];

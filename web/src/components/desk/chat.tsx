@@ -11,6 +11,8 @@ interface Msg {
   unverified?: string[];
   /** Which part of the report this answer was read out of, when it answered a question. */
   readFrom?: string;
+  /** Who wrote it, when it was the model rather than the desk's own fields. */
+  byline?: string;
 }
 
 interface Props {
@@ -69,6 +71,25 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
     };
   }, []);
 
+  /** The instant answer is the desk's own; a few seconds later the model's reading of
+   *  the same report follows as a second message, the way an analyst would reply. */
+  async function followWithTake(id: number, lang: "en" | "zh") {
+    for (let i = 0; i < 40; i++) {
+      try {
+        const t = i === 0 ? await api.analystStart(id, lang) : await api.analystGet(id, lang);
+        if (t.status === "done" && t.text) {
+          const label = lang === "zh" ? "分析师的看法" : "Analyst's take";
+          setMessages((m) => [...m, { role: "assistant", content: `${label}\n\n${t.text}`, byline: lang === "zh" ? "由 Qwen 撰写 · 数字已与报告核对，推理是模型自己的，可能出错" : "Written by Qwen · numbers checked against the report; the reasoning is the model's and can be wrong" }]);
+          return;
+        }
+        if (t.status !== "pending") return;
+      } catch {
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+
   async function send(text: string) {
     const content = text.trim();
     if (!content || busy) return;
@@ -87,7 +108,9 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
       // A follow-up answers about the report already on screen and leaves it there.
       if (res.report) {
         onReport(res.report);
-        setContextId((res.report.forecast_id as number | null) ?? null);
+        const id = (res.report.forecast_id as number | null) ?? null;
+        setContextId(id);
+        if (id != null && res.mode !== "what_if") void followWithTake(id, /[\u3400-\u9fff]/.test(content) ? "zh" : "en");
       }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Something went wrong.";
@@ -128,6 +151,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
           <div key={i} className={m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}>
             <p className="whitespace-pre-wrap">{m.content}</p>
             {m.readFrom ? <p className="mt-2 text-xs text-muted-foreground">Read out of {m.readFrom}.</p> : null}
+            {m.byline ? <p className="mt-2 text-xs text-muted-foreground">{m.byline}</p> : null}
             {m.unverified && m.unverified.length ? <p className="mt-2 text-xs text-status-warning">Numbers not found in the report: {m.unverified.join(", ")}</p> : null}
           </div>
         ))}

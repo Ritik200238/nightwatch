@@ -2,7 +2,7 @@
 
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
 import { Scenarios } from "@/components/charts/scenarios";
@@ -11,7 +11,7 @@ import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, type Report, type TicketInput } from "@/lib/api";
+import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
 import { bucketLabel, fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
 
 const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
@@ -48,6 +48,85 @@ function bindingCap(report: Report) {
 /** Everything a person needs in five seconds: what to do, what it costs to be wrong,
  *  what could go worse, whether you can get out, and the best argument against it.
  *  The twelve sections below are the evidence for this card, and they open on demand. */
+const TAKE_HEADINGS = new Set(["The call", "What matters most tonight", "What would change my mind", "What I'd watch", "结论", "今晚最重要的", "什么会改变我的看法", "我会盯着什么"]);
+
+/** The analyst's take: the model reads the finished report and says what matters.
+ *
+ *  The desk has already answered from its own numbers; this is asked for in the
+ *  background and shown when it arrives, because the model takes 30-90 s to write and
+ *  nobody should wait for it. It cannot change the verdict, and any sentence citing a
+ *  number that is not in the report is removed before it is shown - the count is printed.
+ */
+function AnalystTakeCard({ report }: { report: Report }) {
+  const id = report.forecast_id;
+  const [take, setTake] = useState<AnalystTake | null>(null);
+  const lang: "en" | "zh" =
+    /[\u3400-\u9fff]/.test(`${report.ticket?.thesis ?? ""}${report.ticket?.invalidation ?? ""}`) ||
+    (typeof navigator !== "undefined" && navigator.language?.startsWith("zh"))
+      ? "zh"
+      : "en";
+
+  useEffect(() => {
+    if (id == null) return;
+    let live = true;
+    let tries = 0;
+    const poll = async () => {
+      try {
+        const t = tries === 0 ? await api.analystStart(id, lang) : await api.analystGet(id, lang);
+        if (!live) return;
+        setTake(t);
+        tries += 1;
+        if (t.status === "pending" && tries < 40) setTimeout(poll, 3000);
+      } catch {
+        if (live) setTake({ status: "failed" });
+      }
+    };
+    void poll();
+    return () => {
+      live = false;
+    };
+  }, [id, lang]);
+
+  if (id == null || !take || take.status === "unavailable" || take.status === "none") return null;
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold">{lang === "zh" ? "分析师的看法" : "The analyst's take"}</p>
+        <p className="text-xs text-muted-foreground">
+          {take.status === "done"
+            ? `${take.model || "Qwen"} · ${take.seconds ?? "?"}s · ${lang === "zh" ? "数字已与报告核对；推理是模型自己的，可能出错" : "numbers checked against the report; the reasoning is the model's and can be wrong"}${take.removed ? ` · ${take.removed} ${lang === "zh" ? "句因引用报告外的数字被删除" : "sentence(s) removed for citing numbers not in the report"}` : ""}`
+            : null}
+        </p>
+      </div>
+      {take.status === "pending" ? (
+        <p className="mt-2 animate-pulse text-sm text-muted-foreground">
+          {lang === "zh" ? "AI 分析师正在阅读这份报告（通常不到 15 秒）。上面的结论已经完整。" : "The AI analyst is reading the report (usually under 15 s). The verdict above is already complete."}
+        </p>
+      ) : take.status === "failed" || !take.text ? (
+        <p className="mt-2 text-sm text-muted-foreground">{lang === "zh" ? "这次 AI 分析师没有写出看法；上面的结论不受影响。" : "The analyst could not write a take this time; the verdict above stands on its own."}</p>
+      ) : (
+        <div className="mt-2 space-y-1 text-sm">
+          {take.text
+            .split("\n")
+            .filter((l) => l.trim())
+            .map((l, i) => {
+              const clean = l.replace(/^[#*\s]+|[*]+$/g, "").trim();
+              return TAKE_HEADINGS.has(clean) ? (
+                <p key={i} className="pt-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:pt-0">
+                  {clean}
+                </p>
+              ) : (
+                <p key={i} className="leading-relaxed">
+                  {l.replace(/^[-•*]\s*/, "• ")}
+                </p>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The trader's own plan, measured where it can be.
  *
  *  "Wrong if it closes below 350" is a level the desk can put a distance and a history
@@ -333,6 +412,7 @@ export function ReportView({ report, onRerun }: { report: Report; onRerun?: (pat
     <div className="space-y-4">
       <Hypothetical report={report} />
       <DecisionCard report={report} />
+      <AnalystTakeCard report={report} />
       {/* Above the disclosures on purpose. Narrowing the search changes what every
           number below it means, so it cannot sit behind a section a reader has to
           open before the summary stops being misleading. */}
