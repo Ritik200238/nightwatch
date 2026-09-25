@@ -114,9 +114,11 @@ def test_the_pooled_number_can_hide_two_opposite_errors():
     rows = expanding_rows(df, banded=False).merge(df[["as_of", "horizon_h"]], on="as_of", how="left")
     assert len(rows) == flat.n_evaluated  # the join stayed one to one
     per = {h: (g["r"] < g["a5"]).mean() for h, g in rows.groupby("horizon_h")}
-    # One pooled factor: the average lands on target and neither half is anywhere near it.
-    assert abs(flat.adj_lo_coverage - 0.05) < 0.02
-    assert per[18.0] > 0.09  # the short band breaches nearly twice as often as it should
+    # One pooled fit cannot serve both. The margin rescues the short band, but only by
+    # pinning the factor at its floor, so the long band stays absurdly wide and the
+    # overall rate sits well under target: two wrongs, no longer averaging to look right.
+    assert flat.k_lo_last == 0.5 and flat.c_lo_last is not None and flat.c_lo_last > 1.0
+    assert flat.adj_lo_coverage < 0.035
     assert per[66.0] < 0.01  # the long band never breaches, because its band is absurd
 
     banded = evaluate_expanding(df)
@@ -135,3 +137,46 @@ def test_the_pooled_number_can_hide_two_opposite_errors():
 def per_band_width(rows: pd.DataFrame, horizon_h: float) -> float:
     g = rows[rows["horizon_h"] == horizon_h]
     return float((g["a95"] - g["a5"]).mean())
+
+
+def test_a_uniform_error_gets_no_floor():
+    """When every forecast is too narrow by the same factor, the factor alone fixes it
+    and the margin must come out zero, so the fit is exactly the old one-parameter fit."""
+    f = fit_factors(synthetic(narrow=0.5))
+    assert f is not None and f.c_lo == 0.0
+
+
+def test_narrow_forecasts_get_an_absolute_floor():
+    """Half the forecasts are stated far too narrow and half about right, with the same
+    real spread underneath. A factor alone lands on target overall while the narrow half
+    keeps breaching; the margin puts the narrow half on target as well."""
+    rng = np.random.default_rng(7)
+    n = 1200
+    narrow_row = np.arange(n) % 2 == 0
+    # Stated tail 0.3 against a real sigma of 1.2 (far too tight) next to 2.0 against
+    # 2.0 (too tight by the usual 1.645). One factor cannot fix both: the exact fit is
+    # k = 0.78 with a margin of 1.74 points, well inside the clamps.
+    r = rng.normal(0, np.where(narrow_row, 1.2, 2.0), n)
+    p50 = np.zeros(n)
+    width = np.where(narrow_row, 0.3, 2.0)
+    df = pd.DataFrame({
+        "as_of": [T0 + timedelta(hours=6 * i) for i in range(n)], "p5": p50 - width, "p25": p50 - width / 2, "p50": p50,
+        "p75": p50 + width / 2, "p95": p50 + width, "ret_pct": r, "ticker": "X",
+    })
+    df["horizon_end"] = df["as_of"] + timedelta(hours=3)
+    f = fit_factors(df)
+    assert f is not None and 1.0 < f.c_lo < 2.5 and 0.5 < f.k_lo < 1.2
+    a5 = (df["p50"] + f.k_lo * (df["p5"] - df["p50"]) - f.c_lo).to_numpy()
+    for half in (narrow_row, ~narrow_row):
+        assert abs((r[half] < a5[half]).mean() - 0.05) < 0.02
+    assert abs((r < a5).mean() - 0.05) < 0.02
+    # The factor alone could not have done this: solved on its own for 5% overall, it
+    # leaves the narrow half breaching several times too often.
+    from nightwatch.journal.adjust import _coverage_lo, _solve
+
+    k_alone = _solve(0.05, _coverage_lo, p50, df["p5"].to_numpy(), r)
+    assert _coverage_lo(k_alone, p50[narrow_row], df["p5"].to_numpy()[narrow_row], r[narrow_row]) >= 0.09  # about twice the target
+    rows = expanding_rows(df)
+    assert (rows["c_lo"] > 0).mean() > 0.9  # the margin is in force out of sample too
+    ev = evaluate_expanding(df)
+    assert ev is not None and ev.c_lo_last is not None and ev.c_lo_last > 1.0

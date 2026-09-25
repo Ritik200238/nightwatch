@@ -28,6 +28,27 @@ Halving the weekend band is not a cosmetic gain: that number feeds the sizing ca
 the gate, so the pooled factor was refusing and shrinking weekend positions against a
 loss roughly twice what this token's own history supports.
 
+A floor under narrow forecasts
+------------------------------
+A multiplicative factor keeps a narrow forecast narrow: a cohort whose p5 sits 1.5%
+below its centre is widened to 2%, and 2% is still not enough on a night that gaps 4%.
+Measured out of sample on 2,302 matured forecasts, the adjusted tails were on target
+overall (5.6%) but not by size: the narrowest third of forecasts breached 8.2% of the
+time and the widest third 2.7%. Two opposite errors again, hiding inside a good average.
+
+So each fit carries a second number, ``c_lo``, an absolute margin in percentage points
+subtracted after the multiplicative widening:
+
+    p5_adj = p50 + k_lo · (p5 − p50) − c_lo
+
+``c_lo`` is solved so that the narrower half of the fit set breaches 5% too, with
+``k_lo`` re-solved for the whole set at each candidate margin. On the same 2,302
+forecasts that took the narrowest third from 8.2% to 5.5% breaches, cut the pinball
+loss at the 5% quantile on 20 of 24 tokens (clustered t = +3.75), and did it with a
+*narrower* average tail (−4.55% against −5.12%): the margin goes where it is needed
+instead of everywhere. The upper tail keeps the multiplicative factor alone; nothing
+in the product is sized on it.
+
 Honesty rules
 -------------
 * Factors are fitted only on forecasts whose horizon had *ended* before the point in
@@ -99,6 +120,7 @@ class TailFactors:
     n_fit: int
     fitted_through: datetime | None  # latest horizon_end used in the fit
     scope: str  # "pooled" | a horizon band | ticker
+    c_lo: float = 0.0  # absolute margin under the lower tail, percentage points
 
 
 @dataclass(frozen=True)
@@ -122,8 +144,47 @@ class BandedFactors:
         return self.pooled or next(iter(self.bands.values()), None)
 
 
-def _coverage_lo(k: float, p50: np.ndarray, p5: np.ndarray, r: np.ndarray) -> float:
-    return float((r < p50 + k * (p5 - p50)).mean())
+C_MAX = 8.0  # percentage points; wider than any margin the data has asked for
+
+
+def _coverage_lo(k: float, p50: np.ndarray, p5: np.ndarray, r: np.ndarray, c: float = 0.0) -> float:
+    return float((r < p50 + k * (p5 - p50) - c).mean())
+
+
+def _solve_lo(p50: np.ndarray, p5: np.ndarray, r: np.ndarray, target: float) -> tuple[float, float]:
+    """The multiplicative factor and the absolute margin together.
+
+    Two unknowns, two conditions. Split the fit set at its median stated tail width.
+    For a candidate margin the factor is solved on the wider half (where the factor
+    does the work), and the margin is bisected until the narrower half breaches at the
+    target rate too. Coverage of the narrow half falls as the margin grows, so the
+    bisection is safe. A set whose narrow half is already on target under the
+    one-parameter fit gets a margin of zero, and that fit is exactly the old one.
+    """
+    width = p50 - p5
+    narrow = width <= np.median(width)
+    wide = ~narrow
+    k_alone = _solve(target, _coverage_lo, p50, p5, r)
+    if narrow.sum() < 10 or wide.sum() < 10 or _coverage_lo(k_alone, p50[narrow], p5[narrow], r[narrow]) <= target:
+        return k_alone, 0.0
+
+    def k_for(c: float) -> float:
+        return _solve(target, lambda k, a, b, rr: _coverage_lo(k, a, b, rr, c), p50[wide], p5[wide], r[wide])
+
+    def narrow_cov(c: float) -> float:
+        return _coverage_lo(k_for(c), p50[narrow], p5[narrow], r[narrow], c)
+
+    lo, hi = 0.0, C_MAX
+    if narrow_cov(hi) > target:
+        return k_for(hi), hi
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        if narrow_cov(mid) > target:
+            lo = mid
+        else:
+            hi = mid
+    c = (lo + hi) / 2
+    return k_for(c), c
 
 
 def _coverage_hi(k: float, p50: np.ndarray, p95: np.ndarray, r: np.ndarray) -> float:
@@ -149,9 +210,10 @@ def _solve(target: float, f, p50, q, r) -> float:  # noqa: ANN001
 def _fit_arrays(p5: np.ndarray, p50: np.ndarray, p95: np.ndarray, r: np.ndarray, *, through: datetime | None = None, scope: str = "pooled", target: float = 0.05) -> TailFactors | None:
     if len(r) < MIN_FIT_N:
         return None
+    k_lo, c_lo = _solve_lo(p50, p5, r, target)
     return TailFactors(
-        k_lo=float(_solve(target, _coverage_lo, p50, p5, r)), k_hi=float(_solve(target, _coverage_hi, p50, p95, r)),
-        n_fit=int(len(r)), fitted_through=through, scope=scope,
+        k_lo=float(k_lo), k_hi=float(_solve(target, _coverage_hi, p50, p95, r)),
+        n_fit=int(len(r)), fitted_through=through, scope=scope, c_lo=float(c_lo),
     )
 
 
@@ -164,16 +226,16 @@ def fit_factors(forecasts: pd.DataFrame, *, scope: str = "pooled", target: float
     p5 = df["p5"].to_numpy(float)
     p95 = df["p95"].to_numpy(float)
     r = df["ret_pct"].to_numpy(float)
-    k_lo = _solve(target, _coverage_lo, p50, p5, r)
+    k_lo, c_lo = _solve_lo(p50, p5, r, target)
     k_hi = _solve(target, _coverage_hi, p50, p95, r)
     through = pd.to_datetime(df["horizon_end"]).max().to_pydatetime() if "horizon_end" in df else None
-    return TailFactors(k_lo=float(k_lo), k_hi=float(k_hi), n_fit=int(len(df)), fitted_through=through, scope=scope)
+    return TailFactors(k_lo=float(k_lo), k_hi=float(k_hi), n_fit=int(len(df)), fitted_through=through, scope=scope, c_lo=float(c_lo))
 
 
 def apply_factors(p5: float | None, p50: float | None, p95: float | None, f: TailFactors) -> tuple[float | None, float | None]:
     if p5 is None or p50 is None or p95 is None:
         return None, None
-    return p50 + f.k_lo * (p5 - p50), p50 + f.k_hi * (p95 - p50)
+    return p50 + f.k_lo * (p5 - p50) - f.c_lo, p50 + f.k_hi * (p95 - p50)
 
 
 @dataclass(frozen=True)
@@ -195,6 +257,7 @@ class BandEvaluation:
     adj_tail_band: str
     k_lo: float
     k_hi: float
+    c_lo: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -215,6 +278,7 @@ class AdjustedEvaluation:
     lo_ci: tuple[float, float]
     adj_lo_ci: tuple[float, float]
     bands: list[BandEvaluation] = field(default_factory=list)
+    c_lo_last: float | None = None
 
 
 def expanding_rows(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit_every: int = 25, banded: bool = True) -> pd.DataFrame:
@@ -232,7 +296,7 @@ def expanding_rows(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit
     """
     df = forecasts.dropna(subset=["p5", "p50", "p95", "ret_pct"]).copy()
     if df.empty:
-        return pd.DataFrame(columns=["as_of", "ticker", "band", "r", "p5", "p95", "a5", "a95", "k_lo", "k_hi"])
+        return pd.DataFrame(columns=["as_of", "ticker", "band", "r", "p5", "p95", "a5", "a95", "k_lo", "k_hi", "c_lo"])
     df["as_of"] = pd.to_datetime(df["as_of"], utc=True)
     df["horizon_end"] = pd.to_datetime(df["horizon_end"], utc=True)
     df = df.sort_values("as_of").reset_index(drop=True)
@@ -275,7 +339,7 @@ def expanding_rows(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit
             continue
         a5, a95 = apply_factors(p5_a[i], p50_a[i], p95_a[i], use)
         rows.append({"as_of": as_ofs[i], "ticker": tickers[i], "band": use.scope, "r": r_a[i], "p5": p5_a[i], "p95": p95_a[i],
-                     "a5": a5, "a95": a95, "k_lo": use.k_lo, "k_hi": use.k_hi})
+                     "a5": a5, "a95": a95, "k_lo": use.k_lo, "k_hi": use.k_hi, "c_lo": use.c_lo})
     return pd.DataFrame(rows)
 
 
@@ -305,7 +369,7 @@ def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, r
             adj_hi_coverage=float((g["r"] > g["a95"]).mean()),
             raw_width=float((g["p95"] - g["p5"]).mean()), adj_width=float((g["a95"] - g["a5"]).mean()),
             adj_tail_band=tail_test(g["r"].to_numpy(float), g["a5"].to_numpy(float)).band,
-            k_lo=float(g["k_lo"].iloc[-1]), k_hi=float(g["k_hi"].iloc[-1]),
+            k_lo=float(g["k_lo"].iloc[-1]), k_hi=float(g["k_hi"].iloc[-1]), c_lo=float(g["c_lo"].iloc[-1]),
         )
         for name, g in e.groupby("band", sort=True)
     ] if "band" in e and e["band"].nunique() > 1 else []
@@ -316,7 +380,7 @@ def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, r
         raw_width=float((e["p95"] - e["p5"]).mean()), adj_width=float((e["a95"] - e["a5"]).mean()),
         k_lo_last=float(e["k_lo"].iloc[-1]), k_hi_last=float(e["k_hi"].iloc[-1]),
         lo_ci=wilson_interval(int((e["r"] < e["p5"]).sum()), n), adj_lo_ci=wilson_interval(int((e["r"] < e["a5"]).sum()), n),
-        bands=bands,
+        bands=bands, c_lo_last=float(e["c_lo"].iloc[-1]),
     )
 
 

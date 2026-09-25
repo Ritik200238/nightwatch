@@ -305,7 +305,7 @@ class HorizonReport:
     baseline: BaselineComparison | None
     p5_adjusted: float | None = None  # tail-calibrated (see journal.adjust)
     p95_adjusted: float | None = None
-    adjustment: dict[str, Any] | None = None  # k_lo, k_hi, n_fit, fitted_through
+    adjustment: dict[str, Any] | None = None  # k_lo, k_hi, c_lo, n_fit, fitted_through
 
 
 @dataclass
@@ -861,7 +861,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
 
             p5_adj, p95_adj = apply_factors(stats.p5, stats.median_pct, stats.p95, band_factors)
             adjustment = {
-                "k_lo": band_factors.k_lo, "k_hi": band_factors.k_hi, "n_fit": band_factors.n_fit,
+                "k_lo": band_factors.k_lo, "k_hi": band_factors.k_hi, "c_lo": band_factors.c_lo, "n_fit": band_factors.n_fit,
                 "fitted_through": band_factors.fitted_through.isoformat() if band_factors.fitted_through else None,
                 "scope": band_factors.scope,
             }
