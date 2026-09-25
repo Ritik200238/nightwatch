@@ -658,6 +658,21 @@ export interface AnalystTake {
   lang?: string;
 }
 
+export interface EntryPlan {
+  side: "buy" | "sell";
+  notional: number;
+  budget_bps: number;
+  full_cost_bps: number | null;
+  full_fills: boolean;
+  slices: number | null;
+  slice_notional: number | null;
+  slice_cost_bps: number | null;
+  limit_price: number | null;
+  mid: number | null;
+  book_ts: string;
+  note: string;
+}
+
 export interface PlanCheck {
   invalidation: string;
   kind: "level" | "moving_average" | "move" | "wrong_side" | "untested";
@@ -769,6 +784,8 @@ export interface Report {
   /** The trader's invalidation read for a testable level and measured; plus a flag when
    *  the stated reason reads against the position. */
   plan_check?: PlanCheck | null;
+  /** How to get into the recommended size on the live book. */
+  entry_plan?: EntryPlan | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;

@@ -403,6 +403,8 @@ class AnalysisReport:
     # The trader's invalidation read for a testable level and measured against the
     # analogs; plus a flag when the stated reason reads against the position.
     plan_check: dict | None = None
+    # How to get into the recommended size on the live book: cost, slices, limit price.
+    entry_plan: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -518,6 +520,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         has_book=execution.exit_quote is not None,
     )
     gate, sizing, verdict = ev.gate, ev.sizing, ev.verdict
+
+    # How to get into the size the desk arrived at, on the book as it stands. Priced for
+    # the recommended size, not the requested one: that difference is the verdict.
+    from nightwatch.execution.entry_plan import plan_entry
+
+    entry_size = verdict.recommended_notional if verdict.recommended_notional else ticket.notional_quote
+    entry_plan = plan_entry(book, entry_size, long=ticket.closing_long, taker_fee=fees["spot_taker"], budget_bps=ctx.sizing_policy.exit_cost_budget_bps)
     timings["decision"] = _ms(t0)
 
     # 7. What happened last time conditions looked like this.
@@ -614,6 +623,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
         stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street,
         plan_check=plan.to_dict() if plan else None,
+        entry_plan=entry_plan.to_dict() if entry_plan else None,
     )
     # The case against whatever was just decided, from the report's own numbers.
     try:

@@ -83,6 +83,58 @@ export function ActOnIt({ report }: { report: Report }) {
         </button>
       )}
       <span className="text-xs text-muted-foreground">Nightwatch never places an order.</span>
+      {!refused ? <EntryPlanNote report={report} symbol={symbol} /> : null}
+    </div>
+  );
+}
+
+/** A prompt for an AI tool with Bitget Agent Hub installed, in dry-run: the model can
+ *  preview the order through Bitget's own tools, and the human confirms. */
+function agentHubPrompt(report: Report, symbol: string): string | null {
+  const p = report.entry_plan;
+  if (!p || !p.slices || p.limit_price == null || p.slice_notional == null) return null;
+  const slices = p.slices === 1 ? "one order" : `${p.slices} equal slices`;
+  return (
+    `Using Bitget Agent Hub in dry-run mode, preview a limit ${p.side} of ${Math.round(p.slice_notional).toLocaleString()} USDT on ${symbol} ` +
+    `at ${p.limit_price}, as ${slices}. Show me the preview and do not place anything until I confirm. ` +
+    `(Sized by Nightwatch${report.forecast_id != null && report.forecast_id > 0 ? ` #${report.forecast_id}` : ""}.)`
+  );
+}
+
+/** Getting in: the cost of the whole size at once, and the slices that keep each one
+ *  inside the cost budget when it does not fit. */
+function EntryPlanNote({ report, symbol }: { report: Report; symbol: string }) {
+  const [copied, setCopied] = useState(false);
+  const p = report.entry_plan;
+  if (!p) return null;
+  const prompt = agentHubPrompt(report, symbol);
+  let line: string;
+  if (p.slices === 1) {
+    line = `Getting in: ${p.side === "buy" ? "buying" : "selling"} the whole ${fmtUsd(p.notional)} USDT at once costs ${p.full_cost_bps?.toFixed(0)} bps, inside the ${p.budget_bps.toFixed(0)} bps budget - one limit order at ${p.limit_price} fills it.`;
+  } else if (p.slices && p.slice_notional != null) {
+    line = `Getting in: all ${fmtUsd(p.notional)} USDT at once would cost ${p.full_cost_bps != null ? `${p.full_cost_bps.toFixed(0)} bps` : "more than the book holds"}. In ${p.slices} slices of ${fmtUsd(p.slice_notional)} USDT, each costs about ${p.slice_cost_bps?.toFixed(0)} bps with a limit at ${p.limit_price} - ${p.note}.`;
+  } else {
+    line = `Getting in: ${p.note}.`;
+  }
+  return (
+    <div className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+      <p>{line}</p>
+      {prompt ? (
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(prompt).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          title={prompt}
+        >
+          {copied ? <Check className="h-3 w-3 text-status-good" aria-hidden /> : <Copy className="h-3 w-3" aria-hidden />}
+          {copied ? "Prompt copied" : "Copy a dry-run prompt for Bitget Agent Hub"}
+        </button>
+      ) : null}
     </div>
   );
 }
