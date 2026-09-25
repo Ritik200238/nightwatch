@@ -126,10 +126,10 @@ class QwenProvider:
     # reasoning), and the gateway itself returns 504 at about 120s. Even a stripped-down
     # instruction over a 739-character digest took 34s.
     #
-    # Thirty-four seconds to rephrase text the desk already has instantly is a bad trade,
-    # so this provider does not narrate. It still parses - 12s to turn "im nervous about
-    # the fed thing wednesday, thinking 15k nvidia short overnight" into a short NVDA
-    # ticket with the thesis kept, which no rule was ever going to do.
+    # With the thinking step turned off (2026-09-25) both jobs are seconds, not minutes:
+    # a parse in 3.4-4.0 s and an analyst's take in 6.5-7.5 s. The chat briefing is still
+    # assembled from the report's own fields, because that is instant and cannot misquote
+    # a number; the model's reading arrives separately as the analyst's take.
     narrates = False
 
     def __init__(self, client: Any = None):  # noqa: ANN401
@@ -152,6 +152,10 @@ class QwenProvider:
             payload, _ = self._client.chat_json(
                 [{"role": "user", "content": f"CONVERSATION\n\n{conversation}"}],
                 system=instruction, max_tokens=max_tokens,
+                # Turning a sentence into a ticket needs no long working out: 3.4-4.0 s
+                # with thinking off against 12-57 s with it on, all four test phrasings
+                # read correctly either way (measured 2026-09-25).
+                thinking=False,
             )
         except QwenError as exc:
             # The gateway's content filter answers 400 with an explicit code; that is a
@@ -177,7 +181,9 @@ class QwenProvider:
         from nightwatch.data.qwen import QwenError
 
         try:
-            answer = self._client.chat([{"role": "user", "content": user}], system=system, max_tokens=max_tokens)
+            # Writing prose from facts it is handed needs no working out, and the thinking
+            # step is most of the wait: minutes with it, seconds without (measured).
+            answer = self._client.chat([{"role": "user", "content": user}], system=system, max_tokens=max_tokens, thinking=False)
         except QwenError as exc:
             if "data_inspection_failed" in str(exc).lower():
                 raise ProviderRefusal("the gateway's content filter declined the request") from exc

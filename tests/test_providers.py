@@ -77,14 +77,14 @@ class QwenDouble:
         self.payload, self.text, self.error = payload, text, error
         self.seen: list[dict] = []
 
-    def chat_json(self, messages, *, system=None, max_tokens=1200):  # noqa: ANN001, ARG002
-        self.seen.append({"messages": messages, "system": system})
+    def chat_json(self, messages, *, system=None, max_tokens=1200, thinking=None):  # noqa: ANN001, ARG002
+        self.seen.append({"messages": messages, "system": system, "thinking": thinking})
         if self.error:
             raise self.error
         return self.payload, Usage(prompt_tokens=10, completion_tokens=5)
 
-    def chat(self, messages, *, system=None, max_tokens=1200):  # noqa: ANN001, ARG002
-        self.seen.append({"messages": messages, "system": system})
+    def chat(self, messages, *, system=None, max_tokens=1200, thinking=None):  # noqa: ANN001, ARG002
+        self.seen.append({"messages": messages, "system": system, "thinking": thinking})
         if self.error:
             raise self.error
         return SimpleNamespace(text=self.text, usage=Usage())
@@ -184,3 +184,13 @@ def test_a_raw_vendor_client_is_wrapped_and_a_provider_is_left_alone():
     assert as_provider(already) is already
     wrapped = as_provider(anthropic_double())
     assert isinstance(wrapped, AnthropicProvider)
+
+
+
+def test_qwen_is_asked_not_to_think_before_parsing_or_writing():
+    """The thinking step was most of the wait - minutes against seconds - and neither
+    turning a sentence into a ticket nor writing from given facts needs it."""
+    q = QwenDouble(payload={"ticker": "NVDA", "size": 5000})
+    QwenProvider(q).parse([{"role": "user", "content": "short 5k nvda"}], system="s", schema=Ticket)
+    QwenProvider(q).write(system="s", user="u")
+    assert [x["thinking"] for x in q.seen] == [False, False]

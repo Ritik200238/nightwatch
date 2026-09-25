@@ -113,12 +113,19 @@ class QwenClient:
         max_tokens: int = 1200,
         temperature: float | None = None,
         json_object: bool = False,
+        thinking: bool | None = None,
     ) -> Answer:
         body: dict[str, Any] = {
             "model": self.model,
             "messages": ([{"role": "system", "content": system}] if system else []) + messages,
             "max_tokens": max_tokens,
         }
+        if thinking is not None:
+            # Qwen reasons before it answers unless told not to, and the reasoning is most
+            # of the wait: a three-sentence answer took 4.4 s with it off and minutes with
+            # it on (measured 2026-09-25). Off for writing prose from given facts; left to
+            # the caller for anything that genuinely needs working out.
+            body["enable_thinking"] = thinking
         if temperature is not None:
             body["temperature"] = temperature
         if json_object:
@@ -147,13 +154,13 @@ class QwenClient:
             return _answer(resp.json())
         raise QwenError(f"gave up after {self._max_attempts} attempts: {last}")
 
-    def chat_json(self, messages: list[dict[str, str]], *, system: str | None = None, max_tokens: int = 1200) -> tuple[dict[str, Any], Usage]:
+    def chat_json(self, messages: list[dict[str, str]], *, system: str | None = None, max_tokens: int = 1200, thinking: bool | None = None) -> tuple[dict[str, Any], Usage]:
         """A chat turn whose answer must be one JSON object.
 
         Raises rather than returning a half-parsed dict: a caller that wanted structure
         and got prose should hear about it, not silently act on empty fields.
         """
-        answer = self.chat(messages, system=system, max_tokens=max_tokens, json_object=True)
+        answer = self.chat(messages, system=system, max_tokens=max_tokens, json_object=True, thinking=thinking)
         raw = _strip_fence(answer.text)
         try:
             parsed = json.loads(raw)
