@@ -687,7 +687,7 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
             <Stat label={`Typical outcome over ${report.primary_horizon}`} value={fmtPct(c.median_pct)} hint={`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`} />
             <Stat label="Ended up" value={fmtRatio(c.win_rate)} hint={`of ${c.n} similar past moments${c.n_pending ? `, ${c.n_pending} still open` : ""}`} />
             {primary?.p5_adjusted != null ? (
-              <Stat label="Bad night, 1 in 20" value={fmtPct(primary.p5_adjusted)} hint={`before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)} from ${primary.adjustment?.n_fit} scored replays`} tone="critical" />
+              <Stat label="Bad night, 1 in 20" value={fmtPct(primary.p5_adjusted)} hint={`before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`} tone="critical" />
             ) : (
               <Stat label="Bad night, 1 in 20" value={fmtPct(c.p5)} hint={`likely range [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
             )}

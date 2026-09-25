@@ -131,7 +131,7 @@ export interface HorizonReport {
   } | null;
   p5_adjusted: number | null;
   p95_adjusted: number | null;
-  adjustment: { k_lo: number; k_hi: number; n_fit: number; fitted_through: string | null; scope: string } | null;
+  adjustment: { k_lo: number; k_hi: number; c_lo?: number; n_fit: number; fitted_through: string | null; scope: string } | null;
 }
 
 /** One named condition narrowing which past moments count as comparable.
@@ -265,6 +265,7 @@ export interface BandEvaluation {
   adj_tail_band: string;
   k_lo: number;
   k_hi: number;
+  c_lo?: number;
 }
 
 export interface AdjustedEvaluation {
@@ -281,6 +282,7 @@ export interface AdjustedEvaluation {
   adj_width: number;
   k_lo_last: number | null;
   k_hi_last: number | null;
+  c_lo_last?: number | null;
   lo_ci: [number, number];
   adj_lo_ci: [number, number];
   bands: BandEvaluation[];

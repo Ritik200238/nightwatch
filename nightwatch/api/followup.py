@@ -240,7 +240,8 @@ def _a_history(r: dict, _q: str) -> Answer | None:
         )
     if h.get("adjustment"):
         adj = h["adjustment"]
-        bits.append(f"The tails you see are widened by a factor of {adj.get('k_lo', 0):.2f} fitted on {adj.get('n_fit', 0):,} already-scored forecasts, never on this one.")
+        margin = f" plus a margin of {adj['c_lo']:.1f} points" if adj.get("c_lo") else ""
+        bits.append(f"The tails you see are widened by a factor of {adj.get('k_lo', 0):.2f}{margin}, fitted on {adj.get('n_fit', 0):,} already-scored forecasts, never on this one.")
     return Answer("history", " ".join(bits), ("analog cohort", "baseline test"))
 
 

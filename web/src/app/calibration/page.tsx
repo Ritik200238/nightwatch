@@ -108,7 +108,7 @@ export default function CalibrationPage() {
           {rep.adjusted ? (
             <Section
               title="Tail adjustment, scored out of sample"
-              subtitle={`Each forecast re-scored with tail factors fitted only on forecasts that had matured before it (${rep.adjusted.n_evaluated} evaluated; latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}). The verdict uses the adjusted tails.`}
+              subtitle={`Each forecast re-scored with tail factors fitted only on forecasts that had matured before it (${rep.adjusted.n_evaluated} evaluated; latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}). The verdict uses the adjusted tails.`}
             >
               <Table>
                 <TableHeader>
@@ -173,6 +173,7 @@ export default function CalibrationPage() {
                     <TableHead className="text-right">Above p95 (target 5%)</TableHead>
                     <TableHead className="text-right">Width, raw → adjusted</TableHead>
                     <TableHead className="text-right">k_lo</TableHead>
+                    <TableHead className="text-right">Margin</TableHead>
                     <TableHead className="text-right">5% tail</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -187,6 +188,7 @@ export default function CalibrationPage() {
                         {b.raw_width.toFixed(2)}% → <span className="font-medium">{b.adj_width.toFixed(2)}%</span>
                       </TableCell>
                       <TableCell className="tabular text-right">{b.k_lo.toFixed(2)}</TableCell>
+                      <TableCell className="tabular text-right">{b.c_lo ? `${b.c_lo.toFixed(1)} pts` : "—"}</TableCell>
                       <TableCell className="text-right">
                         <Pill tone={b.adj_tail_band === "green" ? "good" : b.adj_tail_band === "amber" ? "warning" : "critical"}>{b.adj_tail_band}</Pill>
                       </TableCell>
@@ -195,7 +197,7 @@ export default function CalibrationPage() {
                 </TableBody>
               </Table>
               <p className="mt-3 text-xs text-muted-foreground">
-                A k_lo below 1 means the cohort&apos;s own p5 was already too pessimistic for that kind of window and gets pulled in, not pushed out. The &ldquo;before there was
+                A k_lo below 1 means the cohort&apos;s own p5 was already too pessimistic for that kind of window and gets pulled in, not pushed out. The margin is an absolute floor under narrow forecasts: a multiplicative factor alone left the narrowest third of forecasts breaching 8.2% of the time and the widest third 2.7%, and the margin is solved so the narrower half breaches 5% as well. The &ldquo;before there was
                 enough&rdquo; row is every forecast made before its window had 120 matured examples of its own; those used the pooled factor, and they are shown rather than dropped.
               </p>
             </Section>

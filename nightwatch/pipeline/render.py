@@ -62,7 +62,7 @@ def render_text(r: AnalysisReport) -> str:
             base = ""
             if h.baseline and h.baseline.mean_diff_pct is not None:
                 base = f" | vs random {h.baseline.baseline.n} hrs: {h.baseline.mean_diff_pct:+.2f}% (p={h.baseline.permutation_p_value:.2f})"
-            adj = f" | calibrated p5 {h.p5_adjusted:+.2f}% p95 {h.p95_adjusted:+.2f}% (k {h.adjustment['k_lo']:.2f}/{h.adjustment['k_hi']:.2f}, n_fit {h.adjustment['n_fit']})" if h.p5_adjusted is not None and h.adjustment else ""
+            adj = f" | calibrated p5 {h.p5_adjusted:+.2f}% p95 {h.p95_adjusted:+.2f}% (k {h.adjustment['k_lo']:.2f}/{h.adjustment['k_hi']:.2f}, margin {h.adjustment.get('c_lo', 0.0):.1f} pts, n_fit {h.adjustment['n_fit']})" if h.p5_adjusted is not None and h.adjustment else ""
             lines.append(f"  {name:>10} ({h.hours:.0f}h): n={c.n} mean {c.mean_pct:+.2f}% [{c.ci_mean.low:+.2f},{c.ci_mean.high:+.2f}] med {c.median_pct:+.2f}% win {c.win_rate:.0%} | p5 {c.p5:+.2f}% p95 {c.p95:+.2f}%{adj} | ES5 {_f(c.es5_pct)}% (n={c.es5_n}) | worst-in-window p5 {_f(c.mae_p5_pct)}% | tags {c.tag_counts}{base}")
     lines.append("")
     st = r.stress
