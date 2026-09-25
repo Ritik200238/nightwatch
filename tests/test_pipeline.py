@@ -205,3 +205,22 @@ def test_an_ordinary_new_build_is_not_mistaken_for_a_broken_one(seeded_store):
     ctx = _ctx(seeded_store)
     frame = ctx.feature_frame("TSLA", AS_OF)
     assert ctx._checked("TSLA", AS_OF, frame, lambda: frame) is frame and not ctx._degraded
+
+
+def test_the_text_report_renders_when_book_and_tail_numbers_are_missing(seeded_store):
+    """Live QA: a 5,000,000 USDT SMCI ticket returned a 500 because one recorded-book
+    bucket had no spread or depth, and the text report formatted None as a number."""
+    from dataclasses import replace
+
+    from nightwatch.execution.liquidity_history import BucketLiquidity, LiquidityHistory
+
+    ctx = _ctx(seeded_store)
+    ticket = TradeTicket(ticker="TSLA", side=Side.SHORT, notional_quote=5_000_000.0, account_equity_quote=200_000.0, thesis="t", invalidation="i")
+    report = analyze(ctx, ticket, as_of=AS_OF)
+    empty = BucketLiquidity("weekend", 500, False, 40.0, None, None, None, None, None)
+    object.__setattr__(report.execution, "liquidity_history", LiquidityHistory("RSMCIUSDT", AS_OF, AS_OF, 500, [empty]))
+    for h in report.analog.horizons.values():
+        object.__setattr__(h, "cohort", replace(h.cohort, es5_pct=None, mae_p5_pct=None))
+    text = render_text(report)
+    assert "spread   n/a bps" in text and "ES5 n/a%" in text
+    ctx.store.close()
