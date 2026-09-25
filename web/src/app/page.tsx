@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Chat } from "@/components/desk/chat";
 import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
@@ -161,6 +162,9 @@ export default function DeskPage() {
             >
               See it on a real trade: $20k of TSLA held to the next open
             </Button>
+            <Link href="/tonight" className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground">
+              Or check everything you already hold before the market reopens
+            </Link>
           </div>
         ) : null}
       </section>
