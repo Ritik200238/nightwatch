@@ -22,6 +22,20 @@ form — and answers four questions with data:
 4. **How big, then?** A sized verdict — go, reduce, hedge with the perpetual, or don't —
    with every number traceable to its source.
 
+On top of that:
+
+* **An AI analyst reads the finished report** (Qwen 3.8 Max, about 8 s) and says what
+  matters most tonight and what would change its mind - connecting the facts rather than
+  listing them. It cannot move a number: every figure it quotes is checked against the
+  report, and a sentence citing one that is not there is removed before you see it.
+* **Your own plan is tested.** "Wrong if it closes below 360" gets a distance and a count
+  of how many past moments like this crossed it inside the same hold.
+* **The stock's live price while the US market is shut**, analyst ratings and insider
+  trades, from Bitget's own US-stock data service.
+* **Getting in, not just getting out**: the entry cost for the size the desk recommends,
+  sliced to stay inside the cost budget, with a dry-run prompt for Bitget Agent Hub.
+* **English and 中文**: type the trade either way and get the answer in the same language.
+
 Then it argues against its own answer, using the same numbers, and tells you what would
 have to change for the verdict to be different: how big you could go, how far your stop
 could sit, and where the answer flips.

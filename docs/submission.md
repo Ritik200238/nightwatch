@@ -467,6 +467,18 @@ depend on. And size and stop are not variable here, because the sensitivity swee
 ran the whole gate across a grid of both; re-running for those would be slower and no
 more correct.
 
+### Qwen 3.8 Max — the analyst's take (live in the demo)
+
+Once the desk has answered, Qwen reads the finished report and writes what a senior
+analyst would: the call, what matters most tonight, what would change its mind, what to
+watch. On a live TSLA hold it pointed out that the trader's own invalidation sat almost
+exactly on the one-in-twenty bad night, and that the closed-window gap stress test blows
+straight through it while the real market is shut. It reads a fact sheet built from the
+report, cannot change the verdict, and any sentence quoting a number not on the sheet is
+removed before it is shown. With Qwen's thinking step turned off it arrives in about 8 s
+(observed); the page labels the reasoning as the model's own, because it can be wrong -
+on one test it drew a backwards inference from correct figures.
+
 ### What the model is *not* allowed to do, measured rather than asserted
 
 Qwen reasons before it answers, and here the reasoning dominates: rewriting a full report
