@@ -113,6 +113,9 @@ class AppState:
         )
         self.journal = Journal(self.store)
         self.reports = ReportStore(self.store)
+        from nightwatch.api.analyst import AnalystJobs
+
+        self.analyst = AnalystJobs()
         live = os.environ.get("NIGHTWATCH_LIVE_BOOK", "1") == "1"
         self.ctx = AnalysisContext(
             store=self.store, entries=self.entries, journal=self.journal,
@@ -567,6 +570,27 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if text:
             return {"text": render_text(report), "forecast_id": report.forecast_id}
         return payload
+
+    @app.post("/analyst/{forecast_id}")
+    def analyst_start(forecast_id: int, lang: str = "en") -> dict[str, Any]:
+        """Ask the model for the analyst's take on a stored report, in the background.
+
+        Returns at once with the take's status; the page polls GET until it is done. The
+        model reads a fact sheet built from the report and cannot change the verdict, and
+        any sentence citing a number not on the sheet is removed before it is shown.
+        """
+        from nightwatch.api.providers import select
+
+        s = st()
+        report = s.reports.get(forecast_id)
+        if report is None:
+            raise HTTPException(404, f"No stored report {forecast_id}.")
+        return s.analyst.start(forecast_id, report, select(), "zh" if lang == "zh" else "en").to_dict()
+
+    @app.get("/analyst/{forecast_id}")
+    def analyst_get(forecast_id: int, lang: str = "en") -> dict[str, Any]:
+        take = st().analyst.get(forecast_id, "zh" if lang == "zh" else "en")
+        return take.to_dict() if take else {"status": "none"}
 
     @app.get("/reports/{forecast_id}")
     def stored_report(forecast_id: int) -> dict[str, Any]:
