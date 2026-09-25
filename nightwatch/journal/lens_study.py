@@ -46,7 +46,7 @@ MIN_PAIRS = 30  # below this a condition is reported, not judged
 MIN_TOKENS = 5  # a clustered t over fewer tokens than this is not a statistic
 
 
-def collect(ctx: Any, *, common_per_ticker: int = 15, min_history_days: int = 120, lenses: tuple[str, ...] = RARE + COMMON) -> pd.DataFrame:  # noqa: ANN401
+def collect(ctx: Any, *, common_per_ticker: int = 15, min_history_days: int = 120, lenses: tuple[str, ...] = RARE + COMMON, tickers: tuple[str, ...] | None = None) -> pd.DataFrame:  # noqa: ANN401
     """One row per (moment, condition) where the condition held, with both forecasts.
 
     Strictly point-in-time: the snapshot and both searched histories end before the
@@ -94,7 +94,11 @@ def collect(ctx: Any, *, common_per_ticker: int = 15, min_history_days: int = 12
         return float(np.percentile(rets, 5)), len(rets)
 
     rows: list[dict] = []
+    # ``tickers`` limits which moments are asked about, never what is searched: the
+    # pooled history is always every token, so a split run scores exactly as one run.
     for ticker, frame in frames.items():
+        if tickers is not None and ticker not in tickers:
+            continue
         start = frame.index[0].to_pydatetime() + timedelta(days=min_history_days)
         points = closed_window_starts(frame, start=start, end=end_all - timedelta(days=4))
         if not points:

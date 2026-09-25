@@ -64,7 +64,7 @@ def variants(config: Any) -> dict[str, Any]:  # noqa: ANN401
     return out
 
 
-def collect(ctx: Any, *, max_points_per_ticker: int = 40, lookback_days: int = 240, min_history_days: int = 120) -> pd.DataFrame:  # noqa: ANN401
+def collect(ctx: Any, *, max_points_per_ticker: int = 40, lookback_days: int = 240, min_history_days: int = 120, tickers: tuple[str, ...] | None = None) -> pd.DataFrame:  # noqa: ANN401
     """One row per replay moment: what happened, and the raw 5th percentile from every
     version of the engine, each searched on the pooled history strictly before it."""
     from nightwatch.analog.engine import AnalogEngine, pooled_history
@@ -87,7 +87,10 @@ def collect(ctx: Any, *, max_points_per_ticker: int = 40, lookback_days: int = 2
     min_n = ctx.analog_config.min_matches
 
     rows: list[dict[str, Any]] = []
+    # ``tickers`` limits which moments are asked about, never what is searched.
     for ticker, frame in frames.items():
+        if tickers is not None and ticker not in tickers:
+            continue
         start = max(frame.index[0].to_pydatetime() + timedelta(days=min_history_days), end_all - timedelta(days=lookback_days))
         points = closed_window_starts(frame, start=start, end=end_all - timedelta(days=4))
         if len(points) > max_points_per_ticker:
