@@ -268,3 +268,27 @@ def test_a_missing_field_is_asked_for_in_chinese():
     from nightwatch.api import intake_zh as zh
 
     assert "做多还是做空" in zh.ask(["side"]) and "USDT" in zh.ask(["notional_quote"])
+
+
+def test_switching_stock_drops_the_price_levels_given_for_the_last_one():
+    """A TSLA stop at 350 carried into an NVDA ticket became a stop 56% away that every
+    past moment "hit". Prices belong to the stock they were given for."""
+    from nightwatch.api import intake as it
+
+    msgs = [{"role": "user", "content": "我想周末持有两万美元的特斯拉，止损350"}, {"role": "assistant", "content": "..."}, {"role": "user", "content": "换成英伟达呢"}]
+    i = it.read_conversation(msgs, ["TSLA", "NVDA"])
+    assert i.ticker == "NVDA" and i.stop_price is None
+    assert i.side == "long" and i.notional_quote == 20000.0, "the size and direction still carry"
+    same = it.read_conversation([{"role": "user", "content": "long 20k TSLA, stop 350"}, {"role": "user", "content": "make it 30k"}], ["TSLA"])
+    assert same.stop_price == 350.0, "the same stock keeps its stop"
+
+
+def test_a_book_that_cannot_absorb_the_size_is_said_not_crashed_on(seeded_store):  # noqa: F811
+    """"short 5,000,000 USDT of SMCI" crashed the chat with a 500: the exit cost was empty
+    because the book could not take the size, and the briefing formatted None."""
+    from nightwatch.api import intake as it
+    from nightwatch.execution.exit_cost import ExitQuote
+
+    r = _report(seeded_store)
+    r.execution.exit_quote = ExitQuote(5_000_000.0, "sell", 100.0, None, None, 10.0, None, None, 3, False, "2026-09-12T14:00:00+00:00")
+    assert "cannot absorb this size" in it.brief(r) and "无法在任何价格" in it.brief(r, "zh")

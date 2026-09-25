@@ -241,6 +241,11 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
         if m.get("role") != "user" or not (m.get("content") or "").strip():
             continue
         latest = parse_message(m["content"], known_tickers, account_equity)
+        if latest.ticker and merged.ticker and latest.ticker.upper() != merged.ticker.upper():
+            # A stop, a target or a price-based invalidation belongs to the stock it was
+            # given for. Carried over when the trader switches to another one, a TSLA stop
+            # at 350 became an NVDA stop 56% away that "40 of 40 past moments hit".
+            merged.stop_price = merged.target_price = merged.invalidation = None
         for key, value in latest.as_dict().items():
             if key in ("kind", "reply", "missing_fields") or value in (None, [], ""):
                 continue
@@ -406,11 +411,15 @@ def brief(report: Any, lang: str = "en") -> str:
             lines.append(f"Simulated tail: one path in twenty ends below {_pct(mc.p5)}, and the worst drawdown is past {_pct(mc.drawdown_p5)} in the same fifth percentile.")
 
     q = report.execution.exit_quote
-    if q is not None:
+    if q is not None and q.total_cost_bps is not None and q.total_cost_quote is not None:
         if zh:
             lines.append(f"平仓成本：按{'实时' if report.execution.book_source == 'live' else '记录的'}盘口约 {q.total_cost_bps:.0f} bps，约 {q.total_cost_quote:,.0f} USDT。")
         else:
             lines.append(f"Getting out costs {q.total_cost_bps:.0f} bps on the {report.execution.book_source} book, about {q.total_cost_quote:,.0f} USDT.")
+    elif q is not None:
+        # The book cannot take this size at any price. That is the most important thing
+        # the exit line can say, and it used to crash the reply instead.
+        lines.append("平仓：以目前的盘口，这个仓位无法在任何价格全部平掉。" if zh else "Getting out: the order book cannot absorb this size at any price right now.")
 
     street = getattr(report, "street", None)
     if street and street.get("token_vs_live_bps") is not None:
