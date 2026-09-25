@@ -79,3 +79,29 @@ def test_chinese_is_asked_for_in_chinese():
 
 def test_without_a_model_the_take_says_so():
     assert analyst.AnalystJobs().start(4, REPORT, None).status == "unavailable"
+
+
+def test_the_nested_levels_are_stated_the_right_way_round():
+    """The model once read "7 crossed 360, 4 reached 350" as "once 360 breaks it runs to
+    350". The sheet now says what the counts mean, so there is nothing to invert."""
+    rel = analyst.relations(REPORT)
+    assert any("of the 7 that crossed the invalidation, 4 went on to the stop and 3 turned back" in x for x in rel)
+
+
+def test_the_bad_night_is_placed_against_each_level():
+    rel = " ".join(analyst.relations(REPORT))
+    assert "stops short of the stop" in rel and "about the same distance as the invalidation" in rel
+
+
+def test_a_gap_that_jumps_the_stop_is_said():
+    assert any("could jump past the stop" in x for x in analyst.relations(REPORT))
+
+
+def test_the_sheet_carries_the_relations_and_the_instruction_to_use_them():
+    assert "Computed relations" in analyst.fact_sheet(REPORT)
+    assert "use them as given" in analyst.SYSTEM_EN and "use them as given" in analyst.SYSTEM_ZH
+
+
+def test_no_stop_and_no_plan_means_no_level_relations():
+    r = {**REPORT, "ticket": {**REPORT["ticket"], "stop_price": None}, "plan_check": None}
+    assert not any("stop" in x or "invalidation" in x for x in analyst.relations(r))

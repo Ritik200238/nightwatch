@@ -40,7 +40,8 @@ SYSTEM_EN = (
     "and where the evidence is too thin to lean on. Plain language, no jargon (say 'a bad night, one in twenty' rather "
     "than 'p5'). Two or three short sentences or bullets per part, 170 words at most. Quote only numbers that appear "
     "on the fact sheet, exactly as written; never compute, round differently or estimate a new one. Do not change the "
-    "desk's verdict or size. Never tell the trader what to do; they decide."
+    "desk's verdict or size. Where the sheet lists computed relations, use them as given and do not infer your own "
+    "comparisons between numbers. Never tell the trader what to do; they decide."
 )
 SYSTEM_ZH = SYSTEM_EN.replace(
     "four short parts with these exact headings on their own lines:\nThe call\nWhat matters most tonight\nWhat would change my mind\nWhat I'd watch\n",
@@ -109,7 +110,78 @@ def fact_sheet(r: dict[str, Any]) -> str:
         lines.append(f"Fresh filing: {f.get('headline')} ({f.get('market_moving')} impact).")
     for w in (r.get("warnings") or [])[:3]:
         lines.append(f"Caveat: {w}.")
+    rel = relations(r)
+    if rel:
+        lines.append("Computed relations (use these; do not work out your own comparisons):")
+        lines += [f"- {x}" for x in rel]
     return "\n".join(lines)
+
+
+def relations(r: dict[str, Any]) -> list[str]:
+    """Comparisons between the report's own numbers, worked out here rather than by the model.
+
+    On a live test the model read "7 of 40 crossed the invalidation at 360, 4 of 40 hit
+    the stop at 350" as "once 360 breaks, price runs to 350" - backwards: 3 of those 7
+    turned back in between. The figures were right and the inference was not. So every
+    comparison the take is likely to lean on is computed and stated, and the model is
+    told to use these rather than draw its own.
+    """
+    out: list[str] = []
+    t = r.get("ticket") or {}
+    a = r.get("analog") or {}
+    h = (a.get("horizons") or {}).get(r.get("primary_horizon")) or {}
+    c = h.get("cohort") or {}
+    p5 = h.get("p5_adjusted") if h.get("p5_adjusted") is not None else c.get("p5")
+    paths = a.get("paths") or {}
+    n = len(paths.get("paths") or [])
+    stop_pct = paths.get("stop_pct") if t.get("stop_price") else None
+    stopped = paths.get("stopped")
+    plan = r.get("plan_check") or {}
+    inv_pct = plan.get("distance_pct") if plan.get("kind") in ("level", "moving_average", "move") and not plan.get("already") else None
+    crossed = plan.get("crossed")
+
+    if stop_pct is not None and inv_pct is not None and stopped is not None and crossed is not None and n:
+        if abs(inv_pct) < abs(stop_pct):
+            back = crossed - stopped
+            out.append(
+                "The invalidation is closer than the stop, so every past moment that hit the stop crossed the invalidation first: "
+                f"of the {crossed} that crossed the invalidation, {stopped} went on to the stop and {back} turned back before it."
+            )
+        elif abs(inv_pct) > abs(stop_pct):
+            out.append("The stop is closer than the invalidation, so the stop would take the trade out before the invalidation is ever tested.")
+    if p5 is not None:
+        for name, dist in (("stop", stop_pct), ("invalidation", inv_pct)):
+            if dist is None:
+                continue
+            gap = abs(p5) - abs(dist)
+            if abs(gap) < 0.5:
+                out.append(f"The bad night (one in twenty) lands at about the same distance as the {name}.")
+            elif gap > 0:
+                out.append(f"The bad night (one in twenty) goes beyond the {name}.")
+            else:
+                out.append(f"The bad night (one in twenty) stops short of the {name}.")
+    st = r.get("stress") or {}
+    rows = [(p, i) for p, i in zip(st.get("presets") or [], st.get("impacts") or [], strict=False) if i.get("total_pct_of_notional") is not None]
+    if rows and stop_pct is not None:
+        p, i = min(rows, key=lambda x: x[1]["total_pct_of_notional"])
+        if abs(i["total_pct_of_notional"]) > abs(stop_pct):
+            out.append(f"The worst stress test ({p['name']}) moves further than the stop: a gap while the market is shut could jump past the stop rather than fill at it.")
+    s = r.get("street") or {}
+    live = s.get("token_vs_live_bps")
+    if live is not None:
+        if abs(live) < 10:
+            out.append("The token trades close to the real stock's live price.")
+        else:
+            out.append(f"The token trades {'above' if live > 0 else 'below'} the real stock's live price, so if the two converge a long {'loses' if live > 0 else 'gains'} that gap.")
+    if c.get("win_rate") is not None:
+        wr = c["win_rate"]
+        if wr > 0.55:
+            out.append("Past moments like this ended up more often than not.")
+        elif wr < 0.45:
+            out.append("Past moments like this ended down more often than not.")
+        else:
+            out.append("Past moments like this were close to a coin flip on direction.")
+    return out
 
 
 def strip_unverified(text: str, sheet: str) -> tuple[str, int]:
