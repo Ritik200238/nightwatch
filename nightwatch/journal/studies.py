@@ -858,6 +858,7 @@ ORDER = (
     "pooling_beats_own_history",
     "narrowing_gives_a_truer_tail",
     "distance_does_not_warn",
+    "disagreement_warns_of_a_breach",
     "one_factor_hid_two_errors",
     "online_calibration_adds_nothing",
     "filing_read_predicts_size",
@@ -876,10 +877,10 @@ def filing_outcomes(ctx: Any, store: Any) -> pd.DataFrame:  # noqa: ANN401
     return fo.collect(ctx, reads) if not reads.empty else pd.DataFrame()
 
 
-def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = None, max_points_per_ticker: int = 40, lens_rows: pd.DataFrame | None = None) -> list[Study]:
+def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = None, max_points_per_ticker: int = 40, lens_rows: pd.DataFrame | None = None, robust_rows: pd.DataFrame | None = None) -> list[Study]:
     """Every study, recomputed. Anything that fails is reported as inconclusive rather
     than dropped, so a study cannot quietly disappear because it stopped working."""
-    from nightwatch.journal import lens_study
+    from nightwatch.journal import lens_study, robust_study
 
     ev = evidence if evidence is not None else collect_evidence(ctx, max_points_per_ticker=max_points_per_ticker)
     ran = utc_now().isoformat()
@@ -889,6 +890,10 @@ def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = No
     lr = lens_rows if lens_rows is not None else lens_study.collect(ctx)
     if not lr.empty:
         jobs.append((lens_study.KEY, lambda: lens_study.study(lr)))
+    # A dozen searches per moment, so like the narrowing sweep it can be passed in.
+    rr = robust_rows if robust_rows is not None else robust_study.collect(ctx, max_points_per_ticker=max_points_per_ticker)
+    if not rr.empty:
+        jobs.append((robust_study.KEY, lambda: robust_study.study(rr)))
     if ev.ok:
         jobs += [
             ("closer_is_not_tighter", lambda: study_closer_is_not_tighter(ev)),
