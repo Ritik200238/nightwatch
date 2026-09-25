@@ -154,3 +154,13 @@ def test_a_book_too_thin_to_fill_is_a_decision_not_an_admission():
     blind_rule = next(r for r in blind.rules if r.rule == "exit_liquidity")
     assert thin_rule.decision is GateDecision.NO_GO and "cannot absorb" in thin_rule.reason
     assert blind_rule.decision is GateDecision.REVIEW_REQUIRED and "no order book" in blind_rule.reason
+
+
+def test_a_stop_far_enough_out_to_be_another_stocks_price_is_called_that():
+    """A TSLA stop of 350 carried onto a 180 NVDA ticket reads as 'wide'; it is not wide,
+    it is the wrong stock's price, and the reason should point there."""
+    far = evaluate_gate(ticket(ticker="NVDA", entry_price=180.0, stop_price=60.0), inputs(entry_price=180.0))
+    rule = next(r for r in far.rules if r.rule == "stop")
+    assert rule.decision is GateDecision.REVIEW_REQUIRED and "check it is a price for this token" in rule.reason
+    wide = evaluate_gate(ticket(stop_price=364.0 * (1 - (GatePolicy().max_stop_distance_pct + 1) / 100)), inputs())
+    assert "wider than" in next(r for r in wide.rules if r.rule == "stop").reason

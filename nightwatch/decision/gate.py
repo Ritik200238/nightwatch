@@ -134,6 +134,10 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
         rules.append(RuleResult("stop", GateDecision.NO_GO, "stop is on the wrong side of entry"))
     elif dist < policy.min_stop_distance_pct:
         rules.append(RuleResult("stop", GateDecision.NO_GO, f"stop {dist:.2f}% away is tighter than {policy.min_stop_distance_pct}% — inside normal hourly noise for this token"))
+    elif dist > 2 * policy.max_stop_distance_pct:
+        # Far enough out that it is more likely a price for another stock, or a typo, than
+        # a stop anyone meant; say that rather than only that it is wide.
+        rules.append(RuleResult("stop", GateDecision.REVIEW_REQUIRED, f"stop {dist:.1f}% away - check it is a price for this token"))
     elif dist > policy.max_stop_distance_pct:
         rules.append(RuleResult("stop", GateDecision.REVIEW_REQUIRED, f"stop {dist:.1f}% away is wider than {policy.max_stop_distance_pct}%"))
     else:
