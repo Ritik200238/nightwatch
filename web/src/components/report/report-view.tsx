@@ -172,7 +172,7 @@ function DecisionCard({ report }: { report: Report }) {
   return (
     <Section
       title={`${t.ticker} ${t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
-      subtitle={`Horizon ${report.primary_horizon} (${fmtHours(report.horizon_h)}) · as of ${fmtTime(report.as_of)} · ${report.snapshot.labels.session} session, ${report.snapshot.labels.regime_label} regime`}
+      subtitle={`Held for ${fmtHours(report.horizon_h)} · as of ${fmtTime(report.as_of)} · market state: ${report.snapshot.labels.regime_label}`}
       action={<Pill tone={VERDICT_TONE[v.verdict]}>{v.verdict.replace("_", " ")}</Pill>}
     >
       <p className="text-2xl font-semibold leading-tight">
@@ -435,7 +435,7 @@ export function ReportView({ report, onRerun }: { report: Report; onRerun?: (pat
       <Section
         openAll={openAll}
         collapsible
-        summary={`${fmtPrice(report.snapshot.prices.spot_close)} · basis ${fmtBps(f.basis_index_bps, 0, true)} · vol pctl ${f.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.quality_flags.length ? `${report.snapshot.quality_flags.length} data flag${report.snapshot.quality_flags.length > 1 ? "s" : ""}` : "inputs complete"}`}
+        summary={`${fmtPrice(report.snapshot.prices.spot_close)} · vs fair value ${fmtBps(f.basis_index_bps, 0, true)} · volatility ${f.vol_pctl_90d?.toFixed(0) ?? "—"}th pct of 90 days · ${report.snapshot.quality_flags.length ? `${report.snapshot.quality_flags.length} data flag${report.snapshot.quality_flags.length > 1 ? "s" : ""}` : "inputs complete"}`}
         title="Right now"
         subtitle={`Last completed bar ${fmtTime(report.snapshot.bar_ts)} · inputs hash ${report.snapshot.content_hash}`}
       >
@@ -444,7 +444,7 @@ export function ReportView({ report, onRerun }: { report: Report; onRerun?: (pat
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           <Stat label="Token price" value={fmtPrice(report.snapshot.prices.spot_close)} />
           <Stat label="Fair value (index)" value={fmtPrice(report.snapshot.prices.index_close)} hint={`native close ${fmtPrice(report.snapshot.prices.native_close)} · ${fmtHours(report.snapshot.features.native_close_age_h)} old`} />
-          <Stat label="Basis vs index" value={fmtBps(report.snapshot.features.basis_index_bps, 1, true)} hint={`z ${report.snapshot.features.basis_index_z?.toFixed(2) ?? "—"}`} />
+          <Stat label="Token vs fair value" value={fmtBps(report.snapshot.features.basis_index_bps, 1, true)} hint={`z ${report.snapshot.features.basis_index_z?.toFixed(2) ?? "—"}`} />
           <Stat label="Realised vol (24h)" value={report.snapshot.features.rv_24h != null ? `${(report.snapshot.features.rv_24h * 100).toFixed(0)}%` : "—"} hint={`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`} />
           <Stat label="Trend vs 30d avg" value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={report.snapshot.labels.trend_state} />
           <Stat label="Next earnings" value={fmtHours(report.snapshot.features.hours_to_earnings)} hint={`FOMC in ${fmtHours(report.snapshot.features.hours_to_fomc)}`} />
@@ -684,21 +684,21 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
             <Histogram values={values} markers={markers} ariaLabel={`Distribution of token returns over ${report.primary_horizon} after the ${a.result.matches.length} most similar past moments`} />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Stat label={`Median over ${report.primary_horizon}`} value={fmtPct(c.median_pct)} hint={`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`} />
-            <Stat label="Win rate" value={fmtRatio(c.win_rate)} hint={`n = ${c.n}${c.n_pending ? `, ${c.n_pending} pending` : ""}`} />
+            <Stat label={`Typical outcome over ${report.primary_horizon}`} value={fmtPct(c.median_pct)} hint={`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`} />
+            <Stat label="Ended up" value={fmtRatio(c.win_rate)} hint={`of ${c.n} similar past moments${c.n_pending ? `, ${c.n_pending} still open` : ""}`} />
             {primary?.p5_adjusted != null ? (
-              <Stat label="5th percentile (calibrated)" value={fmtPct(primary.p5_adjusted)} hint={`raw ${fmtPct(c.p5)} · tails widened ×${primary.adjustment?.k_lo.toFixed(2)} from ${primary.adjustment?.n_fit} scored replays`} tone="critical" />
+              <Stat label="Bad night, 1 in 20" value={fmtPct(primary.p5_adjusted)} hint={`before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)} from ${primary.adjustment?.n_fit} scored replays`} tone="critical" />
             ) : (
-              <Stat label="5th percentile" value={fmtPct(c.p5)} hint={`CI [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
+              <Stat label="Bad night, 1 in 20" value={fmtPct(c.p5)} hint={`likely range [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
             )}
             <Stat label="Average of the worst 5%" value={fmtPct(c.es5_pct)} hint={c.es5_n ? `${c.es5_n} episode${c.es5_n === 1 ? "" : "s"} below p5` : undefined} tone="critical" />
-            <Stat label="Worst point in window (p5)" value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
+            <Stat label="Deepest dip during the hold, 1 in 20" value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
             {primary?.p95_adjusted != null ? (
-              <Stat label="95th percentile (calibrated)" value={fmtPct(primary.p95_adjusted)} hint={`raw ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone="good" />
+              <Stat label="Good night, 1 in 20" value={fmtPct(primary.p95_adjusted)} hint={`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone="good" />
             ) : (
-              <Stat label="95th percentile" value={fmtPct(c.p95)} tone="good" />
+              <Stat label="Good night, 1 in 20" value={fmtPct(c.p95)} tone="good" />
             )}
-            <Stat label="Max |basis| p95" value={fmtBps(c.max_abs_basis_p95_bps, 0)} hint="inside the window" />
+            <Stat label="Widest gap to fair value, 1 in 20" value={fmtBps(c.max_abs_basis_p95_bps, 0)} hint="inside the window" />
           </div>
         </div>
       ) : (
@@ -961,7 +961,7 @@ function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean 
       collapsible
       summary={current ? `now: ${current.description} · ${fmtPct(current.share * 100, 0, false)} of the last ${m.n_fitted.toLocaleString()} hours · stays put ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}` : `${m.regimes.length} states over ${m.n_fitted.toLocaleString()} hours`}
       title="What kind of market this is"
-      subtitle={`${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, basis, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`}
+      subtitle={`${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, gap to fair value, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`}
       action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>now: {current.description}</Pill> : null}
     >
       <div className="overflow-x-auto">
@@ -1035,7 +1035,7 @@ function PortfolioSection({ report, openAll }: { report: Report; openAll?: boole
           <Stat label="Net exposure" value={fmtUsd(p.after.net_quote)} hint={p.after.net_pct_of_equity != null ? `${p.after.net_pct_of_equity.toFixed(0)}% of equity` : undefined} />
           <Stat label="Largest name" value={p.after.largest_name ?? "—"} hint={p.after.largest_pct_of_gross != null ? `${p.after.largest_pct_of_gross.toFixed(0)}% of gross · top three ${p.after.top3_pct_of_gross?.toFixed(0)}%` : undefined} tone={p.after.largest_pct_of_gross != null && p.after.largest_pct_of_gross > 60 ? "warning" : undefined} />
           <Stat
-            label="Book 5th-percentile loss"
+            label="Whole book, bad night (1 in 20)"
             value={fmtUsd(p.after.tail_loss_quote)}
             hint={added != null ? `this trade adds ${fmtUsd(Math.abs(added))}` : "needs history for every name"}
             tone="critical"
@@ -1309,7 +1309,7 @@ function StressSection({ report, openAll }: { report: Report; openAll?: boolean 
         return w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : "";
       })()}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`}
       title="What could go wrong"
-      subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour basis observations${
+      subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour fair-value gaps${
         s.inputs_summary.earnings_in_window === false
           ? `. Earnings presets left out: no report falls inside this hold${
               typeof s.inputs_summary.hours_to_earnings === "number" && s.inputs_summary.hours_to_earnings < 700
@@ -1361,9 +1361,9 @@ function StressSection({ report, openAll }: { report: Report; openAll?: boolean 
             <>
               <Histogram values={mc.terminal_ret_pct} bins={mc.terminal_hist} markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]} binCount={40} height={180} ariaLabel={`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`} />
               <div className="grid grid-cols-2 gap-2 content-start">
-                <Stat label={`Monte Carlo p5 (${mc.horizon_h}h)`} value={fmtPct(mc.p5)} hint={`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`} tone="critical" />
+                <Stat label={`Simulated bad night, 1 in 20 (${mc.horizon_h}h)`} value={fmtPct(mc.p5)} hint={`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`} tone="critical" />
                 <Stat label="Expected shortfall (5%)" value={fmtPct(mc.expected_shortfall_5_pct)} hint={`P(loss > 5%) ${fmtRatio(mc.prob_loss_gt["5.0"])}`} />
-                <Stat label="Worst point in window (p5)" value={fmtPct(mc.drawdown_p5)} />
+                <Stat label="Deepest simulated dip, 1 in 20" value={fmtPct(mc.drawdown_p5)} />
                 <Stat label="Move that loses 5% after costs" value={fmtPct(s.reverse_move_pct_for_5pct_loss)} />
               </div>
             </>

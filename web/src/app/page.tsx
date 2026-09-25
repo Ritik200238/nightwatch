@@ -128,8 +128,39 @@ export default function DeskPage() {
           </div>
         ) : !busy && !error ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
-            <p className="text-sm font-medium">No report yet</p>
-            <p className="max-w-prose text-sm text-muted-foreground">Fill in the ticket or describe the trade in chat. You will get a sized verdict, the distribution of similar past moments, calibrated stress tests and the real cost of exiting.</p>
+            <p className="text-base font-semibold">What happens to your position while the US market is shut?</p>
+            <ol className="max-w-prose space-y-1 text-left text-sm text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">1.</span> Describe the trade - in the form, or in plain words in chat (English or 中文).
+              </li>
+              <li>
+                <span className="font-medium text-foreground">2.</span> The desk finds the past moments most like now and shows what followed, then stress-tests the position and
+                prices the exit on the live order book.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">3.</span> You get a sized verdict in money, your own plan checked against the data, and an AI analyst&apos;s read of it.
+                You decide.
+              </li>
+            </ol>
+            <Button
+              className="mt-2"
+              disabled={busy}
+              onClick={() =>
+                void run({
+                  ticker: "TSLA",
+                  side: "long",
+                  notional_quote: 20000,
+                  account_equity_quote: 200000,
+                  horizon_kind: "next_open",
+                  horizon_hours: null,
+                  stop_price: null,
+                  thesis: "Strength into the close carries through the night.",
+                  invalidation: "Wrong if it drops 3% before the open.",
+                })
+              }
+            >
+              See it on a real trade: $20k of TSLA held to the next open
+            </Button>
           </div>
         ) : null}
       </section>
