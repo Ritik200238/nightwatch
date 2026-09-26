@@ -611,6 +611,7 @@ def study_online_calibration_adds_nothing(forecasts: pd.DataFrame) -> Study:
         p5a, p50a, p95a, ra = (d[c].to_numpy(float) for c in ("p5", "p50", "p95", "ret_pct"))
         shown = np.full((len(d), 2), np.nan)
         k_lo = k_hi = 1.0
+        c_lo = 0.0  # the absolute floor ships with the factor; both arms carry it, only k is nudged
         started, settled, fitted_at = False, 0, -1
         out = []
         for i in range(len(d)):
@@ -621,12 +622,12 @@ def study_online_calibration_adds_nothing(forecasts: pd.DataFrame) -> Study:
                 f = _fit_arrays(p5h[:ready], p50h[:ready], p95h[:ready], rh[:ready])
                 if f is None:
                     continue
-                k_lo, k_hi, started, settled, fitted_at = f.k_lo, f.k_hi, True, ready, ready
+                k_lo, k_hi, c_lo, started, settled, fitted_at = f.k_lo, f.k_hi, f.c_lo, True, ready, ready
             else:
                 while settled < ready:
                     src = int(order[settled])
                     kj = shown[src] if not np.isnan(shown[src, 0]) else np.array([k_lo, k_hi])
-                    a5j = p50h[settled] + kj[0] * (p5h[settled] - p50h[settled])
+                    a5j = p50h[settled] + kj[0] * (p5h[settled] - p50h[settled]) - c_lo
                     a95j = p50h[settled] + kj[1] * (p95h[settled] - p50h[settled])
                     if gamma:
                         k_lo = float(np.clip(k_lo + gamma * (float(rh[settled] < a5j) - 0.05), K_MIN, K_MAX))
@@ -635,9 +636,9 @@ def study_online_calibration_adds_nothing(forecasts: pd.DataFrame) -> Study:
                 if ready - fitted_at >= 25:
                     f = _fit_arrays(p5h[:ready], p50h[:ready], p95h[:ready], rh[:ready])
                     if f is not None:
-                        k_lo, k_hi, fitted_at = f.k_lo, f.k_hi, ready
+                        k_lo, k_hi, c_lo, fitted_at = f.k_lo, f.k_hi, f.c_lo, ready
             shown[i] = (k_lo, k_hi)
-            out.append({"i": i, "r": ra[i], "a5": p50a[i] + k_lo * (p5a[i] - p50a[i]), "a95": p50a[i] + k_hi * (p95a[i] - p50a[i])})
+            out.append({"i": i, "r": ra[i], "a5": p50a[i] + k_lo * (p5a[i] - p50a[i]) - c_lo, "a95": p50a[i] + k_hi * (p95a[i] - p50a[i])})
         return pd.DataFrame(out)
 
     gammas = (0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5)
