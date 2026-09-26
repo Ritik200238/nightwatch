@@ -100,8 +100,8 @@ Ten falsifiable questions about it — does closeness predict a tighter outcome,
 weighting the close matches help, does one tail factor fit every holding period, does a
 model reading a filing spot a night that matters, does narrowing the search to the nights
 a trader asks about give a truer loss tail — each recomputed from the stored data, each
-published whichever way it came out. Five came back no, including the one that would
-have made the product look cleverer, two could not be decided, and each one says what
+published whichever way it came out. Five came back no, including the two that would
+have made the product look cleverer, three could not be decided, and each one says what
 changed because of it. The
 page is at `/studies` and the failures are the point of it.
 
@@ -164,10 +164,12 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
     from **23,880 to 42,011 USDT**. The desk had been cutting weekend positions by 43%
     against a loss the history does not support.
   * Median absolute error of the median forecast: 2.22 percentage points.
-* **We tested the retrieval itself, and published what failed.** Ten falsifiable
+* **We tested the retrieval itself, and published what failed.** Eleven falsifiable
   questions about the engine, each recomputed from the stored bars and the journal by
   `nightwatch studies`, each reported whichever way it came out. **Five came back no and
-  two could not be decided.** The two that cost us most:
+  three could not be decided.** The newest no: a 'the verdict holds in eleven of twelve
+  versions of the model' confidence line looked real (t=+5.1) and was a proxy for a small
+  5th percentile; with size held fixed it vanished (t=-0.3). Not shown. The two that cost us most:
   * *Do closer analogs have tighter outcomes?* **No — the opposite.** The near half of a
     retrieval is 14% wider by standard deviation and 22% by interquartile range, and
     **not one of 24 tokens goes the other way** (clustered t = −6.59, n = 960). The

@@ -110,9 +110,9 @@ The full write-up is in [docs/research-notes.md](docs/research-notes.md).
 ### What we tested about the retrieval itself
 
 The scorecard above measures the forecasts. The **Studies** page measures the thing that
-makes them: seven questions about the retrieval, each written so it could come back no,
+makes them: eleven questions about the retrieval, each written so it could come back no,
 each recomputed from the stored bars and the journal by `nightwatch studies`. Five came
-back no, and the two most useful are the ones that cost us something:
+back no, three could not be decided, and the most useful are the ones that cost us something:
 
 * **Closer analogs do not have tighter outcomes — they have wider ones.** The near half
   of a retrieval is 14% wider by standard deviation and 22% by interquartile range, and
