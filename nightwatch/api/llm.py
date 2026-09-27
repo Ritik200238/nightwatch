@@ -341,6 +341,10 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             from dataclasses import replace
 
             ticket = replace(ticket, stop_offset_pct=intake.stop_offset(rules.stop_pct, rules.stop_dir, ticket.side.value))
+        if ticket.leverage is None and rules.leverage and 1 < rules.leverage <= 125:
+            from dataclasses import replace
+
+            ticket = replace(ticket, leverage=rules.leverage)  # the rules read "5x"; the model's schema has no field for it
     with state.lock:
         report = analyze(state.ctx, ticket)
         payload = report.to_dict()

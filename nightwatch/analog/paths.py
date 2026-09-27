@@ -71,6 +71,9 @@ class ScenarioPaths:
     stop_pct: float | None  # signed distance of the stop from entry, in %
     stopped: int  # how many of these scenarios would have hit it
     n_dropped: int  # analogs with too little data to draw
+    # A leveraged ticket's liquidation level, judged exactly like the stop.
+    liquidation_pct: float | None = None
+    liquidated: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,6 +83,8 @@ class ScenarioPaths:
             "stop_pct": self.stop_pct,
             "stopped": self.stopped,
             "n_dropped": self.n_dropped,
+            "liquidation_pct": self.liquidation_pct,
+            "liquidated": self.liquidated,
         }
 
 
@@ -151,6 +156,7 @@ def build(
     side: str = "long",
     stop_price: float | None = None,
     entry_price: float | None = None,
+    liquidation_price: float | None = None,
 ) -> ScenarioPaths | None:
     """Draw every retrieved analog over the ticket's horizon.
 
@@ -164,6 +170,10 @@ def build(
     stop_pct = None
     if stop_price and entry_price and entry_price > 0:
         stop_pct = (stop_price / entry_price - 1.0) * 100.0
+    liq_pct = None
+    if liquidation_price and entry_price and entry_price > 0:
+        liq_pct = (liquidation_price / entry_price - 1.0) * 100.0
+    liquidated = 0
 
     drawn: list[ScenarioPath] = []
     dropped = 0
@@ -176,6 +186,8 @@ def build(
         if values is None:
             dropped += 1
             continue
+        if liq_pct is not None and _stop_hit(frame, m.ts, horizon_h, liq_pct, side) is not None:
+            liquidated += 1
         drawn.append(ScenarioPath(
             ts=m.ts, ticker=m.ticker, distance=float(m.distance),
             distance_percentile=float(m.distance_percentile), rank=0.0, values=tuple(values),
@@ -203,4 +215,6 @@ def build(
         stop_pct=stop_pct,
         stopped=sum(1 for p in drawn if p.stopped_at_h is not None),
         n_dropped=dropped,
+        liquidation_pct=liq_pct,
+        liquidated=liquidated,
     )

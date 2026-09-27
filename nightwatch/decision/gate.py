@@ -78,6 +78,9 @@ class GateInputs:
     breaker_reason: str = ""
     recent_losing_exits: tuple[datetime, ...] = ()
     now: datetime | None = None
+    # A leveraged ticket's liquidation verdict, worked out by nightwatch.execution.leverage
+    # from the analogs, presets and Monte Carlo: (decision, reason). None when unleveraged.
+    leverage_rule: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -210,7 +213,12 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
     else:
         rules.append(RuleResult("exit_liquidity", GateDecision.GO, f"exit costs {inputs.exit_cost_bps:.0f} bps on the live book"))
 
-    # 9. Circuit breaker: the trader's own recent record, not this trade's merits.
+    # 9. Leverage: where the exchange closes the position, and whether history got there.
+    if inputs.leverage_rule is not None:
+        decision, reason = inputs.leverage_rule
+        rules.append(RuleResult("liquidation", GateDecision(decision), reason))
+
+    # 10. Circuit breaker: the trader's own recent record, not this trade's merits.
     if inputs.breaker_state == "HALTED":
         rules.append(RuleResult("circuit_breaker", GateDecision.NO_GO, inputs.breaker_reason or "loss limit reached; no new trades"))
     elif inputs.breaker_state == "COOLDOWN":

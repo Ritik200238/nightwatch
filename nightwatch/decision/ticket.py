@@ -38,6 +38,8 @@ class TradeTicket:
     thesis: str = ""
     invalidation: str = ""
     hedge_ratio: float | None = None  # trader's own preference, if any
+    # Leverage, taken on the stock's perpetual. None or 1 is a plain token position.
+    leverage: float | None = None
     created_at: datetime | None = None
     # What the trader already holds, so the desk can judge the book and not just the trade.
     open_positions: tuple[tuple[str, str, float], ...] = ()  # (ticker, side, notional)
@@ -60,6 +62,8 @@ class TradeTicket:
             raise ValueError("horizon_hours required for an explicit-hours horizon")
         if self.stop_offset_pct is not None and not 0 < abs(self.stop_offset_pct) < 100:
             raise ValueError("a stop distance must be between 0% and 100%")
+        if self.leverage is not None and not 1.0 <= self.leverage <= 125.0:
+            raise ValueError("leverage must be between 1x and 125x")
         if self.hedge_ratio is not None and not 0.0 <= self.hedge_ratio <= 1.0:
             raise ValueError("hedge_ratio must be in [0, 1]")
         if self.created_at is not None:
@@ -72,6 +76,10 @@ class TradeTicket:
 
     def horizon_end(self, now: datetime) -> datetime:
         return ensure_utc(now) + timedelta(hours=self.horizon_h(now))
+
+    @property
+    def leveraged(self) -> bool:
+        return self.leverage is not None and self.leverage > 1.0
 
     @property
     def closing_long(self) -> bool:

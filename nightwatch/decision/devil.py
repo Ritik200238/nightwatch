@@ -106,6 +106,21 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
     if breached:
         against.append(Counterpoint("against", f"{len(breached)} of the recalled past calls in conditions like these finished below the level they were sized against.", None, "post-mortems"))
 
+    lev = getattr(report, "leverage", None)
+    if lev and lev.get("liquidation_distance_pct") is not None:
+        margin = lev.get("margin_quote")
+        hits, of, mc = lev.get("analog_hits"), lev.get("analog_of"), lev.get("mc_share")
+        seen = []
+        if of:
+            seen.append(f"{hits} of {of} past moments like this reached it")
+        if mc is not None:
+            seen.append(f"{mc:.0%} of simulated paths do")
+        text = (
+            f"At {lev['leverage']:g}x the exchange closes the position {lev['liquidation_distance_pct']:.1f}% away and the whole "
+            f"{_q(margin)} USDT of margin is gone, with no chance to ride the move back" + (f"; {' and '.join(seen)}." if seen else ".")
+        )
+        against.append(Counterpoint("against", text, margin, "liquidation"))
+
     # The case for taking it, which matters when the answer was no.
     caps = sorted((c for c in report.sizing.caps if c.notional is not None), key=lambda c: c.notional)
     if caps and report.ticket.notional_quote > caps[0].notional:

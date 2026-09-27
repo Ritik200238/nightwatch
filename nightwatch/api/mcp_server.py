@@ -52,6 +52,8 @@ TOOLS: list[dict[str, Any]] = [
                          "description": "next_open: until the next US regular open. window_end: to the end of the current closed window or session."},
                 "hours": {"type": "number", "exclusiveMinimum": 0, "description": "Holding period in hours, when hold is 'hours'"},
                 "stop_price": {"type": "number", "exclusiveMinimum": 0},
+                "leverage": {"type": "number", "minimum": 1, "maximum": 125,
+                             "description": "Leverage on the stock's Bitget perpetual; the report adds the liquidation price and how often history reached it"},
                 "account_equity_usdt": {"type": "number", "exclusiveMinimum": 0},
                 "thesis": {"type": "string", "description": "Why the trade; the desk's gate wants a written plan"},
                 "invalidation": {"type": "string", "description": "What would prove the idea wrong"},
@@ -133,6 +135,7 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
             account_equity_quote=args.get("account_equity_usdt"),
             horizon_kind=HorizonKind(hold), horizon_hours=float(hours) if hold == "hours" else None,
             stop_price=args.get("stop_price"), thesis=str(args.get("thesis") or ""), invalidation=str(args.get("invalidation") or ""),
+            leverage=float(args["leverage"]) if args.get("leverage") else None,
             lenses=tuple(x.name for x in lens_mod.resolve(list(args.get("conditions") or []))),
         )
     except ValueError as exc:
@@ -153,6 +156,7 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
         "history": {"matches": c.get("n"), "median_pct": c.get("median_pct"), "p5_pct": h["p5_adjusted"] if h.get("p5_adjusted") is not None else c.get("p5"),
                     "scope": a.get("scope"), "narrowed_to": ((a.get("lens") or {}).get("description") or None)},
         "exit_cost_bps": ((payload.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"),
+        "leverage": {k: (payload.get("leverage") or {}).get(k) for k in ("leverage", "liquidation_price", "liquidation_distance_pct", "analog_hits", "analog_of", "mc_share", "presets_hit")} if payload.get("leverage") else None,
         "warnings": payload.get("warnings", []),
         "as_of": payload.get("as_of"),
         "report_url": "https://nightwatch-gules.vercel.app",

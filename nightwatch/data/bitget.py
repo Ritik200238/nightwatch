@@ -386,6 +386,15 @@ class BitgetPublicClient:
                 log.warning("bitget ticker row skipped: %s (%s)", r, exc)
         return out
 
+    # -------------------------------------------------------------- margin tiers
+
+    def get_position_tiers(self, symbol: str) -> list[dict[str, Any]]:
+        """Bitget's position tiers for a perp: per notional band, the maximum leverage and
+        the maintenance-margin rate. What a liquidation price is computed from."""
+        if not self.is_perp:
+            raise ValueError("position tiers exist only for perpetuals")
+        return list(self._get("/api/v2/mix/market/query-position-lever", {"symbol": symbol, "productType": PRODUCT_TYPE}) or [])
+
     # ------------------------------------------------------------------- funding
 
     def get_current_funding(self, symbol: str) -> FundingRate:

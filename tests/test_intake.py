@@ -362,3 +362,32 @@ def test_a_missing_account_size_is_asked_for_by_name(seeded_store):  # noqa: F81
     r = _report(seeded_store, account_equity_quote=None, thesis="t", invalidation="i")
     assert "tell me your account size" in it.brief(r) and "账户规模" in it.brief(r, "zh")
     assert "tell me your account size" not in it.brief(_report(seeded_store, thesis="t", invalidation="i"))
+
+
+@pytest.mark.parametrize(
+    ("text", "lev"),
+    [
+        ("5x long NVDA 20k over the weekend", 5.0),
+        ("long 20k TSLA overnight at 10x leverage", 10.0),
+        ("long 20k TSLA overnight, leverage 3", 3.0),
+        ("long 20000 usdt TSLA 100x", 100.0),
+        ("周末5倍杠杆做多英伟达 2万U", 5.0),
+        ("周末做多英伟达 2万U 杠杆10倍", 10.0),
+        ("long 20k TSLA overnight", None),
+    ],
+)
+def test_leverage_is_read_and_never_mistaken_for_a_size(text, lev):  # noqa: ANN001
+    """Live test: "5x long NVDA" was analysed as a plain spot trade with no word said."""
+    p = parse_message(text, ["TSLA", "NVDA"])
+    assert p.leverage == lev and p.notional_quote == 20_000.0
+
+
+def test_a_leveraged_ticket_gets_a_liquidation_line(seeded_store):  # noqa: F811
+    from nightwatch.api import intake as it
+
+    r = _report(seeded_store, leverage=5.0, thesis="t", invalidation="i")
+    assert r.leverage is not None
+    text = it.brief(r)
+    assert "5x" in text and ("liquidat" in text or "perpetual" in text)
+    assert any(x.rule == "liquidation" for x in r.gate.rules)
+    assert _report(seeded_store, thesis="t", invalidation="i").leverage is None

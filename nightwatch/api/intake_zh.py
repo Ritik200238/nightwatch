@@ -33,6 +33,8 @@ _STOP = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9][
 # "止损3%" is a distance, not a price of 3.
 _STOP_PCT = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*[%％]|止损\s*百分之([零〇一二两三四五六七八九十]+)")
 _WEEKEND = re.compile(r"周末|过周末|到周一|下周一")
+# "5倍杠杆", "五倍", "杠杆10倍": a multiple, never a size.
+_LEVERAGE = re.compile(r"([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]+)\s*倍(?:杠杆)?|杠杆\s*([0-9]+(?:\.[0-9]+)?)\s*倍?")
 _NEXT_OPEN = re.compile(r"过夜|隔夜|到开盘|开盘前|今晚")
 _HOURS = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(?:个)?小时")
 _DAYS = re.compile(r"([0-9]+)\s*天")
@@ -66,7 +68,7 @@ def chinese_number(text: str) -> float | None:
 
 
 # A ticker written in Latin letters inside Chinese text: "做多TSLA" has no word boundary
-# between 多 and T, so the English rule's  does not see it.
+# between 多 and T, so the English rule's \b does not see it.
 _LATIN_TICKER = re.compile(r"(?<![A-Za-z])([A-Za-z]{2,5})(?![A-Za-z])")
 
 
@@ -108,6 +110,12 @@ def read(text: str, known: set[str]) -> dict[str, object]:
     elif stop:
         out["stop_price"] = float(stop.group(1).replace(",", ""))
     spent = [stop.span()] if stop else []
+    lev = _LEVERAGE.search(text)
+    if lev:
+        value = chinese_number(lev.group(1)) if lev.group(1) else float(lev.group(2))
+        if value and value >= 1:
+            out["leverage"] = value
+        spent.append(lev.span())
     for m in _SIZE.finditer(text):
         if any(a <= m.start() < b for a, b in spent):
             continue

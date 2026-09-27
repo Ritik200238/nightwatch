@@ -91,6 +91,25 @@ class AnalysisContext:
     _street_pending: set[str] = field(default_factory=set)
     _profiles: dict[str, tuple[datetime, dict[str, float]]] = field(default_factory=dict)
     _degraded: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
+    _tiers: dict[str, tuple[datetime, list[Any]]] = field(default_factory=dict)
+
+    def margin_tiers(self, perp_symbol: str | None) -> list[Any] | None:
+        """Bitget's margin tiers for a perp, cached for a day. None when there is no perp
+        client or the fetch fails; the leverage view then says it assumed a rate."""
+        if not perp_symbol or self.perp_client is None:
+            return None
+        hit = self._tiers.get(perp_symbol)
+        if hit and utc_now() - hit[0] < timedelta(hours=24):
+            return hit[1]
+        from nightwatch.execution.leverage import parse_tiers
+
+        try:
+            tiers = parse_tiers(self.perp_client.get_position_tiers(perp_symbol))
+        except Exception as exc:  # noqa: BLE001 - an assumed rate, said so, beats no answer
+            log.warning("margin tiers for %s unavailable: %s", perp_symbol, exc)
+            return hit[1] if hit else None
+        self._tiers[perp_symbol] = (utc_now(), tiers)
+        return tiers
 
     def street_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=2), fetch: bool = True):  # noqa: ANN201
         """Street context for a ticker, from cache when fresh enough.
@@ -405,6 +424,8 @@ class AnalysisReport:
     plan_check: dict | None = None
     # How to get into the recommended size on the live book: cost, slices, limit price.
     entry_plan: dict | None = None
+    # A leveraged ticket's liquidation price and how often history reached it.
+    leverage: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -432,6 +453,17 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # A stop given as a distance becomes a price here, the first moment one is known, so
     # everything after - the gate, the paths, the brief - sees an ordinary stop.
     ticket = ticket.with_stop_resolved(entry_price)
+    fees = _fees(ctx, spec)
+    # A leveraged ticket's liquidation price, known before history is searched so the
+    # analog paths can be judged against it the same way they are against the stop.
+    lev_view = None
+    if ticket.leveraged:
+        from nightwatch.execution import leverage as lev_mod
+
+        lev_view = lev_mod.assess(
+            leverage=float(ticket.leverage or 1.0), notional=ticket.notional_quote, entry=entry_price, long=ticket.closing_long,
+            perp_symbol=spec.perp_symbol, tiers=ctx.margin_tiers(spec.perp_symbol), taker_fee=fees["perp_taker"],
+        )
     sources.append({"kind": "features", "ticker": ticket.ticker, "bar_ts": snapshot.bar_ts.isoformat(), "hash": snapshot.content_hash, "history_hours": snapshot.history_hours})
 
     # 2. Analog search + outcomes.
@@ -457,7 +489,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
                 f"narrowed automatically because {lens_mod.describe(hits)} holds tonight: on past nights like this "
                 f"the unfiltered 5% loss line was broken far more often than 5%, and the narrowed one close to it"
             )
-    analog = _analog_section(ctx, ticket, snapshot, frame, as_of, horizon_h, primary, warnings, entry_price=entry_price)
+    analog = _analog_section(ctx, ticket, snapshot, frame, as_of, horizon_h, primary, warnings, entry_price=entry_price,
+                             liquidation_price=lev_view.liquidation_price if lev_view else None)
     if auto_reason and analog is not None and analog.lens is not None:
         analog.lens = replace(analog.lens, auto=auto_reason)
     timings["analog"] = _ms(t0)
@@ -476,7 +509,6 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         sources.append({"kind": "orderbook", "symbol": spec.spot_symbol, "ts": book.ts.isoformat(), "source": book_source, "levels": len(book.bids) + len(book.asks)})
     else:
         warnings.append("no order book available: exit cost and liquidity caps are unknown")
-    fees = _fees(ctx, spec)
     timings["book"] = _ms(t0)
 
     # 4. Stress.
@@ -492,6 +524,21 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 6. Gate, sizing, verdict.
     t0 = time.perf_counter()
     p5 = _primary_p5(analog, primary)
+    leverage_rule = None
+    if lev_view is not None:
+        from nightwatch.execution import leverage as lev_mod
+
+        paths = analog.paths if analog else None
+        moves = {
+            s.name: imp.mtm_pnl_quote / ticket.notional_quote * 100.0
+            for s, imp in zip(stress.presets, stress.impacts, strict=True) if imp.mtm_pnl_quote is not None
+        }
+        lev_mod.attach_history(
+            lev_view, analog_hits=paths.liquidated if paths and paths.liquidation_pct is not None else None,
+            analog_of=len(paths.paths) if paths and paths.liquidation_pct is not None else None, preset_moves=moves,
+            mc_worst_pct=stress.monte_carlo.worst_drawdown_pct if stress.monte_carlo is not None else None,
+        )
+        leverage_rule = lev_mod.gate_rule(lev_view, p5)
     residual_p5 = None
     if execution.hedge_quote and execution.hedge_quote.residual_basis_p95_bps is not None:
         residual_p5 = -execution.hedge_quote.residual_basis_p95_bps / 100.0
@@ -515,6 +562,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         max_exit_notional_within_budget=execution.max_notional_within_budget,
         hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
         hedge_residual_p5_loss_pct=residual_p5, gate_policy=ctx.gate_policy, sizing_policy=ctx.sizing_policy,
+        leverage_rule=leverage_rule,
     )
     ev = dc.evaluate(
         ticket, impacts=stress.impacts,
@@ -627,6 +675,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
+        leverage=lev_view.to_dict() if lev_view else None,
     )
     # The case against whatever was just decided, from the report's own numbers.
     try:
@@ -719,7 +768,7 @@ def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, ho
     return notes[:3]
 
 
-def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str], *, entry_price: float = 0.0) -> AnalogSection | None:
+def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str], *, entry_price: float = 0.0, liquidation_price: float | None = None) -> AnalogSection | None:
     from nightwatch.analog import lens as lens_mod
 
     engine = AnalogEngine(ctx.analog_config)
@@ -878,7 +927,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
 
     scenario_paths = paths_mod.build(
         result.matches, frames, horizon_h=float(ticket_h), side=ticket.side.value,
-        stop_price=ticket.stop_price, entry_price=entry_price,
+        stop_price=ticket.stop_price, entry_price=entry_price, liquidation_price=liquidation_price,
     )
     return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result)
 

@@ -64,6 +64,8 @@ _NEXT_OPEN = re.compile(r"\bovernight\b|\b(?:until|till|to|through)\s+(?:the\s+)
 # "Through the weekend" said on a Thursday is until Monday's open, not Thursday's.
 _WEEKEND = re.compile(r"\b(?:through|over|across|for|into)\s+the\s+weekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b|\bweekend\s+hold\b", re.I)
 _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bsession\s+end\b", re.I)
+# "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
+_LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
 _HEDGE_PCT = re.compile(r"\bhedge\b[^.\d]{0,15}(\d{1,3})\s*%", re.I)
 _HEDGE = re.compile(r"\bhedge\b|\bdelta[-\s]?neutral\b", re.I)
 _THESIS = re.compile(r"\b(?:because|since|thesis\s*:|on the view that|reason\s*:|the idea is)\s+(.+?)(?:[.;!?]|$)", re.I)
@@ -89,6 +91,7 @@ class RuleIntent:
     # price only once the entry price is known, which the parser never is.
     stop_pct: float | None = None
     stop_dir: str | None = None  # "above" | "below" | None = on the losing side
+    leverage: float | None = None
     target_price: float | None = None
     thesis: str | None = None
     invalidation: str | None = None
@@ -101,6 +104,7 @@ class RuleIntent:
             "kind": self.kind, "ticker": self.ticker, "side": self.side, "notional_quote": self.notional_quote,
             "account_equity_quote": self.account_equity_quote, "horizon_kind": self.horizon_kind,
             "horizon_hours": self.horizon_hours, "stop_price": self.stop_price, "stop_pct": self.stop_pct, "stop_dir": self.stop_dir,
+            "leverage": self.leverage,
             "target_price": self.target_price,
             "thesis": self.thesis, "invalidation": self.invalidation, "hedge_ratio": self.hedge_ratio,
             "missing_fields": self.missing_fields, "reply": self.reply,
@@ -192,7 +196,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         out.account_equity_quote = account_equity
 
     # Size is the money left over once the labelled numbers are accounted for.
-    spent = [m.span() for m in (stop, target, equity) if m]
+    lev = _LEVERAGE.search(text)
+    spent = [m.span() for m in (stop, target, equity, lev) if m]  # "100x" is not a size
     for m in _MONEY.finditer(text):
         if any(s <= m.start() < e for s, e in spent):
             continue
@@ -228,6 +233,10 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     # message by message, so filling in the default here would let "make it 30k" quietly
     # overwrite the "for 8 hours" from the message before it. The default is applied once,
     # when the ticket is built.
+
+    if lev:
+        value = float(lev.group(1) or lev.group(2))
+        out.leverage = value if value >= 1 else None
 
     pct = _HEDGE_PCT.search(text)
     if pct:
@@ -299,7 +308,8 @@ def intent_to_ticket(p: RuleIntent, account_equity: float | None) -> TradeTicket
         account_equity_quote=p.account_equity_quote or account_equity, horizon_kind=kind, horizon_hours=hours,
         stop_price=p.stop_price, target_price=p.target_price, thesis=p.thesis or "", invalidation=p.invalidation or "",
         stop_offset_pct=None if p.stop_price is not None else stop_offset(p.stop_pct, p.stop_dir, p.side),
-        hedge_ratio=p.hedge_ratio, extra={"horizon_label": label} if label else {},
+        hedge_ratio=p.hedge_ratio, leverage=p.leverage if p.leverage and p.leverage <= 125 else None,
+        extra={"horizon_label": label} if label else {},
     )
 
 
@@ -378,6 +388,40 @@ def _horizon_phrase(report: Any, lang: str) -> str:
     return f"for {h:.0f}h"
 
 
+def _leverage_line(lev: dict[str, Any], lang: str) -> str:
+    """Where the exchange closes a leveraged position, and how often history got there."""
+    zh = lang == "zh"
+    x = f"{lev['leverage']:g}"
+    if lev.get("perp_symbol") is None:
+        return "该股票在 Bitget 没有永续合约，无法加杠杆；以下按现货分析。" if zh else f"{x}x: Bitget lists no perpetual for this stock, so it cannot be held with leverage; the rest is the spot trade."
+    if not lev.get("allowed", True):
+        return (f"{x} 倍超过了 Bitget 在这个仓位规模下允许的 {lev['max_leverage_at_size']:g} 倍。" if zh
+                else f"{x}x is more than the {lev['max_leverage_at_size']:g}x Bitget allows at this size.")
+    d, price = lev.get("liquidation_distance_pct"), lev.get("liquidation_price")
+    if d is None or price is None:
+        return "杠杆已记录，但没有入场价，无法计算强平价。" if zh else f"{x}x noted, but with no entry price the liquidation level is unknown."
+    hits, of = lev.get("analog_hits"), lev.get("analog_of")
+    mc = lev.get("mc_share")
+    presets = lev.get("presets_hit") or []
+    if zh:
+        line = f"{x} 倍杠杆：保证金约 {lev['margin_quote']:,.0f} USDT，约在 {price:,.2f} 强平（距现价 {d:.1f}%）。"
+        if of:
+            line += f"过去 {of} 个相似时刻里有 {hits} 个会在持有期内触及强平"
+            line += f"；模拟路径中约 {mc:.0%} 会触及。" if mc is not None else "。"
+        if presets:
+            line += f"有 {len(presets)} 个压力情景会导致强平。"
+        return line
+    line = f"{x}x leverage: about {lev['margin_quote']:,.0f} USDT of margin, liquidated near {price:,.2f} ({d:.1f}% away)."
+    if of:
+        line += f" {hits} of {of} past moments like this would have reached it inside the hold"
+        line += f", and {mc:.0%} of simulated paths do." if mc is not None else "."
+    if presets:
+        line += f" Stress presets that liquidate it: {'; '.join(presets[:3])}{'...' if len(presets) > 3 else ''}."
+    if lev.get("tiers_source") == "assumed":
+        line += f" (Bitget's margin tiers were unavailable; {lev['mmr']:.1%} maintenance margin assumed.)"
+    return line
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -432,6 +476,10 @@ def brief(report: Any, lang: str = "en") -> str:
             lines.append(f"你的止损 {t.stop_price:,.2f} 距现价 {abs(paths.stop_pct):.1f}%；过去 {n} 个相似时刻里有 {paths.stopped} 个会在途中触发它。")
         else:
             lines.append(f"Your stop at {t.stop_price:,.2f} is {abs(paths.stop_pct):.1f}% away; {paths.stopped} of {n} past moments like this would have hit it on the way.")
+
+    lev = getattr(report, "leverage", None)
+    if lev:
+        lines.append(_leverage_line(lev, lang))
 
     plan = getattr(report, "plan_check", None)
     if plan:

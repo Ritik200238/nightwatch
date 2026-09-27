@@ -67,6 +67,9 @@ class TicketIn(BaseModel):
     thesis: str = ""
     invalidation: str = ""
     hedge_ratio: float | None = Field(default=None, ge=0, le=1)
+    # Leverage on the stock's Bitget perpetual; adds the liquidation price and how often
+    # history reached it. None or 1 is a plain token position.
+    leverage: float | None = Field(default=None, ge=1, le=125)
     as_of: datetime | None = None
     record: bool = True
     open_positions: list[PositionIn] = Field(default_factory=list)
@@ -81,7 +84,7 @@ class TicketIn(BaseModel):
             ticker=self.ticker.upper(), side=self.side, notional_quote=self.notional_quote, account_equity_quote=self.account_equity_quote,
             horizon_kind=self.horizon_kind, horizon_hours=self.horizon_hours, entry_price=self.entry_price, stop_price=self.stop_price,
             target_price=self.target_price, thesis=self.thesis, invalidation=self.invalidation, hedge_ratio=self.hedge_ratio,
-            open_positions=tuple((p.ticker.upper(), p.side.value, p.notional_quote) for p in self.open_positions),
+            leverage=self.leverage, open_positions=tuple((p.ticker.upper(), p.side.value, p.notional_quote) for p in self.open_positions),
             lenses=tuple(self.lenses), auto_lens=self.auto_lens,
         )
 

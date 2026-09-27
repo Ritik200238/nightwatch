@@ -100,6 +100,9 @@ class DecisionContext:
     hedge_residual_p5_loss_pct: float | None
     gate_policy: GatePolicy = GatePolicy()
     sizing_policy: SizingPolicy = SizingPolicy()
+    # Held fixed across the size sweep: the tier, and so the liquidation distance, moves
+    # only at Bitget's tier boundaries, and the leverage is the trader's choice.
+    leverage_rule: tuple[str, str] | None = None
     _stress_caps: dict[tuple, float | None] = field(default_factory=dict, compare=False, repr=False)
 
     def worst_severe_loss_quote(self, ticket: TradeTicket, notional: float) -> float | None:
@@ -164,6 +167,7 @@ class DecisionContext:
                 has_book=self.book is not None if has_book is None else has_book,
                 recent_losing_exits=self.recent_losing_exits,
                 breaker_state=self.breaker_state, breaker_reason=self.breaker_reason, now=self.now,
+                leverage_rule=self.leverage_rule if ticket.leveraged else None,
             ),
             self.gate_policy,
         )
