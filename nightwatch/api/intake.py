@@ -42,6 +42,13 @@ _SHORT = re.compile(r"\bshort(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell\b|\bb
 # to be asked which way round they meant it.
 _LONG = re.compile(r"\blong(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy\b|\bbullish\b|\bhold(?:ing)?\b|\bcarry\b|\bkeep\b", re.I)
 _STOP = re.compile(r"\bstop(?:[-\s]?loss)?\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
+# "stop 3% below", "a 2% stop": a distance, not a price. Read as a price, "stop 1% above"
+# became a stop at 1.00 - 99.9% away, hit by every past moment - on a live test.
+_STOP_PCT = re.compile(
+    r"\bstop(?:[-\s]?loss)?\b\s*(?:is|at|of|:|=)?\s*(\d+(?:\.\d+)?)\s*%\s*(above|over|below|under)?"
+    r"|\b(\d+(?:\.\d+)?)\s*%\s*(?:trailing\s+)?stop(?:[-\s]?loss)?\b",
+    re.I,
+)
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 _EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?", re.I)
 _MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmb])?|\b([\d,]+(?:\.\d+)?)\s*([kmb])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
@@ -78,6 +85,10 @@ class RuleIntent:
     horizon_kind: str | None = None
     horizon_hours: float | None = None
     stop_price: float | None = None
+    # A stop given as a distance: how far, and which way if the trader said. Turned into a
+    # price only once the entry price is known, which the parser never is.
+    stop_pct: float | None = None
+    stop_dir: str | None = None  # "above" | "below" | None = on the losing side
     target_price: float | None = None
     thesis: str | None = None
     invalidation: str | None = None
@@ -89,7 +100,8 @@ class RuleIntent:
         return {
             "kind": self.kind, "ticker": self.ticker, "side": self.side, "notional_quote": self.notional_quote,
             "account_equity_quote": self.account_equity_quote, "horizon_kind": self.horizon_kind,
-            "horizon_hours": self.horizon_hours, "stop_price": self.stop_price, "target_price": self.target_price,
+            "horizon_hours": self.horizon_hours, "stop_price": self.stop_price, "stop_pct": self.stop_pct, "stop_dir": self.stop_dir,
+            "target_price": self.target_price,
             "thesis": self.thesis, "invalidation": self.invalidation, "hedge_ratio": self.hedge_ratio,
             "missing_fields": self.missing_fields, "reply": self.reply,
         }
@@ -163,8 +175,15 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     elif long_:
         out.side = "long"
 
-    stop, target, equity = _STOP.search(text), _TARGET.search(text), _EQUITY.search(text)
+    stop_pct = _STOP_PCT.search(text)
+    stop = None if stop_pct else _STOP.search(text)
+    target, equity = _TARGET.search(text), _EQUITY.search(text)
     out.stop_price = float(stop.group(1).replace(",", "")) if stop else None
+    if stop_pct:
+        out.stop_pct = float(stop_pct.group(1) or stop_pct.group(3))
+        word = (stop_pct.group(2) or "").lower()
+        out.stop_dir = "above" if word in ("above", "over") else "below" if word in ("below", "under") else None
+        stop = stop_pct  # its span is spent, so the percentage is never read as a size
     out.target_price = float(target.group(1).replace(",", "")) if target else None
     if equity:
         scale = _SCALE[equity.group(2).lower()] if equity.group(2) else 1.0
@@ -241,11 +260,17 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
         if m.get("role") != "user" or not (m.get("content") or "").strip():
             continue
         latest = parse_message(m["content"], known_tickers, account_equity)
+        # A stop is either a price or a distance; the later message replaces either kind.
+        if latest.stop_price is not None:
+            merged.stop_pct = merged.stop_dir = None
+        elif latest.stop_pct is not None:
+            merged.stop_price = None
         if latest.ticker and merged.ticker and latest.ticker.upper() != merged.ticker.upper():
             # A stop, a target or a price-based invalidation belongs to the stock it was
             # given for. Carried over when the trader switches to another one, a TSLA stop
             # at 350 became an NVDA stop 56% away that "40 of 40 past moments hit".
             merged.stop_price = merged.target_price = merged.invalidation = None
+            merged.stop_pct = merged.stop_dir = None
         for key, value in latest.as_dict().items():
             if key in ("kind", "reply", "missing_fields") or value in (None, [], ""):
                 continue
@@ -255,12 +280,25 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
     return _settle(merged)
 
 
+def stop_offset(pct: float | None, direction: str | None, side: str | None) -> float | None:
+    """A stop distance as a signed offset from entry, in percent. Unsaid, the direction is
+    the losing one: below entry for a long, above it for a short."""
+    if pct is None or not 0 < pct < 100:
+        return None
+    if direction == "above":
+        return pct
+    if direction == "below":
+        return -pct
+    return pct if side == "short" else -pct
+
+
 def intent_to_ticket(p: RuleIntent, account_equity: float | None) -> TradeTicket:
     kind, hours, label = horizon_fields(p.horizon_kind, p.horizon_hours)
     return TradeTicket(
         ticker=(p.ticker or "").upper(), side=Side(p.side or "long"), notional_quote=float(p.notional_quote or 0.0),
         account_equity_quote=p.account_equity_quote or account_equity, horizon_kind=kind, horizon_hours=hours,
         stop_price=p.stop_price, target_price=p.target_price, thesis=p.thesis or "", invalidation=p.invalidation or "",
+        stop_offset_pct=None if p.stop_price is not None else stop_offset(p.stop_pct, p.stop_dir, p.side),
         hedge_ratio=p.hedge_ratio, extra={"horizon_label": label} if label else {},
     )
 
@@ -355,7 +393,16 @@ def brief(report: Any, lang: str = "en") -> str:
         head = f"{VERDICT_ZH.get(v.verdict.value, v.verdict.value)}：{t.ticker} {side} {t.notional_quote:,.0f} USDT，{_horizon_phrase(report, lang)}。"
     else:
         head = f"{v.verdict.value} on {side} {t.notional_quote:,.0f} USDT of {t.ticker}, {_horizon_phrase(report, lang)}."
-    if v.recommended_notional is not None and abs(v.recommended_notional - t.notional_quote) > 1:
+    if v.recommended_notional is not None and v.recommended_notional < 1:
+        # "Size it at 0 instead" read as a contradiction next to a REVIEW. What it means is
+        # that no size clears a limit, so say which one.
+        priced_caps = [c for c in v.caps if c.notional is not None]
+        binding = min(priced_caps, key=lambda c: c.notional) if priced_caps else None
+        if binding is not None and binding.name == "exit_liquidity":
+            head += " 以目前的盘口，任何仓位的平仓成本都超过预算，现在不宜开仓。" if zh else " No size gets out within the exit-cost budget on the book right now, so there is nothing to size."
+        else:
+            head += " 目前没有任何仓位能通过限制。" if zh else " No size passes the limits right now."
+    elif v.recommended_notional is not None and abs(v.recommended_notional - t.notional_quote) > 1:
         head += f" 建议仓位改为 {v.recommended_notional:,.0f}。" if zh else f" Size it at {v.recommended_notional:,.0f} instead."
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."
@@ -457,6 +504,12 @@ def brief(report: Any, lang: str = "en") -> str:
         repeats = bool(priced) and against.startswith(name)
         if not repeats and not zh:
             lines.append("Case against: " + against)
+    equity_missing = any(r.rule == "position_size" and r.decision.value != "GO" and "equity" in r.reason for r in report.gate.rules)
+    if equity_missing:
+        if zh:
+            lines.append("要给出明确结论，请告诉我你的账户规模——例如“账户 20万U”——我会据此判断仓位是否过大。")
+        else:
+            lines.append("For a firm GO or NO-GO, tell me your account size - e.g. \"account 200k\" - so I can check this position against it.")
     if plan_missing:
         if zh:
             lines.append("要通过复核：告诉我你为什么做这笔交易，以及什么情况说明你错了——例如“因为……，如果收盘跌破……就算错”——我会重新检查。")

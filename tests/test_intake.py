@@ -292,3 +292,73 @@ def test_a_book_that_cannot_absorb_the_size_is_said_not_crashed_on(seeded_store)
     r = _report(seeded_store)
     r.execution.exit_quote = ExitQuote(5_000_000.0, "sell", 100.0, None, None, 10.0, None, None, 3, False, "2026-09-12T14:00:00+00:00")
     assert "cannot absorb this size" in it.brief(r) and "无法在任何价格" in it.brief(r, "zh")
+
+
+@pytest.mark.parametrize(
+    ("text", "pct", "direction"),
+    [
+        ("short 20k TSLA overnight, stop 1% above", 1.0, "above"),
+        ("long 20k TSLA overnight, stop 2.5% below", 2.5, "below"),
+        ("long 20k TSLA over the weekend, 3% stop", 3.0, None),
+        ("long 20k TSLA overnight, stop at 5%", 5.0, None),
+    ],
+)
+def test_a_stop_given_as_a_percentage_is_a_distance_not_a_price(text, pct, direction):  # noqa: ANN001
+    """Live test: "stop 1% above" became a stop at 1.00, 99.9% away, hit by all 40 past
+    moments. A percentage is how far, never where."""
+    p = parse_message(text, ["TSLA"])
+    assert p.stop_price is None and p.stop_pct == pct and p.stop_dir == direction
+    assert p.notional_quote == 20_000.0  # the percentage is not mistaken for a size either
+
+
+def test_a_chinese_percentage_stop_is_a_distance_too():
+    p = parse_message("周末做多英伟达 2万U，止损3%", ["NVDA"])
+    assert p.stop_price is None and p.stop_pct == 3.0 and p.notional_quote == 20_000.0
+
+
+def test_an_unsaid_direction_is_the_losing_side_and_a_said_one_is_kept():
+    from nightwatch.api.intake import intent_to_ticket
+
+    long_ = intent_to_ticket(parse_message("long 20k TSLA overnight, 3% stop", ["TSLA"]), None)
+    short = intent_to_ticket(parse_message("short 20k TSLA overnight, 3% stop", ["TSLA"]), None)
+    assert long_.stop_offset_pct == -3.0 and short.stop_offset_pct == 3.0
+    assert long_.with_stop_resolved(200.0).stop_price == 194.0 and short.with_stop_resolved(200.0).stop_price == 206.0
+    # Said the wrong way round, it is kept as said, so the gate can call it wrong-side
+    # rather than the desk quietly moving the trader's stop.
+    odd = intent_to_ticket(parse_message("short 20k TSLA overnight, stop 3% below", ["TSLA"]), None)
+    assert odd.stop_offset_pct == -3.0
+
+
+def test_a_later_stop_replaces_an_earlier_one_of_either_kind():
+    as_price = read_conversation([{"role": "user", "content": "long 20k TSLA overnight, stop 3%"}, {"role": "user", "content": "make the stop 340"}], ["TSLA"])
+    assert as_price.stop_price == 340.0 and as_price.stop_pct is None
+    as_pct = read_conversation([{"role": "user", "content": "long 20k TSLA overnight, stop 340"}, {"role": "user", "content": "actually stop 2%"}], ["TSLA"])
+    assert as_pct.stop_price is None and as_pct.stop_pct == 2.0
+
+
+def test_a_percentage_stop_reaches_the_report_as_a_price(seeded_store):  # noqa: F811
+    r = _report(seeded_store, stop_offset_pct=-3.0, thesis="t", invalidation="i")
+    entry = r.snapshot.prices["spot_close"]
+    assert r.ticket.stop_price == pytest.approx(entry * 0.97)
+    assert "Your stop at" in __import__("nightwatch.api.intake", fromlist=["brief"]).brief(r)
+
+
+def test_a_size_of_zero_is_said_as_nothing_to_size_not_as_a_size(seeded_store):  # noqa: F811
+    """"REVIEW ... Size it at 0 instead" read as a contradiction on a live test."""
+    from dataclasses import replace
+
+    from nightwatch.api import intake as it
+
+    r = _report(seeded_store, thesis="t", invalidation="i")
+    caps = [replace(c, notional=0.0) if c.name == "exit_liquidity" else c for c in r.verdict.caps]
+    r.verdict = replace(r.verdict, recommended_notional=0.0, caps=caps)
+    text = it.brief(r)
+    assert "Size it at 0" not in text and "No size gets out within the exit-cost budget" in text
+
+
+def test_a_missing_account_size_is_asked_for_by_name(seeded_store):  # noqa: F811
+    from nightwatch.api import intake as it
+
+    r = _report(seeded_store, account_equity_quote=None, thesis="t", invalidation="i")
+    assert "tell me your account size" in it.brief(r) and "账户规模" in it.brief(r, "zh")
+    assert "tell me your account size" not in it.brief(_report(seeded_store, thesis="t", invalidation="i"))

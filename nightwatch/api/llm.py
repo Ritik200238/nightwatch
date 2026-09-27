@@ -335,6 +335,12 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             # question from the one put, so it is undone here rather than trusted.
             intent = intent.model_copy(update={"lenses": []})
         ticket = intent_to_ticket(intent, account_equity)
+        if ticket.stop_price is None and rules.stop_pct is not None and (rules.ticker or "").upper() == ticket.ticker:
+            # "stop 2% below" is read by the rules as a distance; the model is not asked to
+            # turn it into a price, because it would have to guess the entry to do it.
+            from dataclasses import replace
+
+            ticket = replace(ticket, stop_offset_pct=intake.stop_offset(rules.stop_pct, rules.stop_dir, ticket.side.value))
     with state.lock:
         report = analyze(state.ctx, ticket)
         payload = report.to_dict()

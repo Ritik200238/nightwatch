@@ -429,6 +429,9 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     snapshot = build_snapshot(ctx.store, spec, as_of)
     timings["snapshot"] = _ms(t0)
     entry_price = ticket.entry_price or snapshot.prices["spot_close"] or 0.0
+    # A stop given as a distance becomes a price here, the first moment one is known, so
+    # everything after - the gate, the paths, the brief - sees an ordinary stop.
+    ticket = ticket.with_stop_resolved(entry_price)
     sources.append({"kind": "features", "ticker": ticket.ticker, "bar_ts": snapshot.bar_ts.isoformat(), "hash": snapshot.content_hash, "history_hours": snapshot.history_hours})
 
     # 2. Analog search + outcomes.

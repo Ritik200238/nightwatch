@@ -30,6 +30,8 @@ _LONG = re.compile(r"做多|买入|买进|看多|多头|开多|持有|拿着|加
 # scale itself ("两万", "1.5万", "20000美元", "5000U").
 _SIZE = re.compile(r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(万|千|k|K)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?")
 _STOP = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9][0-9,]*(?:\.[0-9]+)?)")
+# "止损3%" is a distance, not a price of 3.
+_STOP_PCT = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*[%％]|止损\s*百分之([零〇一二两三四五六七八九十]+)")
 _WEEKEND = re.compile(r"周末|过周末|到周一|下周一")
 _NEXT_OPEN = re.compile(r"过夜|隔夜|到开盘|开盘前|今晚")
 _HOURS = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(?:个)?小时")
@@ -97,8 +99,13 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         out["side"] = "short"
     elif long_:
         out["side"] = "long"
-    stop = _STOP.search(text)
-    if stop:
+    stop_pct = _STOP_PCT.search(text)
+    stop = stop_pct or _STOP.search(text)
+    if stop_pct:
+        pct = float(stop_pct.group(1)) if stop_pct.group(1) else chinese_number(stop_pct.group(2))
+        if pct:
+            out["stop_pct"] = pct
+    elif stop:
         out["stop_price"] = float(stop.group(1).replace(",", ""))
     spent = [stop.span()] if stop else []
     for m in _SIZE.finditer(text):

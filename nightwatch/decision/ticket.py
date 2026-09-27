@@ -31,6 +31,9 @@ class TradeTicket:
     horizon_hours: float | None = None
     entry_price: float | None = None  # None = current mid
     stop_price: float | None = None
+    # A stop the trader gave as a distance ("3% below"), signed: negative is below entry.
+    # Turned into ``stop_price`` once the entry price is known, then left alone.
+    stop_offset_pct: float | None = None
     target_price: float | None = None
     thesis: str = ""
     invalidation: str = ""
@@ -55,6 +58,8 @@ class TradeTicket:
             raise ValueError("account equity must be positive")
         if self.horizon_kind == HorizonKind.HOURS and (self.horizon_hours is None or self.horizon_hours <= 0):
             raise ValueError("horizon_hours required for an explicit-hours horizon")
+        if self.stop_offset_pct is not None and not 0 < abs(self.stop_offset_pct) < 100:
+            raise ValueError("a stop distance must be between 0% and 100%")
         if self.hedge_ratio is not None and not 0.0 <= self.hedge_ratio <= 1.0:
             raise ValueError("hedge_ratio must be in [0, 1]")
         if self.created_at is not None:
@@ -71,6 +76,14 @@ class TradeTicket:
     @property
     def closing_long(self) -> bool:
         return self.side == Side.LONG
+
+    def with_stop_resolved(self, entry: float) -> TradeTicket:
+        """The same ticket with a distance stop turned into a price at ``entry``."""
+        if self.stop_price is not None or self.stop_offset_pct is None or entry <= 0:
+            return self
+        from dataclasses import replace
+
+        return replace(self, stop_price=round(entry * (1 + self.stop_offset_pct / 100.0), 6))
 
     def stop_distance_pct(self, entry: float) -> float | None:
         if self.stop_price is None or entry <= 0:
