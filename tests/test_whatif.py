@@ -345,3 +345,21 @@ def test_the_chinese_comparison_carries_the_same_numbers():
     for n in ("-3.3%", "-10.6%", "6,200"):
         assert n in en and n in zh
     assert "重新计算" in zh and "建议减仓" in zh
+
+
+def test_leverage_is_a_change_and_survives_a_re_run():
+    """"What about 5x?" used to fall through to the menu; and a leveraged report rebuilt
+    for a what-if used to lose its leverage without a word."""
+    ch = whatif.rule_change("what about 5x?", TICKET, ["TSLA", "NVDA"])
+    assert ch.leverage == 5.0 and not ch.empty and "5x leverage" in ch.describe()
+    base = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=20_000.0)
+    assert ch.apply_to(base).leverage == 5.0
+    off = whatif.rule_change("what about without leverage?", {**TICKET, "leverage": 5.0}, ["TSLA"])
+    assert off.leverage == 1.0 and off.apply_to(ch.apply_to(base)).leverage is None
+    rebuilt = whatif.ticket_from({"ticket": {**TICKET, "leverage": 5.0}})
+    assert rebuilt is not None and rebuilt.leverage == 5.0
+
+
+def test_a_named_weekday_is_a_holding_period():
+    ch = whatif.rule_change("what if I held it until Wednesday?", TICKET, ["TSLA"])
+    assert ch.horizon_kind == "hours" and ch.horizon_hours and 0 < ch.horizon_hours <= 7 * 24

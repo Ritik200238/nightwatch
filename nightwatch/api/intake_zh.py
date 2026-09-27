@@ -33,6 +33,9 @@ _STOP = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9][
 # "止损3%" is a distance, not a price of 3.
 _STOP_PCT = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*[%％]|止损\s*百分之([零〇一二两三四五六七八九十]+)")
 _WEEKEND = re.compile(r"周末|过周末|到周一|下周一")
+# "到周三", "持有到星期四收盘": held to that day's open unless the close is said.
+_WEEKDAY = re.compile(r"(?:到|至)\s*(?:下)?(?:周|星期)([二三四五])(开盘|收盘)?")
+_WEEKDAY_INDEX = {"二": 1, "三": 2, "四": 3, "五": 4}
 # "5倍杠杆", "五倍", "杠杆10倍": a multiple, never a size.
 _LEVERAGE = re.compile(r"([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]+)\s*倍(?:杠杆)?|杠杆\s*([0-9]+(?:\.[0-9]+)?)\s*倍?")
 _NEXT_OPEN = re.compile(r"过夜|隔夜|到开盘|开盘前|今晚")
@@ -133,7 +136,16 @@ def read(text: str, known: set[str]) -> dict[str, object]:
             value *= 1_000
         out["notional_quote"] = value
         break
-    if _WEEKEND.search(text):
+    day = _WEEKDAY.search(text)
+    if day:
+        from nightwatch.api.intake import hours_until_weekday
+
+        h = hours_until_weekday(_WEEKDAY_INDEX[day.group(1)], "close" if day.group(2) == "收盘" else "open")
+        if h:
+            out["horizon_kind"], out["horizon_hours"] = "hours", h
+    if "horizon_kind" in out:
+        pass
+    elif _WEEKEND.search(text):
         out["horizon_kind"] = "through_weekend"
     elif _NEXT_OPEN.search(text):
         out["horizon_kind"] = "next_open"

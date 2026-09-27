@@ -391,3 +391,15 @@ def test_a_leveraged_ticket_gets_a_liquidation_line(seeded_store):  # noqa: F811
     assert "5x" in text and ("liquidat" in text or "perpetual" in text)
     assert any(x.rule == "liquidation" for x in r.gate.rules)
     assert _report(seeded_store, thesis="t", invalidation="i").leverage is None
+
+
+def test_hours_until_a_weekday_open_and_close():
+    from datetime import UTC, datetime
+
+    from nightwatch.api.intake import hours_until_weekday
+
+    sunday_night = datetime(2026, 9, 28, 2, 0, tzinfo=UTC)  # 22:00 ET Sunday
+    assert hours_until_weekday(2, "open", sunday_night) == 59.5  # Wednesday 09:30 ET
+    assert hours_until_weekday(4, "close", sunday_night) == 114.0  # Friday 16:00 ET
+    wed_noon = datetime(2026, 9, 30, 16, 0, tzinfo=UTC)  # Wednesday 12:00 ET, after the open
+    assert hours_until_weekday(2, "open", wed_noon) > 6 * 24  # so next Wednesday

@@ -34,7 +34,7 @@ from nightwatch.decision.ticket import HorizonKind, Side, TradeTicket
 
 # Fields a what-if may touch. Anything outside this set is not a what-if the desk knows
 # how to run, which is a better failure than running something adjacent to the question.
-FIELDS = ("ticker", "side", "horizon_kind", "horizon_hours", "lenses")
+FIELDS = ("ticker", "side", "horizon_kind", "horizon_hours", "lenses", "leverage")
 
 # A question worth spending a model call and a re-run on. Deliberately loose: a false
 # positive costs one parse that comes back empty and falls through to the rules layer,
@@ -81,10 +81,12 @@ class Change:
     horizon_kind: str | None = None
     horizon_hours: float | None = None
     lenses: tuple[str, ...] = ()
+    # "What about 5x?" - leverage on the perpetual. 1.0 means "without leverage".
+    leverage: float | None = None
 
     @property
     def empty(self) -> bool:
-        return not any((self.ticker, self.side, self.horizon_kind, self.horizon_hours, self.lenses))
+        return not any((self.ticker, self.side, self.horizon_kind, self.horizon_hours, self.lenses, self.leverage))
 
     def describe(self) -> str:
         bits = []
@@ -102,6 +104,8 @@ class Change:
             bits.append("held through the weekend")
         if self.lenses:
             bits.append(lens_mod.describe(lens_mod.resolve(list(self.lenses))))
+        if self.leverage:
+            bits.append("no leverage" if self.leverage <= 1 else f"{self.leverage:g}x leverage")
         return ", ".join(bits)
 
     def apply_to(self, ticket: TradeTicket) -> TradeTicket:
@@ -123,6 +127,7 @@ class Change:
             # Names the model invented are dropped rather than guessed at, exactly as
             # they are on the way in from a ticket.
             lenses=tuple(x.name for x in lens_mod.resolve(list(self.lenses))) if self.lenses else ticket.lenses,
+            leverage=(None if self.leverage <= 1 else self.leverage) if self.leverage else ticket.leverage,
         )
 
 
@@ -148,8 +153,11 @@ def rule_change(question: str, ticket: dict, tickers: list[str]) -> Change:
     if intake.asks_to_narrow(question) or re.search(r"\bworse\b|\bbetter\b|更差|更好", question, re.I):
         low = question.lower()
         lenses = tuple(dict.fromkeys(x.name for x in lens_mod.LENSES if any(p in low for p in x.says)))
+    leverage = parsed.leverage if parsed.leverage and parsed.leverage != ticket.get("leverage") else None
+    if leverage is None and ticket.get("leverage") and re.search(r"\b(?:no|without|drop the|remove the)\s+leverage\b|\bunlevered\b|\bas spot\b|不加杠杆|不用杠杆", question, re.I):
+        leverage = 1.0
     return Change(ticker=ticker, side=side, horizon_kind=kind if kind in ("next_open", "window_end", "hours", "through_weekend") else None,
-                  horizon_hours=hours if kind == "hours" else None, lenses=lenses)
+                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage)
 
 
 def ticket_from(report: dict) -> TradeTicket | None:
@@ -179,6 +187,7 @@ def ticket_from(report: dict) -> TradeTicket | None:
             thesis=t.get("thesis") or "",
             invalidation=t.get("invalidation") or "",
             hedge_ratio=t.get("hedge_ratio"),
+            leverage=t.get("leverage"),
             lenses=asked_lenses,
             auto_lens=bool(t.get("auto_lens", True)),
         )
@@ -334,4 +343,10 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
             else:
                 bits.append(f"The verdict is unchanged: {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}.")
 
+    lev = after.get("leverage")
+    if lev and lev.get("liquidation_distance_pct") is not None and not zh:
+        seen = f"; {lev['analog_hits']} of {lev['analog_of']} past moments reached it" if lev.get("analog_of") else ""
+        bits.append(f"At {lev['leverage']:g}x it is liquidated near {lev['liquidation_price']:,.2f}, {lev['liquidation_distance_pct']:.1f}% away{seen}.")
+    elif lev and lev.get("liquidation_distance_pct") is not None:
+        bits.append(f"{lev['leverage']:g} 倍杠杆约在 {lev['liquidation_price']:,.2f} 强平（距现价 {lev['liquidation_distance_pct']:.1f}%）。")
     return Answer("what_if", join.join(bits), ("analog cohort", "gate and sizing", "re-run"))

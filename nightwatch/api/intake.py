@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
 
 from nightwatch.decision.ticket import HorizonKind, TradeTicket
@@ -63,6 +64,10 @@ _DAYS = re.compile(r"\b([\d.]+)\s*(?:days?|d)\b", re.I)
 _NEXT_OPEN = re.compile(r"\bovernight\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
 # "Through the weekend" said on a Thursday is until Monday's open, not Thursday's.
 _WEEKEND = re.compile(r"\b(?:through|over|across|for|into)\s+the\s+weekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b|\bweekend\s+hold\b", re.I)
+# "until Wednesday", "through Thursday's close": a named day, held to its open unless the
+# close is said. Monday is the weekend rule's, which already means the open after it.
+_WEEKDAY = re.compile(r"\b(?:until|till|to|through|into|by)\s+(?:next\s+)?(tues|wednes|thurs|fri)day(?:'s)?(?:\s+(open|close))?", re.I)
+_DAY_INDEX = {"tues": 1, "wednes": 2, "thurs": 3, "fri": 4}
 _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bsession\s+end\b", re.I)
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
@@ -127,6 +132,28 @@ def horizon_fields(kind: str | None, hours: float | None) -> tuple[HorizonKind, 
     if kind in ("next_open", "window_end", "hours"):
         return HorizonKind(kind), hours, None
     return HorizonKind.NEXT_OPEN, hours, None
+
+
+def hours_until_weekday(weekday: int, which: str = "open", now: datetime | None = None) -> float | None:
+    """Hours from now to the next regular open (or close) on a named weekday, 0=Monday.
+
+    A holiday on that day moves it to the next trading day, which is when the position
+    could actually be closed at the regular session.
+    """
+    from nightwatch.time_utils import ET, _regular_bounds, is_trading_day, next_trading_day, utc_now
+
+    now = now or utc_now()
+    local = now.astimezone(ET)
+    ahead = (weekday - local.weekday()) % 7
+    for extra in (0, 7):
+        d = local.date() + timedelta(days=ahead + extra)
+        if not is_trading_day(d):
+            d = next_trading_day(d)
+        open_utc, close_utc = _regular_bounds(d)
+        at = close_utc if which == "close" else open_utc
+        if at > now:
+            return round((at - now).total_seconds() / 3600.0, 2)
+    return None
 
 
 def _money(groups: tuple) -> float | None:
@@ -217,7 +244,10 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
                 break
 
     hours, days = _HOURS.search(text), _DAYS.search(text)
-    if _WEEKEND.search(text):
+    day = _WEEKDAY.search(text)
+    if day and (h := hours_until_weekday(_DAY_INDEX[day.group(1).lower()], (day.group(2) or "open").lower())):
+        out.horizon_kind, out.horizon_hours = "hours", h
+    elif _WEEKEND.search(text):
         out.horizon_kind = THROUGH_WEEKEND
     elif _NEXT_OPEN.search(text):
         out.horizon_kind = "next_open"
