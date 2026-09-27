@@ -196,6 +196,83 @@ function LiquidationNote({ report }: { report: Report }) {
   );
 }
 
+/** The stated reason, checked against the calendar. */
+function PremiseNote({ report }: { report: Report }) {
+  if (!report.premise?.length) return null;
+  return (
+    <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
+      <span className="font-medium text-foreground">Check your reason: </span>
+      <span className="text-muted-foreground">{report.premise.join(" ")}</span>
+    </div>
+  );
+}
+
+/** How this trade loses money: each way it fails, what sets it off, why it costs what it
+ *  does, and how often it happened. Written by rules from the report's own numbers; a
+ *  model is never asked to invent a causal story. */
+function FailureModes({ report, openAll }: { report: Report; openAll?: boolean }) {
+  const modes = report.failure_modes ?? [];
+  if (!modes.length) return null;
+  const worst = modes[0];
+  return (
+    <Section
+      openAll={openAll}
+      collapsible
+      defaultOpen
+      title="How this trade loses money"
+      subtitle="Each way it fails, what sets it off, why it costs what it does, and how often it happened. Worst first."
+      summary={`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : ""}`}
+    >
+      <ol className="space-y-3">
+        {modes.map((m) => (
+          <li key={m.key} className="rounded-lg border border-border px-3 py-2">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="font-medium">{m.title}</span>
+              <span className="tabular text-sm font-medium text-status-critical">
+                {m.loss_quote != null ? `${fmtUsd(m.loss_quote)} USDT` : "—"}
+                {m.loss_pct != null ? <span className="text-muted-foreground"> · {fmtPct(m.loss_pct, 1)}</span> : null}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              <span className="text-foreground">If: </span>
+              {m.trigger}. <span className="text-foreground">Then: </span>
+              {m.mechanism}.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              How often: {m.likelihood} · from {m.source}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </Section>
+  );
+}
+
+/** What the verdict assumes. Caveats are the ones that could make the numbers wrong. */
+function Assumptions({ report, openAll }: { report: Report; openAll?: boolean }) {
+  const items = report.assumptions ?? [];
+  if (!items.length) return null;
+  const caveats = items.filter((a) => a.kind === "caveat").length;
+  return (
+    <Section
+      openAll={openAll}
+      collapsible
+      title="What this answer assumes"
+      subtitle="Every input the verdict rests on. The flagged ones are where the numbers could be wrong."
+      summary={`${items.length} assumptions · ${caveats} could change the answer`}
+    >
+      <ul className="space-y-1.5 text-sm">
+        {items.map((a, i) => (
+          <li key={`${a.topic}-${i}`} className="flex gap-2">
+            <span className={`mt-0.5 shrink-0 text-xs font-medium ${a.kind === "caveat" ? "text-status-warning" : "text-muted-foreground"}`}>{a.kind === "caveat" ? "!" : "–"}</span>
+            <span className={a.kind === "caveat" ? "text-foreground" : "text-muted-foreground"}>{a.text}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
 function DecisionCard({ report }: { report: Report }) {
   const v = report.verdict;
   const t = report.ticket;
@@ -259,6 +336,7 @@ function DecisionCard({ report }: { report: Report }) {
       ) : null}
 
       <LiquidationNote report={report} />
+      <PremiseNote report={report} />
       <PlanNote report={report} />
       <ActOnIt report={report} />
       {/* A what-if was never journalled, so there is no forecast to mark taken and
@@ -454,6 +532,8 @@ export function ReportView({ report, onRerun }: { report: Report; onRerun?: (pat
           open before the summary stops being misleading. */}
       <LensNote report={report} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} />
+      <FailureModes report={report} openAll={openAll} />
+      <Assumptions report={report} openAll={openAll} />
       <StreetSection report={report} openAll={openAll} />
 
       <div className="flex items-center justify-between gap-3 px-1">

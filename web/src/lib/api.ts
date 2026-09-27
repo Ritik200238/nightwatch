@@ -722,6 +722,18 @@ export interface StreetView {
   token_vs_close_bps?: number | null;
 }
 
+export interface FailureMode {
+  key: string;
+  title: string;
+  trigger: string;
+  mechanism: string;
+  loss_quote: number | null;
+  loss_pct: number | null;
+  likelihood: string;
+  source: string;
+  short: string;
+}
+
 export interface LeverageView {
   leverage: number;
   perp_symbol: string | null;
@@ -809,6 +821,12 @@ export interface Report {
   entry_plan?: EntryPlan | null;
   /** A leveraged ticket's liquidation price and how often history reached it. */
   leverage?: LeverageView | null;
+  /** What the verdict assumes, written by rules from the report's own fields. */
+  assumptions?: { topic: string; text: string; kind: "fact" | "caveat" }[];
+  /** How this trade loses money, worst first: trigger, mechanism, cost and how often. */
+  failure_modes?: FailureMode[];
+  /** Where the stated reason depends on an event the data can date, and does not match. */
+  premise?: string[];
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
