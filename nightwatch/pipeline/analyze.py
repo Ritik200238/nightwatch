@@ -426,6 +426,12 @@ class AnalysisReport:
     entry_plan: dict | None = None
     # A leveraged ticket's liquidation price and how often history reached it.
     leverage: dict | None = None
+    # What the verdict assumes, how this trade loses money (trigger → mechanism → cost →
+    # how often), and where the stated reason depends on an event the data can date.
+    # All written by rules from the report's own fields (nightwatch.decision.story).
+    assumptions: list[dict] = field(default_factory=list)
+    failure_modes: list[dict] = field(default_factory=list)
+    premise: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -684,6 +690,14 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         report.second_opinion = build_second_opinion(report)
     except Exception:  # noqa: BLE001
         log.exception("second opinion failed")
+    try:
+        from nightwatch.decision import story
+
+        report.assumptions = [x.__dict__ for x in story.assumptions(report)]
+        report.failure_modes = [x.to_dict() for x in story.failure_modes(report)]
+        report.premise = story.premise(report)
+    except Exception:  # noqa: BLE001 - an explanation must never break a verdict
+        log.exception("assumptions / failure modes failed")
 
     if ctx.journal is not None and record:
         try:

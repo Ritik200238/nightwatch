@@ -321,6 +321,13 @@ def _pct(v: float, digits: int = 1) -> str:
     return sign + text
 
 
+# Failure-mode names in Chinese; the mechanism sentences stay in the English report.
+FAILURE_ZH = {
+    "gap_bad": "开盘跳空（二十分之一的情形）", "gap_worst": "开盘严重跳空（百分之一的情形）", "earnings": "财报后不利跳空",
+    "basis": "代币偏离公允价值", "liquidity": "平仓时盘口变薄", "halt": "24 小时无法平仓", "vol": "波动率骤升",
+    "stop_jumped": "止损被跳空越过", "liquidation": "被强制平仓", "drift": "价格缓慢走弱",
+}
+
 # The verdict names in Chinese, for a trader who wrote in Chinese. The numbers are the
 # same numbers, formatted the same way; only the words around them change.
 VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
@@ -545,6 +552,21 @@ def brief(report: Any, lang: str = "en") -> str:
             lines.append("未通过的检查：" + "、".join(failed) + "。")
     elif reasons:
         lines.append("Why: " + "; ".join(reasons[:3]) + ".")
+    premise = getattr(report, "premise", None) or []
+    if premise and not zh:
+        lines.append("Check your reason: " + " ".join(premise))
+    modes = getattr(report, "failure_modes", None) or []
+    if modes and not zh:
+        top = [m for m in modes if m.get("loss_quote") is not None][:2]
+        if top:
+            lines.append("How this loses money: " + " ".join(
+                f"{m['title']} ({m.get('short') or m['mechanism']}): about {m['loss_quote']:,.0f} USDT; {m['likelihood']}."
+                for m in top
+            ))
+    elif modes and zh:
+        top = [m for m in modes if m.get("loss_quote") is not None][:2]
+        if top:
+            lines.append("主要亏损方式：" + "；".join(f"{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT" for m in top) + "。")
     if report.second_opinion and report.second_opinion.against:
         against = report.second_opinion.against[0].text
         # Often the case against is the worst stress preset again, already said above; and
