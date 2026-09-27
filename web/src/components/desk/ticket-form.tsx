@@ -15,7 +15,7 @@ interface Props {
   initial?: Partial<TicketInput>;
 }
 
-type Errors = Partial<Record<"ticker" | "notional" | "equity" | "stop" | "hours", string>>;
+type Errors = Partial<Record<"ticker" | "notional" | "equity" | "stop" | "hours" | "leverage", string>>;
 
 interface Menu {
   lenses: Lens[];
@@ -143,6 +143,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
   const [horizon, setHorizon] = useState<HorizonKind>(initial?.horizon_kind ?? "next_open");
   const [hours, setHours] = useState("");
   const [stop, setStop] = useState(initial?.stop_price ? String(initial.stop_price) : "");
+  const [leverage, setLeverage] = useState(initial?.leverage ? String(initial.leverage) : "");
   const [thesis, setThesis] = useState(initial?.thesis ?? "");
   const [invalidation, setInvalidation] = useState(initial?.invalidation ?? "");
   const [lenses, setLenses] = useState<string[]>(initial?.lenses ?? []);
@@ -156,11 +157,13 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
     const eq = equity.trim() ? Number(equity) : null;
     const st = stop.trim() ? Number(stop) : null;
     const hrs = hours.trim() ? Number(hours) : null;
+    const lev = leverage.trim() ? Number(leverage) : null;
     if (!ticker) e.ticker = "Pick a token.";
     if (!(n > 0)) e.notional = "Enter a size in USDT.";
     if (eq != null && !(eq > 0)) e.equity = "Equity must be positive.";
     if (st != null && !(st > 0)) e.stop = "Stop must be a price.";
     if (horizon === "hours" && !(hrs && hrs > 0)) e.hours = "Enter how many hours.";
+    if (lev != null && !(lev >= 1 && lev <= 125)) e.leverage = "Leverage is between 1x and 125x.";
     setErrors(e);
     if (Object.keys(e).length) return null;
     return {
@@ -171,6 +174,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
       horizon_kind: horizon,
       horizon_hours: horizon === "hours" ? hrs : null,
       stop_price: st,
+      leverage: lev != null && lev > 1 ? lev : null,
       thesis,
       invalidation,
       lenses,
@@ -259,6 +263,11 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
           <Input id="stop2" type="number" inputMode="decimal" min={0} step="any" value={stop} onChange={(e) => setStop(e.target.value)} autoComplete="off" />
         </div>
       ) : null}
+      <div className="space-y-1">
+        <Label htmlFor="leverage">Leverage (optional)</Label>
+        <Input id="leverage" type="number" inputMode="decimal" min={1} max={125} step="any" value={leverage} onChange={(e) => setLeverage(e.target.value)} aria-invalid={!!errors.leverage} autoComplete="off" placeholder="e.g. 5 - held on the Bitget perpetual" />
+        {errors.leverage ? <p className="text-xs text-destructive">{errors.leverage}</p> : null}
+      </div>
       <div className="space-y-1">
         <div className="flex items-baseline justify-between gap-2">
           <Label htmlFor="thesis">Why this trade</Label>

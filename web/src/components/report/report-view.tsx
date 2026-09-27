@@ -161,6 +161,41 @@ function PlanNote({ report }: { report: Report }) {
   );
 }
 
+/** Where the exchange closes a leveraged position, and how often history got there.
+ *
+ *  A liquidation is not a bad night that can be ridden back: the margin is gone. So it
+ *  sits next to the verdict, not in a panel further down.
+ */
+function LiquidationNote({ report }: { report: Report }) {
+  const l = report.leverage;
+  if (!l) return null;
+  let line: string;
+  let bad = true;
+  if (!l.perp_symbol) {
+    line = `Bitget lists no perpetual for ${report.ticket.ticker}, so ${l.leverage}x is not available; everything below is the spot trade.`;
+  } else if (!l.allowed) {
+    line = `${l.leverage}x is more than the ${l.max_leverage_at_size}x Bitget allows at this size.`;
+  } else if (l.liquidation_price == null || l.liquidation_distance_pct == null) {
+    line = `${l.leverage}x noted, but with no entry price the liquidation level is unknown.`;
+  } else {
+    const seen: string[] = [];
+    if (l.analog_of) seen.push(`${l.analog_hits} of ${l.analog_of} past moments like this reached it inside the hold`);
+    if (l.mc_share != null) seen.push(`${fmtRatio(l.mc_share)} of simulated paths do`);
+    if (l.presets_hit.length) seen.push(`${l.presets_hit.length} stress preset${l.presets_hit.length > 1 ? "s" : ""} liquidate it`);
+    line = `${l.leverage}x: about ${fmtUsd(l.margin_quote)} USDT of margin, liquidated near ${fmtPrice(l.liquidation_price)} (${l.liquidation_distance_pct.toFixed(1)}% away). ${seen.join("; ")}.`;
+    bad = (l.analog_hits ?? 0) > 0 || l.presets_hit.length > 0 || (l.mc_share ?? 0) >= 0.05;
+  }
+  return (
+    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${bad ? "border-status-critical/40 bg-status-critical/5" : "border-border bg-muted/30"}`}>
+      <span className="font-medium text-foreground">Liquidation: </span>
+      <span className="text-muted-foreground">
+        {line}
+        {l.tiers_source === "assumed" ? ` Bitget's margin tiers were unavailable, so ${(l.mmr * 100).toFixed(1)}% maintenance margin is assumed.` : ` Maintenance margin ${(l.mmr * 100).toFixed(2)}% from Bitget's tier for this size.`}
+      </span>
+    </div>
+  );
+}
+
 function DecisionCard({ report }: { report: Report }) {
   const v = report.verdict;
   const t = report.ticket;
@@ -223,6 +258,7 @@ function DecisionCard({ report }: { report: Report }) {
         </p>
       ) : null}
 
+      <LiquidationNote report={report} />
       <PlanNote report={report} />
       <ActOnIt report={report} />
       {/* A what-if was never journalled, so there is no forecast to mark taken and

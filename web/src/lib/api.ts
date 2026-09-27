@@ -40,6 +40,8 @@ export interface TicketInput {
   thesis: string;
   invalidation: string;
   hedge_ratio?: number | null;
+  /** Leverage on the stock's Bitget perpetual; 1 or null is a plain token position. */
+  leverage?: number | null;
   as_of?: string | null;
   record?: boolean;
   open_positions?: { ticker: string; side: Side; notional_quote: number }[];
@@ -720,6 +722,23 @@ export interface StreetView {
   token_vs_close_bps?: number | null;
 }
 
+export interface LeverageView {
+  leverage: number;
+  perp_symbol: string | null;
+  margin_quote: number;
+  liquidation_price: number | null;
+  liquidation_distance_pct: number | null;
+  mmr: number;
+  max_leverage_at_size: number | null;
+  tiers_source: "bitget" | "assumed";
+  allowed: boolean;
+  analog_hits: number | null;
+  analog_of: number | null;
+  presets_hit: string[];
+  mc_share: number | null;
+  notes: string[];
+}
+
 export interface Report {
   ticket: TicketInput & { created_at?: string | null };
   as_of: string;
@@ -788,6 +807,8 @@ export interface Report {
   plan_check?: PlanCheck | null;
   /** How to get into the recommended size on the live book. */
   entry_plan?: EntryPlan | null;
+  /** A leveraged ticket's liquidation price and how often history reached it. */
+  leverage?: LeverageView | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
