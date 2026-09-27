@@ -299,3 +299,56 @@ def test_chinese_questions_are_recognised_and_answered_in_chinese():
     g = zh.answer(r, "为什么需要复核？")
     assert g.kind == "gate" and "书面计划" in g.text and "要通过复核" in g.text
     assert zh.answer_or_menu(r, "天气如何").kind == "menu"
+
+
+# --- the questions a judge asked that used to get the menu ---------------------------------
+
+
+def test_a_named_shock_is_priced_from_the_position(report):
+    """"What if TSLA gaps down 10% at the open?" returned "I could not find that"."""
+    got = answer(report, "what if TSLA gaps down 10% at the open?")
+    assert got is not None and got.kind == "shock"
+    notional = report["ticket"]["notional_quote"]
+    assert f"{notional * 0.10:,.0f}" in got.text  # the loss is the position's own arithmetic
+    up = answer(report, "what if it rallies 5%?")
+    assert up is not None and up.kind == "shock" and "makes about" in up.text
+
+
+def test_a_shock_through_the_stop_says_the_stop_is_jumped(report):
+    r = copy.deepcopy(report)
+    entry = r["snapshot"]["prices"]["spot_close"]
+    r["ticket"]["stop_price"] = entry * 0.97
+    r.setdefault("analog", {}).setdefault("paths", {})["stop_pct"] = -3.0
+    got = answer(r, "what if it gaps down 10%?")
+    assert got is not None and "through your stop" in got.text
+
+
+def test_halving_and_doubling_are_sizes(report):
+    requested = report["ticket"]["notional_quote"]
+    half = answer(report, "what if I halve it?")
+    double = answer(report, "double it?")
+    assert half is not None and half.kind == "size" and double is not None and double.kind == "size"
+    assert "Nothing cuts" not in half.text
+    assert f"{requested / 2:,.0f}" in half.text or "nearest size" in half.text
+
+
+def test_a_bare_why_explains_the_verdict(report):
+    got = answer(report, "why?")
+    assert got is not None and got.kind == "why"
+    assert report["verdict"]["verdict"].replace("_", " ") in got.text
+
+
+def test_a_question_about_the_reason_gets_the_calendar(report):
+    got = answer(report, "is my thesis supported? when were earnings?")
+    assert got is not None and got.kind == "premise" and "earnings" in got.text.lower()
+
+
+def test_what_could_go_wrong_leads_with_the_failure_modes(report):
+    r = copy.deepcopy(report)
+    r["failure_modes"] = [{
+        "key": "gap_worst", "title": "A severe gap at the reopen", "trigger": "News lands while the US market is shut",
+        "mechanism": "the stock reopens at a new price", "loss_quote": -1234.0, "loss_pct": -6.2,
+        "likelihood": "1% of 400 past closed windows were worse", "source": "stress presets", "short": "x",
+    }]
+    got = answer(r, "what could go wrong?")
+    assert got is not None and "A severe gap at the reopen" in got.text and "1,234" in got.text

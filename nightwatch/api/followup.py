@@ -96,6 +96,15 @@ def _a_size(r: dict, q: str) -> Answer | None:
     sizes = sen.get("sizes") or []
     requested = _ticket(r).get("notional_quote")
     asked = _money_in(q)
+    # "halve it", "double it", "three times the size": a multiple of what is on screen.
+    factor = _SIZE_FACTOR.search(q)
+    if requested and factor and (asked is None or asked < 100):
+        word = factor.group(1).lower()
+        mult = {"halve": 0.5, "half": 0.5, "double": 2.0, "twice": 2.0, "triple": 3.0}.get(word)
+        if mult is None and factor.group(2):
+            mult = float(factor.group(2))
+        if mult:
+            asked = requested * mult
 
     # "what if I do 40k" - the sweep already ran the whole gate at that size.
     if asked and sizes and (requested is None or abs(asked - requested) > 1):
@@ -133,6 +142,9 @@ def _a_size(r: dict, q: str) -> Answer | None:
     if sen.get("max_go_notional") is not None:
         bits.append(f"Across the whole sweep the verdict stays a go up to {_usd(sen['max_go_notional'])}.")
     return Answer("size", " ".join(bits), ("sizing caps", "sensitivity sweep")) if bits else None
+
+
+_SIZE_FACTOR = re.compile(r"\b(halve|half|double|twice|triple)\b|\b(\d+(?:\.\d+)?)\s*(?:x|times)\s+(?:the\s+)?(?:size|as much)\b", re.I)
 
 
 def _a_stop(r: dict, q: str) -> Answer | None:
@@ -179,6 +191,15 @@ def _p5(r: dict) -> float | None:
 
 
 def _a_worst(r: dict, _q: str) -> Answer | None:
+    modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
+    if modes:
+        bits = ["The ways this loses money, worst first:"]
+        for i, m in enumerate(modes[:3], 1):
+            bits.append(f"{i}. {m['title']} - {m['trigger'].rstrip('.')}; {m['mechanism']}. About {_usd(m['loss_quote'])} ({_pct(m.get('loss_pct'))}); {m['likelihood']}.")
+        mc = (r.get("stress") or {}).get("monte_carlo")
+        if mc:
+            bits.append(f"In the simulation, one path in twenty ends below {_pct(mc.get('p5'))}.")
+        return Answer("worst", " ".join(bits), ("failure modes", "stress presets", "Monte Carlo"))
     st = r.get("stress") or {}
     presets, impacts = st.get("presets") or [], st.get("impacts") or []
     rows = [(p, i) for p, i in zip(presets, impacts, strict=False) if i.get("total_pnl_quote") is not None]
@@ -368,6 +389,110 @@ def _a_now(r: dict, _q: str) -> Answer | None:
 # ------------------------------------------------------------------------ the routing
 
 # Ordered: the first pattern that matches wins, so the specific ones come first.
+# "what if it gaps down 10%", "TSLA drops 8% at the open", "a 5% gap up": a price shock the
+# trader names. Answered from the report, because the arithmetic is the position's and the
+# comparison is against what the presets measured, not a new search.
+SHOCK = re.compile(
+    r"(?:\b(?:gap|gaps|gapped|drop|drops|dropped|fall|falls|fell|crash|crashes|dump|dumps|tank|tanks|move|moves|goes|go|rally|rallies|jump|jumps|spike|spikes|pump|pumps|rise|rises|up|down)\b"
+    r"[^.?!%]{0,25}?(\d+(?:\.\d+)?)\s*(?:%|per ?cent))"
+    r"|(?:(\d+(?:\.\d+)?)\s*(?:%|per ?cent)\s*(?:gap|drop|fall|move|crash|rally|jump|spike)?\s*(?:up|down|higher|lower)?)(?=[^.?!]*\b(?:gap|drop|fall|crash|move|rally|jump|spike|open)\b)"
+    r"|(?:跌|涨|跳空|暴跌|暴涨)[^0-9]{0,6}(\d+(?:\.\d+)?)\s*[%％]",
+    re.I,
+)
+_UP = re.compile(r"\b(?:up|rally|rallies|jump|jumps|spike|spikes|pump|pumps|rise|rises|higher|gap up|gaps up)\b|涨|暴涨", re.I)
+
+
+def _a_shock(r: dict, q: str) -> Answer | None:
+    m = SHOCK.search(q)
+    if not m:
+        return None
+    size = float(next(g for g in m.groups() if g))
+    if not 0 < size < 100:
+        return None
+    t = _ticket(r)
+    notional = t.get("notional_quote")
+    if not notional:
+        return None
+    long_ = (t.get("side") or "long") == "long"
+    up = bool(_UP.search(q))
+    move = size if up else -size  # the stock's move
+    pnl_pct = move if long_ else -move  # the position's
+    exit_bps = ((r.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps")
+    pnl = notional * pnl_pct / 100.0
+    cost = notional * (exit_bps or 0) / 10_000.0
+    bits = [f"A {size:g}% move {'up' if up else 'down'} {'makes' if pnl >= 0 else 'loses'} about {_usd(abs(pnl))} on {_usd(notional)} {'long' if long_ else 'short'}"
+            + (f", and getting out costs about {_usd(cost)} more on today's book" if exit_bps is not None else "") + "."]
+    if pnl_pct < 0:
+        stop = t.get("stop_price")
+        paths = ((r.get("analog") or {}).get("paths") or {})
+        stop_pct = paths.get("stop_pct")
+        if stop and stop_pct is not None and abs(stop_pct) < size:
+            bits.append(f"It goes straight through your stop at {stop:,.2f} ({abs(stop_pct):.1f}% away): if it happens as a gap at the open, the stop fills after the gap, not at your price.")
+        lev = r.get("leverage")
+        if lev and lev.get("liquidation_distance_pct") is not None:
+            d = lev["liquidation_distance_pct"]
+            bits.append(f"At {lev['leverage']:g}x that {'liquidates the position - the whole ' + _usd(lev['margin_quote']) + ' of margin' if size >= d else f'stays short of liquidation, {d:.1f}% away'}.")
+        # How rare, against what this token's own closed windows did.
+        presets = {p["id"]: p for p in ((r.get("stress") or {}).get("presets") or [])}
+        p1, p5 = presets.get("closed_window_gap_p1"), presets.get("closed_window_gap_p5")
+        if p1 and abs(p1.get("price_move_pct") or 0) < size:
+            bits.append(f"That is bigger than this token's 1-in-100 closed-market move ({_pct(p1['price_move_pct'])}), so it is rarer than one window in a hundred here.")
+        elif p5 and abs(p5.get("price_move_pct") or 0) < size:
+            bits.append(f"For scale: one closed window in twenty here moved worse than {_pct(p5['price_move_pct'])}, one in a hundred worse than {_pct((p1 or {}).get('price_move_pct'))}.")
+        equity = t.get("account_equity_quote")
+        if equity:
+            bits.append(f"That is {abs(pnl + (-cost)) / equity * 100:.2f}% of your account.")
+    return Answer("shock", " ".join(bits), ("position arithmetic", "order book", "stress presets"))
+
+
+def _a_why(r: dict, _q: str) -> Answer | None:
+    v = r.get("verdict") or {}
+    if not v.get("verdict"):
+        return None
+    bits = [f"The verdict is {v['verdict'].replace('_', ' ')}"
+            + (f" at {_usd(v.get('recommended_notional'))}" if v.get("recommended_notional") is not None else "") + "."]
+    failed = [x for x in ((r.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
+    if failed:
+        bits.append("Because: " + "; ".join(f"{x['rule'].replace('_', ' ')} - {x['reason']}" for x in failed[:3]) + ".")
+    cap = (r.get("sizing") or {}).get("binding_cap")
+    caps = {c["name"]: c for c in ((r.get("sizing") or {}).get("caps") or [])}
+    requested = _ticket(r).get("notional_quote")
+    if cap and cap in caps and caps[cap].get("notional") is not None and requested and caps[cap]["notional"] < requested - 1:
+        bits.append(f"The size is held by the {cap.replace('_', ' ')} cap: {caps[cap]['detail']}.")
+    modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
+    if modes:
+        bits.append(f"The worst way it loses: {modes[0]['title'].lower()}, about {_usd(modes[0]['loss_quote'])} ({modes[0]['likelihood']}).")
+    for p in r.get("premise") or []:
+        bits.append(p)
+    return Answer("why", " ".join(bits), ("discipline gate", "sizing caps", "failure modes"))
+
+
+def _a_premise(r: dict, _q: str) -> Answer | None:
+    f = ((r.get("snapshot") or {}).get("features") or {})
+    horizon = r.get("horizon_h") or 0
+
+    def when(h: float | None, past: bool) -> str:
+        if h is None:
+            return "not known"
+        if h >= 720:
+            return "more than 30 days " + ("ago" if past else "away")
+        span = f"{h / 24:.0f} days" if h >= 48 else f"{h:.0f} hours"
+        return f"{span} ago" if past else f"in {span}"
+
+    bits = []
+    premise = r.get("premise") or []
+    if premise:
+        bits += premise
+    elif (_ticket(r).get("thesis") or "").strip():
+        bits.append("Nothing in your reason depends on an event the data can date against this hold.")
+    if not any("earnings" in x for x in premise):
+        bits.append(f"Last earnings report: {when(f.get('hours_since_earnings'), True)}; next: {when(f.get('hours_to_earnings'), False)}"
+                    + (" - inside this hold, so the earnings-gap presets are included." if f.get("hours_to_earnings") is not None and f["hours_to_earnings"] <= horizon else "."))
+    if f.get("hours_to_fomc") is not None:
+        bits.append(f"Next FOMC decision: {when(f.get('hours_to_fomc'), False)}.")
+    return Answer("premise", " ".join(bits), ("event calendar", "premise check"))
+
+
 def _dollars(v: float | None) -> str:
     """Stock prices and insider values are in dollars, not the USDT the positions are in."""
     return "-" if v is None else f"${v:,.0f}"
@@ -406,6 +531,8 @@ def _a_street(r: dict, q: str) -> Answer | None:
 
 
 ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
+    ("shock", SHOCK, _a_shock),
+    ("premise", re.compile(r"\bthesis\b|\bmy reason\b|\bsupported\b|\bwhen (?:is|are|were|was|did)\b.*\b(?:earnings|report|results|fomc|fed)\b|\bearnings (?:date|when)\b|\bnext earnings\b|财报什么时候|逻辑成立", re.I), _a_premise),
     ("street", re.compile(r"\banalysts?\b|\bratings?\b|\bprice targets?\b|\bupgrade\w*\b|\bdowngrade\w*\b|\binsiders?\b|\bthe street\b|\bwall street\b|\bfear\b|\bgreed\b|\bsentiment\b|\blive price\b", re.I), _a_street),
     ("stop", re.compile(r"\bstops?\b|\bstop[- ]loss\b|\btighter\b|\bwider\b", re.I), _a_stop),
     ("size", re.compile(r"\bbigger\b|\bsmaller\b|\bmore\b|\bless\b|\bsize\b|\bwhy not\b.*\b(bigger|more)\b|\bcap\b|\bwhat if i (do|did|put|go|went|buy|bought)\b|\bdouble\b|\bhalve\b", re.I), _a_size),
@@ -417,6 +544,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
     ("hedge", re.compile(r"\bhedg\w*\b|\bperp\b|\bdelta[- ]neutral\b|\bprotect\b", re.I), _a_hedge),
     ("gate", re.compile(r"\bwhy (not|no|review|did you)\b|\brefus\w*\b|\brule\b|\bgate\b|\bcheck\w*\b|\bblock\w*\b|\breason\b", re.I), _a_gate),
     ("regime", re.compile(r"\bregime\b|\bkind of market\b|\bmarket like\b|\bconditions?\b|\bvolatil\w*\b", re.I), _a_regime),
+    ("why", re.compile(r"^\s*(?:but\s+|so\s+)?why\b(?!\s+(?:not|no)\b.*\b(?:bigger|more)\b)|\bexplain (?:the |this |that )?(?:verdict|decision|call)\b|\bwhy (?:this|that) (?:verdict|call|answer)\b", re.I), _a_why),
     ("moments", re.compile(r"\bwhich (moments?|days?|hours?)\b|\bshow me\b|\bexamples?\b|\bmatched?\b|\bsimilar (moments?|days?)\b", re.I), _a_moments),
     ("history", re.compile(r"\bhistor\w*\b|\bpast\b|\banalog\w*\b|\bdistribution\b|\bhow many\b|\bsample\b|\bsignificant\b|\bmedian\b|\bodds\b|\bchance\b", re.I), _a_history),
     ("now", re.compile(r"\bright now\b|\bcurrent\b|\bprice\b|\bbasis\b|\bfair value\b|\bwhat.?s happening\b", re.I), _a_now),

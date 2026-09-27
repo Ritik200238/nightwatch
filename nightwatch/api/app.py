@@ -270,6 +270,11 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     # Rules first: the common changes are shapes the intake rules already read, in
     # milliseconds. The model, which takes 10-60 s, is asked only when they find none.
     change = whatif.rule_change(question, context.get("ticket") or {}, tickers)
+    # "What if it gaps down 10%" and "what if I halve it" are not a different report; the
+    # one on screen answers them in milliseconds. Asking the model to name a change for
+    # them costs seconds and can come back as something adjacent, like "short instead".
+    if change.empty and (followup.SHOCK.search(question) or followup._SIZE_FACTOR.search(question)):
+        return None
     provider = None
     if change.empty:
         provider = select()
