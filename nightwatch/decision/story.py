@@ -182,7 +182,14 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
         if s is None or i is None or i.total_pnl_quote is None:
             return
         trig, how = _MECH[mech]
+        recent = (s.calibration or {}).get("recent") if isinstance(s.calibration, dict) else None
+        if recent:
+            how += f"; this company's last {len(recent)} reactions were " + ", ".join(f"{x:+.1f}%" for x in recent)
         out.append(FailureMode(key, title, trig, how, i.total_pnl_quote, i.total_pct_of_notional, s.probability_note, "stress presets", _SHORT[mech], _preset_chance(sid)))
+
+    # This trade's own chains first: what history did after the trader's own line broke,
+    # the token snapping back to the stock, and this company's actual earnings reactions.
+    out.extend(_own_chains(r))
 
     from_preset("gap_bad", "closed_window_gap_p5", "A bad gap at the reopen", "gap")
     from_preset("gap_worst", "closed_window_gap_p1", "A severe gap at the reopen", "gap")
@@ -259,6 +266,46 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
         ))
 
     return _rank(_cap_at_margin(out, lev))
+
+
+def _own_chains(r: Any) -> list[FailureMode]:  # noqa: ANN401
+    """Consequences measured for this trade, not templates."""
+    t = r.ticket
+    out: list[FailureMode] = []
+    plan = getattr(r, "plan_check", None) or {}
+    paths = r.analog.paths if r.analog else None
+    if plan.get("kind") in ("level", "moving_average", "move") and plan.get("crossed") is not None and plan.get("of") and plan.get("distance_pct") is not None and not plan.get("already"):
+        crossed, of, d = int(plan["crossed"]), int(plan["of"]), abs(float(plan["distance_pct"]))
+        what = f"'{plan.get('invalidation')}'" if plan.get("invalidation") else "your invalidation"
+        mech = f"{crossed} of {of} past moments like this crossed it inside the hold"
+        if t.stop_price and paths is not None and paths.stop_pct is not None and abs(paths.stop_pct) > d and paths.stopped is not None:
+            back = max(crossed - paths.stopped, 0)
+            mech += f"; of those, {paths.stopped} went on to your stop and {back} turned back before it"
+        out.append(FailureMode(
+            "invalidation", f"Your own line breaks: {what}",
+            f"The price reaches your invalidation, {d:.1f}% away",
+            mech + " - so the idea is proven wrong on your own terms",
+            -d / 100.0 * t.notional_quote, -d,
+            f"{crossed} of {of} past moments like this ({crossed / of:.0%})", "your plan + analogs",
+            f"{crossed} of {of} similar moments crossed your line", crossed / of,
+        ))
+    street = getattr(r, "street", None) or {}
+    gap = street.get("token_vs_live_bps")
+    if gap is not None and abs(gap) >= CONVERGE_MIN_BPS and ((gap > 0) == t.closing_long):
+        out.append(FailureMode(
+            "convergence", "The token snaps back to the stock",
+            f"The token trades {abs(gap):.0f} bps {'above' if gap > 0 else 'below'} the stock's live price now",
+            "at the next open the stock's own price sets the level again and the token is pulled to it, "
+            f"so a {'long' if t.closing_long else 'short'} gives that gap up",
+            -abs(gap) / 1e4 * t.notional_quote, -abs(gap) / 100.0,
+            "the gap to the live price is measured now; how fully it closes is not", "Bitget live quote",
+            "the token's premium to the stock closes at the open", None,
+        ))
+    return out
+
+
+# A token-vs-stock gap smaller than this is inside ordinary spread and fee noise.
+CONVERGE_MIN_BPS = 15.0
 
 
 def _preset_chance(sid: str) -> float | None:

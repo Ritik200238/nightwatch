@@ -94,3 +94,17 @@ def test_a_leveraged_fund_says_what_it_is(seeded_store):  # noqa: F811
     r = _report(seeded_store, thesis="t", invalidation="i")
     r.ticket = replace(r.ticket, ticker="SQQQ")
     assert any(a.topic == "instrument" and "inverse" in a.text for a in story.assumptions(r))
+
+
+def test_the_traders_own_line_is_a_measured_chain_not_a_template(seeded_store):  # noqa: F811
+    """What history did after the trader's own invalidation broke, and how many went on to
+    the stop - measured for this trade, not a sentence that reads the same on every one."""
+    r = _report(seeded_store, thesis="t", invalidation="i")
+    entry = r.snapshot.prices["spot_close"]
+    r.plan_check = {"invalidation": "wrong if it closes below X", "kind": "level", "level": entry * 0.99, "distance_pct": -1.0, "crossed": 13, "of": 40, "already": False}
+    mode = next(m for m in story.failure_modes(r) if m.key == "invalidation")
+    assert mode.chance == 13 / 40 and "13 of 40" in mode.mechanism and "wrong if it closes below X" in mode.title
+    r.street = {"token_vs_live_bps": 40.0}
+    assert any(m.key == "convergence" for m in story.failure_modes(r))  # a long above the stock's price gives it up
+    r.street = {"token_vs_live_bps": -40.0}
+    assert not any(m.key == "convergence" for m in story.failure_modes(r))  # a discount helps a long

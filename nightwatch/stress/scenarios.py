@@ -391,7 +391,8 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
         presets.append(Scenario(
             id="earnings_gap_worst", name="Earnings gap: worst observed", severity=Severity.EXTREME, horizon_h=h,
             price_move_pct=worst, probability_note=f"worst of {g.size} past earnings reactions",
-            calibration={"source": "native stock close→open across report dates", "n": int(g.size), "median_abs": float(np.median(np.abs(g)))},
+            calibration={"source": "native stock close→open across report dates", "n": int(g.size), "median_abs": float(np.median(np.abs(g))),
+                         "recent": [round(float(x), 1) for x in g[-4:]]},
         ))
         presets.append(Scenario(
             id="earnings_gap_typical", name="Earnings gap: typical adverse", severity=Severity.SEVERE, horizon_h=h,
