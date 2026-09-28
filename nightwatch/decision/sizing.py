@@ -152,8 +152,13 @@ def recommend_size(ticket: TradeTicket, inp: SizingInputs, policy: SizingPolicy 
         # Hedge the share needed to bring the request inside the binding cap, capped at 100%.
         if recommended < ticket.notional_quote:
             hedge_ratio = min(1.0, 1.0 - recommended / ticket.notional_quote)
-            rationale = (f"hedging {hedge_ratio:.0%} costs ~{inp.hedge_cost_bps_of_position:.0f} bps and cuts the 5th-percentile loss from "
-                         f"{inp.analog_p5_loss_pct:+.1f}% to {inp.hedge_residual_p5_loss_pct:+.1f}% (basis risk only)")
+            # At ratio h the loss is the blend of the unhedged and fully-hedged distributions,
+            # not the fully-hedged residual on its own - quoting the residual at a partial ratio
+            # overstates how much of the loss the suggested hedge actually removes.
+            at_ratio_p5 = (1.0 - hedge_ratio) * inp.analog_p5_loss_pct + hedge_ratio * inp.hedge_residual_p5_loss_pct
+            full_hedge_note = " (fully hedged)" if hedge_ratio >= 1.0 - 1e-9 else ""
+            rationale = (f"hedging {hedge_ratio:.0%}{full_hedge_note} costs ~{inp.hedge_cost_bps_of_position:.0f} bps and cuts the 5th-percentile loss from "
+                         f"{inp.analog_p5_loss_pct:+.1f}% to about {at_ratio_p5:+.1f}% at that ratio (basis risk only)")
     return SizingResult(recommended, binding.name, caps, hedge_ratio, rationale)
 
 

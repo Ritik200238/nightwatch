@@ -355,6 +355,7 @@ FEATURE_WORDS = {
 }
 
 
+MARKET_WIDE = frozenset({"vix_pctl_1y", "curve_pctl_1y", "dollar_20d_chg_pct", "ten_year_20d_chg_bps"})
 LOOSE_SIMILARITY = 0.1  # below this a match shares the broad state, not the specifics
 
 
@@ -376,7 +377,9 @@ def _a_moments(r: dict, _q: str) -> Answer | None:
     if matches and any(m.get("alike_on") for m in matches):
         from collections import Counter
 
-        alike = Counter(f for m in matches for f in (m.get("alike_on") or []))
+        # Market-wide readings are the same for every token at a given hour, so they say
+        # when a match happened, not why this stock's moment resembles it.
+        alike = Counter(f for m in matches for f in (m.get("alike_on") or []) if f not in MARKET_WIDE)
         differs = Counter(f for m in matches for f in (m.get("differs_on") or []))
         top = [FEATURE_WORDS.get(f, f.replace("_", " ")) for f, _ in alike.most_common(3)]
         why = f" What makes them similar: most sit closest to now on {', '.join(top[:-1])} and {top[-1]}." if len(top) > 1 else ""

@@ -202,13 +202,18 @@ def _a_shock(r: dict, q: str) -> Answer | None:
 
 
 FEATURE_ZH = {
-    "basis_index_bps": "与公允价值的偏离", "basis_index_z": "偏离的程度", "rv_24h": "当日波动率", "rv_168h": "周波动率",
+    "basis_index_bps": "与公允价值的偏离", "basis_index_z": "偏离的程度", "basis_index_d6h_bps": "偏离的变化速度",
+    "basis_native_bps": "与上次收盘价的偏离", "rv_24h": "当日波动率", "rv_168h": "周波动率",
     "vol_pctl_90d": "波动率分位", "trend_sma_pct": "趋势", "sma_slope_5d_pct": "趋势斜率", "liq_ratio": "交易活跃度",
     "no_trade_share_24h": "无成交时段占比", "native_close_age_h": "距正股上次交易的时间", "hours_to_earnings": "距财报时间",
     "hours_since_earnings": "距上次财报时间", "macro_events_72h": "未来宏观数据", "hours_to_fomc": "距美联储会议时间",
     "news_count_24h": "新闻数量", "vix_pctl_1y": "VIX", "curve_pctl_1y": "收益率曲线", "dollar_20d_chg_pct": "美元",
     "ten_year_20d_chg_bps": "十年期美债收益率",
 }
+
+# Identical across a token's recent hours, so naming one as why a moment is "alike" tells
+# the trader nothing token-specific; keep them out of what a match is said to be alike on.
+MARKET_WIDE_ZH = frozenset({"vix_pctl_1y", "curve_pctl_1y", "dollar_20d_chg_pct", "ten_year_20d_chg_bps"})
 
 
 def _a_similar(r: dict, _q: str) -> Answer | None:
@@ -217,9 +222,11 @@ def _a_similar(r: dict, _q: str) -> Answer | None:
     matches = ((r.get("analog") or {}).get("result") or {}).get("matches") or []
     if not matches or not any(m.get("alike_on") for m in matches):
         return None
-    alike = Counter(f for m in matches for f in (m.get("alike_on") or []))
+    alike = Counter(f for m in matches for f in (m.get("alike_on") or []) if f not in MARKET_WIDE_ZH)
     differs = Counter(f for m in matches for f in (m.get("differs_on") or []))
     top = [FEATURE_ZH.get(f, f) for f, _ in alike.most_common(3)]
+    if not top:
+        return None
     text = f"这 {len(matches)} 个历史时刻与现在最接近的是：{'、'.join(top)}。"
     if differs:
         f, n = differs.most_common(1)[0]

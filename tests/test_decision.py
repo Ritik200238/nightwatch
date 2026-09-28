@@ -164,3 +164,22 @@ def test_a_stop_far_enough_out_to_be_another_stocks_price_is_called_that():
     assert rule.decision is GateDecision.REVIEW_REQUIRED and "check it is a price for this token" in rule.reason
     wide = evaluate_gate(ticket(stop_price=364.0 * (1 - (GatePolicy().max_stop_distance_pct + 1) / 100)), inputs())
     assert "wider than" in next(r for r in wide.rules if r.rule == "stop").reason
+
+
+def test_hedge_rationale_states_the_loss_at_the_suggested_ratio_not_the_full_hedge_residual():
+    """A partial hedge leaves part of the position unhedged, so the loss at that ratio is the
+    blend (1-h)*unhedged_p5 + h*residual, not the fully-hedged residual on its own. Quoting
+    the residual at a 50% ratio (as if the whole position carried only basis risk) overstates
+    how much of the loss the suggested hedge actually removes."""
+    t = ticket()
+    partial = recommend_size(t, sizing_inputs(risk_multiplier=0.5))
+    assert partial.hedge_ratio_suggested is not None and abs(partial.hedge_ratio_suggested - 0.5) < 1e-9
+    # analog_p5_loss_pct=-3.2, hedge_residual_p5_loss_pct=-0.6 -> blend at 50% = -1.9, not -0.6.
+    assert "hedging 50%" in partial.hedge_rationale
+    assert "to about -1.9% at that ratio" in partial.hedge_rationale
+    assert "to -0.6%" not in partial.hedge_rationale and "to -3.2%" not in partial.hedge_rationale
+    # A full hedge (h=100%) blends to exactly the residual, and says so plainly.
+    full = recommend_size(t, sizing_inputs(risk_multiplier=0.0))
+    assert full.hedge_ratio_suggested is not None and abs(full.hedge_ratio_suggested - 1.0) < 1e-9
+    assert "hedging 100% (fully hedged)" in full.hedge_rationale
+    assert "to about -0.6% at that ratio" in full.hedge_rationale

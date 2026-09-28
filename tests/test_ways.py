@@ -21,9 +21,28 @@ def test_the_pick_is_the_safest_go_at_the_size_asked_not_simply_less_money():
 def test_the_versions_are_fixed_by_rule():
     base = TradeTicket(ticker="NVDA", side=Side.LONG, notional_quote=20000.0, horizon_kind=HorizonKind.HOURS, horizon_hours=70.0, leverage=5.0)
     labels = [label for label, _ in ways.versions(base)]
-    assert labels == ["As asked", "Half the size", "Shorter hold: to the next open", "Half hedged on the perpetual", "Without leverage"]
+    # Leveraged: no "half hedged on the perpetual" version - a leveraged position is already
+    # on the perpetual, so that is not a distinct version of the trade. See below for the
+    # unleveraged case, where it is offered and "without leverage" is not.
+    assert labels == ["As asked", "Half the size", "Shorter hold: to the next open", "Without leverage"]
     assert ways.ASKS.search("what's the safest way to hold NVDA over the weekend?")
     assert ways.ASKS.search("怎么持有最安全") and not ways.ASKS.search("what if it gaps 10%?")
+
+
+def test_half_hedged_is_not_offered_for_a_position_already_on_the_perpetual():
+    """A leveraged ticket is already trading the perpetual; halving a hedge onto the same
+    instrument is not a distinct version of the trade, so it must not appear. An unleveraged
+    ticket has no perpetual exposure yet, so the hedge version is still offered and
+    "without leverage" is not, since there is none to remove."""
+    leveraged = TradeTicket(ticker="NVDA", side=Side.LONG, notional_quote=20000.0, leverage=5.0)
+    labels = [label for label, _ in ways.versions(leveraged)]
+    assert "Half hedged on the perpetual" not in labels
+    assert "Without leverage" in labels
+
+    spot = TradeTicket(ticker="NVDA", side=Side.LONG, notional_quote=20000.0)
+    spot_labels = [label for label, _ in ways.versions(spot)]
+    assert "Half hedged on the perpetual" in spot_labels
+    assert "Without leverage" not in spot_labels
 
 
 def test_the_table_reads_in_chinese():

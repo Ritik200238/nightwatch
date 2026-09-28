@@ -413,3 +413,45 @@ def test_loose_matches_are_said_to_be_loose(report):
                                         for o in r["analog"]["matches_outcomes"]]
     got = answer(r, "why are these moments similar?")
     assert got is not None and "loose matches" in got.text
+
+
+def test_chinese_similar_answer_has_no_leaked_feature_names(report):
+    """basis_index_d6h_bps and basis_native_bps used to leak straight into the Chinese
+    answer because FEATURE_ZH had no entry for them."""
+    from nightwatch.api import followup_zh
+
+    r = copy.deepcopy(report)
+    r["analog"]["result"]["matches"] = [
+        {"ts": o["ts"], "alike_on": ["basis_index_d6h_bps", "basis_native_bps"], "differs_on": ["basis_native_bps"]}
+        for o in r["analog"]["matches_outcomes"]
+    ]
+    got = followup_zh.answer(r, "这些时刻为什么相似？")
+    assert got is not None and got.kind == "moments"
+    assert "偏离的变化速度" in got.text and "与上次收盘价的偏离" in got.text
+    assert "basis_index_d6h_bps" not in got.text and "basis_native_bps" not in got.text
+
+
+def test_chinese_similar_answer_skips_market_wide_features(report):
+    """vix_pctl_1y, curve_pctl_1y, dollar_20d_chg_pct and ten_year_20d_chg_bps are identical
+    across a token's recent hours, so naming one as why a moment is "alike" tells the trader
+    nothing token-specific; only the token-specific feature should be named."""
+    from nightwatch.api import followup_zh
+
+    r = copy.deepcopy(report)
+    r["analog"]["result"]["matches"] = [
+        {"ts": o["ts"], "alike_on": ["vix_pctl_1y", "curve_pctl_1y", "dollar_20d_chg_pct", "ten_year_20d_chg_bps", "basis_index_d6h_bps"], "differs_on": []}
+        for o in r["analog"]["matches_outcomes"]
+    ]
+    got = followup_zh.answer(r, "这些时刻为什么相似？")
+    assert got is not None and got.kind == "moments" and "偏离的变化速度" in got.text
+    for word in ("VIX", "收益率曲线", "美元", "十年期美债收益率"):
+        assert word not in got.text
+
+    # If every alike feature is market-wide, there is nothing token-specific left to say,
+    # so the answer must fall through rather than print an empty "最接近的是：。".
+    r2 = copy.deepcopy(report)
+    r2["analog"]["result"]["matches"] = [
+        {"ts": o["ts"], "alike_on": ["vix_pctl_1y", "curve_pctl_1y"], "differs_on": []}
+        for o in r2["analog"]["matches_outcomes"]
+    ]
+    assert followup_zh._a_similar(r2, "这些时刻为什么相似？") is None

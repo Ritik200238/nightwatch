@@ -35,7 +35,10 @@ def versions(base: Any) -> list[tuple[str, Any]]:  # noqa: ANN401 - a TradeTicke
         out.append(("Shorter hold: to the next open", replace(base, horizon_kind=HorizonKind.NEXT_OPEN, horizon_hours=None, extra={})))
     elif base.horizon_kind == HorizonKind.NEXT_OPEN:
         out.append(("Shorter hold: to the end of this session or closed window", replace(base, horizon_kind=HorizonKind.WINDOW_END, horizon_hours=None)))
-    out.append(("Half hedged on the perpetual", replace(base, hedge_ratio=0.5)))
+    if not base.leveraged:
+        # A leveraged position is already on the perpetual; offering to half-hedge it onto
+        # the same instrument it is already trading is not a distinct version of the trade.
+        out.append(("Half hedged on the perpetual", replace(base, hedge_ratio=0.5)))
     if base.leveraged:
         out.append(("Without leverage", replace(base, leverage=None)))
     return out
