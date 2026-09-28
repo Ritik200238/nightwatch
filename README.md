@@ -12,11 +12,16 @@ form — and answers four questions with data:
 1. **What happened before?** It finds the past moments that looked like now — same
    volatility, same gap between token and fair value, same liquidity, same distance to
    earnings and to the Fed — and shows what followed, with sample sizes and confidence
-   intervals. (Time of week is deliberately *not* a condition: replayed over 610 past
-   moments, restricting matches to the same slot of the week gave no truer loss tail.)
-2. **What could go wrong?** Preset stress tests built from real token data: weekend gap,
+   intervals. Each match says what it shares with now and where it differs, next to a
+   "Now" row, so a reader can argue with it. (Time of week is deliberately *not* a
+   condition: replayed over 610 past moments, restricting matches to the same slot of the
+   week gave no truer loss tail.)
+2. **What could go wrong?** Preset stress tests built from real token data — weekend gap,
    earnings gap, volatility spike, token-vs-fair-value blowout, liquidity drought, exchange
-   halt.
+   halt — each taken from the tail that hurts *this* side (the falls for a long, the
+   squeezes for a short). Plus **crash replays**: what this stock actually did on the days
+   the market broke in the COVID crash, the 2022 inflation shock, the March 2023 bank
+   failures, the August 2024 carry-trade unwind and the April 2025 tariff shock.
 3. **Can you get out?** It walks the live order book for your size and tells you the real
    cost of exiting.
 4. **How big, then?** A sized verdict — go, reduce, hedge with the perpetual, or don't —
@@ -24,6 +29,18 @@ form — and answers four questions with data:
 
 On top of that:
 
+* **How this trade loses money**, worst first: each way it fails, what sets it off, why it
+  costs what it does and how often it happened — written by rules from the report's own
+  numbers, never by a model. Beside it, **what the answer assumes**, with the assumptions
+  that could make it wrong flagged, and a check of your stated reason against the
+  calendar ("post-earnings drift" with no recent earnings is said).
+* **Leverage, with its liquidation price.** "5x long NVDA" is held on Bitget's perpetual:
+  the liquidation price comes from Bitget's own margin tiers for that size, and the desk
+  counts how many past moments like this, which stress tests and what share of simulated
+  paths would have reached it. A one-in-twenty chance of liquidation is a no.
+* **Ask it anything a stress test should answer**: "what if it gaps down 10%?", "halve
+  it", "why?", "what about 5x?", "hold it until Wednesday", "is my thesis supported?",
+  "why are these moments similar?" — each answered from the report or by re-running it.
 * **An AI analyst reads the finished report** (Qwen 3.8 Max, about 8 s) and says what
   matters most tonight and what would change its mind - connecting the facts rather than
   listing them. It cannot move a number: every figure it quotes is checked against the
@@ -74,7 +91,7 @@ The desk is also an MCP server, so Claude, Cursor or any MCP client can call it 
 claude mcp add nightwatch --transport http https://nightwatch-gules.vercel.app/api/mcp
 ```
 
-Three read-only tools: `stress_test` (the full analysis - verdict, history, stress tests,
+Three read-only tools: `stress_test` (the full analysis - verdict, history, stress tests, liquidation with `leverage`,
 exit cost), `list_conditions` (what the search can be narrowed to, and what each costs in
 evidence) and `list_tokens`. The calling model picks the tool and fills in the trade;
 every number in the reply comes from the engine. Nothing here can place an order.
@@ -104,6 +121,12 @@ uncomfortable one included:
 * **The macro layer earned its place by measurement**, on the third and largest test of
   it: 1,605 paired forecasts, a 1.3% lower forecast loss, interval excluding zero. The two
   smaller tests before it showed nothing, and the notes say so.
+* **Shorts were not being stress-tested, and now are.** Every price preset used to be a
+  fall — a gain for a short — so a TSLA short's "1-in-100 gap" read as +7.4%. Presets now
+  come from the tail that hurts the position's own side; the same short reads −6.8%.
+* **More history is not automatically better.** Backfilling 2025 earnings dates brought
+  back 15% more searchable hours and made the 5th percentile slightly *less* accurate on
+  820 replayed moments (9 of 24 tokens better, t = −0.76). It was not shipped.
 
 The full write-up is in [docs/research-notes.md](docs/research-notes.md).
 
