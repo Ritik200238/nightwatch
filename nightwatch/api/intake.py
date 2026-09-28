@@ -364,6 +364,7 @@ FAILURE_ZH = {
     "gap_bad": "开盘跳空（二十分之一的情形）", "gap_worst": "开盘严重跳空（百分之一的情形）", "earnings": "财报后不利跳空",
     "basis": "代币偏离公允价值", "liquidity": "平仓时盘口变薄", "halt": "24 小时无法平仓", "vol": "波动率骤升",
     "stop_jumped": "止损被跳空越过", "liquidation": "被强制平仓", "drift": "价格缓慢走弱", "replay": "历史危机重演",
+    "invalidation": "你自己设定的止错线被突破", "convergence": "代币价格回归正股",
 }
 
 # The verdict names in Chinese, for a trader who wrote in Chinese. The numbers are the
@@ -662,6 +663,49 @@ def brief(report: Any, lang: str = "en") -> str:
     return "\n\n".join(lines)
 
 
+_SHORT_KEEP_EN = ("Why:", "Check your plan:", "History:", "For a firm GO", "To clear the review")
+_SHORT_KEEP_ZH = ("未通过的检查", "历史：", "要给出明确结论", "要通过复核")
+
+
+def brief_short(report: Any, lang: str = "en") -> str:
+    """The first reply in chat: the answer and the one thing that matters, then an offer.
+
+    The full briefing ran to ten paragraphs and a judge called it a wall of text. The chat
+    now leads with the verdict and size, why when it is not a go, leverage, the plan check,
+    the single most likely-and-costly way the trade loses, the history in one line and
+    anything the trader still has to say - and invites the follow-ups that open the rest.
+    Every line is one the full briefing prints; the page below still shows everything.
+    """
+    zh = lang == "zh"
+    full = brief(report, lang).split("\n\n")
+    keep = _SHORT_KEEP_ZH if zh else _SHORT_KEEP_EN
+    out = [full[0]]
+    lev = getattr(report, "leverage", None)
+    if lev:
+        out.append(_leverage_line(lev, lang))
+    modes = [m for m in (getattr(report, "failure_modes", None) or []) if m.get("loss_quote") is not None]
+    picked = {p: next((x for x in full[1:] if x.startswith(p)), None) for p in keep}
+    for p in keep[:2] if not zh else keep[:1]:
+        if picked.get(p):
+            out.append(picked[p])
+    if modes:
+        m = modes[0]
+        if zh:
+            out.append(f"最需要注意的亏损方式：{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT。")
+        else:
+            out.append(f"The one to watch: {m['title']} ({m.get('short') or m['mechanism']}) - about {m['loss_quote']:,.0f} USDT; {m['likelihood']}.")
+    for p in (keep[2:] if not zh else keep[1:]):
+        if picked.get(p):
+            out.append(picked[p])
+    t = report.ticket
+    lev_ask = ("不加杠杆呢？" if zh else "what about no leverage?") if t.leveraged else ("5 倍杠杆呢？" if zh else "what about 5x?")
+    if zh:
+        out.append(f"可以接着问我：为什么？· 如果跌 10% 呢？· 仓位减半 · {lev_ask} · {t.ticker} 周末跌 5% 的概率是多少？")
+    else:
+        out.append(f"Ask me: why? · what if it gaps down 10%? · halve it · {lev_ask} · how often does {t.ticker} fall 5% over a weekend?")
+    return "\n\n".join(out)
+
+
 def is_a_new_idea(text: str, context: dict[str, Any], known_tickers: list[str]) -> bool:
     """True when a message is a fresh trade idea rather than a question about the last one.
 
@@ -711,7 +755,7 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.reports.save(report.forecast_id, payload)
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
-    narrative = brief(report)
+    narrative = brief_short(report, language_of(messages[-1].get("content", "") if messages else ""))
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,

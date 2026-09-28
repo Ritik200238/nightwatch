@@ -363,7 +363,7 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         narrative, text = narrate(provider, report)
         wrote = provider.name
     else:
-        narrative, text = intake.brief(report, lang), render_text(report)
+        narrative, text = intake.brief_short(report, lang), render_text(report)
         wrote = "rules"
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),

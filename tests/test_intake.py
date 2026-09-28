@@ -429,3 +429,17 @@ def test_a_partial_fill_is_said_once_not_contradicted(seeded_store):  # noqa: F8
     r.execution.exit_quote = ExitQuote(5_000_000.0, "sell", 100.0, 120.0, 130.0, 10.0, 60000.0, 65000.0, 20, False, "2026-09-12T14:00:00+00:00")
     text = it.brief(r)
     assert "takes only part of this size" in text and "Getting out costs" not in text
+
+
+def test_the_first_reply_is_short_and_leads_with_what_matters(seeded_store):  # noqa: F811
+    """A judge called the ten-paragraph reply a wall of text. The chat leads with the verdict,
+    the one failure mode to watch and an offer of the follow-ups; the page keeps the rest."""
+    from nightwatch.api import intake as it
+
+    r = _report(seeded_store, thesis="t", invalidation="i")
+    short, full = it.brief_short(r), it.brief(r)
+    assert short.split("\n\n")[0] == full.split("\n\n")[0]  # the verdict line, unchanged
+    assert len(short) < len(full) and "Ask me:" in short and "what about 5x?" in short
+    assert "可以接着问我" in it.brief_short(r, "zh")
+    lev = _report(seeded_store, thesis="t", invalidation="i", leverage=5.0)
+    assert "no leverage?" in it.brief_short(lev)
