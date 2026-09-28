@@ -339,6 +339,18 @@ def _a_regime(r: dict, _q: str) -> Answer | None:
     return Answer("regime", " ".join(bits), ("regime map",))
 
 
+# The search features in plain words, for saying why a past moment counts as similar.
+FEATURE_WORDS = {
+    "basis_index_bps": "the gap to fair value", "basis_index_z": "how stretched that gap is", "basis_index_d6h_bps": "how fast the gap is moving",
+    "basis_native_bps": "the gap to the last close", "rv_24h": "the last day's volatility", "rv_168h": "the week's volatility",
+    "vol_pctl_90d": "how volatile it is for this stock", "trend_sma_pct": "the trend", "sma_slope_5d_pct": "the trend's slope",
+    "liq_ratio": "trading activity", "no_trade_share_24h": "how often it did not trade", "native_close_age_h": "time since the stock last traded",
+    "hours_to_earnings": "time to earnings", "hours_since_earnings": "time since earnings", "macro_events_72h": "macro releases ahead",
+    "hours_to_fomc": "time to the Fed", "news_count_24h": "news flow", "vix_pctl_1y": "the VIX", "curve_pctl_1y": "the yield curve",
+    "dollar_20d_chg_pct": "the dollar", "ten_year_20d_chg_bps": "the 10-year yield",
+}
+
+
 def _a_moments(r: dict, _q: str) -> Answer | None:
     outs = (r.get("analog") or {}).get("matches_outcomes") or []
     horizon = r.get("primary_horizon")
@@ -352,9 +364,21 @@ def _a_moments(r: dict, _q: str) -> Answer | None:
         return f"{when} ended {_pct(o['outcomes'][horizon]['ret_pct'])}" + (f" ({tag})" if tag else "")
 
     middle = f"; {line(rows[len(rows) // 2])} in the middle" if len(rows) > 2 else ""
+    why = ""
+    matches = ((r.get("analog") or {}).get("result") or {}).get("matches") or []
+    if matches and any(m.get("alike_on") for m in matches):
+        from collections import Counter
+
+        alike = Counter(f for m in matches for f in (m.get("alike_on") or []))
+        differs = Counter(f for m in matches for f in (m.get("differs_on") or []))
+        top = [FEATURE_WORDS.get(f, f.replace("_", " ")) for f, _ in alike.most_common(3)]
+        why = f" What makes them similar: most sit closest to now on {', '.join(top[:-1])} and {top[-1]}." if len(top) > 1 else ""
+        if differs:
+            f, n = differs.most_common(1)[0]
+            why += f" Where they differ most: {FEATURE_WORDS.get(f, f)}, far from now on {n} of {len(matches)}."
     return Answer(
         "moments",
-        f"The {len(rows)} matched moments, worst first: {line(rows[0])}{middle}; best {line(rows[-1])}. "
+        f"The {len(rows)} matched moments, worst first: {line(rows[0])}{middle}; best {line(rows[-1])}.{why} "
         f'The full list, with what each one looked like at the time, is in the "What history says" panel.',
         ("matched moments",),
     )
@@ -544,8 +568,8 @@ ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
     ("hedge", re.compile(r"\bhedg\w*\b|\bperp\b|\bdelta[- ]neutral\b|\bprotect\b", re.I), _a_hedge),
     ("gate", re.compile(r"\bwhy (not|no|review|did you)\b|\brefus\w*\b|\brule\b|\bgate\b|\bcheck\w*\b|\bblock\w*\b|\breason\b", re.I), _a_gate),
     ("regime", re.compile(r"\bregime\b|\bkind of market\b|\bmarket like\b|\bconditions?\b|\bvolatil\w*\b", re.I), _a_regime),
-    ("why", re.compile(r"^\s*(?:but\s+|so\s+)?why\b(?!\s+(?:not|no)\b.*\b(?:bigger|more)\b)|\bexplain (?:the |this |that )?(?:verdict|decision|call)\b|\bwhy (?:this|that) (?:verdict|call|answer)\b", re.I), _a_why),
-    ("moments", re.compile(r"\bwhich (moments?|days?|hours?)\b|\bshow me\b|\bexamples?\b|\bmatched?\b|\bsimilar (moments?|days?)\b", re.I), _a_moments),
+    ("why", re.compile(r"^\s*(?:but\s+|so\s+)?why\b(?!\s+(?:not|no)\b.*\b(?:bigger|more)\b)(?!.*\b(?:similar|alike|match(?:es|ed)?|moments?)\b)|\bexplain (?:the |this |that )?(?:verdict|decision|call)\b|\bwhy (?:this|that) (?:verdict|call|answer)\b", re.I), _a_why),
+    ("moments", re.compile(r"\bwhich (moments?|days?|hours?)\b|\bshow me\b|\bexamples?\b|\bmatch(?:ed|es)?\b|\bsimilar\b|\balike\b|\bclosest\b|相似", re.I), _a_moments),
     ("history", re.compile(r"\bhistor\w*\b|\bpast\b|\banalog\w*\b|\bdistribution\b|\bhow many\b|\bsample\b|\bsignificant\b|\bmedian\b|\bodds\b|\bchance\b", re.I), _a_history),
     ("now", re.compile(r"\bright now\b|\bcurrent\b|\bprice\b|\bbasis\b|\bfair value\b|\bwhat.?s happening\b", re.I), _a_now),
 )

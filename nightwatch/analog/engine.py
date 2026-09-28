@@ -41,6 +41,9 @@ from nightwatch.features.snapshot import SEARCH_COLUMNS
 from nightwatch.time_utils import index_epoch_ns
 
 MAD_SCALE = 1.4826
+# How a match's resemblance is described: its closest features, and those more than one
+# robust standard deviation away.
+ALIKE_N, DIFFERS_N, DIFFERS_Z = 3, 2, 1.0
 
 
 @dataclass(frozen=True)
@@ -66,6 +69,11 @@ class AnalogMatch:
     distance_percentile: float  # 0 = closest of all candidates, 100 = farthest
     bucket: str
     features: dict[str, float]
+    # Why this one: the features where it sits closest to now, and the ones where it
+    # differs by more than one robust standard deviation, in the search's own scaled
+    # units. Said, so a reader can argue with a match rather than take it on trust.
+    alike_on: tuple[str, ...] = ()
+    differs_on: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -166,6 +174,15 @@ class AnalogEngine:
             return self._refuse(f"only {len(chosen)} distinct episodes (need {cfg.min_matches})", history, used, dropped, query, n_candidates=n_candidates, n_distinct=len(chosen))
 
         pct = _percentiles(d)
+        gaps = np.abs(Z - zq)  # per feature, in robust standard deviations
+
+        def alike(i: int) -> tuple[str, ...]:
+            return tuple(used[j] for j in np.argsort(gaps[i], kind="stable")[:ALIKE_N])
+
+        def differs(i: int) -> tuple[str, ...]:
+            far = np.argsort(-gaps[i], kind="stable")[:DIFFERS_N]
+            return tuple(used[j] for j in far if gaps[i, j] > DIFFERS_Z)
+
         matches = [
             AnalogMatch(
                 ts=hist.index[i].to_pydatetime(),
@@ -175,6 +192,8 @@ class AnalogEngine:
                 distance_percentile=float(pct[i]),
                 bucket=str(hist["bucket"].iloc[i]),
                 features={f: float(X[i, j]) for j, f in enumerate(used)},
+                alike_on=alike(i),
+                differs_on=differs(i),
             )
             for i in chosen
         ]

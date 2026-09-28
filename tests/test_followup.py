@@ -352,3 +352,13 @@ def test_what_could_go_wrong_leads_with_the_failure_modes(report):
     }]
     got = answer(r, "what could go wrong?")
     assert got is not None and "A severe gap at the reopen" in got.text and "1,234" in got.text
+
+
+def test_why_the_moments_are_similar_is_answered(report):
+    r = copy.deepcopy(report)
+    r["analog"]["result"]["matches"] = [
+        {"ts": o["ts"], "alike_on": ["vol_pctl_90d", "trend_sma_pct", "hours_to_fomc"], "differs_on": ["news_count_24h"]}
+        for o in r["analog"]["matches_outcomes"]
+    ]
+    got = answer(r, "why are these moments similar?")
+    assert got is not None and got.kind == "moments" and "What makes them similar" in got.text and "news flow" in got.text

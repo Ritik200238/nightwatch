@@ -118,3 +118,18 @@ def test_pooled_history_and_same_ticker_filter():
     assert res.ok and all(m.ticker == "NVDA" for m in res.matches)
     df = matches_frame(res)
     assert list(df.columns[:5]) == ["ticker", "bucket", "distance", "similarity", "distance_pct"]
+
+
+def test_each_match_says_what_it_shares_with_now_and_where_it_does_not():
+    """A reader should be able to argue with a match: its closest features and the ones
+    more than one robust standard deviation away are named, from the search's own scaling."""
+    h = history()
+    now = h.index[-1] + timedelta(hours=200)
+    res = AnalogEngine(cfg()).search(h, {"a": 0.0, "b": 0.0, "c": 0.0, "d": 0.0}, query_ts=now)
+    assert res.ok
+    for m in res.matches:
+        assert len(m.alike_on) == 3 and set(m.alike_on) <= set(FEATS)
+        assert not set(m.alike_on) & set(m.differs_on)
+    # A query far out on one feature: every match must differ on it.
+    far = AnalogEngine(cfg()).search(h, {"a": 0.0, "b": 0.0, "c": 0.0, "d": 25.0}, query_ts=now)
+    assert far.ok and all("d" in m.differs_on for m in far.matches)
