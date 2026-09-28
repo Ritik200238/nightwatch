@@ -212,6 +212,10 @@ class EmpiricalInputs:
     # keep the day's figure: scaled over a weekend it was already too wide (0.7% of moves
     # beat it), and the week's would only widen it further.
     rv_168h_now: float = 0.0
+    # Which way hurts: -1 for a long (the stock falling), +1 for a short (it rising).
+    # Every price preset is taken from that tail. Before this existed every preset was a
+    # fall, so a short's "1-in-100 gap" showed as a 7% gain on a live TSLA ticket.
+    adverse_sign: float = -1.0
 
     @property
     def vol_now(self) -> float:
@@ -308,24 +312,29 @@ def earnings_in_window(inp: EmpiricalInputs) -> bool:
 
 
 def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
-    """Presets calibrated from the ticker's own history. Each records its source."""
+    """Presets calibrated from the ticker's own history. Each records its source.
+
+    Every price move is taken from the tail that hurts this position: the falls for a
+    long, the rises for a short.
+    """
     presets: list[Scenario] = []
     h = inp.horizon_h
+    up = inp.adverse_sign > 0  # a short: the adverse tail is the upper one
     # Expected move from realised vol over the horizon (√time, 8760 trading hours/yr).
     sigma_h = inp.vol_now * np.sqrt(h / 8760.0) * 100.0 if inp.vol_now and h > 0 else None
 
     if inp.closed_window_ret_pct.size >= min_obs:
         r = inp.closed_window_ret_pct
         for sev, p in ((Severity.MODERATE, 10), (Severity.SEVERE, 5), (Severity.EXTREME, 1)):
-            move = float(np.percentile(r, p))
+            move = float(np.percentile(r, 100 - p if up else p))
             presets.append(Scenario(
                 id=f"closed_window_gap_p{p}", name=f"Closed-window gap, {_ordinal(p)} percentile", severity=sev, horizon_h=h,
-                price_move_pct=move, probability_note=f"{p}% of {r.size} past closed windows were worse",
+                price_move_pct=move, probability_note=f"{p}% of {r.size} past closed windows were worse for this side",
                 calibration={"source": "spot close→open across closed windows", "n": int(r.size), "percentile": p},
             ))
     if inp.earnings_gap_pct.size >= 4 and earnings_in_window(inp):
         g = inp.earnings_gap_pct
-        worst = float(np.min(g))
+        worst = float(np.max(g) if up else np.min(g))
         presets.append(Scenario(
             id="earnings_gap_worst", name="Earnings gap: worst observed", severity=Severity.EXTREME, horizon_h=h,
             price_move_pct=worst, probability_note=f"worst of {g.size} past earnings reactions",
@@ -333,14 +342,14 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
         ))
         presets.append(Scenario(
             id="earnings_gap_typical", name="Earnings gap: typical adverse", severity=Severity.SEVERE, horizon_h=h,
-            price_move_pct=-float(np.median(np.abs(g))), probability_note="median absolute past reaction, adverse direction",
+            price_move_pct=inp.adverse_sign * float(np.median(np.abs(g))), probability_note="median absolute past reaction, adverse direction",
             calibration={"source": "native stock close→open across report dates", "n": int(g.size)},
         ))
     if sigma_h is not None:
         for mult, sev in ((2.0, Severity.SEVERE), (3.0, Severity.EXTREME)):
             presets.append(Scenario(
                 id=f"vol_spike_x{int(mult)}", name=f"Volatility spike ×{int(mult)}", severity=sev, horizon_h=h,
-                price_move_pct=-mult * sigma_h, vol_multiplier=mult, probability_note=f"{int(mult)}σ adverse move at current realised vol",
+                price_move_pct=inp.adverse_sign * mult * sigma_h, vol_multiplier=mult, probability_note=f"{int(mult)}σ adverse move at current realised vol",
                 calibration={"source": "max(rv_24h, rv_168h) × √horizon" if inp.horizon_h < MULTI_DAY_H else "rv_24h × √horizon", "rv_24h": float(inp.rv_24h_now), "rv_168h": float(inp.rv_168h_now), "sigma_h_pct": float(sigma_h)},
             ))
     if inp.abs_basis_closed_bps.size >= min_obs:
@@ -359,7 +368,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     if inp.closed_window_ret_pct.size >= min_obs and sigma_h is not None:
         presets.append(Scenario(
             id="exchange_halt_24h", name="Cannot exit for 24h during an adverse move", severity=Severity.EXTREME, horizon_h=max(h, 24.0),
-            halt_hours=24.0, price_move_pct=-2.0 * float(inp.vol_now) * np.sqrt(24.0 / 8760.0) * 100.0, depth_multiplier=0.5,
+            halt_hours=24.0, price_move_pct=inp.adverse_sign * 2.0 * float(inp.vol_now) * np.sqrt(24.0 / 8760.0) * 100.0, depth_multiplier=0.5,
             probability_note="2σ 24h move with no ability to react, then exit into a half-depth book",
             calibration={"source": "rv_24h, book"},
         ))

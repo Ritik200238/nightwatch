@@ -204,3 +204,22 @@ def test_multi_day_holds_keep_the_days_volatility():
     weekend = EmpiricalInputs(closed_window_ret_pct=np.array([]), earnings_gap_pct=np.array([]), abs_basis_closed_bps=np.array([]),
                               rv_24h_now=0.05, rv_168h_now=0.60, horizon_h=66.0)
     assert weekend.vol_now == 0.05
+
+
+def test_a_short_is_stressed_by_the_moves_that_hurt_a_short():
+    """Every price preset was a fall, so a short's "1-in-100 gap" showed as a 7% gain on a
+    live TSLA ticket. Presets now come from the tail that hurts the position."""
+    from nightwatch.stress.scenarios import EmpiricalInputs, Position, Side, apply_scenario, build_presets
+
+    closed = np.concatenate([np.linspace(-8, -1, 20), np.linspace(1, 12, 20)])  # rises bigger than falls
+    kw = dict(closed_window_ret_pct=closed, earnings_gap_pct=np.array([-9.0, -3.0, 4.0, 15.0]), abs_basis_closed_bps=np.array([]),
+              rv_24h_now=0.5, horizon_h=18.0, hours_to_earnings=5.0)
+    for side, sign in ((Side.LONG, -1.0), (Side.SHORT, 1.0)):
+        presets = build_presets(EmpiricalInputs(**kw, adverse_sign=sign))
+        pos = Position("TSLA", side, 10_000.0, 100.0)
+        for p in presets:
+            if p.price_move_pct:
+                assert np.sign(p.price_move_pct) == sign, p.id
+                assert apply_scenario(pos, p, book=None, taker_fee=0.001).mtm_pnl_quote < 0, p.id
+        by = {p.id: p.price_move_pct for p in presets}
+        assert by["earnings_gap_worst"] == (15.0 if sign > 0 else -9.0)
