@@ -680,6 +680,10 @@ def brief_short(report: Any, lang: str = "en") -> str:
     full = brief(report, lang).split("\n\n")
     keep = _SHORT_KEEP_ZH if zh else _SHORT_KEEP_EN
     out = [full[0]]
+    note = getattr(report.execution, "book_note", None)
+    if note:
+        out.append("注意：盘口此刻异常宽，仓位上限按过去两小时的正常盘口计算；现在进出成本更高，可以等一等或用限价单。" if zh
+                   else "Heads-up: " + note[0].upper() + note[1:] + ".")
     lev = getattr(report, "leverage", None)
     if lev:
         out.append(_leverage_line(lev, lang))

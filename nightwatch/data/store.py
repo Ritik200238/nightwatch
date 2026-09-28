@@ -343,12 +343,30 @@ class Store:
             asks=tuple(OrderBookLevel(price=p, size=s) for p, s in lv["asks"]),
         )
 
-    def latest_orderbook(self, venue: Venue, symbol: str) -> OrderBookSnapshot | None:
-        row = self._conn.execute(
-            "SELECT id FROM orderbook_snapshots WHERE venue=? AND symbol=? ORDER BY ts DESC LIMIT 1",
-            (venue.value, symbol),
-        ).fetchone()
+    def latest_orderbook(self, venue: Venue, symbol: str, *, at: datetime | None = None) -> OrderBookSnapshot | None:
+        """The newest snapshot, or the newest one at or before ``at``."""
+        if at is None:
+            row = self._conn.execute(
+                "SELECT id FROM orderbook_snapshots WHERE venue=? AND symbol=? ORDER BY ts DESC LIMIT 1",
+                (venue.value, symbol),
+            ).fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT id FROM orderbook_snapshots WHERE venue=? AND symbol=? AND ts<=? ORDER BY ts DESC LIMIT 1",
+                (venue.value, symbol, to_epoch_ms(at)),
+            ).fetchone()
         return None if row is None else self.get_orderbook_snapshot(int(row[0]))
+
+    def typical_orderbook(self, venue: Venue, symbol: str, start: datetime, end: datetime) -> tuple[OrderBookSnapshot | None, float | None]:
+        """The snapshot with the median spread in ``[start, end)``, and that median."""
+        rows = self._conn.execute(
+            "SELECT id, spread_bps FROM orderbook_snapshots WHERE venue=? AND symbol=? AND ts>=? AND ts<? AND spread_bps IS NOT NULL ORDER BY spread_bps",
+            (venue.value, symbol, to_epoch_ms(start), to_epoch_ms(end)),
+        ).fetchall()
+        if not rows:
+            return None, None
+        mid = rows[len(rows) // 2]
+        return self.get_orderbook_snapshot(int(mid[0])), float(mid[1])
 
     # ------------------------------------------------------------------ funding
 

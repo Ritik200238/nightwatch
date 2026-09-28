@@ -64,6 +64,11 @@ from nightwatch.time_utils import classify_session, ensure_utc, utc_now
 log = logging.getLogger(__name__)
 
 BOOK_MAX_AGE = timedelta(minutes=10)
+# When the book now is this much wider than its median over the lookback, and by at least
+# this many bps, it is a momentary blowout rather than the book, and does not set the size.
+WIDE_BOOK_LOOKBACK = timedelta(hours=2)
+WIDE_BOOK_RATIO = 2.5
+WIDE_BOOK_MIN_BPS = 10.0
 
 
 @dataclass
@@ -391,6 +396,7 @@ class ExecutionSection:
     book_ts: datetime | None
     book_source: str
     liquidity_history: LiquidityHistory | None = None
+    book_note: str | None = None  # the book now is a momentary blowout; the size used the typical one
 
 
 @dataclass
@@ -526,6 +532,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 5. Execution.
     t0 = time.perf_counter()
     execution = _execution_section(ctx, ticket, spec, frame, book, book_source, fees, horizon_h, entry_info, as_of)
+    if execution.book_note:
+        warnings.append(execution.book_note)
     timings["execution"] = _ms(t0)
 
     # 6. Gate, sizing, verdict.
@@ -989,6 +997,22 @@ def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSp
         exit_quote = quote_exit(book, ticket.notional_quote, closing_long=ticket.closing_long, taker_fee=fees["spot_taker"])
         curve = cost_curve(book, closing_long=ticket.closing_long, taker_fee=fees["spot_taker"])
         max_n = max_notional_within(book, closing_long=ticket.closing_long, taker_fee=fees["spot_taker"], budget_bps=ctx.sizing_policy.exit_cost_budget_bps)
+    # One wide snapshot must not decide the size. The same ticket read NO GO with "nothing
+    # to size" at a 37 bps exit and GO at 11 bps ten minutes later. When the book now is far
+    # wider than it has been over the last two hours, the size limit is taken from the
+    # typical book of those two hours, and the report says the book is wide right now.
+    book_note = None
+    if book is not None and book.mid:
+        now_spread = (book.asks[0].price - book.bids[0].price) / book.mid * 1e4 if book.asks and book.bids else None
+        typical, typical_spread = ctx.store.typical_orderbook(Venue.BITGET_SPOT, spec.spot_symbol, as_of - WIDE_BOOK_LOOKBACK, as_of)
+        if now_spread is not None and typical is not None and typical_spread and now_spread > max(WIDE_BOOK_RATIO * typical_spread, typical_spread + WIDE_BOOK_MIN_BPS):
+            max_typ = max_notional_within(typical, closing_long=ticket.closing_long, taker_fee=fees["spot_taker"], budget_bps=ctx.sizing_policy.exit_cost_budget_bps)
+            if max_typ is not None and (max_n is None or max_typ > max_n):
+                max_n = max_typ
+                book_note = (
+                    f"the book is unusually wide right now ({now_spread:.0f} bps spread against {typical_spread:.0f} typical over the last two hours): "
+                    "the size limit uses the typical book, but getting in or out this minute costs more - wait, or use a limit order"
+                )
     hedge = None
     if entry.perp_symbol:
         fr = ctx.store.get_funding(Venue.BITGET_UMCBL, entry.perp_symbol)
@@ -1005,7 +1029,7 @@ def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSp
         log.exception("liquidity history failed")
     return ExecutionSection(
         exit_quote=exit_quote, cost_curve=curve, max_notional_within_budget=max_n, hedge_quote=hedge,
-        book_ts=book.ts if book else None, book_source=book_source, liquidity_history=history,
+        book_ts=book.ts if book else None, book_source=book_source, liquidity_history=history, book_note=book_note,
     )
 
 
@@ -1013,7 +1037,10 @@ def _execution_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSp
 
 
 def _get_book(ctx: AnalysisContext, symbol: str, as_of: datetime) -> tuple[OrderBookSnapshot | None, str]:
-    snap = ctx.store.latest_orderbook(Venue.BITGET_SPOT, symbol)
+    # The book as of the moment asked about. A what-if re-runs an earlier report at that
+    # report's moment, and used to pick up whatever book was newest - so "against the
+    # same moment" compared two different books.
+    snap = ctx.store.latest_orderbook(Venue.BITGET_SPOT, symbol, at=as_of)
     if snap is not None and as_of - snap.ts <= BOOK_MAX_AGE:
         return snap, "recorded"
     if ctx.spot_client is not None:

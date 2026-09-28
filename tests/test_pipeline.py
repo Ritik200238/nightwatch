@@ -224,3 +224,31 @@ def test_the_text_report_renders_when_book_and_tail_numbers_are_missing(seeded_s
     text = render_text(report)
     assert "spread   n/a bps" in text and "ES5 n/a%" in text
     ctx.store.close()
+
+
+def _book(mid: float, half_spread: float, ts: datetime) -> OrderBookSnapshot:
+    bids = tuple(OrderBookLevel(price=mid * (1 - half_spread - 0.0004 * i), size=30.0) for i in range(40))
+    asks = tuple(OrderBookLevel(price=mid * (1 + half_spread + 0.0004 * i), size=30.0) for i in range(40))
+    return OrderBookSnapshot(venue=Venue.BITGET_SPOT, symbol="RTSLAUSDT", ts=ts, observed_at=ts, bids=bids, asks=asks)
+
+
+def test_one_wide_book_does_not_set_the_size_and_a_what_if_uses_its_own_moment(seeded_store, tmp_path):  # noqa: F811
+    """Live: the same ticket read NO GO with "nothing to size" at a 37 bps exit and GO ten
+    minutes later at 11 bps; and a what-if "against the same moment" read a newer book."""
+    import shutil
+
+    path = tmp_path / "copy.sqlite"
+    shutil.copy(seeded_store, path)
+    ctx = _ctx(path)
+    mid = float(ctx.store.get_bars(Venue.BITGET_SPOT, "RTSLAUSDT", Interval.H1)["close"].iloc[-1])
+    for m in range(110, 10, -10):  # two hours of an ordinary book, then one blown-out snapshot
+        ctx.store.insert_orderbook(_book(mid, 0.0002, AS_OF - timedelta(minutes=m)))
+    ctx.store.insert_orderbook(_book(mid, 0.004, AS_OF - timedelta(minutes=1)))
+    ctx.store.insert_orderbook(_book(mid, 0.02, AS_OF + timedelta(minutes=5)))  # after the moment: must not be used
+    ticket = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=20_000.0, account_equity_quote=200_000.0, thesis="t", invalidation="i")
+    report = analyze(ctx, ticket, as_of=AS_OF, record=False)
+    assert report.execution.book_ts == AS_OF - timedelta(minutes=1)  # the moment's book, not the later one
+    assert report.execution.book_note and "unusually wide" in report.execution.book_note
+    assert any("unusually wide" in w for w in report.warnings)
+    assert report.execution.max_notional_within_budget and report.execution.max_notional_within_budget > 0
+    ctx.store.close()
