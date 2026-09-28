@@ -116,3 +116,10 @@ def test_the_sheet_carries_the_real_reasons_so_the_take_cannot_guess_one():
     sheet = analyst.fact_sheet(r)
     assert "account equity not provided" in sheet and "Market state: favorable, size multiplier 1.00" in sheet
     assert "regime multiplier 1.00" in sheet
+
+
+def test_a_stop_at_the_invalidation_is_one_level_not_two_claims():
+    r = {**REPORT, "plan_check": {**REPORT["plan_check"], "distance_pct": -7.55}}
+    rel = analyst.relations(r)
+    assert any("essentially the same level" in x for x in rel)
+    assert not any("closer than" in x for x in rel)

@@ -143,6 +143,9 @@ def fact_sheet(r: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+SAME_LEVEL_PCT = 0.25  # stop and invalidation closer than this are one level
+
+
 def relations(r: dict[str, Any]) -> list[str]:
     """Comparisons between the report's own numbers, worked out here rather than by the model.
 
@@ -167,7 +170,10 @@ def relations(r: dict[str, Any]) -> list[str]:
     crossed = plan.get("crossed")
 
     if stop_pct is not None and inv_pct is not None and stopped is not None and crossed is not None and n:
-        if abs(inv_pct) < abs(stop_pct):
+        if abs(abs(inv_pct) - abs(stop_pct)) < SAME_LEVEL_PCT:
+            # A take once said both "they sit at the same distance" and "the stop is closer".
+            out.append("The stop and the invalidation sit at essentially the same level, so crossing one is hitting the other.")
+        elif abs(inv_pct) < abs(stop_pct):
             back = crossed - stopped
             out.append(
                 "The invalidation is closer than the stop, so every past moment that hit the stop crossed the invalidation first: "
