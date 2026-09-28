@@ -352,6 +352,10 @@ export interface AnalogMatch {
   distance_percentile: number;
   bucket: string;
   features: Record<string, number>;
+  /** The features where this moment sits closest to now, and those more than one robust
+   *  standard deviation away - why it counts as similar, and where it does not. */
+  alike_on?: string[];
+  differs_on?: string[];
 }
 
 export interface HorizonOutcome {
@@ -778,6 +782,8 @@ export interface Report {
       n_candidates: number;
       n_distinct_available: number;
       distance_scale: number | null;
+      /** Now, on the features the search used. */
+      query?: Record<string, number>;
     };
     scope: "same_ticker" | "pooled";
     horizons: Record<string, HorizonReport>;

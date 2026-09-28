@@ -898,6 +898,32 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
 }
 
 /** The retrieved scenarios themselves: when they were, why they matched, what followed. */
+// The search features in plain words, for saying why a past moment counts as similar.
+const FEATURE_WORDS: Record<string, string> = {
+  basis_index_bps: "gap to fair value",
+  basis_index_z: "how stretched that gap is",
+  basis_index_d6h_bps: "how fast the gap moves",
+  basis_native_bps: "gap to the last close",
+  rv_24h: "day's volatility",
+  rv_168h: "week's volatility",
+  vol_pctl_90d: "volatility for this stock",
+  trend_sma_pct: "trend",
+  sma_slope_5d_pct: "trend's slope",
+  liq_ratio: "trading activity",
+  no_trade_share_24h: "how often it didn't trade",
+  native_close_age_h: "time since the stock traded",
+  hours_to_earnings: "time to earnings",
+  hours_since_earnings: "time since earnings",
+  macro_events_72h: "macro releases ahead",
+  hours_to_fomc: "time to the Fed",
+  news_count_24h: "news flow",
+  vix_pctl_1y: "the VIX",
+  curve_pctl_1y: "yield curve",
+  dollar_20d_chg_pct: "the dollar",
+  ten_year_20d_chg_bps: "10-year yield",
+};
+const words = (fs?: string[]) => (fs ?? []).map((f) => FEATURE_WORDS[f] ?? f.replace(/_/g, " ")).join(", ");
+
 function ClosestMoments({ report }: { report: Report }) {
   const a = report.analog;
   const [open, setOpen] = useState(false);
@@ -930,6 +956,20 @@ function ClosestMoments({ report }: { report: Report }) {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {a.result.query ? (
+              <TableRow className="bg-muted/40">
+                <TableCell className="font-medium">Now</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{bucketLabel(report.snapshot.labels.bucket)}</TableCell>
+                <TableCell className="tabular text-right text-muted-foreground">—</TableCell>
+                <TableCell className="tabular text-right font-medium">{f(a.result.query.vol_pctl_90d, 0)}</TableCell>
+                <TableCell className="tabular text-right font-medium">{f(a.result.query.basis_index_z)}</TableCell>
+                <TableCell className="tabular text-right font-medium">{fmtPct(a.result.query.trend_sma_pct, 1)}</TableCell>
+                <TableCell className="tabular text-right font-medium">
+                  {a.result.query.hours_to_earnings == null ? "—" : a.result.query.hours_to_earnings >= 720 ? "> 30 d" : `${a.result.query.hours_to_earnings.toFixed(0)} h`}
+                </TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground">what we&apos;re asking about</TableCell>
+              </TableRow>
+            ) : null}
             {shown.map((m) => {
               const o = byTs.get(m.ts)?.outcomes[report.primary_horizon];
               const hte = m.features.hours_to_earnings;
@@ -938,6 +978,8 @@ function ClosestMoments({ report }: { report: Report }) {
                   <TableCell className="whitespace-nowrap">
                     {fmtTime(m.ts)}
                     {m.ticker !== report.ticket.ticker ? <span className="block text-xs text-muted-foreground">{m.ticker}</span> : null}
+                    {m.alike_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-muted-foreground">alike on {words(m.alike_on)}</span> : null}
+                    {m.differs_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-status-warning">differs on {words(m.differs_on)}</span> : null}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{bucketLabel(m.bucket)}</TableCell>
                   <TableCell className="tabular text-right">{fmtRatio(m.similarity)}</TableCell>
