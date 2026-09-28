@@ -362,3 +362,9 @@ def test_why_the_moments_are_similar_is_answered(report):
     ]
     got = answer(r, "why are these moments similar?")
     assert got is not None and got.kind == "moments" and "What makes them similar" in got.text and "news flow" in got.text
+
+
+@pytest.mark.parametrize("text", ["halve it", "double it", "use 5x", "hold it until Wednesday", "no leverage", "减半"])
+def test_an_instruction_without_a_question_mark_is_about_the_report(text):
+    """"halve it" used to be read as a fresh trade and re-ran the same size in silence."""
+    assert looks_like_a_question(text)

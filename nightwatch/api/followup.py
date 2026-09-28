@@ -586,8 +586,20 @@ MENU = (
 _QUESTIONY = re.compile(r"\?|？|^\s*(why|what|how|when|which|who|where|can|could|should|would|is|are|do|does|did|tell|show|explain|talk)\b|吗|呢|什么|为什么|怎么|多少|能不能|是否|如何|会不会", re.I)
 
 
+# "halve it", "double it", "use 5x", "hold it until Wednesday", "gap it down 10%": an
+# instruction about the report on screen. Without a question mark these used to be read
+# as a fresh trade, which re-ran the same size and said nothing.
+_INSTRUCTION = re.compile(
+    r"^\s*(?:now\s+|ok\s+|and\s+)?(?:halve|double|triple|use|try|drop|remove|flip|cut)\b|\b(?:hold|keep)\s+(?:it|this|that|the position)\b"
+    r"|\b(?:halve|double|triple)\s+(?:it|the size|that)\b|\b\d+(?:\.\d+)?\s*[x×](?![a-z])|\b(?:no|without)\s+leverage\b"
+    r"|减半|加倍|翻倍",
+    re.I,
+)
+
+
 def looks_like_a_question(text: str) -> bool:
-    return bool(_QUESTIONY.search(text.strip()))
+    t = text.strip()
+    return bool(_QUESTIONY.search(t) or _INSTRUCTION.search(t) or SHOCK.search(t))
 
 
 def answer(report: dict, question: str) -> Answer | None:

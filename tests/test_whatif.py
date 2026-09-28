@@ -363,3 +363,18 @@ def test_leverage_is_a_change_and_survives_a_re_run():
 def test_a_named_weekday_is_a_holding_period():
     ch = whatif.rule_change("what if I held it until Wednesday?", TICKET, ["TSLA"])
     assert ch.horizon_kind == "hours" and ch.horizon_hours and 0 < ch.horizon_hours <= 7 * 24
+
+
+def test_hold_through_the_next_earnings_is_a_holding_period():
+    ch = whatif.rule_change("what if I use 10x leverage and hold it through the next earnings?", TICKET, ["TSLA"], {"hours_to_earnings": 200.0})
+    assert ch.leverage == 10.0 and ch.horizon_kind == "hours" and ch.horizon_hours == 200.0 + whatif.AFTER_REPORT_OPEN_H
+    assert whatif.rule_change("hold it through the next earnings", TICKET, ["TSLA"], {"hours_to_earnings": 720.0}).empty  # unknown date
+
+
+def test_a_what_if_that_is_refused_says_the_rule_not_the_cap():
+    before = {"verdict": {"verdict": "GO", "recommended_notional": 20000.0}, "analog": {"result": {"matches": []}}}
+    after = {"verdict": {"verdict": "NO_GO", "recommended_notional": 20000.0}, "sizing": {"binding_cap": "regime"},
+             "gate": {"rules": [{"rule": "liquidation", "decision": "NO_GO", "reason": "22 of 40 past moments would have been liquidated"}]},
+             "analog": {"result": {"matches": []}}}
+    text = whatif.compare(before, after, whatif.Change(leverage=10.0)).text
+    assert "because liquidation" in text or "not enough" in text

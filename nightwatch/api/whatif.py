@@ -131,7 +131,13 @@ class Change:
         )
 
 
-def rule_change(question: str, ticket: dict, tickers: list[str]) -> Change:
+# "hold it through the next earnings": the hours to the open after the report, which
+# covers a report before the open and one after the close.
+_THROUGH_EARNINGS = re.compile(r"\b(?:through|over|past|into|across|until after|till after)\s+(?:the\s+)?(?:next\s+)?(?:earnings|report|results)\b|过财报|拿过财报", re.I)
+AFTER_REPORT_OPEN_H = 33.5  # from 00:00 ET on the report date to the next day's 09:30 open
+
+
+def rule_change(question: str, ticket: dict, tickers: list[str], features: dict | None = None) -> Change:
     """The change a what-if asks for, read by rules; empty when they find none.
 
     The model takes 10-60 s to name a change. The common ones - a holding period, the
@@ -149,6 +155,9 @@ def rule_change(question: str, ticket: dict, tickers: list[str]) -> Change:
     if side == "long" and not re.search(r"\blong\b|\bbuy\b|做多|买入", question, re.I):
         side = None
     kind, hours = parsed.horizon_kind, parsed.horizon_hours
+    hte = (features or {}).get("hours_to_earnings")
+    if _THROUGH_EARNINGS.search(question) and hte is not None and hte < 720:
+        kind, hours = "hours", round(float(hte) + AFTER_REPORT_OPEN_H, 2)
     lenses: tuple[str, ...] = ()
     if intake.asks_to_narrow(question) or re.search(r"\bworse\b|\bbetter\b|更差|更好", question, re.I):
         low = question.lower()
@@ -334,7 +343,12 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
             else:
                 bits.append(f"结论不变：{_verdict_zh(va['verdict'])}，{_usd(va.get('recommended_notional'))}{held}。")
         else:
-            held = f", held by the {cap.replace('_', ' ')} cap" if cap else ""
+            failed = [x for x in ((after.get("gate") or {}).get("rules") or []) if x.get("decision") == "NO_GO"] or \
+                [x for x in ((after.get("gate") or {}).get("rules") or []) if x.get("decision") == "REVIEW_REQUIRED"]
+            if va.get("verdict") in ("NO_GO", "REVIEW") and failed:
+                held = f", because {failed[0]['rule'].replace('_', ' ')}: {failed[0]['reason']}"
+            else:
+                held = f", held by the {cap.replace('_', ' ')} cap" if cap else ""
             if moved:
                 bits.append(
                     f"The verdict moves from {vb['verdict']} at {_usd(vb.get('recommended_notional'))} "

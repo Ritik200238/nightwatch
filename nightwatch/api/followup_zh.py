@@ -64,7 +64,9 @@ def _a_worst(r: dict, _q: str) -> Answer | None:
     bits = []
     if rows:
         rows.sort(key=lambda x: x[1]["total_pnl_quote"])
-        bits.append("用这个代币自身历史构建的最坏三个情景：" + "；".join(f"{p['name']} 损失 {_usd(i['total_pnl_quote'])}（仓位 {_pct(i.get('total_pct_of_notional'))}）" for p, i in rows[:3]) + "。")
+        from nightwatch.api.intake import preset_zh
+
+        bits.append("用这个代币自身历史构建的最坏三个情景：" + "；".join(f"{preset_zh(p['id'], p['name'])} 损失 {_usd(i['total_pnl_quote'])}（仓位 {_pct(i.get('total_pct_of_notional'))}）" for p, i in rows[:3]) + "。")
     mc = st.get("monte_carlo")
     if mc:
         bits.append(f"模拟中，二十条路径里最差的一条收在 {_pct(mc.get('p5'))} 以下，最差二十分之一的平均是 {_pct(mc.get('expected_shortfall_5_pct'))}。")
