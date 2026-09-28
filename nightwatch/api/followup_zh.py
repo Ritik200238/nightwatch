@@ -18,6 +18,8 @@ VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对�
 RULE_ZH = {
     "written_plan": "书面计划", "stop": "止损", "position_size": "仓位大小", "market_posture": "市场状态",
     "liquidity": "流动性", "circuit_breaker": "熔断", "basis": "价差", "event": "事件", "data_quality": "数据质量",
+    "liquidation": "强平风险", "exit_liquidity": "平仓流动性", "risk_budget": "风险预算", "concentration": "集中度",
+    "revenge": "报复性交易冷静期", "regime": "市场状态",
 }
 
 
@@ -72,6 +74,16 @@ def _a_stop(r: dict, _q: str) -> Answer | None:
 
 
 def _a_worst(r: dict, _q: str) -> Answer | None:
+    modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
+    if modes:
+        from nightwatch.api.intake import FAILURE_ZH
+
+        bits = ["按可能性乘以损失排序，这笔交易最主要的亏损方式："]
+        for i, m in enumerate(modes[:3], 1):
+            chance = f"，历史上约 {m['chance']:.0%} 的时候发生" if m.get("chance") is not None else ""
+            capped = "（杠杆下会先被强平，亏损止于保证金）" if m.get("capped") else ""
+            bits.append(f"{i}. {FAILURE_ZH.get(m['key'], m['title'])}：约 {_usd(m['loss_quote'])}（仓位 {_pct(m.get('loss_pct'))}）{chance}{capped}。")
+        return Answer("worst", "".join(bits), ("failure modes",))
     st = r.get("stress") or {}
     rows = [(p, i) for p, i in zip(st.get("presets") or [], st.get("impacts") or [], strict=False) if i.get("total_pnl_quote") is not None]
     bits = []
@@ -154,18 +166,81 @@ def _a_hedge(r: dict, _q: str) -> Answer | None:
     )
 
 
+def _a_shock(r: dict, q: str) -> Answer | None:
+    """"如果跌 10% 呢": the same arithmetic as the English answer, in Chinese."""
+    from nightwatch.api.followup import _UP, SHOCK
+
+    m = SHOCK.search(q)
+    if not m:
+        return None
+    size = float(next(g for g in m.groups() if g))
+    t = r.get("ticket") or {}
+    notional = t.get("notional_quote")
+    if not notional or not 0 < size < 100:
+        return None
+    long_ = (t.get("side") or "long") == "long"
+    up = bool(_UP.search(q))
+    pnl_pct = (size if up else -size) * (1 if long_ else -1)
+    pnl = notional * pnl_pct / 100.0
+    exit_bps = ((r.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps")
+    bits = [f"{'上涨' if up else '下跌'} {size:g}%：{_usd(notional)} 的{'多头' if long_ else '空头'}{'赚' if pnl >= 0 else '亏'}约 {_usd(abs(pnl))}"
+            + (f"，按当前盘口平仓还要约 {_usd(notional * exit_bps / 1e4)}" if exit_bps is not None else "") + "。"]
+    if pnl_pct < 0:
+        stop = t.get("stop_price")
+        stop_pct = (((r.get("analog") or {}).get("paths") or {}).get("stop_pct"))
+        if stop and stop_pct is not None and abs(stop_pct) < size:
+            bits.append(f"这会直接越过你在 {stop:,.2f} 的止损（距现价 {abs(stop_pct):.1f}%）：如果是开盘跳空，止损会在跳空之后成交，而不是在你的价格。")
+        lev = r.get("leverage") or {}
+        if lev.get("liquidation_distance_pct") is not None:
+            d = lev["liquidation_distance_pct"]
+            bits.append(f"{lev['leverage']:g} 倍杠杆下" + (f"会被强平，{_usd(lev['margin_quote'])} 保证金全部损失。" if size >= d else f"还不会强平（强平线距现价 {d:.1f}%）。"))
+        presets = {p["id"]: p for p in ((r.get("stress") or {}).get("presets") or [])}
+        p1 = presets.get("closed_window_gap_p1")
+        if p1 and abs(p1.get("price_move_pct") or 0) < size:
+            bits.append(f"这比该代币历史上百分之一的休市波动（{_pct(p1['price_move_pct'])}）还大。")
+    return Answer("shock", "".join(bits), ("position arithmetic", "order book", "stress presets"))
+
+
+FEATURE_ZH = {
+    "basis_index_bps": "与公允价值的偏离", "basis_index_z": "偏离的程度", "rv_24h": "当日波动率", "rv_168h": "周波动率",
+    "vol_pctl_90d": "波动率分位", "trend_sma_pct": "趋势", "sma_slope_5d_pct": "趋势斜率", "liq_ratio": "交易活跃度",
+    "no_trade_share_24h": "无成交时段占比", "native_close_age_h": "距正股上次交易的时间", "hours_to_earnings": "距财报时间",
+    "hours_since_earnings": "距上次财报时间", "macro_events_72h": "未来宏观数据", "hours_to_fomc": "距美联储会议时间",
+    "news_count_24h": "新闻数量", "vix_pctl_1y": "VIX", "curve_pctl_1y": "收益率曲线", "dollar_20d_chg_pct": "美元",
+    "ten_year_20d_chg_bps": "十年期美债收益率",
+}
+
+
+def _a_similar(r: dict, _q: str) -> Answer | None:
+    from collections import Counter
+
+    matches = ((r.get("analog") or {}).get("result") or {}).get("matches") or []
+    if not matches or not any(m.get("alike_on") for m in matches):
+        return None
+    alike = Counter(f for m in matches for f in (m.get("alike_on") or []))
+    differs = Counter(f for m in matches for f in (m.get("differs_on") or []))
+    top = [FEATURE_ZH.get(f, f) for f, _ in alike.most_common(3)]
+    text = f"这 {len(matches)} 个历史时刻与现在最接近的是：{'、'.join(top)}。"
+    if differs:
+        f, n = differs.most_common(1)[0]
+        text += f"差别最大的是{FEATURE_ZH.get(f, f)}，{len(matches)} 个里有 {n} 个相差较远。"
+    return Answer("moments", text, ("matched moments",))
+
+
 ROUTES = (
+    ("shock", re.compile(r"(?:跌|涨|跳空|暴跌|暴涨)[^0-9]{0,6}[0-9]+(?:\.[0-9]+)?\s*[%％]"), _a_shock),
+    ("similar", re.compile(r"相似|一样|像现在"), _a_similar),
     ("street", re.compile(r"分析师|评级|目标价|内部人|高管|恐慌|贪婪|情绪|华尔街|实时价"), _a_street),
     ("stop", re.compile(r"止损"), _a_stop),
     ("size", re.compile(r"仓位|更大|更小|加仓|减仓|为什么不能|上限|多少钱|减半|加倍|翻倍"), _a_size),
-    ("worst", re.compile(r"最坏|最差|风险|压力|暴跌|亏多少|崩"), _a_worst),
+    ("worst", re.compile(r"最坏|最差|风险|压力|暴跌|亏多少|崩|出什么问题|怎么亏|会亏|出错"), _a_worst),
     ("exit", re.compile(r"平仓|出场|卖得掉|流动性|滑点|盘口|深度"), _a_exit),
     ("hedge", re.compile(r"对冲|永续"), _a_hedge),
     ("gate", re.compile(r"为什么|复核|规则|原因|闸门"), _a_gate),
     ("history", re.compile(r"历史|过去|相似|概率|胜率|中位"), _a_history),
 )
 
-MENU_ZH = "我可以根据这份报告回答：仓位为什么是这么大、止损、最坏的情况、平仓成本、历史怎么说、对冲、为什么需要复核，以及分析师和内部人在做什么。"
+MENU_ZH = "我可以根据这份报告回答：仓位为什么是这么大、止损、最坏的情况、如果跌 10% 会怎样、平仓成本、历史怎么说、这些时刻为什么相似、对冲、为什么需要复核，以及分析师和内部人在做什么。也可以问“最安全的持有方式是什么”。"
 
 
 def answer(report: dict, question: str) -> Answer | None:

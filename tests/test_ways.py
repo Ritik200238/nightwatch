@@ -24,3 +24,11 @@ def test_the_versions_are_fixed_by_rule():
     assert labels == ["As asked", "Half the size", "Shorter hold: to the next open", "Half hedged on the perpetual", "Without leverage"]
     assert ways.ASKS.search("what's the safest way to hold NVDA over the weekend?")
     assert ways.ASKS.search("怎么持有最安全") and not ways.ASKS.search("what if it gaps 10%?")
+
+
+def test_the_table_reads_in_chinese():
+    rows = [row("As asked", "GO", 20000, -4.0), row("Half the size", "GO", 10000, -4.0), row("Half hedged on the perpetual", "GO", 20000, -2.0, hedge=12.0)]
+    base = TradeTicket(ticker="NVDA", side=Side.LONG, notional_quote=20000.0)
+    text = ways._zh(base, rows, ways.pick(rows, 20000), rows[1])
+    assert "用永续合约对冲一半" in text and "按原计划" in text and "As asked" not in text
+    assert ways.ASKS.search("最安全的持有方式是什么？")

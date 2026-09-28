@@ -257,6 +257,8 @@ def _describe_zh(change: Change) -> str:
         bits.append("持有到本时段结束")
     if change.lenses:
         bits.append("只比较：" + lens_mod.describe(lens_mod.resolve(list(change.lenses))))
+    if change.leverage:
+        bits.append("不加杠杆" if change.leverage <= 1 else f"{change.leverage:g} 倍杠杆")
     return "，".join(bits)
 
 

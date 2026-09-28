@@ -22,7 +22,7 @@ from nightwatch.decision.ticket import HorizonKind
 
 ASKS = re.compile(
     r"\bsafest\b|\bbest way\b|\bcompare\b.*\b(?:ways|options|versions|holds?)\b|\b(?:ways|options) to (?:hold|do|play|take)\b|\balternatives?\b"
-    r"|怎么持有最安全|最安全的方式|比较.*方案|有哪些方案",
+    r"|最安全|比较.*方案|有哪些方案|怎么持有",
     re.I,
 )
 _VERDICT_RANK = {"GO": 0, "HEDGE": 1, "REDUCE_TO": 2, "REVIEW": 3, "NO_GO": 4}
@@ -88,6 +88,41 @@ def _usd(v: float | None) -> str:
     return "n/a" if v is None else f"{v:,.0f}"
 
 
+LABEL_ZH = {
+    "As asked": "按原计划", "Half the size": "仓位减半", "Shorter hold: to the next open": "缩短持有：到下一次开盘",
+    "Shorter hold: to the end of this session or closed window": "缩短持有：到本时段结束",
+    "Half hedged on the perpetual": "用永续合约对冲一半", "Without leverage": "不加杠杆",
+}
+VERDICT_ZH = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+
+
+def _zh(base: Any, rows: list[dict[str, Any]], best: dict[str, Any] | None, half: dict[str, Any] | None) -> str:  # noqa: ANN401
+    """The same table in Chinese; the numbers are the same fields."""
+    lines = [f"同一个{'做多' if base.side.value == 'long' else '做空'} {base.ticker} 的想法，按 {len(rows)} 种方式在同一时刻重新计算："]
+    for x in rows:
+        bits = [f"{VERDICT_ZH.get(x['verdict'], x['verdict'])}，{_usd(x['size'])} USDT", f"持有 {x['hours']:.0f} 小时"]
+        if x["p5_quote"] is not None:
+            bits.append(f"二十分之一的坏情况 {_usd(x['p5_quote'])} USDT（{x['p5_pct']:+.1f}%）" + ("，只计未对冲的一半" if x["hedge_bps"] is not None else ""))
+        if x["worst_quote"] is not None:
+            bits.append(f"最坏压力情景 {_usd(x['worst_quote'])} USDT")
+        if x["exit_bps"] is not None:
+            bits.append(f"平仓 {x['exit_bps']:.0f} bps")
+        if x["hedge_bps"] is not None:
+            bits.append(f"对冲成本 {x['hedge_bps']:.0f} bps")
+        if x["liquidation_pct"] is not None:
+            bits.append(f"强平线距现价 {x['liquidation_pct']:.1f}%")
+        lines.append(f"- {LABEL_ZH.get(x['label'], x['label'])}：" + "，".join(bits))
+    lines.append("")
+    if best is not None and best["verdict"] == "GO":
+        lines.append(f"保持你的仓位不变，仍可直接做的最安全方案是：{LABEL_ZH.get(best['label'], best['label'])}（二十分之一的坏情况为仓位的 {best['p5_pct']:+.1f}%）。")
+    elif best is not None:
+        lines.append(f"按你的仓位，没有一个方案能直接做。最接近的是：{LABEL_ZH.get(best['label'], best['label'])}（{VERDICT_ZH.get(best['verdict'], best['verdict'])}）。")
+    if half is not None and half["p5_quote"] is not None:
+        lines.append(f"或者少冒点钱：仓位减半后，二十分之一的坏情况是 {_usd(half['p5_quote'])} USDT。")
+    lines.append("每个数字都来自对系统的完整重新计算，没有估算。")
+    return "\n".join(lines)
+
+
 def answer(state: Any, context: dict[str, Any], lang: str = "en") -> dict[str, Any] | None:  # noqa: ANN401
     from nightwatch.api import whatif
     from nightwatch.pipeline.analyze import analyze
@@ -135,7 +170,7 @@ def answer(state: Any, context: dict[str, Any], lang: str = "en") -> dict[str, A
     head = f"The same {base.side.value} {base.ticker} idea, run {len(rows)} ways against the same moment:"
     text = "\n".join([head, *lines, "", verdict, "Every number is from a full re-run of the desk; nothing is estimated."])
     if zh:
-        text = "同一个想法按不同方式在同一时刻重新计算（英文明细如下）：\n" + text
+        text = _zh(base, rows, best, half)
     return {
         "intent": {"kind": "ways", "missing_fields": [], "reply": text},
         "ticket": None, "report": None, "report_text": None, "narrative": text, "unverified_numbers": [],

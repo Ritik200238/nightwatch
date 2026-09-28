@@ -375,3 +375,28 @@ def test_halving_in_chinese_reads_the_size_sweep(report):
 
     got = followup_zh.answer(report, "仓位减半呢")
     assert got is not None and got.kind == "size" and "结论为" in got.text
+
+
+def test_the_chinese_questions_a_judge_found_broken_are_answered(report):
+    """The product's own suggestion "如果跌 10% 呢" returned the menu, "会出什么问题" too,
+    and "这些时刻为什么相似" got the gate answer."""
+    from nightwatch.api import followup_zh
+
+    r = copy.deepcopy(report)
+    r["failure_modes"] = [{"key": "gap_worst", "title": "A severe gap at the reopen", "trigger": "t", "mechanism": "m",
+                           "loss_quote": -1234.0, "loss_pct": -6.2, "likelihood": "l", "source": "s", "short": "x", "chance": 0.01, "capped": False}]
+    r["analog"]["result"]["matches"] = [{"ts": o["ts"], "alike_on": ["vol_pctl_90d", "trend_sma_pct"], "differs_on": ["news_count_24h"]}
+                                        for o in r["analog"]["matches_outcomes"]]
+    shock = followup_zh.answer(r, "如果跌 10% 呢？")
+    assert shock is not None and shock.kind == "shock" and "下跌 10%" in shock.text
+    worst = followup_zh.answer(r, "会出什么问题？")
+    assert worst is not None and worst.kind == "worst" and "开盘严重跳空" in worst.text
+    similar = followup_zh.answer(r, "这些时刻为什么相似？")
+    assert similar is not None and similar.kind == "moments" and "波动率分位" in similar.text
+
+
+def test_a_chinese_leverage_what_if_names_the_change():
+    from nightwatch.api import whatif
+
+    assert whatif._describe_zh(whatif.Change(leverage=1.0)) == "不加杠杆"
+    assert whatif._describe_zh(whatif.Change(leverage=5.0)) == "5 倍杠杆"
