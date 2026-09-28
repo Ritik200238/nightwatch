@@ -24,8 +24,11 @@ ALIASES_ZH: dict[str, str] = {
 _DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 _UNITS = {"十": 10, "百": 100, "千": 1_000, "万": 10_000}
 
-_SHORT = re.compile(r"做空|卖空|看空|空头|开空")
-_LONG = re.compile(r"做多|买入|买进|看多|多头|开多|持有|拿着|加仓|买")
+_SHORT = re.compile(r"做空|卖空|沽空|看空|空头|开空|空单|做淡")
+# "拿点特斯拉" is how a trader says "hold some Tesla": 拿 is a long unless it is 拿不准.
+_LONG = re.compile(r"做多|买入|买进|看多|多头|开多|多单|持有|拿(?!不)|入手|上车|抄底|建仓|进场|加仓|囤|买")
+# A one-word answer to "做多还是做空？".
+_BARE_SIDE = {"多": "long", "做多": "long", "多单": "long", "空": "short", "做空": "short", "空单": "short"}
 # A size: Arabic or Chinese numerals, an optional 千/万 scale, then a money word or the
 # scale itself ("两万", "1.5万", "20000美元", "5000U").
 _SIZE = re.compile(r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(万|千|k|K)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?")
@@ -93,9 +96,37 @@ def find_ticker_zh(text: str, known: set[str]) -> str | None:
 ASKS_ZH = {"ticker": "哪只股票", "side": "做多还是做空", "notional_quote": "多大仓位（USDT）"}
 
 
-def ask(missing: list[str]) -> str:
-    """The clarifying question, in Chinese, for the fields still missing."""
-    return "还需要知道：" + "、".join(ASKS_ZH[m] for m in missing if m in ASKS_ZH) + "。例如：“周末持有两万美元的特斯拉，止损350”。"
+_NAME_ZH = {v: k for k, v in reversed(list(ALIASES_ZH.items()))}  # the first alias listed is the name used
+_SIDE_ZH = {"long": "做多", "short": "做空"}
+_HINT_ZH = {"side": "回“多”或“空”就行", "notional_quote": "比如“2万U”", "ticker": "比如“特斯拉”或“NVDA”"}
+
+
+def ask(missing: list[str], known: dict[str, object] | None = None) -> str:
+    """The clarifying question, in Chinese, for the fields still missing.
+
+    It first says back what it already has, so a trader who answered part of the
+    question sees the answer landed and is not handed the same sentence again.
+    """
+    known = known or {}
+    have = []
+    if known.get("ticker"):
+        have.append(_NAME_ZH.get(str(known["ticker"]), str(known["ticker"])))
+    if known.get("side") in _SIDE_ZH:
+        have.append(_SIDE_ZH[str(known["side"])])
+    if known.get("notional_quote"):
+        have.append(f"{float(known['notional_quote']):,.0f} USDT")
+    kind = known.get("horizon_kind")
+    if kind == "through_weekend":
+        have.append("过周末")
+    elif kind == "next_open":
+        have.append("过夜")
+    elif kind == "hours" and known.get("horizon_hours"):
+        have.append(f"{float(known['horizon_hours']):g} 小时")
+    wanted = [m for m in missing if m in ASKS_ZH]
+    head = ("已记下：" + " · ".join(have) + "。") if have else ""
+    if len(wanted) == 1:
+        return f"{head}还差一项：{ASKS_ZH[wanted[0]]}？{_HINT_ZH[wanted[0]]}。"
+    return head + "还需要知道：" + "、".join(ASKS_ZH[m] for m in wanted) + "。例如：“周末持有两万美元的特斯拉，止损350”。"
 
 
 def read(text: str, known: set[str]) -> dict[str, object]:
@@ -105,7 +136,10 @@ def read(text: str, known: set[str]) -> dict[str, object]:
     if ticker:
         out["ticker"] = ticker
     short, long_ = _SHORT.search(text), _LONG.search(text)
-    if short:
+    bare = _BARE_SIDE.get(text.strip().strip("。.!！~ "))
+    if bare:
+        out["side"] = bare
+    elif short:
         out["side"] = "short"
     elif long_:
         out["side"] = "long"

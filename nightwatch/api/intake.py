@@ -190,7 +190,14 @@ def _settle(out: RuleIntent) -> RuleIntent:
     if out.missing_fields:
         out.kind = "clarify"
         example = ' For example: "long 25k TSLA overnight, stop 340".' if len(out.missing_fields) == 3 else ""
-        out.reply = "I need " + ", ".join(ASKS[m] for m in out.missing_fields) + "." + example
+        # Say back what landed, so an answer to half the question is seen to have counted.
+        have = [x for x in (out.ticker, out.side, f"{out.notional_quote:,.0f} USDT" if out.notional_quote else None) if x]
+        head = f"Got {', '.join(have)}. " if have else ""
+        if len(out.missing_fields) == 1:
+            hint = {"side": ' (just say "long" or "short")', "notional_quote": ' (e.g. "25k")', "ticker": ' (e.g. "TSLA")'}
+            out.reply = f"{head}Still need {ASKS[out.missing_fields[0]]}{hint[out.missing_fields[0]]}."
+        else:
+            out.reply = head + "I need " + ", ".join(ASKS[m] for m in out.missing_fields) + "." + example
     else:
         out.kind = "analyze"
         out.reply = f"Running {out.side} {out.notional_quote:,.0f} USDT in {out.ticker}."

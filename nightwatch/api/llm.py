@@ -302,9 +302,9 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         from nightwatch.api import intake_zh
 
         return {
-            "intent": {**rules.as_dict(), "reply": intake_zh.ask(rules.missing_fields)}, "ticket": None, "report": None,
+            "intent": {**rules.as_dict(), "reply": intake_zh.ask(rules.missing_fields, rules.as_dict())}, "ticket": None, "report": None,
             "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model,
-            "reply": intake_zh.ask(rules.missing_fields), "parsed_by": "rules", "language": lang,
+            "reply": intake_zh.ask(rules.missing_fields, rules.as_dict()), "parsed_by": "rules", "language": lang,
         }
     if fast:
         ticket = intake.intent_to_ticket(rules, account_equity)

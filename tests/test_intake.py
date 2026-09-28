@@ -497,3 +497,22 @@ def test_the_first_reply_is_short_and_leads_with_what_matters(seeded_store):  # 
     assert "可以接着问我" in it.brief_short(r, "zh")
     lev = _report(seeded_store, thesis="t", invalidation="i", leverage=5.0)
     assert "no leverage?" in it.brief_short(lev)
+
+
+def test_a_chinese_trader_saying_na_means_long_and_is_not_asked_the_same_thing_twice():
+    """"我想周末拿点特斯拉" is a long. Read as no side, the desk asked 做多还是做空 on every
+    turn, byte for byte, and a trader who never types 做多 never got past the first message."""
+    from nightwatch.api import intake_zh
+
+    got = intake_zh.read("我想周末拿点特斯拉", set(TICKERS))
+    assert got["side"] == "long" and got["ticker"] == "TSLA" and got["horizon_kind"] == "through_weekend"
+    assert intake_zh.read("多", set(TICKERS))["side"] == "long" and intake_zh.read("空。", set(TICKERS))["side"] == "short"
+    first = intake_zh.ask(["notional_quote"], got)
+    assert "特斯拉" in first and "做多" in first and "过周末" in first and "仓位" in first
+    assert first != intake_zh.ask(["side", "notional_quote"], {"ticker": "TSLA"})
+
+
+def test_an_english_clarify_says_back_what_it_has():
+    out = read_conversation([{"role": "user", "content": "thinking of holding some nvda over the weekend"}], TICKERS)
+    assert out.kind == "clarify" and out.missing_fields == ["notional_quote"]
+    assert out.reply.startswith("Got NVDA, long.") and "size" in out.reply
