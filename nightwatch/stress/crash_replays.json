@@ -1,0 +1,1230 @@
+{
+ "AAPL": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -1.57,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 3.58,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.92,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 0.54
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -5.77,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 3.19,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -9.45,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.21
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -12.06,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 10.75,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -12.96,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 6.71
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -10.87,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 6.64,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -4.68,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.57
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -18.95,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 5.56,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -8.2,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 2.89
+  }
+ },
+ "AMD": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -3.94,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 17.79,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.78,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 2.02
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -6.69,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -2.41,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -7.8,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 8.88
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -15.3,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 10.18,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -10.98,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 8.18
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -14.63,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 9.23,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -4.74,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.73
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -18.76,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 12.92,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -5.02,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 3.0
+  }
+ },
+ "AMZN": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -1.59,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 8.23,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.75,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.51
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -13.88,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -1.04,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -8.15,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.84
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -7.23,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 4.89,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -8.04,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 4.68
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -14.45,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 10.85,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -3.45,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.56
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -10.59,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 11.75,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.64,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 5.69
+  }
+ },
+ "AVGO": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -2.5,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 3.25,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.76,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.12
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -11.58,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -0.71,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -9.88,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 5.54
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -23.74,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 4.71,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -11.12,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 3.08
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -8.44,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 6.14,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -2.41,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.23
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -10.43,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 26.56,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.71,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 8.75
+  }
+ },
+ "BABA": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -4.66,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": -0.82,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -2.74,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": -0.05
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -2.37,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -0.18,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -4.42,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.71
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -10.08,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 1.9,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -9.2,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 5.29
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -17.64,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 29.08,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -8.79,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.83
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -18.35,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": -10.09,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -3.19,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 2.15
+  }
+ },
+ "COIN": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -6.09,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 14.55,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.2,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 10.61
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -15.55,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 17.17,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -20.75,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 3.8
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -24.84,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 15.69,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -7.91,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 7.57
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -14.03,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 10.3,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -7.85,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 5.04
+  }
+ },
+ "CRCL": {},
+ "GOOGL": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -3.33,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 10.11,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.8,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.59
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -7.16,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -0.89,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -6.7,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.73
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -11.39,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 3.16,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -10.27,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 5.71
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -9.22,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 6.26,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -2.06,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 3.26
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -6.55,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 9.0,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -3.78,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 3.05
+  }
+ },
+ "HOOD": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -6.84,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 3.56,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -3.29,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 3.78
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -20.18,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 11.75,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -17.79,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 2.16
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -13.72,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 25.73,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -7.92,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.04
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -17.03,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 22.31,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -11.02,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 4.87
+  }
+ },
+ "INTC": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": 3.73,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 11.99,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.0,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.48
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -34.58,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 2.51,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -5.96,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.36
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -13.65,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 5.69,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -12.71,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 5.97
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -8.39,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 6.17,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -1.68,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 1.92
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -10.96,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 8.46,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -2.64,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 2.5
+  }
+ },
+ "META": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -2.2,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 13.28,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.55,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 3.69
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": 0.19,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -4.47,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -7.54,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.69
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -14.23,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": -0.37,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -10.55,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 5.87
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -16.47,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 11.36,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -3.72,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.86
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -11.59,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 16.06,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.46,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 5.23
+  }
+ },
+ "MSFT": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": 0.09,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 8.77,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.31,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.11
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -5.55,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -1.14,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -4.73,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": -0.57
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -11.85,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 5.27,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -11.86,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 6.07
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -10.41,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 6.79,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -2.77,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.75
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -6.35,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 8.52,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -1.92,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 2.91
+  }
+ },
+ "MSTR": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -4.11,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 8.03,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.08,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 7.13
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -18.92,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 22.5,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -27.37,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 2.62
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -14.09,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 0.75,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -7.59,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 3.12
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -34.67,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 17.34,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -6.79,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 7.71
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -14.21,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 1.11,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -8.25,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 3.73
+  }
+ },
+ "MU": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -5.26,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 4.95,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.73,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.99
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -17.67,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -2.1,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -5.47,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 7.11
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -21.16,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 5.19,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -13.12,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 7.11
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -14.23,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 16.02,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -3.64,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 3.64
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -22.83,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 20.32,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.41,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 4.72
+  }
+ },
+ "NFLX": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -5.86,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 5.64,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.82,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 0.84
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -4.74,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 0.55,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -4.33,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 0.64
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -14.6,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 4.0,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -8.82,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 4.84
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -16.34,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 12.2,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -3.37,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 4.66
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -7.24,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 10.47,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -3.6,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 5.14
+  }
+ },
+ "NVDA": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -5.02,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 11.21,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.26,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 2.31
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -14.16,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -0.82,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -14.18,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 8.84
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -20.31,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 5.35,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -11.8,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 6.56
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -16.09,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 16.11,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -6.13,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 4.06
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -11.57,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 21.23,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.26,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 6.32
+  }
+ },
+ "PLTR": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -3.2,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 1.4,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.01,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 2.29
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -10.41,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 3.73,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -12.13,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 2.46
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -16.78,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 17.33,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -6.52,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 3.35
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -10.99,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 24.32,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -7.09,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 7.0
+  }
+ },
+ "QQQ": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -2.39,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 5.55,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -0.89,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.25
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -7.58,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 0.9,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -5.36,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 2.26
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -13.28,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 6.03,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -9.46,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 5.5
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -10.48,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 8.26,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -3.21,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.6
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -11.02,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 10.25,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -4.14,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 3.42
+  }
+ },
+ "SMCI": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -12.77,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 8.9,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -3.36,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 2.87
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -13.23,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -1.38,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -14.26,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 6.56
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -28.3,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 5.08,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -12.74,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 2.48
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -13.62,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 3.5,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -4.3,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 1.63
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -5.96,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 23.11,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -8.72,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 6.48
+  }
+ },
+ "SPY": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -3.4,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 2.79,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.49,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.33
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -6.07,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 1.51,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -3.99,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 1.29
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -12.58,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 5.6,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -10.45,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 6.04
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -8.81,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 5.77,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -2.59,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 2.14
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -10.65,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 8.58,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -3.44,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 3.47
+  }
+ },
+ "SQQQ": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": 7.43,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": -15.35,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": 2.7,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": -3.63
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": 25.61,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": -2.23,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": 16.28,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": -6.68
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": 21.4,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": -17.39,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": 29.76,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": -16.24
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": 36.04,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": -22.32,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": 9.77,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": -7.79
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": 37.08,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": -31.93,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": 12.57,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": -10.11
+  }
+ },
+ "TQQQ": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -7.22,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 16.92,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -2.68,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 3.7
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -21.47,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 2.46,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -16.02,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 6.67
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -39.59,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 15.44,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -28.82,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 16.71
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -29.31,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 25.59,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -9.7,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 7.76
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -31.17,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 28.04,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -12.51,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 10.04
+  }
+ },
+ "TSLA": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -4.13,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 5.53,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -1.34,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 1.62
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -14.3,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 6.44,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -10.81,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 2.37
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -29.83,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 12.2,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -14.11,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 6.15
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -10.8,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 13.73,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -8.33,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 1.83
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -17.5,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 13.69,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.18,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 5.02
+  }
+ },
+ "TSM": {
+  "banks_2023": {
+   "d3_down_date": "2023-03-13",
+   "d3_down_pct": -3.4,
+   "d3_up_date": "2023-03-16",
+   "d3_up_pct": 2.31,
+   "gap_down_date": "2023-03-15",
+   "gap_down_pct": -2.34,
+   "gap_up_date": "2023-03-14",
+   "gap_up_pct": 0.33
+  },
+  "carry_2024": {
+   "d3_down_date": "2024-08-05",
+   "d3_down_pct": -10.77,
+   "d3_up_date": "2024-07-16",
+   "d3_up_pct": 0.83,
+   "gap_down_date": "2024-08-05",
+   "gap_down_pct": -10.68,
+   "gap_up_date": "2024-07-31",
+   "gap_up_pct": 5.97
+  },
+  "covid_2020": {
+   "d3_down_date": "2020-03-16",
+   "d3_down_pct": -14.05,
+   "d3_up_date": "2020-03-04",
+   "d3_up_pct": 6.02,
+   "gap_down_date": "2020-03-16",
+   "gap_down_pct": -11.28,
+   "gap_up_date": "2020-03-13",
+   "gap_up_pct": 6.59
+  },
+  "rates_2022": {
+   "d3_down_date": "2022-06-13",
+   "d3_down_pct": -8.47,
+   "d3_up_date": "2022-03-17",
+   "d3_up_pct": 7.76,
+   "gap_down_date": "2022-02-24",
+   "gap_down_pct": -6.82,
+   "gap_up_date": "2022-03-09",
+   "gap_up_pct": 4.51
+  },
+  "tariffs_2025": {
+   "d3_down_date": "2025-04-07",
+   "d3_down_pct": -14.21,
+   "d3_up_date": "2025-04-09",
+   "d3_up_pct": 8.14,
+   "gap_down_date": "2025-04-03",
+   "gap_down_pct": -6.06,
+   "gap_up_date": "2025-04-08",
+   "gap_up_pct": 3.97
+  }
+ },
+ "_meta": {
+  "built": "2026-09-28",
+  "source": "Yahoo Finance daily chart, split-adjusted; dates from SPY",
+  "windows": {
+   "banks_2023": {
+    "end": "2023-03-17",
+    "market_days": {
+     "d3_down": "2023-03-13",
+     "d3_up": "2023-03-16",
+     "gap_down": "2023-03-15",
+     "gap_up": "2023-03-14"
+    },
+    "name": "March 2023 bank failures",
+    "start": "2023-03-08"
+   },
+   "carry_2024": {
+    "end": "2024-08-07",
+    "market_days": {
+     "d3_down": "2024-08-05",
+     "d3_up": "2024-07-16",
+     "gap_down": "2024-08-05",
+     "gap_up": "2024-07-31"
+    },
+    "name": "August 2024 carry-trade unwind",
+    "start": "2024-07-16"
+   },
+   "covid_2020": {
+    "end": "2020-03-23",
+    "market_days": {
+     "d3_down": "2020-03-16",
+     "d3_up": "2020-03-04",
+     "gap_down": "2020-03-16",
+     "gap_up": "2020-03-13"
+    },
+    "name": "COVID crash",
+    "start": "2020-02-19"
+   },
+   "rates_2022": {
+    "end": "2022-10-14",
+    "market_days": {
+     "d3_down": "2022-06-13",
+     "d3_up": "2022-03-17",
+     "gap_down": "2022-02-24",
+     "gap_up": "2022-03-09"
+    },
+    "name": "2022 inflation shock",
+    "start": "2022-01-03"
+   },
+   "tariffs_2025": {
+    "end": "2025-04-10",
+    "market_days": {
+     "d3_down": "2025-04-07",
+     "d3_up": "2025-04-09",
+     "gap_down": "2025-04-03",
+     "gap_up": "2025-04-08"
+    },
+    "name": "April 2025 tariff shock",
+    "start": "2025-04-02"
+   }
+  }
+ }
+}
