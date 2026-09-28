@@ -96,7 +96,7 @@ applies them to new verdicts. Judges can see the before and after.
 The second hypothesis follows from the first, and is the one we would most like to be
 judged on: **if a forecast that is never scored is a guess, so is a retrieval engine that
 is never tested.** So the engine is put through the same treatment as its own forecasts.
-Ten falsifiable questions about it — does closeness predict a tighter outcome, does
+Eleven falsifiable questions about it — does closeness predict a tighter outcome, does
 weighting the close matches help, does one tail factor fit every holding period, does a
 model reading a filing spot a night that matters, does narrowing the search to the nights
 a trader asks about give a truer loss tail — each recomputed from the stored data, each
@@ -161,7 +161,7 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
   * **This changed what a trader is told.** Checked end to end through the gate: TSLA, a
     Saturday, 60,000 USDT requested, no stop, 200,000 equity. The analog 5th percentile
     the desk sizes against moved from −8.38% to −4.76%, and the binding risk-budget cap
-    from **23,880 to 42,011 USDT**. The desk had been cutting weekend positions by 43%
+    from **23,880 to 42,011 USDT** (checked through the gate the day it shipped). The desk had been cutting weekend positions by 43%
     against a loss the history does not support.
   * Median absolute error of the median forecast: 2.22 percentage points.
 * **We tested the retrieval itself, and published what failed.** Eleven falsifiable
@@ -171,8 +171,8 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
   versions of the model' confidence line looked real (t=+5.1) and was a proxy for a small
   5th percentile; with size held fixed it vanished (t=-0.3). Not shown. The two that cost us most:
   * *Do closer analogs have tighter outcomes?* **No — the opposite.** The near half of a
-    retrieval is 14% wider by standard deviation and 22% by interquartile range, and
-    **not one of 24 tokens goes the other way** (clustered t = −6.59, n = 960). The
+    retrieval is 13% wider by standard deviation and 19% by interquartile range, and
+    **only 1 of 24 tokens goes the other way** (clustered t = −6.2, n = 958). The
     distance is dominated by the volatility features, so a query made in a wild moment
     retrieves wild neighbours.
   * *So should closer analogs count for more?* **No.** None of four weighting schemes
@@ -313,8 +313,8 @@ Behind the Submission Materials Link:
    as forecasts mature — including the split by holding period, where the pooled figure
    was hiding two opposite errors.
 6. **What we tested about our own retrieval:**
-   https://nightwatch-gules.vercel.app/studies — ten falsifiable questions about the
-   engine, five answered no and two undecided, each with the method, the numbers and what changed in the
+   https://nightwatch-gules.vercel.app/studies — eleven falsifiable questions about the
+   engine, five answered no and three undecided, each with the method, the numbers and what changed in the
    product because of it. Recomputed by `nightwatch studies`; nothing on it is typed in.
 7. One worked verdict, fixed in place: `https://nightwatch-gules.vercel.app/r/<forecast id>`. Every analysis the
    desk produces gets a link that reopens it exactly as it was argued — same analogs,
@@ -556,7 +556,7 @@ compliance requirement and a reply does not satisfy it.
 > https://nightwatch-gules.vercel.app/studies
 > #BitgetHackathon @Bitget_AI
 
-*Attach: screenshot of the Studies scoreboard — 10 asked, 3 yes, 5 no, 2 cannot tell yet.*
+*Attach: screenshot of the Studies scoreboard — 11 asked, 3 yes, 5 no, 3 cannot tell yet.*
 
 **2/**
 
@@ -564,7 +564,7 @@ compliance requirement and a reply does not satisfy it.
 > informative.
 >
 > We checked. The near half of a retrieval has **wider** outcomes than the far half.
-> 14% by std dev. Not 1 of 24 tokens goes the other way.
+> 13% by std dev. Only 1 of 24 tokens goes the other way.
 >
 > So weighting the close ones more makes the forecast measurably worse.
 
@@ -589,7 +589,7 @@ compliance requirement and a reply does not satisfy it.
 **5/**
 
 > Fixed, and it changed what a trader is told. A 60k weekend hold with no stop was
-> capped at 23,880 USDT. Now 42,011.
+> capped at 23,880 USDT. After the fix, 42,011.
 >
 > We were cutting weekend positions by 43% against a loss the history doesn't support.
 

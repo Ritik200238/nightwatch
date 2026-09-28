@@ -313,10 +313,12 @@ Reproduce: `nightwatch filings --core`, then `GET /sources`.
 ## 13. Testing the retrieval itself (2026-09-21)
 
 Everything above measures the *forecasts*. This measures the thing that makes them.
-Seven questions, each written so it could come back no, each recomputed from the stored
-bars and the journal by `nightwatch studies` and served at `/studies`. Five came back no.
+Eleven questions, each written so it could come back no, each recomputed from the stored
+bars and the journal by `nightwatch studies` and served at `/studies`. Five came back no,
+three unclear, three yes. Numbers here are the 26 Sep run; `/studies` recomputes them, so
+where this page and that one differ, that one is current.
 
-The match-level evidence is 960 point-in-time moments across 24 tokens, 40 retrieved
+The match-level evidence is 958 point-in-time moments across 24 tokens, 40 retrieved
 analogs each. The journal-based questions use the 2,345 matured replays of §7.
 
 ### 13.1 Closer analogs have **wider** outcomes, not tighter — verdict: no
@@ -326,10 +328,10 @@ each half, paired inside the moment:
 
 | measure | near half ÷ far half | near tighter on |
 |---|---|---|
-| standard deviation | **1.14** | 38.0% of moments |
-| interquartile range | **1.22** | — |
+| standard deviation | **1.13** | 38.3% of moments |
+| interquartile range | **1.19** | — |
 
-Clustered by token: **0 of 24** tokens have tighter outcomes when closer, t = −6.59.
+Clustered by token: **1 of 24** tokens has tighter outcomes when closer, t = −6.2.
 
 This is not a broken retrieval. The distance is dominated by the volatility features, so
 a query made in a wild moment retrieves wild neighbours — which is the retrieval working.
@@ -359,16 +361,16 @@ The §7 correction fitted a single k_lo across every holding period. Scored per 
 
 | holding period | n | below p5, one factor | band width | below p5, per period | band width |
 |---|---|---|---|---|---|
-| overnight (18h) | 1,718 | 7.1% | 10.9% | **5.1%** | 12.4% |
-| multi-day (66–90h) | 353 | **0.2%** | **20.0%** | 6.5% | **10.6%** |
-| before either band had 120 matured | 230 | — | — | 7.4% | 14.1% |
-| **overall** | 2,301 | **5.6%** | 12.87% | 5.6% | 12.29% |
+| overnight (18h) | — | 6.2% | 10.7% | **4.9%** | 11.8% |
+| multi-day (66–90h) | — | **1.8%** | **17.6%** | 6.5% | **10.6%** |
+| before either band had 120 matured | — | — | — | 7.4% | 12.7% |
+| **overall** | 2,301 | **5.3%** | 12.1% | 5.4% | 11.7% |
 
-The pooled 5.6% looked respectable and was an average of a too-narrow overnight band and
-a weekend band so wide it broke twice in 468 forecasts. Two wrongs cancelling is worse
+The pooled 5.3% looked respectable and was an average of a too-narrow overnight band and
+a multi-day band so wide it almost never broke. Two wrongs cancelling is worse
 than either alone, because the headline hides both.
 
-Downstream, checked through the gate rather than inferred: TSLA, Saturday, 60k requested,
+Downstream, checked through the gate the day it shipped, rather than inferred: TSLA, Saturday, 60k requested,
 no stop, 200k equity. The analog p5 the desk sizes against moves from −8.38% to −4.76%,
 and the binding risk-budget cap from **23,880 to 42,011 USDT**. The desk had been cutting
 weekend positions by 43% against a loss the history does not support.
@@ -415,9 +417,10 @@ excludes zero, but only just. A real edge at the edge of detectability. The naiv
 
 ### 13.7 A token is not obviously best explained by its own past — verdict: unclear
 
-On 190 moments that retrieved at least 8 analogs from the token itself and 8 from others:
-same-token p5 breached 12.1% of the time against 6.8% cross-token, pinball 0.305 against
-0.259, t = 1.80. Directionally against restricting the search, not decisively. The search
+On 188 moments that retrieved at least 8 analogs from the token itself and 8 from others:
+same-token p5 breached 16.0% of the time against 14.4% cross-token, pinball 0.481 against
+0.491, t = −0.26. An earlier run read t = +1.80; the swing on under 200 moments is itself
+the finding — this is noise, not a signal either way. The search
 stays pooled, with the token's own history competing on distance like everything else —
 about 12% of retrieved matches come from the token being asked about.
 

@@ -120,7 +120,7 @@ submission form as the worked example — it reopens this exact verdict for anyo
 **Screen:** the **Studies** page. Scroll to the first two, which are the ones that matter.
 
 > The page before this one measures the forecasts. This one measures the thing that makes
-> them. Seven questions about the retrieval, each written so it could come back no. Five
+> them. Eleven questions about the retrieval, each written so it could come back no. Five
 > did.
 >
 > This is the one I would lead with. Everyone assumes the closest matches are the most

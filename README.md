@@ -135,21 +135,22 @@ The full write-up is in [docs/research-notes.md](docs/research-notes.md).
 The scorecard above measures the forecasts. The **Studies** page measures the thing that
 makes them: eleven questions about the retrieval, each written so it could come back no,
 each recomputed from the stored bars and the journal by `nightwatch studies`. Five came
-back no, three could not be decided, and the most useful are the ones that cost us something:
+back no, three could not be decided (numbers below are the 26 Sep run; the page recomputes
+them, so a last digit can move), and the most useful are the ones that cost us something:
 
 * **Closer analogs do not have tighter outcomes — they have wider ones.** The near half
-  of a retrieval is 14% wider by standard deviation and 22% by interquartile range, and
-  not one of 24 tokens goes the other way. The distance is dominated by the volatility
+  of a retrieval is 13% wider by standard deviation and 19% by interquartile range, and
+  only 1 of 24 tokens goes the other way (clustered t = −6.2, n = 958). The distance is dominated by the volatility
   features, so a query made in a wild moment retrieves wild neighbours.
 * **So weighting the close matches more makes the forecast worse.** The engine's own
   similarity weights push the 5th percentile in far enough to roughly double the rate at
   which the real outcome falls outside the band. The weighted fields the cohort computes
   stay wired to nothing, which is now a measured decision rather than an oversight.
-* **One tail factor was hiding two opposite errors.** Pooled coverage read 5.4% against a
-  5% target — respectable, and made of 6.7% breaches on overnight holds cancelling 0.2%
-  on weekend ones inside a band twice as wide as it should be. Fitting per holding period
-  fixed both. For a 60k weekend hold with no stop, the size the desk allows went from
-  23,880 to 42,011 USDT.
+* **One tail factor was hiding two opposite errors.** Pooled coverage read 5.3% against a
+  5% target — respectable, and made of 6.2% breaches on overnight holds cancelling 1.8%
+  on multi-day ones inside a band 17.6% wide. Fitting per holding period brought them to
+  4.9% and 6.5%. When it shipped, a 60k TSLA weekend hold with no stop went from an
+  allowed 23,880 to 42,011 USDT (checked through the gate that day).
 
 A "we have never seen anything like this" warning looked significant at t=+3.6 and died
 at t=−0.07 once tokens were clustered: it was measuring which tokens are volatile, not
