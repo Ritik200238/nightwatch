@@ -411,3 +411,21 @@ def test_stress_preset_names_are_chinese_in_a_chinese_reply():
     assert preset_zh("closed_window_gap_p1", "Closed-window gap, 1st percentile") == "休市期间跳空（第 1 百分位）"
     assert preset_zh("vol_spike_x3", "Volatility spike x3") == "波动率骤升 ×3"
     assert preset_zh("something_new", "Something new") == "Something new"  # unknown ids keep their name
+
+
+def test_named_margin_is_multiplied_by_the_leverage():
+    p = parse_message("5x long NVDA with 20k margin over the weekend", ["NVDA"])
+    assert p.leverage == 5.0 and p.notional_quote == 100_000.0
+    q = parse_message("long TSLA 10x, margin 5000, overnight", ["TSLA"])
+    assert q.leverage == 10.0 and q.notional_quote == 50_000.0
+    assert parse_message("5x long NVDA 20k over the weekend", ["NVDA"]).notional_quote == 20_000.0  # no "margin": the position
+
+
+def test_a_partial_fill_is_said_once_not_contradicted(seeded_store):  # noqa: F811
+    from nightwatch.api import intake as it
+    from nightwatch.execution.exit_cost import ExitQuote
+
+    r = _report(seeded_store, thesis="t", invalidation="i")
+    r.execution.exit_quote = ExitQuote(5_000_000.0, "sell", 100.0, 120.0, 130.0, 10.0, 60000.0, 65000.0, 20, False, "2026-09-12T14:00:00+00:00")
+    text = it.brief(r)
+    assert "takes only part of this size" in text and "Getting out costs" not in text

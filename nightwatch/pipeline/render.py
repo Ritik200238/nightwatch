@@ -44,7 +44,7 @@ def render_text(r: AnalysisReport) -> str:
     earn = "n/a" if hte is None else (">30d" if hte >= 720 else f"{hte:.0f}h")
     hsf = f.get("hours_since_filing")
     filing = "n/a" if hsf is None else (">30d ago" if hsf >= 720 else f"{hsf:.0f}h ago")
-    lines.append(f"  earnings in {earn}  |  FOMC in {_f(f.get('hours_to_fomc'), '{:.0f}')}h  |  macro events next 72h {_f(f.get('macro_events_72h'), '{:.0f}')}  |  headlines 24h {_f(f.get('news_count_24h'), '{:.0f}')}")
+    lines.append(f"  earnings in {earn}  |  FOMC {('in ' + _f(f.get('hours_to_fomc'), '{:.0f}') + 'h') if f.get('hours_to_fomc') is not None else 'none in 30 days'}  |  macro events next 72h {_f(f.get('macro_events_72h'), '{:.0f}')}  |  headlines 24h {_f(f.get('news_count_24h'), '{:.0f}')}")
     lines.append(f"  last SEC filing {filing}  |  filings in last 72h {_f(f.get('filings_72h'), '{:.0f}')}  |  liq vs same hour of week {_f(f.get('liq_ratio'), '{:.2f}x')}  |  no-trade share 24h {_f(f.get('no_trade_share_24h'), '{:.0%}')} ({_f(f.get('no_trade_excess_24h'), '{:+.0%}')} vs its norm)")
     if s.quality_flags:
         lines.append("  flags: " + ", ".join(s.quality_flags))

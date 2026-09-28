@@ -201,7 +201,7 @@ function PremiseNote({ report }: { report: Report }) {
   if (!report.premise?.length) return null;
   return (
     <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
-      <span className="font-medium text-foreground">Check your reason: </span>
+      <span className="font-medium text-foreground">Check your plan: </span>
       <span className="text-muted-foreground">{report.premise.join(" ")}</span>
     </div>
   );

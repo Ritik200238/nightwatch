@@ -44,6 +44,10 @@ class FailureMode:
     likelihood: str
     source: str
     short: str = ""  # the mechanism in a clause, for the chat reply
+    # How often, as a number, where it was measured (a percentile, a share of past moments,
+    # a share of simulated paths). None where it is a named crisis or an assumption.
+    chance: float | None = None
+    capped: bool = False  # a leveraged loss stopped at the margin by liquidation
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -66,6 +70,13 @@ def _days(hours: float | None) -> str:
 
 
 # ------------------------------------------------------------------ assumptions
+
+# Leveraged and inverse funds do not do over several days what their multiple says: they
+# reset every day, so the path matters as much as the destination.
+_FUNDS = {
+    "TQQQ": "TQQQ is a 3x leveraged Nasdaq-100 fund that resets daily: over more than a day it does not return 3x the index, and a choppy market erodes it.",
+    "SQQQ": "SQQQ is a 3x inverse Nasdaq-100 fund that resets daily: it rises when the Nasdaq falls, and over more than a day it does not return -3x the index.",
+}
 
 
 def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
@@ -101,6 +112,9 @@ def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
             "the future is assumed to resemble them only as much as the calibration page shows it has.",
             "caveat",
         ))
+    fund = _FUNDS.get(t.ticker.upper())
+    if fund:
+        out.append(Assumption("instrument", fund, "caveat"))
     basis = r.snapshot.features.get("basis_index_bps")
     if basis is not None:
         out.append(Assumption("fair value", f"Fair value is Bitget's index for the stock; the token sits {basis:+.0f} bps from it now."))
@@ -168,7 +182,7 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
         if s is None or i is None or i.total_pnl_quote is None:
             return
         trig, how = _MECH[mech]
-        out.append(FailureMode(key, title, trig, how, i.total_pnl_quote, i.total_pct_of_notional, s.probability_note, "stress presets", _SHORT[mech]))
+        out.append(FailureMode(key, title, trig, how, i.total_pnl_quote, i.total_pct_of_notional, s.probability_note, "stress presets", _SHORT[mech], _preset_chance(sid)))
 
     from_preset("gap_bad", "closed_window_gap_p5", "A bad gap at the reopen", "gap")
     from_preset("gap_worst", "closed_window_gap_p1", "A severe gap at the reopen", "gap")
@@ -209,6 +223,7 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
                 f"{paths.stopped} of {len(paths.paths)} past moments like this hit the stop at all; the extra loss beyond it here is about {extra:,.0f} USDT",
                 "stress presets + analogs",
                 f"a gap fills the stop well past {t.stop_price:,.2f}",
+                0.01,  # it is the 1-in-100 gap that jumps it
             ))
 
     lev = getattr(r, "leverage", None)
@@ -225,6 +240,8 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
             -float(lev["margin_quote"]), -100.0 / float(lev["leverage"]),
             "; ".join(seen) or "not measured", "Bitget margin tiers + analogs + Monte Carlo",
             "the exchange closes the position and the margin is gone",
+            max(x for x in (lev.get("mc_share"), (lev["analog_hits"] / lev["analog_of"]) if lev.get("analog_of") else None) if x is not None)
+            if (lev.get("mc_share") is not None or lev.get("analog_of")) else None,
         ))
 
     # Nothing dramatic: the ordinary way a trade loses.
@@ -238,9 +255,42 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
             c.median_pct / 100.0 * t.notional_quote, c.median_pct,
             f"{1 - c.win_rate:.0%} of {c.n} past moments like this ended down", "analog cohort",
             "no event; the price just ends lower",
+            1 - c.win_rate,
         ))
 
-    return sorted(out, key=lambda m: m.loss_quote if m.loss_quote is not None else 0.0)
+    return _rank(_cap_at_margin(out, lev))
+
+
+def _preset_chance(sid: str) -> float | None:
+    """The measured frequency behind a preset, where it has one."""
+    if (m := re.fullmatch(r"closed_window_gap_p(\d+)", sid)):
+        return int(m.group(1)) / 100.0
+    if (m := re.fullmatch(r"basis_blowout_p(\d+)", sid)):
+        return (100 - int(m.group(1))) / 100.0
+    return None
+
+
+def _cap_at_margin(modes: list[FailureMode], lev: dict | None) -> list[FailureMode]:
+    """With isolated margin a leveraged position cannot lose more than its margin: the
+    exchange closes it first. A stress loss past the margin is shown as the margin."""
+    if not lev or not lev.get("margin_quote") or lev.get("liquidation_distance_pct") is None:
+        return modes
+    margin = float(lev["margin_quote"])
+    out = []
+    for m in modes:
+        if m.key != "liquidation" and m.loss_quote is not None and m.loss_quote < -margin:
+            m = FailureMode(**{**asdict(m), "loss_quote": -margin, "loss_pct": -100.0 / float(lev["leverage"]), "capped": True,
+                               "mechanism": m.mechanism + f"; at {lev['leverage']:g}x it is liquidated first, so the loss stops at the {margin:,.0f} USDT margin"})
+        out.append(m)
+    return out
+
+
+def _rank(modes: list[FailureMode]) -> list[FailureMode]:
+    """Most-expected loss first: chance times loss where the chance was measured, then
+    the rest by size. A 0% liquidation no longer outranks one that 83% of paths reach."""
+    known = sorted((m for m in modes if m.chance is not None and m.loss_quote is not None), key=lambda m: m.chance * m.loss_quote)
+    rest = sorted((m for m in modes if m.chance is None or m.loss_quote is None), key=lambda m: m.loss_quote if m.loss_quote is not None else 0.0)
+    return known + rest
 
 
 # ------------------------------------------------------------------- premise
@@ -249,6 +299,7 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
 _EARN = re.compile(r"earning|post[-\s]?earn|guidance|report(?:s|ed)?\s+(?:q\d|results)|财报|业绩", re.I)
 _POST = re.compile(r"post[-\s]?earn|after\s+(?:the\s+)?(?:earnings|report|results)|drift|财报后", re.I)
 _PRE = re.compile(r"(?:into|ahead\s+of|before|pre[-\s]?)\s*(?:the\s+)?(?:earnings|report|results)|run[-\s]?up|财报前", re.I)
+_MACRO = re.compile(r"\bcpi\b|inflation (?:data|print|number|report)|\bjobs? (?:report|data|number)\b|\bnfp\b|payrolls?|\bpce\b|\bgdp\b|retail sales|非农|通胀数据|CPI", re.I)
 _FED = re.compile(r"\bfed\b|fomc|rate\s+(?:cut|hike|decision)|powell|美联储|议息|降息|加息", re.I)
 
 
@@ -268,6 +319,21 @@ def premise(r: Any) -> list[str]:  # noqa: ANN401
         elif not _POST.search(thesis) and not _PRE.search(thesis) and (since is None or since > 7 * 24) and (until is None or until > r.horizon_h + 24):
             out.append(f"Your reason mentions earnings, but none fall near this hold (last {_days(since)} ago, next in {_days(until)}).")
     fomc = f.get("hours_to_fomc")
-    if _FED.search(thesis) and fomc is not None and fomc > max(r.horizon_h + 24, 7 * 24):
-        out.append(f"Your reason mentions the Fed, but the next FOMC decision is {_days(fomc)} away, after this hold ends.")
+    if _FED.search(thesis):
+        if fomc is None:
+            # The FOMC feature looks 30 days ahead; empty means no decision in that window.
+            out.append("Your reason mentions the Fed, but there is no FOMC decision in the next 30 days.")
+        elif fomc > max(r.horizon_h + 24, 7 * 24):
+            out.append(f"Your reason mentions the Fed, but the next FOMC decision is {_days(fomc)} away, after this hold ends.")
+    macro = f.get("macro_events_72h")
+    if _MACRO.search(thesis) and macro is not None and macro == 0 and r.horizon_h <= 72:
+        out.append("Your reason leans on a data release, but no scheduled release (CPI, jobs, PCE, GDP, retail sales) falls in the next 72 hours.")
+    # A stop beyond the line that proves the idea wrong: still holding after being wrong.
+    plan = getattr(r, "plan_check", None) or {}
+    t = r.ticket
+    if t.stop_price and plan.get("kind") == "level" and plan.get("level") and not plan.get("already"):
+        level = float(plan["level"])
+        beyond = t.stop_price < level if t.closing_long else t.stop_price > level
+        if beyond:
+            out.append(f"Your stop ({t.stop_price:,.2f}) sits beyond your own 'wrong if' level ({level:,.2f}): if the idea is proven wrong you are still holding it.")
     return out

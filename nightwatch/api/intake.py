@@ -71,6 +71,8 @@ _DAY_INDEX = {"tues": 1, "wednes": 2, "thurs": 3, "fri": 4}
 _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bsession\s+end\b", re.I)
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
+# "20k margin", "margin of 4000", "with 5k collateral": the money put up, not the position.
+_MARGIN = re.compile(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmb])?\s*(?:usdt\s*)?(?:of\s+)?(?:margin|collateral)\b|\b(?:margin|collateral)\s*(?:of|is|:|=)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmb])?\b", re.I)
 _HEDGE_PCT = re.compile(r"\bhedge\b[^.\d]{0,15}(\d{1,3})\s*%", re.I)
 _HEDGE = re.compile(r"\bhedge\b|\bdelta[-\s]?neutral\b", re.I)
 _THESIS = re.compile(r"\b(?:because|since|thesis\s*:|on the view that|reason\s*:|the idea is)\s+(.+?)(?:[.;!?]|$)", re.I)
@@ -224,7 +226,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
 
     # Size is the money left over once the labelled numbers are accounted for.
     lev = _LEVERAGE.search(text)
-    spent = [m.span() for m in (stop, target, equity, lev) if m]  # "100x" is not a size
+    margin = _MARGIN.search(text) if lev else None
+    spent = [m.span() for m in (stop, target, equity, lev, margin) if m]  # "100x" is not a size
     for m in _MONEY.finditer(text):
         if any(s <= m.start() < e for s, e in spent):
             continue
@@ -267,6 +270,11 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     if lev:
         value = float(lev.group(1) or lev.group(2))
         out.leverage = value if value >= 1 else None
+        if margin and out.leverage:
+            # The trader named the margin: the position is the margin times the leverage.
+            amount, scale = (margin.group(1), margin.group(2)) if margin.group(1) else (margin.group(3), margin.group(4))
+            put_up = float(amount.replace(",", "")) * (_SCALE[scale.lower()] if scale else 1.0)
+            out.notional_quote = put_up * out.leverage
 
     pct = _HEDGE_PCT.search(text)
     if pct:
@@ -549,13 +557,22 @@ def brief(report: Any, lang: str = "en") -> str:
             lines.append(said)
 
     priced = [i for i in report.stress.impacts if i.total_pnl_quote is not None]
+    lev_view = getattr(report, "leverage", None) or {}
+    margin = lev_view.get("margin_quote") if lev_view.get("liquidation_distance_pct") is not None else None
+    lev_x = lev_view.get("leverage") or 1.0
     if priced:
         worst = min(priced, key=lambda i: i.total_pnl_quote)
         name = next((s.name for s in report.stress.presets if s.id == worst.scenario_id), worst.scenario_id)
         if zh:
-            lines.append(f"最坏压力情景（{preset_zh(worst.scenario_id, name)}）：仓位 {_pct(worst.total_pct_of_notional)}，约 {worst.total_pnl_quote:,.0f} USDT。")
+            line = f"最坏压力情景（{preset_zh(worst.scenario_id, name)}）：仓位 {_pct(worst.total_pct_of_notional)}，约 {worst.total_pnl_quote:,.0f} USDT。"
+            if margin and worst.total_pnl_quote < -margin:
+                line += f"但 {lev_x:g} 倍杠杆会先被强平，亏损止于 {margin:,.0f} USDT 保证金。"
+            lines.append(line)
         else:
-            lines.append(f"Worst stress preset ({name}): {_pct(worst.total_pct_of_notional)} of the position, about {worst.total_pnl_quote:,.0f} USDT.")
+            line = f"Worst stress preset ({name}): {_pct(worst.total_pct_of_notional)} of the position, about {worst.total_pnl_quote:,.0f} USDT."
+            if margin and worst.total_pnl_quote < -margin:
+                line += f" At {lev_x:g}x the exchange liquidates first, so the loss stops at the {margin:,.0f} USDT margin."
+            lines.append(line)
     mc = report.stress.monte_carlo
     if mc is not None:
         if zh:
@@ -564,7 +581,13 @@ def brief(report: Any, lang: str = "en") -> str:
             lines.append(f"Simulated tail: one path in twenty ends below {_pct(mc.p5)}, and the worst drawdown is past {_pct(mc.drawdown_p5)} in the same fifth percentile.")
 
     q = report.execution.exit_quote
-    if q is not None and q.total_cost_bps is not None and q.total_cost_quote is not None:
+    if q is not None and not q.fully_filled and q.total_cost_bps is not None:
+        # The book takes part of the size. Printing the cost of that part as "getting out
+        # costs" sat beside "cannot absorb this size" and read as a contradiction.
+        cost = f" the part that fills costs about {q.total_cost_bps:.0f} bps," if q.total_cost_bps is not None else ""
+        lines.append("平仓：盘口只能吃下这个仓位的一部分，其余目前在任何价格都无法卖出。" if zh
+                     else f"Getting out: the book takes only part of this size;{cost} the rest cannot be sold at any price right now.")
+    elif q is not None and q.total_cost_bps is not None and q.total_cost_quote is not None:
         if zh:
             lines.append(f"平仓成本：按{'实时' if report.execution.book_source == 'live' else '记录的'}盘口约 {q.total_cost_bps:.0f} bps，约 {q.total_cost_quote:,.0f} USDT。")
         else:
@@ -605,7 +628,7 @@ def brief(report: Any, lang: str = "en") -> str:
         lines.append("Why: " + "; ".join(reasons[:3]) + ".")
     premise = getattr(report, "premise", None) or []
     if premise and not zh:
-        lines.append("Check your reason: " + " ".join(premise))
+        lines.append("Check your plan: " + " ".join(premise))
     modes = getattr(report, "failure_modes", None) or []
     if modes and not zh:
         top = [m for m in modes if m.get("loss_quote") is not None][:2]
