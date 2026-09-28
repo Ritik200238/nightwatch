@@ -180,3 +180,18 @@ def test_earnings_presets_only_when_a_report_can_hit_the_hold():
     assert "earnings_gap_worst" in ids(inp(720.0, 8.0)), "out last night, and the market has not opened on it"
     assert earnings_in_window(inp(None, None)), "an unknown date cannot rule it out"
     assert "earnings_gap_worst" in ids(inp(80.0, 720.0, h=102.0)), "a weekend hold that spans the report"
+
+
+def test_volatility_presets_use_the_larger_of_a_day_and_a_week():
+    """On a weekend the token barely trades and a day's volatility collapses; the presets
+    take the week's when it is larger, which measured closer to what "2 sigma" means."""
+    from nightwatch.stress.scenarios import EmpiricalInputs, build_presets
+
+    closed = np.linspace(-5, 5, 40)
+    quiet_day = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=np.array([]), abs_basis_closed_bps=np.array([]),
+                                rv_24h_now=0.05, rv_168h_now=0.60, horizon_h=18.0)
+    busy_day = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=np.array([]), abs_basis_closed_bps=np.array([]),
+                               rv_24h_now=0.60, rv_168h_now=0.05, horizon_h=18.0)
+    move = lambda inp: next(s.price_move_pct for s in build_presets(inp) if s.id == "vol_spike_x2")  # noqa: E731
+    assert quiet_day.vol_now == busy_day.vol_now == 0.60
+    assert move(quiet_day) == move(busy_day) < -2.0

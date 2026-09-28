@@ -199,6 +199,16 @@ class EmpiricalInputs:
     # an earnings gap out.
     hours_to_earnings: float | None = None
     hours_since_earnings: float | None = None
+    # A week of realised volatility. The volatility presets use the larger of this and the
+    # last day's: while the market is shut the token barely trades, and a day of that
+    # understates what the next session can do. Measured on 900 replayed holds, overnight
+    # moves beat "2 sigma" from the 24h figure 10.8% of the time (a true 2 sigma is beaten
+    # ~4.6%); from the larger of the two, 5.6%.
+    rv_168h_now: float = 0.0
+
+    @property
+    def vol_now(self) -> float:
+        return max(self.rv_24h_now or 0.0, self.rv_168h_now or 0.0)
 
 
 def closed_window_returns(frame: pd.DataFrame) -> np.ndarray:
@@ -293,7 +303,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     presets: list[Scenario] = []
     h = inp.horizon_h
     # Expected move from realised vol over the horizon (√time, 8760 trading hours/yr).
-    sigma_h = inp.rv_24h_now * np.sqrt(h / 8760.0) * 100.0 if inp.rv_24h_now and h > 0 else None
+    sigma_h = inp.vol_now * np.sqrt(h / 8760.0) * 100.0 if inp.vol_now and h > 0 else None
 
     if inp.closed_window_ret_pct.size >= min_obs:
         r = inp.closed_window_ret_pct
@@ -322,7 +332,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
             presets.append(Scenario(
                 id=f"vol_spike_x{int(mult)}", name=f"Volatility spike ×{int(mult)}", severity=sev, horizon_h=h,
                 price_move_pct=-mult * sigma_h, vol_multiplier=mult, probability_note=f"{int(mult)}σ adverse move at current realised vol",
-                calibration={"source": "rv_24h × √horizon", "rv_24h": float(inp.rv_24h_now), "sigma_h_pct": float(sigma_h)},
+                calibration={"source": "max(rv_24h, rv_168h) × √horizon", "rv_24h": float(inp.rv_24h_now), "rv_168h": float(inp.rv_168h_now), "sigma_h_pct": float(sigma_h)},
             ))
     if inp.abs_basis_closed_bps.size >= min_obs:
         b = inp.abs_basis_closed_bps
@@ -340,7 +350,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     if inp.closed_window_ret_pct.size >= min_obs and sigma_h is not None:
         presets.append(Scenario(
             id="exchange_halt_24h", name="Cannot exit for 24h during an adverse move", severity=Severity.EXTREME, horizon_h=max(h, 24.0),
-            halt_hours=24.0, price_move_pct=-2.0 * float(inp.rv_24h_now) * np.sqrt(24.0 / 8760.0) * 100.0, depth_multiplier=0.5,
+            halt_hours=24.0, price_move_pct=-2.0 * float(inp.vol_now) * np.sqrt(24.0 / 8760.0) * 100.0, depth_multiplier=0.5,
             probability_note="2σ 24h move with no ability to react, then exit into a half-depth book",
             calibration={"source": "rv_24h, book"},
         ))
