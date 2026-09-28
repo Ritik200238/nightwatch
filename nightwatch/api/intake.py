@@ -235,7 +235,9 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         if value is not None and value != out.account_equity_quote:
             out.notional_quote = value
             break
-    if out.notional_quote is None:
+    # A bare number is read as a size only in English. In a Chinese message a size carries
+    # 万/千/U/美元, and a bare "340" is a price - "如果收盘跌破 340 就算错" became a 340 USDT trade.
+    if out.notional_quote is None and not _CJK.search(text):
         for m in _BARE_MONEY.finditer(text):
             if any(s <= m.start() < e for s, e in spent):
                 continue
@@ -290,8 +292,11 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         # English rules did not find (a ticker written as TSLA reads the same either way).
         from nightwatch.api import intake_zh
 
+        # The Chinese reader knows 账户, 理由 and where the invalidation ends; where it read a
+        # size, an account, a reason or an invalidation, its reading wins over the English one.
+        zh_wins = ("notional_quote", "account_equity_quote", "thesis", "invalidation")
         for key, value in intake_zh.read(text, {t.upper() for t in known_tickers}).items():
-            if getattr(out, key) in (None, ""):
+            if getattr(out, key) in (None, "") or (key in zh_wins and value not in (None, "")):
                 setattr(out, key, value)
     return _settle(out)
 
@@ -529,6 +534,11 @@ def brief(report: Any, lang: str = "en") -> str:
                 line = f"历史：找到 {c.n} 个与现在相似的时刻；中位结果 {_pct(c.median_pct)}，最差的二十分之一低于 {_pct(p5)}。"
             else:
                 line = f"History: {c.n} past moments like this one; the middle outcome was {_pct(c.median_pct)} and one in twenty was worse than {_pct(p5)}."
+                adj = horizon.adjustment or {}
+                if adj.get("uncalibrated"):
+                    line += " That is the raw history: no forecast held this long has been scored, so it is not calibrated."
+                elif c.p5 is not None and horizon.p5_adjusted is not None and abs(c.p5 - horizon.p5_adjusted) >= 1.0:
+                    line += f" (The raw count of these moments said {_pct(c.p5)}; adjusted by how past calls of this length actually came out.)"
             lens = getattr(analog, "lens", None)
             if lens is not None and lens.applied and lens.lenses:
                 from nightwatch.analog.lens import describe

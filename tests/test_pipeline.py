@@ -267,3 +267,17 @@ def test_a_longer_hold_is_never_shown_milder_than_a_shorter_one():
     _floor_longer_holds(hs)
     assert hs["24h"].p5_adjusted == -4.5 and hs["24h"].adjustment["floored_by"] == "5h"
     assert hs["173h"].p5_adjusted == -4.5 and hs["240h"].p5_adjusted == -6.0 and "floored_by" not in hs["240h"].adjustment
+
+
+def test_no_calibration_is_applied_past_the_longest_scored_hold(seeded_store):  # noqa: F811
+    """The multi-day factor was fitted on weekends; applied to a trading week it shrank a
+    -6.4% tail to -4.9% beside a base rate of 13% falling 5%."""
+    from nightwatch.pipeline.analyze import CALIBRATED_MAX_H
+
+    ctx = _ctx(seeded_store)
+    ticket = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=20_000.0, account_equity_quote=200_000.0,
+                         horizon_kind=HorizonKind.HOURS, horizon_hours=170.0, thesis="t", invalidation="i")
+    report = analyze(ctx, ticket, as_of=AS_OF, record=False)
+    long_ = [h for h in report.analog.horizons.values() if h.hours > CALIBRATED_MAX_H]
+    assert long_ and all((h.adjustment or {}).get("uncalibrated") for h in long_)
+    ctx.store.close()

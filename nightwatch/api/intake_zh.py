@@ -41,8 +41,13 @@ _LEVERAGE = re.compile(r"([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十
 _NEXT_OPEN = re.compile(r"过夜|隔夜|到开盘|开盘前|今晚")
 _HOURS = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(?:个)?小时")
 _DAYS = re.compile(r"([0-9]+)\s*天")
-_THESIS = re.compile(r"(?:因为|理由是|逻辑是)(.+?)(?:[，,。；;！!？?]|$)")
+_THESIS = re.compile(r"(?:因为|理由是|逻辑是|理由\s*[:：]|论点\s*[:：]|逻辑\s*[:：])(.+?)(?:[，,。；;！!？?]|$)")
 _INVALID = re.compile(r"(?:如果|若|假如)(.+?)(?:就算错|就错|说明我错|就止损|则离场|就离场)")
+# "账户10万U", "本金5万美元", "资金 20万U": the money on hand, never the position.
+_ACCOUNT = re.compile(
+    r"(?:账户|本金|资金|总资金)\s*(?:余额|规模|有|是|为)?\s*[:：]?\s*"
+    r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?"
+)
 
 
 def chinese_number(text: str) -> float | None:
@@ -119,6 +124,25 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         if value and value >= 1:
             out["leverage"] = value
         spent.append(lev.span())
+    # An account size ("账户10万U") is the money on hand, never the position, and the
+    # thesis and invalidation clauses carry their own numbers ("跌破340") that read like
+    # a size but are not one. All three are spent before a bare number is taken for one.
+    account = _ACCOUNT.search(text)
+    if account:
+        value = chinese_number(account.group(1))
+        if value is not None:
+            scale = account.group(2)
+            if scale == "万":
+                value *= 10_000
+            elif scale in ("千", "k", "K"):
+                value *= 1_000
+            out["account_equity_quote"] = value
+        spent.append(account.span())
+    thesis, invalid = _THESIS.search(text), _INVALID.search(text)
+    if thesis:
+        spent.append(thesis.span())
+    if invalid:
+        spent.append(invalid.span())
     for m in _SIZE.finditer(text):
         if any(a <= m.start() < b for a, b in spent):
             continue
@@ -153,7 +177,6 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         out["horizon_kind"], out["horizon_hours"] = "hours", float(h.group(1))
     elif (d := _DAYS.search(text)):
         out["horizon_kind"], out["horizon_hours"] = "hours", float(d.group(1)) * 24.0
-    thesis, invalid = _THESIS.search(text), _INVALID.search(text)
     if thesis:
         out["thesis"] = thesis.group(1).strip()
     if invalid:

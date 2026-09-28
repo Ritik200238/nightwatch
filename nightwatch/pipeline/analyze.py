@@ -64,6 +64,9 @@ from nightwatch.time_utils import classify_session, ensure_utc, utc_now
 log = logging.getLogger(__name__)
 
 BOOK_MAX_AGE = timedelta(minutes=10)
+# The longest hold the tail calibration has scored forecasts for (the journal's longest is
+# 90 hours). Beyond it no factor is applied.
+CALIBRATED_MAX_H = 96.0
 # When the book now is this much wider than its median over the lookback, and by at least
 # this many bps, it is a momentary blowout rather than the book, and does not set the size.
 WIDE_BOOK_LOOKBACK = timedelta(hours=2)
@@ -931,6 +934,13 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         # single pooled factor was the average of the two - too tight for one, roughly
         # twice too wide for the other.
         band_factors = factors.for_hours(hours) if factors is not None else None
+        if hours > CALIBRATED_MAX_H:
+            # Every scored forecast is 90 hours or shorter, and the multi-day factor was fitted
+            # on weekends, when the stock barely trades. Applied to a week that includes five
+            # sessions it shrank a -6.4% tail to -4.9%, beside a base rate of 13% falling 5%.
+            # Past the longest scored hold the raw history stands, and says it is uncalibrated.
+            band_factors = None
+            adjustment = {"uncalibrated": True, "longest_scored_h": CALIBRATED_MAX_H}
         if band_factors is not None and not stats.insufficient:
             from nightwatch.journal.adjust import apply_factors
 

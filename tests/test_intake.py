@@ -270,6 +270,60 @@ def test_a_missing_field_is_asked_for_in_chinese():
     assert "做多还是做空" in zh.ask(["side"]) and "USDT" in zh.ask(["notional_quote"])
 
 
+def test_account_size_is_read_in_chinese_and_never_mistaken_for_a_size():
+    """Live-test failure: "账户10万U" was ignored and the invalidation's "340" was read
+    as the position size instead. The account, thesis and invalidation spans must all be
+    spent before a bare number is taken for a size."""
+    from nightwatch.api import intake_zh as zh
+
+    fields = zh.read(
+        "周末5倍杠杆做多特斯拉 1万U，账户10万U，止损4%，理由：Robotaxi 预期，如果收盘跌破 340 就算错",
+        {"TSLA"},
+    )
+    assert fields["ticker"] == "TSLA" and fields["side"] == "long"
+    assert fields["leverage"] == 5.0 and fields["stop_pct"] == 4.0
+    assert fields["notional_quote"] == 10000.0, "the 1万U size, not the 340 in the invalidation"
+    assert fields["account_equity_quote"] == 100000.0
+    assert fields["thesis"] == "Robotaxi 预期" and "340" in fields["invalidation"]
+    assert fields["horizon_kind"] == "through_weekend"
+
+    # A later message giving only the account size: it sets the account, not a position.
+    followup = zh.read("账户 20万U", {"TSLA"})
+    assert followup["account_equity_quote"] == 200000.0 and "notional_quote" not in followup
+
+    # A thesis and invalidation with no size in the message at all: still no size read.
+    thesis_only = zh.read("因为 AI 资本开支继续增长，如果收盘跌破 200 就算错", {"TSLA"})
+    assert thesis_only["thesis"] == "AI 资本开支继续增长" and thesis_only["invalidation"] == "收盘跌破 200"
+    assert "notional_quote" not in thesis_only
+
+
+def test_new_chinese_thesis_markers_are_read():
+    from nightwatch.api import intake_zh as zh
+
+    for marker in ("理由：", "理由:", "论点：", "逻辑："):
+        fields = zh.read(f"做多特斯拉，{marker}Robotaxi 预期", {"TSLA"})
+        assert fields["thesis"] == "Robotaxi 预期", marker
+
+
+def test_account_follow_up_is_read_through_the_full_parser():
+    """"账户 20万U" sets the account size and is never read as the position itself."""
+    i = p("账户 20万U")
+    assert i.account_equity_quote == 200000.0 and i.notional_quote is None
+
+
+def test_full_chinese_trade_message_is_read_through_the_full_parser():
+    i = p("周末5倍杠杆做多特斯拉 1万U，账户10万U，止损4%，理由：Robotaxi 预期，如果收盘跌破 340 就算错")
+    assert i.ticker == "TSLA" and i.side == "long" and i.notional_quote == 10000.0
+    assert i.account_equity_quote == 100000.0 and i.leverage == 5.0 and i.stop_pct == 4.0
+    assert i.thesis == "Robotaxi 预期" and "340" in (i.invalidation or "")
+    assert i.horizon_kind == "through_weekend"
+
+
+def test_a_chinese_invalidation_number_is_never_read_as_a_size_through_the_full_parser():
+    i = p("因为 AI 资本开支继续增长，如果收盘跌破 200 就算错")
+    assert i.notional_quote is None
+
+
 def test_switching_stock_drops_the_price_levels_given_for_the_last_one():
     """A TSLA stop at 350 carried into an NVDA ticket became a stop 56% away that every
     past moment "hit". Prices belong to the stock they were given for."""
