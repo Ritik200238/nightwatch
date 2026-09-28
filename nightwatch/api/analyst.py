@@ -70,6 +70,32 @@ def fact_sheet(r: dict[str, Any]) -> str:
         f"Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
         f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
     ]
+    # The actual reasons, so the take cannot guess one. On a live test it wrote "REVIEW
+    # because the regime cap binds, meaning conditions are fragile" when the regime was
+    # favourable and the review was for a missing account size.
+    failed = [x for x in ((r.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
+    if failed:
+        lines.append("Checks that did not pass: " + "; ".join(f"{x['rule'].replace('_', ' ')} ({x['decision'].replace('_', ' ')}): {x['reason']}" for x in failed) + ".")
+    else:
+        lines.append("Every gate check passed.")
+    caps = {cp["name"]: cp for cp in ((r.get("sizing") or {}).get("caps") or [])}
+    bcap = caps.get((r.get("sizing") or {}).get("binding_cap") or "")
+    if bcap and bcap.get("detail"):
+        lines.append(f"The binding cap, {bcap['name'].replace('_', ' ')}, says: {bcap['detail']}.")
+    labels = ((r.get("snapshot") or {}).get("labels") or {})
+    feats = ((r.get("snapshot") or {}).get("features") or {})
+    if labels.get("regime_label"):
+        mult = feats.get("risk_multiplier")
+        lines.append(f"Market state: {labels['regime_label']}" + (f", size multiplier {mult:.2f}" if isinstance(mult, int | float) else "") + ".")
+    lev = r.get("leverage") or {}
+    if lev.get("liquidation_distance_pct") is not None:
+        lines.append(f"Leverage {lev['leverage']:g}x: liquidated about {lev['liquidation_distance_pct']:.1f}% away"
+                     + (f"; {lev['analog_hits']} of {lev['analog_of']} past moments reached it" if lev.get("analog_of") else "") + ".")
+    modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
+    if modes:
+        lines.append(f"Worst way it loses: {modes[0]['title']} ({modes[0]['mechanism']}), about {modes[0]['loss_quote']:,.0f} USDT; {modes[0]['likelihood']}.")
+    for pm in r.get("premise") or []:
+        lines.append(f"Premise check: {pm}")
     if c.get("n"):
         lens = (a.get("lens") or {})
         narrowed = f" (compared only against {lens.get('description')})" if lens.get("applied") and lens.get("description") else ""

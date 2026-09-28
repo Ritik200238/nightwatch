@@ -105,3 +105,14 @@ def test_the_sheet_carries_the_relations_and_the_instruction_to_use_them():
 def test_no_stop_and_no_plan_means_no_level_relations():
     r = {**REPORT, "ticket": {**REPORT["ticket"], "stop_price": None}, "plan_check": None}
     assert not any("stop" in x or "invalidation" in x for x in analyst.relations(r))
+
+
+def test_the_sheet_carries_the_real_reasons_so_the_take_cannot_guess_one():
+    r = {**REPORT,
+         "gate": {"rules": [{"rule": "position_size", "decision": "REVIEW_REQUIRED", "reason": "account equity not provided"},
+                            {"rule": "stop", "decision": "GO", "reason": "ok"}]},
+         "snapshot": {"labels": {"regime_label": "favorable"}, "features": {"risk_multiplier": 1.0}},
+         "sizing": {"binding_cap": "regime", "caps": [{"name": "regime", "notional": 20000.0, "detail": "regime multiplier 1.00 x the requested size"}]}}
+    sheet = analyst.fact_sheet(r)
+    assert "account equity not provided" in sheet and "Market state: favorable, size multiplier 1.00" in sheet
+    assert "regime multiplier 1.00" in sheet
