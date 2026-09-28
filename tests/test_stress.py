@@ -195,3 +195,12 @@ def test_volatility_presets_use_the_larger_of_a_day_and_a_week():
     move = lambda inp: next(s.price_move_pct for s in build_presets(inp) if s.id == "vol_spike_x2")  # noqa: E731
     assert quiet_day.vol_now == busy_day.vol_now == 0.60
     assert move(quiet_day) == move(busy_day) < -2.0
+
+
+def test_multi_day_holds_keep_the_days_volatility():
+    """Scaled over a weekend the day's figure was already too wide; the week's is not used."""
+    from nightwatch.stress.scenarios import EmpiricalInputs
+
+    weekend = EmpiricalInputs(closed_window_ret_pct=np.array([]), earnings_gap_pct=np.array([]), abs_basis_closed_bps=np.array([]),
+                              rv_24h_now=0.05, rv_168h_now=0.60, horizon_h=66.0)
+    assert weekend.vol_now == 0.05

@@ -185,6 +185,11 @@ def sensitivity(
 # ------------------------------------------------------------- data-driven presets
 
 
+# Where an overnight hold ends and a multi-day one begins; the same cut the tail
+# calibration uses (nightwatch.journal.adjust.HORIZON_BANDS).
+MULTI_DAY_H = 40.0
+
+
 @dataclass(frozen=True)
 class EmpiricalInputs:
     """Numbers measured from the ticker's history that presets are built from."""
@@ -199,15 +204,19 @@ class EmpiricalInputs:
     # an earnings gap out.
     hours_to_earnings: float | None = None
     hours_since_earnings: float | None = None
-    # A week of realised volatility. The volatility presets use the larger of this and the
-    # last day's: while the market is shut the token barely trades, and a day of that
-    # understates what the next session can do. Measured on 900 replayed holds, overnight
-    # moves beat "2 sigma" from the 24h figure 10.8% of the time (a true 2 sigma is beaten
-    # ~4.6%); from the larger of the two, 5.6%.
+    # A week of realised volatility. For an overnight hold the volatility presets use the
+    # larger of this and the last day's: while the market is shut the token barely
+    # trades, and a day of that understates what the next session can do. Measured on 900
+    # replayed holds, overnight moves beat "2 sigma" from the 24h figure 10.8% of the time
+    # (a true 2 sigma is beaten ~4.6%); from the larger of the two, 5.6%. Multi-day holds
+    # keep the day's figure: scaled over a weekend it was already too wide (0.7% of moves
+    # beat it), and the week's would only widen it further.
     rv_168h_now: float = 0.0
 
     @property
     def vol_now(self) -> float:
+        if self.horizon_h >= MULTI_DAY_H:
+            return self.rv_24h_now or 0.0
         return max(self.rv_24h_now or 0.0, self.rv_168h_now or 0.0)
 
 
@@ -332,7 +341,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
             presets.append(Scenario(
                 id=f"vol_spike_x{int(mult)}", name=f"Volatility spike ×{int(mult)}", severity=sev, horizon_h=h,
                 price_move_pct=-mult * sigma_h, vol_multiplier=mult, probability_note=f"{int(mult)}σ adverse move at current realised vol",
-                calibration={"source": "max(rv_24h, rv_168h) × √horizon", "rv_24h": float(inp.rv_24h_now), "rv_168h": float(inp.rv_168h_now), "sigma_h_pct": float(sigma_h)},
+                calibration={"source": "max(rv_24h, rv_168h) × √horizon" if inp.horizon_h < MULTI_DAY_H else "rv_24h × √horizon", "rv_24h": float(inp.rv_24h_now), "rv_168h": float(inp.rv_168h_now), "sigma_h_pct": float(sigma_h)},
             ))
     if inp.abs_basis_closed_bps.size >= min_obs:
         b = inp.abs_basis_closed_bps
