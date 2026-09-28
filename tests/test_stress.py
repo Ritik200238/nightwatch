@@ -223,3 +223,21 @@ def test_a_short_is_stressed_by_the_moves_that_hurt_a_short():
                 assert apply_scenario(pos, p, book=None, taker_fee=0.001).mtm_pnl_quote < 0, p.id
         by = {p.id: p.price_move_pct for p in presets}
         assert by["earnings_gap_worst"] == (15.0 if sign > 0 else -9.0)
+
+
+def test_crash_replays_hurt_each_side_on_the_markets_worst_days():
+    """What the stock did on the day the market broke, applied to today's position: the
+    fall for a long, the squeeze for a short, and the up-day for an inverse fund."""
+    from nightwatch.stress.scenarios import EmpiricalInputs, Severity, build_presets, crash_replays
+
+    table = crash_replays()
+    assert "covid_2020" in table["_meta"]["windows"] and table["TSLA"]["covid_2020"]["gap_down_date"] == "2020-03-16"
+    base = dict(closed_window_ret_pct=np.array([]), earnings_gap_pct=np.array([]), abs_basis_closed_bps=np.array([]), rv_24h_now=0.0, horizon_h=18.0)
+    long_ = [p for p in build_presets(EmpiricalInputs(**base, adverse_sign=-1.0, ticker="TSLA", crash_moves=table["TSLA"])) if p.id.startswith("replay_")]
+    short = [p for p in build_presets(EmpiricalInputs(**base, adverse_sign=1.0, ticker="TSLA", crash_moves=table["TSLA"])) if p.id.startswith("replay_")]
+    inverse = [p for p in build_presets(EmpiricalInputs(**base, adverse_sign=-1.0, ticker="SQQQ", crash_moves=table["SQQQ"])) if p.id.startswith("replay_")]
+    assert long_ and all(p.price_move_pct < 0 and p.severity == Severity.EXTREME for p in long_)
+    assert short and all(p.price_move_pct > 0 for p in short)
+    covid_inverse = next(p for p in inverse if p.id == "replay_covid_2020")
+    assert covid_inverse.price_move_pct < 0 and "2020-03-13" in covid_inverse.probability_note  # hurt on the market's up day
+    assert not [p for p in build_presets(EmpiricalInputs(**base, crash_moves={}))if p.id.startswith("replay_")]  # no table, no replays

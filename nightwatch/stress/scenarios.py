@@ -216,6 +216,10 @@ class EmpiricalInputs:
     # Every price preset is taken from that tail. Before this existed every preset was a
     # fall, so a short's "1-in-100 gap" showed as a 7% gain on a live TSLA ticket.
     adverse_sign: float = -1.0
+    # What this stock did on the days the market broke in named crises (crash_replays.json,
+    # built by research/build_crash_replays.py), and whose stock it is.
+    ticker: str = ""
+    crash_moves: dict = field(default_factory=dict)
 
     @property
     def vol_now(self) -> float:
@@ -311,6 +315,55 @@ def earnings_in_window(inp: EmpiricalInputs) -> bool:
     return (to is not None and to <= inp.horizon_h + EARNINGS_SLACK_H) or (since is not None and since <= EARNINGS_SLACK_H)
 
 
+# Holds past this are replayed with the market's worst three sessions; shorter ones end
+# at an open and are replayed with its worst overnight gap.
+REPLAY_D3_AFTER_H = 96.0
+_CRASHES: dict | None = None
+
+
+def crash_replays() -> dict:
+    """The committed crash table, loaded once."""
+    global _CRASHES
+    if _CRASHES is None:
+        import json
+        from pathlib import Path
+
+        path = Path(__file__).with_name("crash_replays.json")
+        _CRASHES = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    return _CRASHES
+
+
+def _replays(inp: EmpiricalInputs) -> list[Scenario]:
+    """What this stock did on the days the market broke, applied to today's position.
+
+    Each crisis contributes the stock's move on the market's worst day and on its best
+    one; the side decides which hurts (a long fears the fall, a short the squeeze, and
+    for an inverse fund the two swap on their own). EXTREME severity, so they inform the
+    trader without entering the size limit, which is measured and calibrated separately.
+    """
+    meta = (crash_replays().get("_meta") or {}).get("windows") or {}
+    long_ = inp.adverse_sign < 0
+    kind = "d3" if inp.horizon_h > REPLAY_D3_AFTER_H else "gap"
+    out: list[Scenario] = []
+    for key, m in (inp.crash_moves or {}).items():
+        a, b = m.get(f"{kind}_down_pct"), m.get(f"{kind}_up_pct")
+        if a is None or b is None:
+            continue
+        move, day_key = (min((a, "down"), (b, "up")) if long_ else max((a, "down"), (b, "up")))
+        if (move < 0) != long_ or move == 0:
+            continue  # neither crisis day hurt this side
+        date = m.get(f"{kind}_{day_key}_date", "")
+        name = (meta.get(key) or {}).get("name", key.replace("_", " "))
+        way = "down" if day_key == "down" else "up"
+        market = f"the market gapped {way} most" if kind == "gap" else f"the market's three sessions ran {way} most"
+        out.append(Scenario(
+            id=f"replay_{key}", name=f"Replay: {name}", severity=Severity.EXTREME, horizon_h=inp.horizon_h,
+            price_move_pct=float(move), probability_note=f"what {inp.ticker or 'this stock'} did on {date}, the day {market}",
+            calibration={"source": "Yahoo daily, stock's move on SPY's extreme day in the window", "window": key, "date": date, "kind": kind},
+        ))
+    return out
+
+
 def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     """Presets calibrated from the ticker's own history. Each records its source.
 
@@ -378,6 +431,7 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
             funding_rate=inp.funding_rate_abs_p95, probability_note="95th percentile |funding| every 8h for the horizon",
             calibration={"source": "perp funding history", "p95_abs": float(inp.funding_rate_abs_p95)},
         ))
+    presets += _replays(inp)
     return presets
 
 

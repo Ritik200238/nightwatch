@@ -355,7 +355,7 @@ def _pct(v: float, digits: int = 1) -> str:
 FAILURE_ZH = {
     "gap_bad": "开盘跳空（二十分之一的情形）", "gap_worst": "开盘严重跳空（百分之一的情形）", "earnings": "财报后不利跳空",
     "basis": "代币偏离公允价值", "liquidity": "平仓时盘口变薄", "halt": "24 小时无法平仓", "vol": "波动率骤升",
-    "stop_jumped": "止损被跳空越过", "liquidation": "被强制平仓", "drift": "价格缓慢走弱",
+    "stop_jumped": "止损被跳空越过", "liquidation": "被强制平仓", "drift": "价格缓慢走弱", "replay": "历史危机重演",
 }
 
 # The verdict names in Chinese, for a trader who wrote in Chinese. The numbers are the
@@ -377,6 +377,9 @@ def preset_zh(sid: str, name: str) -> str:
         return f"休市期间跳空（第 {m.group(1)} 百分位）"
     if (m := _re.fullmatch(r"basis_blowout_p(\d+)", sid)):
         return f"代币偏离公允价值（休市时段第 {m.group(1)} 百分位）"
+    if sid.startswith("replay_"):
+        return "历史危机重演：" + {"covid_2020": "2020 年新冠暴跌", "banks_2023": "2023 年 3 月银行危机", "rates_2022": "2022 年通胀冲击",
+                               "carry_2024": "2024 年 8 月套息交易平仓", "tariffs_2025": "2025 年 4 月关税冲击"}.get(sid[7:], name)
     if (m := _re.fullmatch(r"vol_spike_x(\d+)", sid)):
         return f"波动率骤升 ×{m.group(1)}"
     return {

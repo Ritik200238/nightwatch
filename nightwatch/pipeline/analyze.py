@@ -55,6 +55,7 @@ from nightwatch.stress.scenarios import (
     apply_scenario,
     build_presets,
     closed_window_returns,
+    crash_replays,
     earnings_gaps,
     earnings_in_window,
 )
@@ -959,7 +960,8 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
             funding_p95 = float(fr["rate"].abs().quantile(0.95))
     inp = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=gaps, abs_basis_closed_bps=basis_closed, rv_24h_now=float(snapshot.features.get("rv_24h") or 0.0), rv_168h_now=float(snapshot.features.get("rv_168h") or 0.0), horizon_h=horizon_h, funding_rate_abs_p95=funding_p95,
                           hours_to_earnings=snapshot.features.get("hours_to_earnings"), hours_since_earnings=snapshot.features.get("hours_since_earnings"),
-                          adverse_sign=-1.0 if ticket.closing_long else 1.0)
+                          adverse_sign=-1.0 if ticket.closing_long else 1.0,
+                          ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {})
     presets = build_presets(inp)
     position = Position(ticket.ticker, ticket.side, ticket.notional_quote, entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
     impacts = [apply_scenario(position, p, book=book, taker_fee=taker_fee) for p in presets]

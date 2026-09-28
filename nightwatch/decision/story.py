@@ -178,6 +178,20 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
     from_preset("halt", "exchange_halt_24h", "Stuck for 24 hours", "halt")
     from_preset("vol", "vol_spike_x3", "A volatility spike", "vol")
 
+    # The worst named crisis, replayed: what this stock did the day the market broke.
+    replays = [(s, imp[s.id]) for s in r.stress.presets if s.id.startswith("replay_") and imp.get(s.id) is not None and imp[s.id].total_pnl_quote is not None]
+    if replays:
+        s, i = min(replays, key=lambda x: x[1].total_pnl_quote)
+        crisis = s.name.replace("Replay: ", "")
+        out.append(FailureMode(
+            "replay", f"A repeat of the {crisis}",
+            f"The market breaks the way it did in the {crisis}",
+            "the stock moves as it did on that day, and the token follows it at the next open",
+            i.total_pnl_quote, i.total_pct_of_notional,
+            f"{s.probability_note} - a named crisis, not a frequency", "crash replays",
+            f"the {crisis} replayed on this position",
+        ))
+
     # A stop that a gap can jump: judged against the worst measured gap.
     paths = r.analog.paths if r.analog else None
     worst_gap = by_id.get("closed_window_gap_p1")
