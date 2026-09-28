@@ -44,6 +44,7 @@ MAD_SCALE = 1.4826
 # How a match's resemblance is described: its closest features, and those more than one
 # robust standard deviation away.
 ALIKE_N, DIFFERS_N, DIFFERS_Z = 3, 2, 1.0
+UNINFORMATIVE_SHARE = 0.3  # a value this share of history also has says nothing about a match
 
 
 @dataclass(frozen=True)
@@ -175,9 +176,15 @@ class AnalogEngine:
 
         pct = _percentiles(d)
         gaps = np.abs(Z - zq)  # per feature, in robust standard deviations
+        # A feature most of history shares with now - "time to earnings" capped at 30 days,
+        # no macro release ahead - explains nothing about why this match was chosen. It is
+        # left out of "alike on", which otherwise named exactly those.
+        common = (np.abs(X - q) < 1e-9).mean(axis=0) >= UNINFORMATIVE_SHARE
+        telling = [j for j in range(len(used)) if not common[j]] or list(range(len(used)))
 
         def alike(i: int) -> tuple[str, ...]:
-            return tuple(used[j] for j in np.argsort(gaps[i], kind="stable")[:ALIKE_N])
+            order = sorted(telling, key=lambda j: gaps[i, j])
+            return tuple(used[j] for j in order[:ALIKE_N])
 
         def differs(i: int) -> tuple[str, ...]:
             far = np.argsort(-gaps[i], kind="stable")[:DIFFERS_N]

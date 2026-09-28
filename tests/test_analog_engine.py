@@ -133,3 +133,13 @@ def test_each_match_says_what_it_shares_with_now_and_where_it_does_not():
     # A query far out on one feature: every match must differ on it.
     far = AnalogEngine(cfg()).search(h, {"a": 0.0, "b": 0.0, "c": 0.0, "d": 25.0}, query_ts=now)
     assert far.ok and all("d" in m.differs_on for m in far.matches)
+
+
+def test_a_value_most_of_history_shares_is_not_offered_as_the_resemblance():
+    """ "Alike on time to earnings" named a value capped at 30 days that almost every hour has."""
+    h = history()
+    h["cap"] = 720.0
+    h.loc[h.index[::5], "cap"] = np.linspace(1, 700, len(h.index[::5]))  # a fifth of hours differ
+    now = h.index[-1] + timedelta(hours=200)
+    res = AnalogEngine(cfg(features=("a", "b", "c", "cap"))).search(h, {"a": 0.0, "b": 0.0, "c": 5.0, "cap": 720.0}, query_ts=now)
+    assert res.ok and all("cap" not in m.alike_on for m in res.matches)
