@@ -275,6 +275,9 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     # them costs seconds and can come back as something adjacent, like "short instead".
     if change.empty and (followup.SHOCK.search(question) or followup._SIZE_FACTOR.search(question)):
         return None
+    if change.empty and change.note:
+        return {"intent": {"kind": "what_if", "missing_fields": [], "reply": change.note}, "ticket": None, "report": None,
+                "report_text": None, "narrative": change.note, "unverified_numbers": [], "reply": change.note, "mode": "what_if"}
     provider = None
     if change.empty:
         provider = select()

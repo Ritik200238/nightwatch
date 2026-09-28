@@ -400,3 +400,16 @@ def test_a_chinese_leverage_what_if_names_the_change():
 
     assert whatif._describe_zh(whatif.Change(leverage=1.0)) == "不加杠杆"
     assert whatif._describe_zh(whatif.Change(leverage=5.0)) == "5 倍杠杆"
+
+
+def test_the_thesis_question_says_which_way_history_leans(report):
+    got = answer(report, "is my thesis supported?")
+    assert got is not None and "history leans" in got.text and "does not claim to call direction" in got.text
+
+
+def test_loose_matches_are_said_to_be_loose(report):
+    r = copy.deepcopy(report)
+    r["analog"]["result"]["matches"] = [{"ts": o["ts"], "similarity": 0.05, "alike_on": ["vol_pctl_90d", "trend_sma_pct"], "differs_on": []}
+                                        for o in r["analog"]["matches_outcomes"]]
+    got = answer(r, "why are these moments similar?")
+    assert got is not None and "loose matches" in got.text

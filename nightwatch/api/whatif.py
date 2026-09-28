@@ -58,6 +58,12 @@ def looks_like_a_what_if(question: str, *, tickers: tuple[str, ...] = (), curren
     q = question.lower()
     if _WHATIF.search(q):
         return True
+    # A change named without "what if": a size multiple, a leverage, a named day to hold to.
+    from nightwatch.api import intake
+    from nightwatch.api.followup import _SIZE_FACTOR
+
+    if _SIZE_FACTOR.search(question) or intake._LEVERAGE.search(question) or intake._WEEKDAY.search(question) or _THROUGH_EARNINGS.search(question):
+        return True
     for x in lens_mod.LENSES:
         if any(phrase in q for phrase in x.says):
             return True
@@ -83,10 +89,13 @@ class Change:
     lenses: tuple[str, ...] = ()
     # "What about 5x?" - leverage on the perpetual. 1.0 means "without leverage".
     leverage: float | None = None
+    # "halve it", "double it": the size, re-run exactly rather than read off the sweep grid.
+    notional_quote: float | None = None
+    note: str = ""  # said with the answer: something asked for that could not be run
 
     @property
     def empty(self) -> bool:
-        return not any((self.ticker, self.side, self.horizon_kind, self.horizon_hours, self.lenses, self.leverage))
+        return not any((self.ticker, self.side, self.horizon_kind, self.horizon_hours, self.lenses, self.leverage, self.notional_quote))
 
     def describe(self) -> str:
         bits = []
@@ -106,6 +115,8 @@ class Change:
             bits.append(lens_mod.describe(lens_mod.resolve(list(self.lenses))))
         if self.leverage:
             bits.append("no leverage" if self.leverage <= 1 else f"{self.leverage:g}x leverage")
+        if self.notional_quote:
+            bits.append(f"{self.notional_quote:,.0f} USDT")
         return ", ".join(bits)
 
     def apply_to(self, ticket: TradeTicket) -> TradeTicket:
@@ -128,6 +139,7 @@ class Change:
             # they are on the way in from a ticket.
             lenses=tuple(x.name for x in lens_mod.resolve(list(self.lenses))) if self.lenses else ticket.lenses,
             leverage=(None if self.leverage <= 1 else self.leverage) if self.leverage else ticket.leverage,
+            notional_quote=self.notional_quote or ticket.notional_quote,
         )
 
 
@@ -156,8 +168,27 @@ def rule_change(question: str, ticket: dict, tickers: list[str], features: dict 
         side = None
     kind, hours = parsed.horizon_kind, parsed.horizon_hours
     hte = (features or {}).get("hours_to_earnings")
-    if _THROUGH_EARNINGS.search(question) and hte is not None and hte < 720:
-        kind, hours = "hours", round(float(hte) + AFTER_REPORT_OPEN_H, 2)
+    note = ""
+    if _THROUGH_EARNINGS.search(question):
+        if hte is not None and hte < 720:
+            kind, hours = "hours", round(float(hte) + AFTER_REPORT_OPEN_H, 2)
+        else:
+            note = "The next earnings report is more than 30 days away, beyond what the desk can date, so the hold was not stretched to it."
+    size = None
+    from nightwatch.api.followup import _SIZE_FACTOR
+
+    fm = _SIZE_FACTOR.search(question)
+    if fm and ticket.get("notional_quote"):
+        word = (fm.group(1) or "").lower()
+        mult = {"halve": 0.5, "half": 0.5, "double": 2.0, "twice": 2.0, "triple": 3.0}.get(word)
+        if mult is None and fm.group(2):
+            mult = float(fm.group(2))
+        if mult is None and "减半" in question:
+            mult = 0.5
+        if mult is None and ("加倍" in question or "翻倍" in question):
+            mult = 2.0
+        if mult:
+            size = float(ticket["notional_quote"]) * mult
     lenses: tuple[str, ...] = ()
     if intake.asks_to_narrow(question) or re.search(r"\bworse\b|\bbetter\b|更差|更好", question, re.I):
         low = question.lower()
@@ -166,7 +197,7 @@ def rule_change(question: str, ticket: dict, tickers: list[str], features: dict 
     if leverage is None and ticket.get("leverage") and re.search(r"\b(?:no|without|drop the|remove the)\s+leverage\b|\bunlevered\b|\bas spot\b|不加杠杆|不用杠杆", question, re.I):
         leverage = 1.0
     return Change(ticker=ticker, side=side, horizon_kind=kind if kind in ("next_open", "window_end", "hours", "through_weekend") else None,
-                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage)
+                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage, notional_quote=size, note=note)
 
 
 def ticket_from(report: dict) -> TradeTicket | None:
@@ -259,6 +290,8 @@ def _describe_zh(change: Change) -> str:
         bits.append("只比较：" + lens_mod.describe(lens_mod.resolve(list(change.lenses))))
     if change.leverage:
         bits.append("不加杠杆" if change.leverage <= 1 else f"{change.leverage:g} 倍杠杆")
+    if change.notional_quote:
+        bits.append(f"仓位 {change.notional_quote:,.0f} USDT")
     return "，".join(bits)
 
 
@@ -365,4 +398,6 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
         bits.append(f"At {lev['leverage']:g}x it is liquidated near {lev['liquidation_price']:,.2f}, {lev['liquidation_distance_pct']:.1f}% away{seen}.")
     elif lev and lev.get("liquidation_distance_pct") is not None:
         bits.append(f"{lev['leverage']:g} 倍杠杆约在 {lev['liquidation_price']:,.2f} 强平（距现价 {lev['liquidation_distance_pct']:.1f}%）。")
+    if change.note and not zh:
+        bits.append(change.note)
     return Answer("what_if", join.join(bits), ("analog cohort", "gate and sizing", "re-run"))

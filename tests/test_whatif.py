@@ -378,3 +378,14 @@ def test_a_what_if_that_is_refused_says_the_rule_not_the_cap():
              "analog": {"result": {"matches": []}}}
     text = whatif.compare(before, after, whatif.Change(leverage=10.0)).text
     assert "because liquidation" in text or "not enough" in text
+
+
+def test_size_multiples_are_exact_re_runs_and_an_undatable_earnings_hold_is_said():
+    t = {**TICKET, "notional_quote": 20000.0}
+    assert whatif.rule_change("halve it", t, ["TSLA"]).notional_quote == 10000.0
+    assert whatif.rule_change("仓位减半呢", t, ["TSLA"]).notional_quote == 10000.0
+    far = whatif.rule_change("hold through the next earnings", t, ["TSLA"], {"hours_to_earnings": 720.0})
+    assert far.empty and "more than 30 days away" in far.note
+    for q in ("halve it", "use 5x", "hold until Wednesday"):
+        assert whatif.looks_like_a_what_if(q, tickers=("TSLA",), current="TSLA"), q
+    assert not whatif.looks_like_a_what_if("why?", tickers=("TSLA",), current="TSLA")

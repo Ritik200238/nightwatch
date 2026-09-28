@@ -355,6 +355,9 @@ FEATURE_WORDS = {
 }
 
 
+LOOSE_SIMILARITY = 0.1  # below this a match shares the broad state, not the specifics
+
+
 def _a_moments(r: dict, _q: str) -> Answer | None:
     outs = (r.get("analog") or {}).get("matches_outcomes") or []
     horizon = r.get("primary_horizon")
@@ -377,6 +380,10 @@ def _a_moments(r: dict, _q: str) -> Answer | None:
         differs = Counter(f for m in matches for f in (m.get("differs_on") or []))
         top = [FEATURE_WORDS.get(f, f.replace("_", " ")) for f, _ in alike.most_common(3)]
         why = f" What makes them similar: most sit closest to now on {', '.join(top[:-1])} and {top[-1]}." if len(top) > 1 else ""
+        sims = [m.get("similarity") for m in matches if m.get("similarity") is not None]
+        loose = sum(1 for x in sims if x < LOOSE_SIMILARITY)
+        if sims and loose > len(sims) / 2:
+            why += f" Be aware most are loose matches: {loose} of {len(sims)} have a similarity under {LOOSE_SIMILARITY:.1f}, so read the cohort as a range, not a precedent."
         if differs:
             f, n = differs.most_common(1)[0]
             why += f" Where they differ most: {FEATURE_WORDS.get(f, f)}, far from now on {n} of {len(matches)}."
@@ -518,7 +525,15 @@ def _a_premise(r: dict, _q: str) -> Answer | None:
                     + (" - inside this hold, so the earnings-gap presets are included." if f.get("hours_to_earnings") is not None and f["hours_to_earnings"] <= horizon else "."))
     if f.get("hours_to_fomc") is not None:
         bits.append(f"Next FOMC decision: {when(f.get('hours_to_fomc'), False)}.")
-    return Answer("premise", " ".join(bits), ("event calendar", "premise check"))
+    # What the data can say about the idea itself: which way moments like this went.
+    c = (_primary(r) or {}).get("cohort") or {}
+    long_ = (_ticket(r).get("side") or "long") == "long"
+    if c.get("n") and c.get("win_rate") is not None and c.get("median_pct") is not None:
+        with_you = c["win_rate"] if long_ else 1 - c["win_rate"]
+        lean = "with you" if with_you > 0.55 else "against you" if with_you < 0.45 else "neither way"
+        bits.append(f"As for the idea itself: of {c['n']} past moments like this, {with_you:.0%} went your way (middle outcome {_pct(c['median_pct'])}), "
+                    f"so history leans {lean}. The desk does not claim to call direction - its measured edge is on the size of the bad case.")
+    return Answer("premise", " ".join(bits), ("event calendar", "premise check", "analog cohort"))
 
 
 def _dollars(v: float | None) -> str:
@@ -595,6 +610,7 @@ _QUESTIONY = re.compile(r"\?|？|^\s*(why|what|how|when|which|who|where|can|coul
 # as a fresh trade, which re-ran the same size and said nothing.
 _INSTRUCTION = re.compile(
     r"^\s*(?:now\s+|ok\s+|and\s+)?(?:halve|double|triple|use|try|drop|remove|flip|cut)\b|\b(?:hold|keep)\s+(?:it|this|that|the position)\b"
+    r"|^\s*hold\s+(?:it\s+|this\s+|that\s+)?(?:until|till|to|through|for|over|into)\b"
     r"|\b(?:halve|double|triple)\s+(?:it|the size|that)\b|\b\d+(?:\.\d+)?\s*[x×](?![a-z])|\b(?:no|without)\s+leverage\b"
     r"|减半|加倍|翻倍",
     re.I,
