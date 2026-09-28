@@ -144,7 +144,7 @@ def _a_size(r: dict, q: str) -> Answer | None:
     return Answer("size", " ".join(bits), ("sizing caps", "sensitivity sweep")) if bits else None
 
 
-_SIZE_FACTOR = re.compile(r"\b(halve|half|double|twice|triple)\b|\b(\d+(?:\.\d+)?)\s*(?:x|times)\s+(?:the\s+)?(?:size|as much)\b", re.I)
+_SIZE_FACTOR = re.compile(r"\b(halve|half|double|twice|triple)\b|\b(\d+(?:\.\d+)?)\s*(?:x|times)\s+(?:the\s+)?(?:size|as much)\b|减半|加倍|翻倍", re.I)
 
 
 def _a_stop(r: dict, q: str) -> Answer | None:

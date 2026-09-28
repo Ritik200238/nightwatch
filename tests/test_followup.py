@@ -368,3 +368,10 @@ def test_why_the_moments_are_similar_is_answered(report):
 def test_an_instruction_without_a_question_mark_is_about_the_report(text):
     """"halve it" used to be read as a fresh trade and re-ran the same size in silence."""
     assert looks_like_a_question(text)
+
+
+def test_halving_in_chinese_reads_the_size_sweep(report):
+    from nightwatch.api import followup_zh
+
+    got = followup_zh.answer(report, "仓位减半呢")
+    assert got is not None and got.kind == "size" and "结论为" in got.text

@@ -33,6 +33,19 @@ def _a_size(r: dict, _q: str) -> Answer | None:
     binding = next((c for c in caps if c["name"] == sizing.get("binding_cap")), None)
     requested = (r.get("ticket") or {}).get("notional_quote")
     bits = []
+    # "仓位减半" / "加倍": the sweep already ran the gate at that size.
+    mult = 0.5 if re.search(r"减半|一半", _q) else 2.0 if re.search(r"加倍|翻倍", _q) else None
+    sizes = sen.get("sizes") or []
+    if mult and requested and sizes:
+        target = requested * mult
+        p = min(sizes, key=lambda x: abs(x["notional"] - target))
+        near = "" if abs(p["notional"] - target) < max(1.0, target * 0.01) else f"（最接近 {_usd(target)} 的扫描点）"
+        bits.append(f"仓位 {_usd(p['notional'])}{near} 时结论为 {VERDICT_ZH.get(p['verdict'], p['verdict'])}。")
+        if p.get("exit_cost_bps") is not None:
+            bits.append(f"平仓成本约 {p['exit_cost_bps']:.1f} bps。")
+        if sen.get("max_go_notional") is not None:
+            bits.append(f"最大仍可直接做的仓位是 {_usd(sen['max_go_notional'])}。")
+        return Answer("size", "".join(bits), ("sensitivity sweep",))
     if binding and requested is not None and binding["notional"] < requested - 1:
         from nightwatch.api.intake import CAP_ZH
 
@@ -144,7 +157,7 @@ def _a_hedge(r: dict, _q: str) -> Answer | None:
 ROUTES = (
     ("street", re.compile(r"分析师|评级|目标价|内部人|高管|恐慌|贪婪|情绪|华尔街|实时价"), _a_street),
     ("stop", re.compile(r"止损"), _a_stop),
-    ("size", re.compile(r"仓位|更大|更小|加仓|减仓|为什么不能|上限|多少钱"), _a_size),
+    ("size", re.compile(r"仓位|更大|更小|加仓|减仓|为什么不能|上限|多少钱|减半|加倍|翻倍"), _a_size),
     ("worst", re.compile(r"最坏|最差|风险|压力|暴跌|亏多少|崩"), _a_worst),
     ("exit", re.compile(r"平仓|出场|卖得掉|流动性|滑点|盘口|深度"), _a_exit),
     ("hedge", re.compile(r"对冲|永续"), _a_hedge),
