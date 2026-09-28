@@ -733,6 +733,14 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         # A question about the report already on screen, rather than a new trade idea.
         context = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
+        # "What's the safest way to hold this?" - the same idea run several ways, side by side.
+        from nightwatch.api import ways
+
+        if context and latest and ways.ASKS.search(latest):
+            got = ways.answer(s, context, language_of(latest))
+            if got is not None:
+                return got
+
         if context and latest and followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, list(s.ctx.tickers_with_data())):
             # "What if I held it twelve hours", "was it worse on earnings nights". The
             # report on screen cannot answer those - they are a different report - so the
