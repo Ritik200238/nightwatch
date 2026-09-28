@@ -269,7 +269,7 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         return None
     # Rules first: the common changes are shapes the intake rules already read, in
     # milliseconds. The model, which takes 10-60 s, is asked only when they find none.
-    change = whatif.rule_change(question, context.get("ticket") or {}, tickers)
+    change = whatif.rule_change(question, context.get("ticket") or {}, tickers, ((context.get("snapshot") or {}).get("features") or {}))
     # "What if it gaps down 10%" and "what if I halve it" are not a different report; the
     # one on screen answers them in milliseconds. Asking the model to name a change for
     # them costs seconds and can come back as something adjacent, like "short instead".
@@ -718,6 +718,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         s = st()
         messages = [m.model_dump() for m in body.messages]
         latest = next((m["content"] for m in reversed(messages) if m.get("role") == "user" and (m.get("content") or "").strip()), "")
+
+        # "How often does TSLA fall 5% over a weekend?" - the historical distribution asked
+        # for directly, with no trade attached. Answered from history, not by asking for a size.
+        from nightwatch.api import baserate
+        from nightwatch.api.intake import language_of
+
+        br = baserate.detect(latest, list(s.ctx.tickers_with_data())) if latest else None
+        if br is not None:
+            try:
+                return baserate.answer(s, br, lang=language_of(latest))
+            except InsufficientData as exc:
+                raise HTTPException(422, str(exc)) from exc
 
         # A question about the report already on screen, rather than a new trade idea.
         context = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
