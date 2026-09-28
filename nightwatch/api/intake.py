@@ -365,7 +365,25 @@ CAP_ZH = {"risk_budget": "风险预算", "concentration": "集中度", "regime":
 RULE_ZH = {
     "written_plan": "书面计划", "stop": "止损", "position_size": "仓位大小", "market_posture": "市场状态",
     "liquidity": "流动性", "circuit_breaker": "熔断", "basis": "价差", "event": "事件", "data_quality": "数据质量",
+    "liquidation": "强平风险", "exit_liquidity": "平仓流动性", "revenge": "报复性交易冷静期", "concentration": "集中度", "risk_budget": "风险预算",
 }
+
+
+def preset_zh(sid: str, name: str) -> str:
+    """A stress preset's name in Chinese, from its id; the English name when unknown."""
+    import re as _re
+
+    if (m := _re.fullmatch(r"closed_window_gap_p(\d+)", sid)):
+        return f"休市期间跳空（第 {m.group(1)} 百分位）"
+    if (m := _re.fullmatch(r"basis_blowout_p(\d+)", sid)):
+        return f"代币偏离公允价值（休市时段第 {m.group(1)} 百分位）"
+    if (m := _re.fullmatch(r"vol_spike_x(\d+)", sid)):
+        return f"波动率骤升 ×{m.group(1)}"
+    return {
+        "earnings_gap_worst": "财报跳空：历史最差", "earnings_gap_typical": "财报跳空：典型不利",
+        "liquidity_drought": "流动性枯竭（盘口深度 ÷5）", "exchange_halt_24h": "24 小时无法平仓",
+        "funding_spike": "对冲腿资金费率飙升",
+    }.get(sid, name)
 _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
 
@@ -532,7 +550,7 @@ def brief(report: Any, lang: str = "en") -> str:
         worst = min(priced, key=lambda i: i.total_pnl_quote)
         name = next((s.name for s in report.stress.presets if s.id == worst.scenario_id), worst.scenario_id)
         if zh:
-            lines.append(f"最坏压力情景（{name}）：仓位 {_pct(worst.total_pct_of_notional)}，约 {worst.total_pnl_quote:,.0f} USDT。")
+            lines.append(f"最坏压力情景（{preset_zh(worst.scenario_id, name)}）：仓位 {_pct(worst.total_pct_of_notional)}，约 {worst.total_pnl_quote:,.0f} USDT。")
         else:
             lines.append(f"Worst stress preset ({name}): {_pct(worst.total_pct_of_notional)} of the position, about {worst.total_pnl_quote:,.0f} USDT.")
     mc = report.stress.monte_carlo

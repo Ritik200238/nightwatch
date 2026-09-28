@@ -403,3 +403,11 @@ def test_hours_until_a_weekday_open_and_close():
     assert hours_until_weekday(4, "close", sunday_night) == 114.0  # Friday 16:00 ET
     wed_noon = datetime(2026, 9, 30, 16, 0, tzinfo=UTC)  # Wednesday 12:00 ET, after the open
     assert hours_until_weekday(2, "open", wed_noon) > 6 * 24  # so next Wednesday
+
+
+def test_stress_preset_names_are_chinese_in_a_chinese_reply():
+    from nightwatch.api.intake import preset_zh
+
+    assert preset_zh("closed_window_gap_p1", "Closed-window gap, 1st percentile") == "休市期间跳空（第 1 百分位）"
+    assert preset_zh("vol_spike_x3", "Volatility spike x3") == "波动率骤升 ×3"
+    assert preset_zh("something_new", "Something new") == "Something new"  # unknown ids keep their name
