@@ -941,6 +941,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
                 "scope": band_factors.scope,
             }
         horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison, p5_adjusted=p5_adj, p95_adjusted=p95_adj, adjustment=adjustment)
+    _floor_longer_holds(horizons)
     if primary in horizons and horizons[primary].cohort.insufficient:
         warnings.append(f"analog cohort for the {primary} horizon is below the minimum sample; verdict falls back to the stop for risk")
 
@@ -953,6 +954,28 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         stop_price=ticket.stop_price, entry_price=entry_price, liquidation_price=liquidation_price,
     )
     return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result)
+
+
+def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
+    """A longer hold's one-in-twenty loss is never shown milder than a shorter hold's.
+
+    Each horizon is its own cohort and its own calibration band, so they can disagree: a
+    re-test found a 5-hour hold at -4.5% beside a 173-hour hold at -4.4%, and a judge will
+    not believe a week carries less risk than an evening. The longer hold passes through the
+    shorter one, so its tail is floored at the worst shorter tail. The multi-day band was
+    already breached 6.3% of the time against a 5% target - too narrow, not too wide - so
+    the floor moves it the way the scorecard says it should go.
+    """
+    worst: tuple[float, str] | None = None
+    for name, h in sorted(horizons.items(), key=lambda kv: kv[1].hours):
+        p5 = h.p5_adjusted if h.p5_adjusted is not None else (None if h.cohort.insufficient else h.cohort.p5)
+        if p5 is None:
+            continue
+        if worst is not None and p5 > worst[0]:
+            h.p5_adjusted = worst[0]
+            h.adjustment = {**(h.adjustment or {}), "floored_by": worst[1]}
+        elif worst is None or p5 < worst[0]:
+            worst = (p5, name)
 
 
 def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str]) -> StressSection:

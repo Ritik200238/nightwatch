@@ -252,3 +252,18 @@ def test_one_wide_book_does_not_set_the_size_and_a_what_if_uses_its_own_moment(s
     assert any("unusually wide" in w for w in report.warnings)
     assert report.execution.max_notional_within_budget and report.execution.max_notional_within_budget > 0
     ctx.store.close()
+
+
+def test_a_longer_hold_is_never_shown_milder_than_a_shorter_one():
+    """A re-test found a 5-hour hold at -4.5% beside a 173-hour hold at -4.4%."""
+    from types import SimpleNamespace
+
+    from nightwatch.pipeline.analyze import HorizonReport, _floor_longer_holds
+
+    def h(name, hours, p5):  # noqa: ANN001, ANN202
+        return HorizonReport(horizon=name, hours=hours, cohort=SimpleNamespace(insufficient=False, p5=p5), baseline=None, p5_adjusted=p5, adjustment={"k_lo": 1.0})
+
+    hs = {"5h": h("5h", 5, -4.5), "24h": h("24h", 24, -3.0), "173h": h("173h", 173, -4.4), "240h": h("240h", 240, -6.0)}
+    _floor_longer_holds(hs)
+    assert hs["24h"].p5_adjusted == -4.5 and hs["24h"].adjustment["floored_by"] == "5h"
+    assert hs["173h"].p5_adjusted == -4.5 and hs["240h"].p5_adjusted == -6.0 and "floored_by" not in hs["240h"].adjustment

@@ -262,7 +262,11 @@ def _a_history(r: dict, _q: str) -> Answer | None:
     if h.get("adjustment"):
         adj = h["adjustment"]
         margin = f" plus a margin of {adj['c_lo']:.1f} points" if adj.get("c_lo") else ""
-        bits.append(f"The tails you see are widened by a factor of {adj.get('k_lo', 0):.2f}{margin}, fitted on {adj.get('n_fit', 0):,} already-scored forecasts, never on this one.")
+        k = adj.get("k_lo", 1.0) or 1.0
+        how = "widened" if k > 1.0 else "narrowed" if k < 1.0 else "left"
+        why = " (past tails of this length were too wide)" if k < 1.0 else ""
+        floor = f" It is also floored at the {adj['floored_by']} hold's, because a longer hold is never shown carrying less risk." if adj.get("floored_by") else ""
+        bits.append(f"The loss line you see is {how} by a factor of {k:.2f}{why}{margin}, fitted on {adj.get('n_fit', 0):,} already-scored forecasts, never on this one.{floor}")
     return Answer("history", " ".join(bits), ("analog cohort", "baseline test"))
 
 
