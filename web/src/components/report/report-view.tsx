@@ -197,6 +197,24 @@ function LiquidationNote({ report }: { report: Report }) {
 }
 
 /** The stated reason, checked against the calendar. */
+/** "Over the weekend" asked on a weekday: say which weekend was measured, and what past
+ *  Friday-to-Monday weekends did, so 150 hours does not read as broken clock maths. */
+function WeekendNote({ report }: { report: Report }) {
+  const w = report.weekend_only;
+  if (!w) return null;
+  return (
+    <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
+      <span className="font-medium text-foreground">Which weekend: </span>
+      <span className="text-muted-foreground">
+        today is {w.today}, so holding from now is {(w.hold_from_now_h / 24).toFixed(1)} days, to Monday&apos;s open - longer than
+        any hold we have scored. Buying on Friday instead: over {report.ticket.ticker}&apos;s last {w.n} weekends, 1 in 20 lost
+        more than {(-w.p5_pct).toFixed(1)}% from Friday&apos;s close to Monday&apos;s open, and the worst was {w.worst_pct.toFixed(1)}% (raw
+        history, not calibrated). Run it again on Friday for the full check.
+      </span>
+    </div>
+  );
+}
+
 function PremiseNote({ report }: { report: Report }) {
   if (!report.premise?.length) return null;
   return (
@@ -336,6 +354,7 @@ function DecisionCard({ report }: { report: Report }) {
       ) : null}
 
       <LiquidationNote report={report} />
+      <WeekendNote report={report} />
       <PremiseNote report={report} />
       <PlanNote report={report} />
       <ActOnIt report={report} />

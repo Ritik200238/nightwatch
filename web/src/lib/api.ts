@@ -833,6 +833,7 @@ export interface Report {
   failure_modes?: FailureMode[];
   /** Where the stated reason depends on an event the data can date, and does not match. */
   premise?: string[];
+  weekend_only?: WeekendOnly | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
@@ -971,3 +972,16 @@ export const api = {
     return request<Record<string, unknown>[]>(`/forecasts?${q.toString()}`);
   },
 };
+
+/** What past Friday-close-to-Monday-open weekends did to the token, shown when "over the
+ *  weekend" was asked early in the week and holding from now is a longer trade. */
+export interface WeekendOnly {
+  n: number;
+  since: string;
+  p5_pct: number;
+  median_pct: number;
+  worst_pct: number;
+  typical_h: number;
+  today: string;
+  hold_from_now_h: number;
+}
