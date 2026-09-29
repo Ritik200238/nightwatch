@@ -78,6 +78,7 @@ export default function CalibrationPage() {
         </div>
       ) : (
         <>
+          {rep.adjusted ? <PlainWords adj={rep.adjusted} /> : null}
           {rep.adjusted ? (
             <Section
               title="What the desk sizes on, scored out of sample"
@@ -387,6 +388,28 @@ export default function CalibrationPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** The page's answer in one paragraph, for a reader who does not speak p5 and pinball
+ *  loss. Every number is the one the tables below print. */
+function PlainWords({ adj }: { adj: NonNullable<CalibrationReport["adjusted"]> }) {
+  const lo = adj.adj_lo_coverage * 100;
+  const verdict =
+    adj.adj_tail_band === "green"
+      ? "That is on target, so the bad-case numbers the desk sizes with have held up."
+      : adj.adj_tail_band === "amber"
+        ? "That is close to target but not on it, so treat the bad-case numbers as slightly optimistic."
+        : "That is off target, so the bad-case numbers have been too optimistic and should be read as such.";
+  return (
+    <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
+      <p className="font-medium">In plain words</p>
+      <p className="mt-1 text-muted-foreground">
+        Every verdict comes with a bad case: &ldquo;1 time in 20, it goes worse than this&rdquo;. We wrote down {adj.n_evaluated.toLocaleString()} of those before knowing what
+        would happen, then checked. The real outcome was worse than the bad case {fmtPct(lo, 1, false)} of the time, against the 5% it should be. {verdict} Before the correction
+        the raw history was worse than its own bad case {fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time, which is why the desk corrects it.
+      </p>
     </div>
   );
 }
