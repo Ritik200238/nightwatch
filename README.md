@@ -51,6 +51,19 @@ On top of that:
   trades, from Bitget's own US-stock data service.
 * **Getting in, not just getting out**: the entry cost for the size the desk recommends,
   sliced to stay inside the cost budget, with a dry-run prompt for Bitget Agent Hub.
+* **It knows what you already hold.** "Long 20k TSLA, I also hold 60k TSLA and 40k NVDA"
+  (or 我还持有 6万U 特斯拉): the whole book's one-in-twenty loss is measured before and after
+  the trade, on the same past windows for every holding, and caps the size; what you
+  already hold in the same name counts toward the concentration limit. The same trade
+  that is a go on its own can come back at zero on a concentrated book, and the reply
+  says why. A trade that lowers the book's risk is never refused for it.
+* **Talk to it like a person**: "compare it with SPY", "is this better than NVDA?",
+  "short it instead", "explain it simply", "should I buy?" - the trade on screen is
+  changed and re-run, not asked for again.
+* **Every live verdict has a receipt**, a hash chained to the one before it, and
+  `/api/verify` recomputes the chain. **What we got wrong** (`/wrong`) lists every live
+  verdict that went past its one-in-twenty line and the mistakes found in the desk
+  itself, the open one included.
 * **English and 中文**: type the trade either way and get the answer in the same language.
 
 Then it argues against its own answer, using the same numbers, and tells you what would
