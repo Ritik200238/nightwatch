@@ -17,6 +17,9 @@ Rules (all inputs explicit; nothing is assumed):
 7. Market posture: hostile regime → selective only (size must already be reduced).
 8. Exit liquidity: the book can absorb the position within the cost budget.
 9. Circuit breaker: realised losses on taken trades, and losing streaks.
+10. Book: with holdings given, whether history exists to measure the whole book (an
+    advisory when it does not), and whether the trade moves with what is held (an
+    advisory when it does). The book's tail limit itself is a sizing cap, not a veto.
 """
 
 from __future__ import annotations
@@ -81,6 +84,11 @@ class GateInputs:
     # A leveraged ticket's liquidation verdict, worked out by nightwatch.execution.leverage
     # from the analogs, presets and Monte Carlo: (decision, reason). None when unleveraged.
     leverage_rule: tuple[str, str] | None = None
+    # What the trader already holds. ``book_given`` is whether any holding was stated;
+    # ``book_unknown`` names those with no stored history, which the tail leaves out.
+    book_given: bool = False
+    book_unknown: tuple[str, ...] = ()
+    book_mean_correlation: float | None = None  # this trade against the rest of the book
 
 
 @dataclass(frozen=True)
@@ -225,5 +233,17 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
         rules.append(RuleResult("circuit_breaker", GateDecision.REVIEW_REQUIRED, inputs.breaker_reason or "cooling off after recent losses"))
     else:
         rules.append(RuleResult("circuit_breaker", GateDecision.GO, inputs.breaker_reason or "no loss limit is close"))
+
+    # 11. The rest of the book. Advisories only: the limit on the book's tail is applied as
+    # a size cap, and a holding we cannot measure is a reason to look, not to refuse.
+    if inputs.book_given:
+        if inputs.book_unknown:
+            names = ", ".join(inputs.book_unknown)
+            rules.append(RuleResult("book_tail", GateDecision.GO, f"no stored history for {names}; the book's tail is measured without it"))
+            advisories.append(f"review your book: there is no stored history for {names}, so it is left out of the book's tail and the book cap is measured on the rest")
+        else:
+            rules.append(RuleResult("book_tail", GateDecision.GO, "the book's history is measured; its limit is applied to the size"))
+        if inputs.book_mean_correlation is not None and inputs.book_mean_correlation > 0.7:
+            advisories.append(f"it moves with the rest of your book (mean correlation {inputs.book_mean_correlation:.2f}): this adds size, not diversification")
 
     return GateReport(decision=_worst(rules), rules=rules, risk_quote=risk_quote, risk_pct_of_equity=risk_pct, risk_basis=basis, advisories=advisories)
