@@ -14,7 +14,7 @@ import re
 
 from nightwatch.api.followup import Answer, _bps, _p5, _pct, _primary, _usd
 
-VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+VERDICT_ZH = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
 RULE_ZH = {
     "written_plan": "书面计划", "stop": "止损", "position_size": "仓位大小", "market_posture": "市场状态",
     "liquidity": "流动性", "circuit_breaker": "熔断", "basis": "价差", "event": "事件", "data_quality": "数据质量",
@@ -234,7 +234,69 @@ def _a_similar(r: dict, _q: str) -> Answer | None:
     return Answer("moments", text, ("matched moments",))
 
 
+_PLAIN_ZH = {
+    "GO": "按你要的仓位，所有检查都通过了", "REDUCE_TO": "想法可以，但只能用更小的仓位", "HEDGE": "仓位不变，但用永续合约对冲一部分",
+    "REVIEW": "还缺一些信息，补上才能下结论", "NO_GO": "按你给的条件，有一条硬性限制不允许",
+}
+
+
+def _loss(r: dict) -> tuple[float | None, float | None]:
+    p5, size = _p5(r), (r.get("ticket") or {}).get("notional_quote")
+    return p5, (p5 / 100.0 * float(size)) if (p5 is not None and size) else None
+
+
+def _a_plain(r: dict, _q: str) -> Answer | None:
+    from nightwatch.api.intake import FAILURE_ZH
+
+    v, t, h = (r.get("verdict") or {}).get("verdict"), r.get("ticket") or {}, _primary(r)
+    if not v or not t:
+        return None
+    side = "买入并持有" if t.get("side") == "long" else "做空"
+    bits = [f"简单说：你想{side} {_usd(t.get('notional_quote'))} USDT 的 {t.get('ticker')}，大约 {r.get('horizon_h', 0):.0f} 小时。"]
+    c = (h or {}).get("cohort") or {}
+    if c.get("n") and not c.get("insufficient"):
+        p5, loss = _loss(r)
+        bits.append(f"系统找到了 {c['n']} 个和现在很像的历史时刻，看了之后发生了什么：通常波动不大（中间值 {_pct(c.get('median_pct'))}），"
+                    f"但大约每二十次有一次亏损超过 {_pct(p5)}" + (f"，按你的仓位约 {_usd(-loss)} USDT。" if loss is not None else "。"))
+    modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
+    if modes:
+        bits.append(f"最可能亏钱的方式：{FAILURE_ZH.get(modes[0]['key'], modes[0]['title'])}，约 {_usd(modes[0]['loss_quote'])} USDT。")
+    q = (r.get("execution") or {}).get("exit_quote") or {}
+    if q.get("total_cost_bps") is not None:
+        bits.append(f"如果现在在 Bitget 实时盘口上卖出，成本约 {_bps(q['total_cost_bps'])}（{_usd(q.get('total_cost_quote'))} USDT）。")
+    bits.append(f"所以结论是{VERDICT_ZH.get(v, v)}：{_PLAIN_ZH.get(v, '')}。系统不会替你下单，由你决定。")
+    return Answer("plain", "".join(bits), ("analog cohort", "failure modes", "order book", "verdict"))
+
+
+def _a_decide(r: dict, _q: str) -> Answer | None:
+    v, t = (r.get("verdict") or {}).get("verdict"), r.get("ticket") or {}
+    if not v:
+        return None
+    p5, loss = _loss(r)
+    bits = [f"系统的回答是{VERDICT_ZH.get(v, v)}：{_PLAIN_ZH.get(v, '')}。"]
+    if loss is not None:
+        bits.append(f"如果按 {_usd(t.get('notional_quote'))} USDT 做，历史上大约每二十次有一次亏损超过 {_usd(-loss)} USDT（{_pct(p5)}）。")
+    bits.append("股票会不会涨，它回答不了：在几千次已评分的预测里，它对方向没有优势，只对“坏情况有多坏”有把握。这一步由你决定。")
+    return Answer("decide", "".join(bits), ("verdict", "analog cohort"))
+
+
+def _a_data(r: dict, _q: str) -> Answer | None:
+    return Answer("data", "所有数据都来自实时数据源，没有手动输入：Bitget 代币和永续合约的 K 线与盘口（每 30 秒记录一次）、Bitget 永续合约保证金档位（用于强平价）、"
+                  "Bitget 美股数据服务（实时股价、分析师评级、内部人交易）、Yahoo Finance 的美股小时线、Nasdaq 财报日期、FRED 的美联储与 CPI 日期、SEC 公告和新闻。"
+                  "首页的数据源面板显示每个数据源现在有多新。", ("sources",))
+
+
+def _a_options(r: dict, q: str) -> Answer | None:
+    got = _a_hedge(r, q)
+    head = "系统没有这些代币的期权数据，无法给期权定价。它能定价的保护方式是用 Bitget 永续合约对冲："
+    return Answer("hedge", head + (got.text if got else ""), ("hedge quote",))
+
+
 ROUTES = (
+    ("plain", re.compile(r"通俗|简单(?:说|点|解释|讲)|说人话|新手|小白|看不懂|不懂|什么意思|解释一下"), _a_plain),
+    ("decide", re.compile(r"我该怎么做|要不要(?:买|做|入)|该不该|值得吗|值不值|能不能买|可以买吗|建议我|你会怎么做|安全吗"), _a_decide),
+    ("data", re.compile(r"数据来源|什么数据|数据从哪|用了哪些数据|数据源"), _a_data),
+    ("options", re.compile(r"期权|看跌期权|看涨期权"), _a_options),
     ("shock", re.compile(r"(?:跌|涨|跳空|暴跌|暴涨)[^0-9]{0,6}[0-9]+(?:\.[0-9]+)?\s*[%％]"), _a_shock),
     ("similar", re.compile(r"相似|一样|像现在"), _a_similar),
     ("street", re.compile(r"分析师|评级|目标价|内部人|高管|恐慌|贪婪|情绪|华尔街|实时价"), _a_street),
@@ -247,7 +309,7 @@ ROUTES = (
     ("history", re.compile(r"历史|过去|相似|概率|胜率|中位"), _a_history),
 )
 
-MENU_ZH = "我可以根据这份报告回答：仓位为什么是这么大、止损、最坏的情况、如果跌 10% 会怎样、平仓成本、历史怎么说、这些时刻为什么相似、对冲、为什么需要复核，以及分析师和内部人在做什么。也可以问“最安全的持有方式是什么”。"
+MENU_ZH = "这个问题我没能对上这份报告。可以试试：为什么？· 简单解释一下 · 最坏会亏多少？· 最安全的持有方式是什么？· 和 SPY 比呢？"
 
 
 def answer(report: dict, question: str) -> Answer | None:

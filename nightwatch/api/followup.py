@@ -576,7 +576,90 @@ def _a_street(r: dict, q: str) -> Answer | None:
     return Answer("street", " ".join(bits), ("Bitget US-stock data",))
 
 
+_VERDICT_PLAIN = {
+    "GO": "every check passed at the size you asked for",
+    "REDUCE_TO": "the idea passes, but only at a smaller size",
+    "HEDGE": "keep the size and hedge part of it with the perpetual",
+    "REVIEW": "something is missing before it can be decided",
+    "NO_GO": "a hard limit refuses it as asked",
+}
+
+
+def _loss_at_size(r: dict) -> tuple[float | None, float | None]:
+    p5, size = _p5(r), _ticket(r).get("notional_quote")
+    return p5, (p5 / 100.0 * float(size)) if (p5 is not None and size) else None
+
+
+def _a_decide(r: dict, _q: str) -> Answer | None:
+    """'Should I buy?': the desk's answer is a size, never a direction, and it says why."""
+    v = r.get("verdict") or {}
+    if not v.get("verdict"):
+        return None
+    t = _ticket(r)
+    p5, loss = _loss_at_size(r)
+    bits = [f"The desk's answer is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}"
+            + (f", at {_usd(v.get('recommended_notional'))} USDT" if v.get("recommended_notional") is not None and v["verdict"] == "REDUCE_TO" else "") + "."]
+    if loss is not None:
+        bits.append(f"If you do it at {_usd(t.get('notional_quote'))} USDT, one time in twenty history says it loses more than {_usd(-loss)} USDT ({_pct(p5)}).")
+    bits.append("Whether the stock goes up is not something it can tell you: on thousands of scored forecasts it has no edge on direction, "
+                "only on how bad the bad case is. That part is your call.")
+    failed = [x for x in ((r.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
+    if failed:
+        bits.append("To get a clean answer, fix: " + "; ".join(x["reason"] for x in failed[:2]) + ".")
+    return Answer("decide", " ".join(bits), ("verdict", "analog cohort"))
+
+
+def _a_plain(r: dict, _q: str) -> Answer | None:
+    """The whole report in five plain sentences, for someone new to it."""
+    v, t, h = r.get("verdict") or {}, _ticket(r), _primary(r)
+    if not v.get("verdict") or not t:
+        return None
+    side = "buy and hold" if t.get("side") == "long" else "short"
+    bits = [f"In plain words: you want to {side} {_usd(t.get('notional_quote'))} USDT of {t.get('ticker')} for about {r.get('horizon_h', 0):.0f} hours."]
+    c = (h or {}).get("cohort") or {}
+    if c.get("n") and not c.get("insufficient"):
+        p5, loss = _loss_at_size(r)
+        bits.append(f"The desk found {c['n']} past moments that looked like right now and checked what happened next. Usually the move was small "
+                    f"(the middle one was {_pct(c.get('median_pct'))}), but about one time in twenty it lost more than {_pct(p5)}"
+                    + (f", which on your size is about {_usd(-loss)} USDT." if loss is not None else "."))
+    modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
+    if modes:
+        bits.append(f"The way this most likely hurts: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])} USDT.")
+    q = (r.get("execution") or {}).get("exit_quote") or {}
+    if q.get("total_cost_bps") is not None:
+        bits.append(f"Selling it again right now would cost about {_bps(q['total_cost_bps'])} ({_usd(q.get('total_cost_quote'))} USDT) on Bitget's live order book.")
+    bits.append(f"So the verdict is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}. The desk never places the trade; you decide.")
+    return Answer("plain", " ".join(bits), ("analog cohort", "failure modes", "order book", "verdict"))
+
+
+def _a_data(r: dict, _q: str) -> Answer | None:
+    kinds = sorted({str(s.get("kind")) for s in (r.get("sources") or []) if s.get("kind")})
+    bits = [
+        "Everything comes from live feeds, none of it typed in: Bitget's token and perpetual candles and order books (recorded every 30 seconds), "
+        "Bitget's perpetual margin tiers for liquidation prices, Bitget's US-stock data service for the live stock price, analyst ratings and insider "
+        "trades, the real stock's hourly bars from Yahoo Finance, earnings dates from Nasdaq, Fed and CPI dates from FRED, SEC filings and news headlines.",
+    ]
+    if kinds:
+        bits.append(f"This report read: {', '.join(k.replace('_', ' ') for k in kinds)}.")
+    bits.append("The data-sources panel on the desk shows how fresh each feed is right now.")
+    return Answer("data", " ".join(bits), ("sources",))
+
+
+def _a_options(r: dict, q: str) -> Answer | None:
+    head = "The desk has no options data for these tokens, so it cannot price an option. The protection it can price is a hedge on the stock's Bitget perpetual:"
+    got = _a_hedge(r, q)
+    return Answer("hedge", f"{head} {got.text}" if got else head, ("hedge quote",))
+
+
 ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
+    ("plain", re.compile(r"\blike i'?m (?:new|five|5|a beginner|a kid)\b|\beli5\b|\bin plain\b|\bsimple (?:terms|words|english|language)\b|\bsimply\b"
+                         r"|\bi (?:don'?t|do not) (?:understand|get it)\b|\bwhat does (?:this|that|it|all this) mean\b|\bfor a beginner\b|\bnew to (?:this|trading)\b"
+                         r"|\bdumb it down\b|\bexplain (?:it|this|that|everything|the report)\b(?!.*\b(?:verdict|decision|call)\b)|^\s*explain\s*[?.!]*\s*$", re.I), _a_plain),
+    ("decide", re.compile(r"\bshould i\b|\bwhat should i do\b|\bwould you\b|\bdo you recommend\b|\bis (?:it|this) (?:a )?good (?:idea|trade)\b|\bworth it\b"
+                          r"|\bgo for it\b|\bbuy or\b|\bshould we\b|\bis it safe\b", re.I), _a_decide),
+    ("data", re.compile(r"\bwhat data\b|\bwhich data\b|\bdata sources?\b|\bwhere (?:does|do) (?:the|your|this) (?:data|numbers?)\b|\bwhere is (?:the|your) data\b"
+                        r"|\bwhat (?:do you|does it) (?:use|read|look at)\b|\bwhat sources\b", re.I), _a_data),
+    ("options", re.compile(r"(?<!my )(?<!other )(?<!the )\boptions?\b(?! (?:do i|are there|have i))|\bput options?\b|\bcall options?\b|\bbuy (?:a )?puts?\b|\bbuy (?:a )?calls?\b", re.I), _a_options),
     ("shock", SHOCK, _a_shock),
     ("premise", re.compile(r"\bthesis\b|\bmy reason\b|\bsupported\b|\bwhen (?:is|are|were|was|did)\b.*\b(?:earnings|report|results|fomc|fed)\b|\bearnings (?:date|when)\b|\bnext earnings\b|财报什么时候|逻辑成立", re.I), _a_premise),
     ("street", re.compile(r"\banalysts?\b|\bratings?\b|\bprice targets?\b|\bupgrade\w*\b|\bdowngrade\w*\b|\binsiders?\b|\bthe street\b|\bwall street\b|\bfear\b|\bgreed\b|\bsentiment\b|\blive price\b", re.I), _a_street),
@@ -596,12 +679,9 @@ ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
     ("now", re.compile(r"\bright now\b|\bcurrent\b|\bprice\b|\bbasis\b|\bfair value\b|\bwhat.?s happening\b", re.I), _a_now),
 )
 
-MENU = (
-    "I can answer from this report: why the size is what it is, what a different size or stop would do, "
-    "what the worst cases are, what it costs to get out, what history says and how significant that is, "
-    "whether this setup has burned you before, the case against it, what hedging costs, what kind of market "
-    "this is, what analysts and insiders are doing, and how far to trust any of it."
-)
+# What to say when a question matches nothing: three or four things worth asking, not a
+# paragraph listing every section. A judge read the long version as a dead end.
+MENU = "Try one of these: why? · explain it simply · how bad can it get? · what's the safest way to hold it? · compare it with SPY"
 
 # A question, rather than a new trade idea. Deliberately loose: the caller only reaches
 # here when there is a report to ask about and no new ticker was named.
@@ -644,4 +724,4 @@ def answer_or_menu(report: dict, question: str) -> Answer:
     got = answer(report, question)
     if got is not None:
         return got
-    return Answer("menu", f"I could not find that in this report. {MENU}", ())
+    return Answer("menu", f"I could not match that to this report. {MENU}", ())

@@ -176,7 +176,8 @@ def test_no_matured_lesson_is_said_plainly_rather_than_guessed(report):
 def test_a_question_it_cannot_answer_offers_what_it_can(report):
     got = answer_or_menu(report, "what is the capital of France?")
     assert got.kind == "menu"
-    assert "why the size is what it is" in got.text
+    # A handful of things worth asking, not a paragraph listing every section.
+    assert "why?" in got.text and "explain it simply" in got.text and len(got.text) < 200
 
 
 # --- the claim itself --------------------------------------------------------------------
