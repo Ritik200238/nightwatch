@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from nightwatch.time_utils import classify_session, ensure_utc
+from nightwatch.time_utils import Session, classify_session, ensure_utc
 
 HORIZONS_FIXED_H: tuple[int, ...] = (24, 72)
 STRUCTURAL = ("next_open", "window_end")
@@ -179,3 +179,43 @@ def outcomes_table(match_outcomes: list[MatchOutcome], horizon: str) -> pd.DataF
              "native_ret_pct": o.native_ret_pct, "excess_pct": o.excess_pct, "max_abs_basis_bps": o.max_abs_basis_bps, "tag": o.tag}
         )
     return pd.DataFrame(rows).set_index("ts") if rows else pd.DataFrame()
+
+
+WEEKEND_H = 40.0  # a closed window longer than this is a weekend or a holiday
+
+
+def closed_windows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Every closed window: when it started, how long it lasted, and the token's move
+    from the last regular close to the first regular price after it."""
+    f = frame[["spot_close", "session"]].dropna(subset=["spot_close"])
+    rows, start, last_close, in_closed = [], None, None, False
+    for ts, close, session in zip(f.index, f["spot_close"].to_numpy(float), f["session"].to_numpy(), strict=True):
+        if session == Session.REGULAR.value:
+            if in_closed and last_close is not None and start is not None:
+                rows.append({"start": start, "hours": (ts - start).total_seconds() / 3600.0, "ret_pct": (close / last_close - 1.0) * 100.0})
+            in_closed, last_close = False, close
+        elif not in_closed:
+            in_closed, start = True, ts
+    return pd.DataFrame(rows)
+
+
+def weekend_history(frame: pd.DataFrame, side: str) -> dict[str, float | int | str] | None:
+    """What past weekends did to this token, Friday's close to Monday's first regular price.
+
+    The answer to "over the weekend" asked early in the week, when holding from now would
+    be a six-day trade and the trader almost always means buying on Friday. Unconditional
+    and raw: every weekend in the stored history, none of them selected to look like now,
+    and no calibration applied.
+    """
+    w = closed_windows(frame)
+    if w.empty:
+        return None
+    w = w[w["hours"] >= WEEKEND_H]
+    if len(w) < 10:
+        return None
+    signed = w["ret_pct"].to_numpy(float) * (1.0 if side == "long" else -1.0)
+    return {
+        "n": int(len(w)), "since": w["start"].min().isoformat(),
+        "p5_pct": float(np.percentile(signed, 5)), "median_pct": float(np.median(signed)),
+        "worst_pct": float(signed.min()), "typical_h": float(w["hours"].median()),
+    }

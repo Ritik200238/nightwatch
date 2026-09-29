@@ -467,6 +467,34 @@ def _horizon_phrase(report: Any, lang: str) -> str:
     return f"for {h:.0f}h"
 
 
+_DAY_ZH = {"Monday": "周一", "Tuesday": "周二", "Wednesday": "周三", "Thursday": "周四", "Friday": "周五", "Saturday": "周六", "Sunday": "周日"}
+
+
+def weekend_line(report: Any, lang: str) -> str | None:
+    """Which weekend was answered, when "over the weekend" was asked early in the week.
+
+    Holding from a Tuesday to Monday's open is a six-day trade, longer than any hold the
+    desk has scored, and a judge reading "weekend: 152h" took it for broken clock maths.
+    Say what was measured, then give the answer the trader most likely meant - buying on
+    Friday - from what past weekends did, plainly marked as raw history.
+    """
+    w = getattr(report, "weekend_only", None)
+    if not w:
+        return None
+    days = w["hold_from_now_h"] / 24.0
+    if lang == "zh":
+        return (
+            f"说明：今天是{_DAY_ZH.get(w['today'], w['today'])}，从现在持有到周末后的周一开盘是 {days:.1f} 天，比我们评分过的任何持有期都长。"
+            f"如果你是打算周五买、周一卖：{report.ticket.ticker} 过去 {w['n']} 个周末（周五收盘到周一开盘），大约每二十个周末有一个亏损超过 {-w['p5_pct']:.1f}%，"
+            f"最差 {w['worst_pct']:+.1f}%（未经校准的原始历史）。周五再问我一次，可以得到那个周末的完整检查。"
+        )
+    return (
+        f"Note: today is {w['today']}, so holding from now through the weekend is {days:.1f} days, to Monday's open - longer than any hold we have scored. "
+        f"If you mean buying on Friday and selling on Monday: over {report.ticket.ticker}'s last {w['n']} weekends, Friday's close to Monday's open, "
+        f"1 in 20 lost more than {-w['p5_pct']:.1f}% and the worst was {w['worst_pct']:+.1f}% (raw history, not calibrated). Ask again on Friday for the full check of that weekend."
+    )
+
+
 def _leverage_line(lev: dict[str, Any], lang: str) -> str:
     """Where the exchange closes a leveraged position, and how often history got there."""
     zh = lang == "zh"
@@ -530,6 +558,9 @@ def brief(report: Any, lang: str = "en") -> str:
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."
     lines.append(head)
+    wk = weekend_line(report, lang)
+    if wk:
+        lines.append(wk)
 
     analog = report.analog
     horizon = analog.horizons.get(report.primary_horizon) if analog else None
@@ -697,6 +728,9 @@ def brief_short(report: Any, lang: str = "en") -> str:
     full = brief(report, lang).split("\n\n")
     keep = _SHORT_KEEP_ZH if zh else _SHORT_KEEP_EN
     out = [full[0]]
+    wk = weekend_line(report, lang)
+    if wk:
+        out.append(wk)
     note = getattr(report.execution, "book_note", None)
     if note:
         out.append("注意：盘口此刻异常宽，仓位上限按过去两小时的正常盘口计算；现在进出成本更高，可以等一等或用限价单。" if zh

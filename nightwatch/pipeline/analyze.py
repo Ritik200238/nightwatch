@@ -442,6 +442,9 @@ class AnalysisReport:
     assumptions: list[dict] = field(default_factory=list)
     failure_modes: list[dict] = field(default_factory=list)
     premise: list[str] = field(default_factory=list)
+    # "Over the weekend" asked early in the week: holding from now is a trade longer than
+    # any scored one, so what past Friday-close-to-Monday weekends did is shown beside it.
+    weekend_only: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -711,12 +714,33 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     except Exception:  # noqa: BLE001 - an explanation must never break a verdict
         log.exception("assumptions / failure modes failed")
 
+    report.weekend_only = _weekend_only(ticket, horizon_h, frame, as_of)
+
     if ctx.journal is not None and record:
         try:
             report.forecast_id = _record(ctx, report)
         except Exception:  # noqa: BLE001 - journaling must never break an analysis
             log.exception("failed to journal the forecast")
     return report
+
+
+def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as_of: datetime) -> dict | None:
+    """Past weekends, when "through the weekend" was asked far enough ahead of it that
+    holding from now runs past the longest scored hold."""
+    label = (ticket.extra or {}).get("horizon_label") if isinstance(ticket.extra, dict) else None
+    if not label or "weekend" not in label or horizon_h <= CALIBRATED_MAX_H:
+        return None
+    from nightwatch.analog.outcomes import weekend_history
+    from nightwatch.time_utils import ET
+
+    try:
+        hist = weekend_history(frame, ticket.side.value)
+    except Exception:  # noqa: BLE001 - context must never fail an analysis
+        log.exception("weekend history failed")
+        return None
+    if hist is None:
+        return None
+    return {**hist, "today": ensure_utc(as_of).astimezone(ET).strftime("%A"), "hold_from_now_h": horizon_h}
 
 
 def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:

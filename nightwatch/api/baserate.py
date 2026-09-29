@@ -17,9 +17,8 @@ from datetime import datetime
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
-from nightwatch.time_utils import Session
+from nightwatch.analog.outcomes import WEEKEND_H, closed_windows
 
 _ASK = re.compile(
     r"\b(?:base[\s-]?rate|how often|how many times|odds|chances?|probability|likelihood|how likely|historically|history says)\b"
@@ -30,7 +29,6 @@ _PCT = re.compile(r"(\d+(?:\.\d+)?)\s*(?:%|％|per ?cent)", re.I)
 _UP = re.compile(r"\b(?:rise|rises|rising|rally|rallies|up|gain|gains|jump|jumps|pump|pumps|gap up|higher|climb|climbs)\b|涨|上涨|暴涨", re.I)
 _WEEKEND = re.compile(r"weekend|周末", re.I)
 DEFAULT_NOTIONAL = 10_000.0
-WEEKEND_H = 40.0  # a closed window longer than this is a weekend or a holiday
 
 
 @dataclass(frozen=True)
@@ -53,21 +51,6 @@ def detect(text: str, tickers: list[str]) -> BaseRateQuestion | None:
     if not parsed.ticker:
         return None
     return BaseRateQuestion(parsed.ticker.upper(), float(pct.group(1)), bool(_UP.search(text)), bool(_WEEKEND.search(text)))
-
-
-def closed_windows(frame: pd.DataFrame) -> pd.DataFrame:
-    """Every closed window: when it started, how long it lasted, and the token's move
-    from the last regular close to the first regular price after it."""
-    f = frame[["spot_close", "session"]].dropna(subset=["spot_close"])
-    rows, start, last_close, in_closed = [], None, None, False
-    for ts, close, session in zip(f.index, f["spot_close"].to_numpy(float), f["session"].to_numpy(), strict=True):
-        if session == Session.REGULAR.value:
-            if in_closed and last_close is not None and start is not None:
-                rows.append({"start": start, "hours": (ts - start).total_seconds() / 3600.0, "ret_pct": (close / last_close - 1.0) * 100.0})
-            in_closed, last_close = False, close
-        elif not in_closed:
-            in_closed, start = True, ts
-    return pd.DataFrame(rows)
 
 
 def _times(n: int) -> str:
