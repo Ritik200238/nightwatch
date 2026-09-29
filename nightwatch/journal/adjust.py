@@ -46,8 +46,13 @@ subtracted after the multiplicative widening:
 forecasts that took the narrowest third from 8.2% to 5.5% breaches, cut the pinball
 loss at the 5% quantile on 20 of 24 tokens (clustered t = +3.75), and did it with a
 *narrower* average tail (−4.55% against −5.12%): the margin goes where it is needed
-instead of everywhere. The upper tail keeps the multiplicative factor alone; nothing
-in the product is sized on it.
+instead of everywhere. The upper tail keeps the multiplicative factor alone, and a short
+is sized on it. The same margin was tried there (29 Sep, the same 2,302 forecasts, out of
+sample): fitted like ``c_lo`` it sharpened the tail (pinball better on 21 of 24 tokens,
+t = +4.29) but raised breaches from 5.8% to 6.3%; added on top of the one-parameter
+factor it brought breaches to 4.7% but blunted it (t = -1.93). Neither beat what ships on
+both counts, so neither shipped: the upper tail is breached 5.8% of the time, 6.8% on the
+narrowest third, and a short's one-in-twenty loss is that much optimistic on quiet nights.
 
 Honesty rules
 -------------

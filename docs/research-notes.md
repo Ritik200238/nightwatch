@@ -426,6 +426,16 @@ about 12% of retrieved matches come from the token being asked about.
 
 ## 10. Things that did not work, and what was done instead
 
+* **Shorts were sized on the wrong tail (found and fixed 29 Sep).** Every consumer read the
+  cohort's 5th percentile as "the one-in-twenty loss", which for a short is its gain. Each
+  horizon now carries the position's own view: for a short, the calibrated 95th percentile
+  turned over. That tail is breached 5.8% of the time out of sample (target 5%), 6.8% on the
+  narrowest third of forecasts. The lower tail's absolute margin was tried on it two ways and
+  neither shipped: fitted the same way it sharpened the tail (pinball better on 21 of 24
+  tokens, t = +4.29) but raised breaches to 6.3%; added on top of the existing factor it cut
+  breaches to 4.7% but scored worse (t = -1.93). A short's loss line is therefore slightly
+  optimistic on quiet nights, and this page says so rather than the product hiding it.
+
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
   tool returns empty results; verified the fault is server-side. Not used.
 * Yahoo's earnings endpoints are gated by a crumb; Nasdaq's public calendar is used.
