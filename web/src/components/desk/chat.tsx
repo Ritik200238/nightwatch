@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, type Report } from "@/lib/api";
+import { Working } from "./working";
 
 interface Msg {
   role: "user" | "assistant";
@@ -172,9 +173,8 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
           </div>
         ) : null}
         {busy ? (
-          <div className="mr-2 space-y-2 rounded-lg bg-muted px-3 py-2" aria-label="Working">
-            <div className="h-3 w-3/4 animate-pulse rounded bg-background/60" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-background/60" />
+          <div className="mr-2 rounded-lg bg-muted px-3 py-2" aria-label="Working">
+            <Working compact lang={/[\u3400-\u9fff]/.test(messages[messages.length - 1]?.content ?? "") ? "zh" : "en"} />
           </div>
         ) : null}
         {error ? (
