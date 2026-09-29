@@ -67,6 +67,21 @@ BOOK_MAX_AGE = timedelta(minutes=10)
 # The longest hold the tail calibration has scored forecasts for (the journal's longest is
 # 90 hours). Beyond it no factor is applied.
 CALIBRATED_MAX_H = 96.0
+OUTCOME_CACHE = 4000  # a few analyses' worth of matches and baseline hours
+BASELINE_CACHE = 200
+
+
+def _remember(cache: dict, key: tuple, value: Any, limit: int) -> None:  # noqa: ANN401
+    cache[key] = value
+    while len(cache) > limit:
+        cache.pop(next(iter(cache)))
+
+
+def _digest(table: pd.DataFrame) -> tuple:
+    """The whole table - every column and row, in order - as a hashable key. Order counts:
+    the permutation test shuffles the rows as given, so the same rows in another order
+    give another p-value."""
+    return (tuple(table.columns), pd.util.hash_pandas_object(table, index=True).to_numpy().tobytes())
 # When the book now is this much wider than its median over the lookback, and by at least
 # this many bps, it is a momentary blowout rather than the book, and does not set the size.
 WIDE_BOOK_LOOKBACK = timedelta(hours=2)
@@ -101,6 +116,31 @@ class AnalysisContext:
     _profiles: dict[str, tuple[datetime, dict[str, float]]] = field(default_factory=dict)
     _degraded: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     _tiers: dict[str, tuple[datetime, list[Any]]] = field(default_factory=dict)
+    # What followed a past hour, and how a cohort compared with random hours, depend only
+    # on their inputs. "Compare ways" and every what-if rerun the same moment with one
+    # thing changed, so most of these repeat exactly; recomputing them was most of the
+    # 1.5-2 s an analysis spends after the search. Bounded, oldest out first.
+    _outcomes: dict[tuple, Any] = field(default_factory=dict)
+    _baselines: dict[tuple, Any] = field(default_factory=dict)
+    _memo_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def match_outcomes(self, frame: pd.DataFrame, ts: datetime, fixed: tuple[int, ...]) -> MatchOutcome:
+        key = (id(frame), len(frame), frame.index[0], frame.index[-1], pd.Timestamp(ts), fixed)
+        hit = self._outcomes.get(key)
+        if hit is None:
+            hit = compute_match_outcomes(frame, ts, fixed_h=fixed)
+            with self._memo_lock:
+                _remember(self._outcomes, key, hit, OUTCOME_CACHE)
+        return hit
+
+    def baseline_comparison(self, table: pd.DataFrame, base_table: pd.DataFrame, min_sample: int) -> BaselineComparison:
+        key = (_digest(table), _digest(base_table), min_sample)
+        hit = self._baselines.get(key)
+        if hit is None:
+            hit = compare_to_baseline(table, base_table, min_sample=min_sample)
+            with self._memo_lock:
+                _remember(self._baselines, key, hit, BASELINE_CACHE)
+        return hit
 
     def margin_tiers(self, perp_symbol: str | None) -> list[Any] | None:
         """Bitget's margin tiers for a perp, cached for a day. None when there is no perp
@@ -931,7 +971,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         if f is None:
             continue
         try:
-            outcomes.append(compute_match_outcomes(f, m.ts, fixed_h=fixed))
+            outcomes.append(ctx.match_outcomes(f, m.ts, fixed))
         except (KeyError, ValueError):
             continue
     weights = np.array([m.similarity for m in result.matches[: len(outcomes)]])
@@ -943,13 +983,13 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     closed_mask = frame["is_closed"].astype(bool)[cut]
     exclude = pd.DatetimeIndex([m.ts for m in result.matches])
     base_ts = sample_baseline_times(frame.index[cut], n=min(120, 3 * max(result.n, 1)), bucket_mask=same_bucket, fallback_mask=closed_mask, exclude=exclude, min_separation_h=ctx.analog_config.min_separation_h)
-    base_outcomes = [compute_match_outcomes(frame, t.to_pydatetime(), fixed_h=fixed) for t in base_ts]
+    base_outcomes = [ctx.match_outcomes(frame, t.to_pydatetime(), fixed) for t in base_ts]
     factors = ctx.tail_factors(as_of)
     for name in horizon_names:
         table = outcomes_table(outcomes, name)
         stats = summarize(table, weights=weights, min_sample=ctx.analog_config.min_matches)
         base_table = outcomes_table(base_outcomes, name)
-        comparison = compare_to_baseline(table, base_table, min_sample=ctx.analog_config.min_matches) if not table.empty and not base_table.empty else None
+        comparison = ctx.baseline_comparison(table, base_table, ctx.analog_config.min_matches) if not table.empty and not base_table.empty else None
         hours = float(table["hours"].mean()) if not table.empty else float("nan")
         p5_adj = p95_adj = None
         adjustment = None
