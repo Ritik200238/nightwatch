@@ -134,6 +134,10 @@ export interface HorizonReport {
   p5_adjusted: number | null;
   p95_adjusted: number | null;
   adjustment: { k_lo: number; k_hi: number; c_lo?: number; n_fit: number; fitted_through: string | null; scope: string } | null;
+  /** The position's own view: for a short, the token's upper tail turned over. */
+  loss_p5_pct?: number | null;
+  pnl_median_pct?: number | null;
+  pnl_win_rate?: number | null;
 }
 
 /** One named condition narrowing which past moments count as comparable.

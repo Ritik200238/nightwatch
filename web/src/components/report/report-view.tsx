@@ -827,14 +827,18 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
           { value: (primary?.p95_adjusted ?? c.p95) as number, label: primary?.p95_adjusted != null ? "p95 cal." : "p95" },
         ]
       : [];
-  const p5shown = primary?.p5_adjusted ?? c?.p5 ?? null;
+  // The histogram and the tiles are the token's move; a short loses when it rises, so its
+  // one-in-twenty loss is the upper tail and the tiles say which way hurts.
+  const short = report.ticket.side === "short";
+  const p5shown = primary?.loss_p5_pct ?? primary?.p5_adjusted ?? c?.p5 ?? null;
+  const wins = primary?.pnl_win_rate ?? c?.win_rate ?? null;
   return (
     <Section
       openAll={openAll}
       collapsible
       summary={
         c && !c.insufficient
-          ? `${a.result.matches.length} past moments · median ${fmtPct(c.median_pct, 1)} · one in twenty worse than ${fmtPct(p5shown, 1)} · won ${c.win_rate != null ? `${(c.win_rate * 100).toFixed(0)}%` : "—"} of the time`
+          ? `${a.result.matches.length} past moments · median ${fmtPct(c.median_pct, 1)} · ${short ? "the position's " : ""}one in twenty worse than ${fmtPct(p5shown, 1)} · went this position's way ${wins != null ? `${(wins * 100).toFixed(0)}%` : "—"} of the time`
           : "not enough distinct matches to answer"
       }
       title="What history says"
@@ -849,16 +853,16 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
             <Stat label={`Typical outcome over ${report.primary_horizon}`} value={fmtPct(c.median_pct)} hint={`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`} />
             <Stat label="Ended up" value={fmtRatio(c.win_rate)} hint={`of ${c.n} similar past moments${c.n_pending ? `, ${c.n_pending} still open` : ""}`} />
             {primary?.p5_adjusted != null ? (
-              <Stat label="Bad night, 1 in 20" value={fmtPct(primary.p5_adjusted)} hint={`before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`} tone="critical" />
+              <Stat label={short ? "Stock falls, 1 in 20 (your gain)" : "Bad night, 1 in 20"} value={fmtPct(primary.p5_adjusted)} hint={`before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`} tone={short ? "good" : "critical"} />
             ) : (
-              <Stat label="Bad night, 1 in 20" value={fmtPct(c.p5)} hint={`likely range [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone="critical" />
+              <Stat label={short ? "Stock falls, 1 in 20 (your gain)" : "Bad night, 1 in 20"} value={fmtPct(c.p5)} hint={`likely range [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone={short ? "good" : "critical"} />
             )}
-            <Stat label="Average of the worst 5%" value={fmtPct(c.es5_pct)} hint={c.es5_n ? `${c.es5_n} episode${c.es5_n === 1 ? "" : "s"} below p5` : undefined} tone="critical" />
-            <Stat label="Deepest dip during the hold, 1 in 20" value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
+            <Stat label={short ? "Stock's worst 5%, on average" : "Average of the worst 5%"} value={fmtPct(c.es5_pct)} hint={c.es5_n ? `${c.es5_n} episode${c.es5_n === 1 ? "" : "s"} below p5` : undefined} tone={short ? undefined : "critical"} />
+            <Stat label={short ? "Stock's deepest dip during the hold, 1 in 20" : "Deepest dip during the hold, 1 in 20"} value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
             {primary?.p95_adjusted != null ? (
-              <Stat label="Good night, 1 in 20" value={fmtPct(primary.p95_adjusted)} hint={`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone="good" />
+              <Stat label={short ? "Stock rises, 1 in 20 (your loss)" : "Good night, 1 in 20"} value={fmtPct(primary.p95_adjusted)} hint={`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone={short ? "critical" : "good"} />
             ) : (
-              <Stat label="Good night, 1 in 20" value={fmtPct(c.p95)} tone="good" />
+              <Stat label={short ? "Stock rises, 1 in 20 (your loss)" : "Good night, 1 in 20"} value={fmtPct(c.p95)} tone={short ? "critical" : "good"} />
             )}
             <Stat label="Widest gap to fair value, 1 in 20" value={fmtBps(c.max_abs_basis_p95_bps, 0)} hint="inside the window" />
           </div>
