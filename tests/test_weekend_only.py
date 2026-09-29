@@ -46,3 +46,11 @@ def test_the_line_says_which_weekend_and_marks_the_history_raw():
     zh = weekend_line(report, "zh")
     assert "周二" in zh and "46 个周末" in zh and "4.2%" in zh and "未经校准" in zh
     assert weekend_line(SimpleNamespace(weekend_only=None), "en") is None
+
+
+def test_a_holiday_closure_that_does_not_start_on_friday_is_not_a_weekend():
+    f = _frame([-1.0] * 12)
+    extra = _frame([-20.0]).copy()
+    extra.index = extra.index + pd.Timedelta(days=7 * 12 - 2)  # the same shape, starting on a Wednesday
+    both = pd.concat([f, extra]).sort_index()
+    assert weekend_history(both, "long")["worst_pct"] > -2.0

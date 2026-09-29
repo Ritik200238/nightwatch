@@ -210,7 +210,11 @@ def weekend_history(frame: pd.DataFrame, side: str) -> dict[str, float | int | s
     w = closed_windows(frame)
     if w.empty:
         return None
-    w = w[w["hours"] >= WEEKEND_H]
+    # Weekends only: a long closure that starts on a Friday. A Thanksgiving Wednesday
+    # night also runs past 40 hours and is not what "over the weekend" means.
+    starts = pd.DatetimeIndex(w["start"])
+    starts = starts.tz_localize("UTC") if starts.tz is None else starts
+    w = w[(w["hours"] >= WEEKEND_H) & (starts.tz_convert("America/New_York").weekday == 4)]
     if len(w) < 10:
         return None
     signed = w["ret_pct"].to_numpy(float) * (1.0 if side == "long" else -1.0)
