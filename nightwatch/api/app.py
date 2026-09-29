@@ -115,6 +115,12 @@ class AppState:
             self.store.list_instruments(Venue.BITGET_SPOT), self.store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers
         )
         self.journal = Journal(self.store)
+        from nightwatch.journal import receipts
+
+        # Forecasts written before receipts existed, or by a bulk import, are chained now.
+        chained = receipts.chain_pending(self.store._conn)
+        if chained:
+            log.info("chained %d forecasts that had no receipt", chained)
         self.reports = ReportStore(self.store)
         from nightwatch.api.analyst import AnalystJobs
 
@@ -639,6 +645,67 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if matured:
             s.calibration_cache.clear()  # new outcomes invalidate every view
         s.calibration_cache[key] = (utc_now(), out)
+        return out
+
+    @app.get("/verify")
+    def verify_receipts() -> dict[str, Any]:
+        """Recompute every receipt from the forecasts it covers, and name the first break.
+
+        Rows written by a bulk import carry no receipt until chained here; chaining them
+        cannot hide an edit to a row that already had one."""
+        from nightwatch.journal import receipts
+
+        s = st()
+        with s.lock:
+            receipts.chain_pending(s.store._conn)
+            return receipts.verify(s.store._conn)
+
+    @app.get("/verify/{forecast_id}")
+    def verify_one(forecast_id: int) -> dict[str, Any]:
+        from nightwatch.journal import receipts
+
+        s = st()
+        with s.lock:
+            got = receipts.receipt(s.store._conn, forecast_id)
+            if got is None:
+                raise HTTPException(404, f"No receipt for forecast {forecast_id}.")
+            check = receipts.verify(s.store._conn, upto=got["seq"])
+        return {**got, "chain_ok_through_it": check["ok"] and check["checked"] >= got["seq"], "first_break": check["first_break"]}
+
+    @app.get("/misses")
+    def misses() -> dict[str, Any]:
+        """Every live verdict whose outcome was worse than the one-in-twenty line it stated,
+        scored exactly as the calibration page scores them: the tail in force at the time,
+        fitted only on forecasts that had already matured."""
+        s = st()
+        cached = s.calibration_cache.get(("misses", ""))
+        if cached and (utc_now() - cached[0]).total_seconds() < CALIBRATION_TTL_SEC:
+            return cached[1]
+        from nightwatch.journal import receipts
+        from nightwatch.journal.adjust import expanding_rows
+
+        with s.lock:
+            mature_and_learn(s.journal, spot_symbol_for={e.ticker: e.spot_symbol for e in s.entries})
+            df = s.journal.forecasts(matured_only=True)
+            rows = expanding_rows(df) if not df.empty else pd.DataFrame()
+            meta = df.set_index("id")[["kind", "side", "notional", "horizon_h", "verdict", "recommended_notional"]] if not df.empty else pd.DataFrame()
+            out_rows, totals = [], {}
+            if not rows.empty:
+                rows = rows.join(meta, on="id")
+                rows["miss"] = rows["r"] < rows["a5"]
+                for kind, g in rows.groupby("kind"):
+                    totals[str(kind)] = {"scored": int(len(g)), "missed": int(g["miss"].sum()), "rate": float(g["miss"].mean())}
+                for _, x in rows[(rows["kind"] == "ticket") & rows["miss"]].sort_values("as_of", ascending=False).iterrows():
+                    rc = receipts.receipt(s.store._conn, int(x["id"]))
+                    out_rows.append({
+                        "id": int(x["id"]), "as_of": pd.Timestamp(x["as_of"]).isoformat(), "ticker": x["ticker"], "side": x["side"],
+                        "notional": float(x["notional"]), "horizon_h": float(x["horizon_h"]), "verdict": x["verdict"],
+                        "stated_p5_pct": float(x["a5"]), "outcome_pct": float(x["r"]),
+                        "loss_quote": float(x["r"]) / 100.0 * float(x["notional"]), "beyond_quote": (float(x["r"]) - float(x["a5"])) / 100.0 * float(x["notional"]),
+                        "receipt": rc["digest"] if rc else None,
+                    })
+        out = {"totals": totals, "misses": out_rows, "target_rate": 0.05}
+        s.calibration_cache[("misses", "")] = (utc_now(), out)
         return out
 
     @app.post("/forecasts/{forecast_id}/taken")

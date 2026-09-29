@@ -312,6 +312,7 @@ def expanding_rows(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit
     as_ofs = df["as_of"].to_numpy()
     p5_a, p50_a, p95_a, r_a = (df[c].to_numpy(float) for c in ("p5", "p50", "p95", "ret_pct"))
     tickers = df["ticker"].to_numpy() if "ticker" in df else np.array([""] * len(df))
+    ids = df["id"].to_numpy() if "id" in df else np.full(len(df), -1)
     bands_a = (df["horizon_h"].map(horizon_band).to_numpy() if banded and "horizon_h" in df else np.array([POOLED] * len(df)))
     bands_h = bands_a[order]
 
@@ -343,7 +344,7 @@ def expanding_rows(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit
         if use is None:
             continue
         a5, a95 = apply_factors(p5_a[i], p50_a[i], p95_a[i], use)
-        rows.append({"as_of": as_ofs[i], "ticker": tickers[i], "band": use.scope, "r": r_a[i], "p5": p5_a[i], "p95": p95_a[i],
+        rows.append({"id": int(ids[i]), "as_of": as_ofs[i], "ticker": tickers[i], "band": use.scope, "r": r_a[i], "p5": p5_a[i], "p95": p95_a[i],
                      "a5": a5, "a95": a95, "k_lo": use.k_lo, "k_hi": use.k_hi, "c_lo": use.c_lo})
     return pd.DataFrame(rows)
 

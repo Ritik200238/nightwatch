@@ -113,6 +113,9 @@ class Journal:
         self.store = store
         self._conn = store._conn
         self._conn.executescript(SCHEMA)
+        from nightwatch.journal import receipts
+
+        self._conn.executescript(receipts.SCHEMA)
         self._migrate()
 
     def _migrate(self) -> None:
@@ -194,6 +197,11 @@ class Journal:
                     b.get("p5"), b.get("p25"), b.get("p50"), b.get("p75"), b.get("p95"),
                 ),
             )
+            from nightwatch.journal import receipts
+
+            # In the same transaction: a live verdict and its receipt land together or not at all.
+            if kind == receipts.KIND:
+                receipts.append(self._conn, int(cur.lastrowid))
         return int(cur.lastrowid)
 
     def log_trade(self, *, forecast_id: int | None, ticker: str, side: str, opened_at: datetime, notional: float, entry_price: float | None, note: str | None = None) -> int:

@@ -508,6 +508,8 @@ class AnalysisReport:
     # "Over the weekend" asked early in the week: holding from now is a trade longer than
     # any scored one, so what past Friday-close-to-Monday weekends did is shown beside it.
     weekend_only: dict | None = None
+    # The journal receipt for this verdict: chained to every one before it (see journal.receipts).
+    receipt: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return _serialise(self)
@@ -782,6 +784,10 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     if ctx.journal is not None and record:
         try:
             report.forecast_id = _record(ctx, report)
+            from nightwatch.journal import receipts
+
+            got = receipts.receipt(ctx.journal.store._conn, report.forecast_id)
+            report.receipt = got["digest"] if got else None
         except Exception:  # noqa: BLE001 - journaling must never break an analysis
             log.exception("failed to journal the forecast")
     return report
