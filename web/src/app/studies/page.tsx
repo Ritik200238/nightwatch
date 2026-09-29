@@ -161,6 +161,41 @@ function statValue(key: string, v: number): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(3);
 }
 
+/** Very small p-values are printed as a bound; a reader cannot use "0.0000023". */
+function fmtP(p: number): string {
+  if (p < 0.001) return "< 0.001";
+  return p < 0.1 ? p.toFixed(3) : p.toFixed(2);
+}
+
+/** One line of evidence per study: the raw p, the p after the correction, and whether the
+ *  result is still standing once the number of questions asked is paid for. */
+function Significance({ s, m }: { s: Study; m: number | undefined }) {
+  if (s.p_value == null) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span title={s.p_method}>No p-value: this is not a hypothesis test, so it is not part of the correction.</span>
+        {s.small_sample ? <Pill tone="warning">small sample</Pill> : null}
+        {s.small_sample && s.small_sample_note ? <span>{s.small_sample_note}</span> : null}
+      </div>
+    );
+  }
+  const survives = s.survives_fdr === true;
+  return (
+    <div className="space-y-1 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="tabular">
+          p = {fmtP(s.p_value)}
+          {s.q_value != null ? `, after correcting for ${m ?? "all"} questions q = ${fmtP(s.q_value)}` : ""}
+        </span>
+        {s.survives_fdr != null ? <Pill tone={survives ? "good" : "warning"}>{survives ? "survives" : "does not survive"}</Pill> : null}
+        {s.small_sample ? <Pill tone="warning">small sample</Pill> : null}
+      </div>
+      {s.p_method ? <p className="text-muted-foreground">{s.p_method}</p> : null}
+      {s.small_sample && s.small_sample_note ? <p className="text-muted-foreground">{s.small_sample_note}</p> : null}
+    </div>
+  );
+}
+
 export default function StudiesPage() {
   const [rep, setRep] = useState<StudiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +265,13 @@ export default function StudiesPage() {
               <Stat label="Answered no" value={String(no)} hint="which is the more useful half" tone={no ? "warning" : undefined} />
               <Stat label="Cannot tell yet" value={String(unclear)} hint="not enough matured history" />
             </div>
+            {rep.fdr ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Asking {rep.fdr.m_tests} testable questions at once makes a lucky &ldquo;yes&rdquo; likely, so the p-values are corrected together (Benjamini–Hochberg, a{" "}
+                {Math.round(rep.fdr.alpha * 100)}% false-discovery rate). {rep.fdr.yes_survive} of {rep.fdr.yes_tested} &ldquo;yes&rdquo; answers survive the correction
+                {rep.fdr.yes_fail.length ? `. The other ${rep.fdr.yes_fail.length} should be read as leads, not settled findings` : ""}. The remaining {rep.fdr.m_studies - rep.fdr.m_tests} {rep.fdr.m_studies - rep.fdr.m_tests === 1 ? "study is" : "studies are"} not hypothesis tests and carry no p-value.
+              </p>
+            ) : null}
             <p className="mt-3 text-xs text-muted-foreground">
               A study that nobody acted on is decoration, so each one below ends with what changed because of it — including &ldquo;nothing, and here is why that is the right
               answer&rdquo;. The calibration behind two of these is on the{" "}
@@ -266,6 +308,7 @@ export default function StudiesPage() {
                     <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">What came back</p>
                     <p className="mt-1 leading-relaxed">{s.finding}</p>
                   </div>
+                  <Significance s={s} m={rep.fdr?.m_tests} />
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
                     <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">What changed because of it</p>
                     <p className="mt-1 leading-relaxed">{s.consequence}</p>

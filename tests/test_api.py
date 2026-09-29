@@ -100,6 +100,29 @@ def test_studies_are_served_with_the_date_they_were_computed(client, seeded_stor
     assert got["stats"]["sd_ratio_near_over_far"] == 1.14
 
 
+def test_studies_payload_carries_the_multiple_testing_fields(client, seeded_store):  # noqa: F811
+    """Additive: the verdict is as stored, and beside it sits the corrected p-value."""
+    from nightwatch.data.store import Store
+    from nightwatch.journal.studies import Study, StudyStore
+
+    with Store(seeded_store) as store:
+        StudyStore(store).save([
+            Study(key="closer_is_not_tighter", title="t", question="q", method="m", finding="f", consequence="c",
+                  verdict="no", n=960, stats={"clustered_t": -6.2, "tokens": 24.0}),
+            Study(key="one_factor_hid_two_errors", title="t2", question="q", method="m", finding="f", consequence="c",
+                  verdict="no", n=20, stats={"pooled_lo_coverage": 0.05}),
+        ])
+    r = client.get("/studies").json()
+    by = {s["key"]: s for s in r["studies"]}
+    a, b = by["closer_is_not_tighter"], by["one_factor_hid_two_errors"]
+    assert a["verdict"] == "no" and a["stats"]["clustered_t"] == -6.2
+    assert 0 < a["p_value"] < 1e-4 and a["q_value"] == a["p_value"] and a["survives_fdr"] is True
+    assert a["small_sample"] is False and a["small_sample_note"] is None
+    assert b["p_value"] is None and b["q_value"] is None and b["survives_fdr"] is None
+    assert b["small_sample"] is True and "20" in b["small_sample_note"]
+    assert r["fdr"]["m_tests"] == 1 and r["fdr"]["m_studies"] == 2 and r["fdr"]["method"] == "Benjamini-Hochberg"
+
+
 def test_chat_answers_with_rules_when_there_is_no_model(client, monkeypatch):
     """No key is not the same as no desk. The rules read the ticket and brief the answer."""
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)

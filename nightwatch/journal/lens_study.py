@@ -298,6 +298,7 @@ def study(rows: pd.DataFrame) -> Study:
     for _, r in table.iterrows():
         p = r["lens"]
         stats[f"{p}.n"] = float(r["n"])
+        stats[f"{p}.tokens"] = float(r["tokens"])  # the cluster count the p-value's degrees of freedom need
         for k in ("breach_all", "breach_lens", "p5_all_median", "p5_lens_median", "t_clustered"):
             if k in r and pd.notna(r[k]):
                 stats[f"{p}.{k}"] = float(r[k])

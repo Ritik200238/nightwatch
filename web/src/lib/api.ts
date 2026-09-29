@@ -246,10 +246,32 @@ export interface Study {
   n: number;
   stats: Record<string, number>;
   ran_at: string;
+  /** Null when the study is not a hypothesis test (a fixed tolerance, not a null). */
+  p_value?: number | null;
+  /** Benjamini-Hochberg adjusted p across every study that has one. */
+  q_value?: number | null;
+  survives_fdr?: boolean | null;
+  /** How p was derived, in words, including any approximation. */
+  p_method?: string;
+  small_sample?: boolean;
+  small_sample_note?: string | null;
+}
+
+/** The multiple-testing correction applied across the studies. */
+export interface StudiesFdr {
+  method: string;
+  alpha: number;
+  m_tests: number;
+  m_studies: number;
+  yes_total: number;
+  yes_tested: number;
+  yes_survive: number;
+  yes_fail: string[];
 }
 
 export interface StudiesResponse {
   studies: Study[];
+  fdr?: StudiesFdr;
   last_run: string | null;
   note: string;
 }

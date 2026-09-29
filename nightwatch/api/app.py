@@ -510,13 +510,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         itself differently every time nobody was looking would not be a study. The
         answer carries the date it was last run so a stale one is visible as stale.
         """
+        from nightwatch.journal.fdr import annotate
         from nightwatch.journal.studies import StudyStore
 
         s = st()
         store = StudyStore(s.store)
         last = store.last_run()
+        # Additive: each study also carries a p-value corrected for having asked many
+        # questions. The stored verdicts are untouched.
+        studies_out, fdr = annotate(store.all())
         return {
-            "studies": store.all(),
+            "studies": studies_out,
+            "fdr": fdr,
             "last_run": last.isoformat() if last else None,
             "note": "" if last else "No studies have been run against this database yet; run `nightwatch studies`.",
         }

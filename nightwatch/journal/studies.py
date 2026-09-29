@@ -848,7 +848,7 @@ def study_the_model_calls_the_direction(outcomes: pd.DataFrame) -> Study:
         ),
         verdict=verdict, n=int(len(called)),
         stats={"hit_rate": rate, "ci_low": lo_ci, "ci_high": hi_ci, "clustered_t": clustered,
-               "share_committed": share_called, "n_called": float(len(called)), "n_read": float(len(d))},
+               "tokens": float(len(per)), "share_committed": share_called, "n_called": float(len(called)), "n_read": float(len(d))},
     )
 
 
