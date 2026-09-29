@@ -10,6 +10,8 @@ which one binds:
 * ``exit_liquidity`` – largest size the live book absorbs within the cost budget
 * ``stress``       – the largest notional at which the worst *severe* preset's loss,
   in quote terms, stays inside the allowed share of equity
+* ``book_tail``    – with holdings given: the largest notional at which the whole book's
+  one-in-twenty loss stays inside the allowed share of equity (see ``DecisionContext``)
 
 The verdict then compares the requested size with the recommended one and folds in
 the analog evidence and hedge economics:
@@ -48,6 +50,7 @@ class SizingPolicy:
     max_stress_loss_pct_of_equity: float = 5.0  # stress cap: worst severe preset may cost this much of equity
     hedge_cost_ceiling_bps: float = 30.0  # hedge only if it costs less than this
     hedge_benefit_min_pct: float = 1.5  # ... and removes at least this much p5 loss
+    max_book_tail_pct_of_equity: float = 4.0  # the whole book's one-in-twenty loss may cost this much of equity
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,11 @@ class SizingInputs:
     hedge_cost_bps_of_position: float | None
     hedge_residual_p5_loss_pct: float | None  # p5 loss after hedging (basis only)
     stress_cap_notional: float | None = None  # solved by the caller, which can re-price the scenarios
+    # Holdings: the book's tail is measured on history the caller holds, so it solves this
+    # too. None = no book, no equity, or no history to measure it on; the cap is then absent.
+    book_tail_cap_notional: float | None = None
+    book_tail_detail: str = ""
+    same_name_exposure_quote: float = 0.0  # already held in this name, running the same way
 
 
 @dataclass(frozen=True)
@@ -104,7 +112,13 @@ def compute_caps(ticket: TradeTicket, inp: SizingInputs, policy: SizingPolicy = 
     if inp.equity is None:
         caps.append(Cap("concentration", None, "needs equity"))
     else:
-        caps.append(Cap("concentration", inp.equity * policy.max_position_pct_of_equity / 100.0, f"max {policy.max_position_pct_of_equity}% of equity in one name"))
+        room = inp.equity * policy.max_position_pct_of_equity / 100.0
+        if inp.same_name_exposure_quote > 0:
+            # What is already held in the name counts: two 15% positions in one stock are a 30% position.
+            caps.append(Cap("concentration", max(0.0, room - inp.same_name_exposure_quote),
+                            f"max {policy.max_position_pct_of_equity}% of equity in one name, and {inp.same_name_exposure_quote:,.0f} of it is already held"))
+        else:
+            caps.append(Cap("concentration", room, f"max {policy.max_position_pct_of_equity}% of equity in one name"))
     # Regime multiplier applies to the requested size.
     caps.append(Cap("regime", ticket.notional_quote * inp.risk_multiplier, f"regime size multiplier {inp.risk_multiplier:.2f} on the requested size"))
     # Exit liquidity.
@@ -129,6 +143,8 @@ def compute_caps(ticket: TradeTicket, inp: SizingInputs, policy: SizingPolicy = 
         # cost grows faster than size, so this overestimates the safe size slightly.
         cap = inp.equity * limit / 100.0 / (abs(worst) / 100.0)
         caps.append(Cap("stress", cap, f"worst severe preset {worst:+.1f}% of notional; approximately the largest size within {limit}% of equity"))
+    if inp.book_tail_cap_notional is not None:
+        caps.append(Cap("book_tail", max(0.0, inp.book_tail_cap_notional), inp.book_tail_detail or f"largest size whose book-wide one-in-twenty loss stays inside {policy.max_book_tail_pct_of_equity}% of equity"))
     return caps
 
 
