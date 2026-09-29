@@ -310,3 +310,21 @@ def test_the_upper_tail_is_floored_for_longer_holds_too():
     hs = {"5h": h("5h", 5, 4.5), "24h": h("24h", 24, 3.0), "72h": h("72h", 72, 6.0)}
     _floor_longer_holds(hs)
     assert hs["24h"].p95_adjusted == 4.5 and hs["24h"].adjustment["floored_up_by"] == "5h" and hs["72h"].p95_adjusted == 6.0
+
+
+def test_a_narrowing_the_desk_chose_never_makes_the_loss_line_milder():
+    """The narrowing evidence does not survive the multiple-testing correction, so an
+    automatic narrowing may only make the answer more cautious."""
+    from types import SimpleNamespace
+
+    from nightwatch.pipeline.analyze import HorizonReport, _cautious_of
+
+    def h(loss):  # noqa: ANN001, ANN202
+        return HorizonReport(horizon="x", hours=12, cohort=SimpleNamespace(insufficient=False), baseline=None, loss_p5_pct=loss)
+
+    narrowed = SimpleNamespace(horizons={"12h": h(-2.0), "24h": h(-5.0), "72h": h(None)})
+    plain = SimpleNamespace(horizons={"12h": h(-3.0), "24h": h(-4.0), "72h": h(-6.0)})
+    used = _cautious_of(narrowed, plain)
+    assert narrowed.horizons["12h"].loss_p5_pct == -3.0 and narrowed.horizons["24h"].loss_p5_pct == -5.0
+    assert narrowed.horizons["72h"].loss_p5_pct == -6.0 and used == ["12h", "72h"]
+    assert narrowed.horizons["12h"].adjustment["cautious_of_two"] == "unfiltered"

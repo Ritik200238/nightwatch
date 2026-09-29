@@ -576,6 +576,15 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     analog = _analog_section(ctx, ticket, snapshot, frame, as_of, horizon_h, primary, warnings, entry_price=entry_price,
                              liquidation_price=lev_view.liquidation_price if lev_view else None)
     if auto_reason and analog is not None and analog.lens is not None:
+        # The evidence that narrowing gives a truer tail is suggestive, not established
+        # (q = 0.095 once corrected for the other studies), so a narrowing the desk chose
+        # itself may make the answer more cautious and never less: each horizon is sized
+        # on the worse of the narrowed and the unfiltered one-in-twenty loss.
+        plain = _analog_section(ctx, replace(ticket, lenses=()), snapshot, frame, as_of, horizon_h, primary, [],
+                                entry_price=entry_price, liquidation_price=lev_view.liquidation_price if lev_view else None)
+        floored = _cautious_of(analog, plain)
+        if floored:
+            auto_reason += f"; the unfiltered answer was more cautious for {', '.join(floored)}, so that is what the size uses"
         analog.lens = replace(analog.lens, auto=auto_reason)
     timings["analog"] = _ms(t0)
 
@@ -1079,6 +1088,23 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         stop_price=ticket.stop_price, entry_price=entry_price, liquidation_price=liquidation_price,
     )
     return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result)
+
+
+def _cautious_of(narrowed: AnalogSection, plain: AnalogSection | None) -> list[str]:
+    """Hold each narrowed horizon's loss line to at least the unfiltered one's. Returns the
+    horizons where the unfiltered answer was the more cautious and was used."""
+    used: list[str] = []
+    if plain is None:
+        return used
+    for name, h in narrowed.horizons.items():
+        other = plain.horizons.get(name)
+        if other is None or other.loss_p5_pct is None:
+            continue
+        if h.loss_p5_pct is None or other.loss_p5_pct < h.loss_p5_pct:
+            h.loss_p5_pct = other.loss_p5_pct
+            h.adjustment = {**(h.adjustment or {}), "cautious_of_two": "unfiltered"}
+            used.append(name)
+    return used
 
 
 def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
