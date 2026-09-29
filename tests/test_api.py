@@ -229,6 +229,7 @@ def test_a_question_about_another_token_runs_that_token_instead(client, monkeypa
             "context_forecast_id": fid,
         },
     ).json()
-    # NVDA is a different token, so this is a new idea however it is phrased.
-    assert moved.get("answer_kind") is None
-    assert moved["intent"]["ticker"] == "NVDA"
+    # Another token named without a size of its own is the same trade in that token: the
+    # desk used to ask for the side and size again, although they were on screen.
+    assert moved["mode"] == "what_if" and moved["ticket"]["ticker"] == "NVDA"
+    assert moved["ticket"]["notional_quote"] == 20000 and moved["ticket"]["side"] == "long"

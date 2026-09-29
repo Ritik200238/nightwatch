@@ -42,8 +42,9 @@ FIELDS = ("ticker", "side", "horizon_kind", "horizon_hours", "lenses", "leverage
 _MARKERS = (
     r"what if", r"what about", r"how about", r"instead", r"rather than", r"compared? (?:to|with)",
     r"\bonly\b", r"\bjust\b", r"\bversus\b", r"\bvs\.?\b", r"would it", r"\bif i (?:held|hold|went|go|was|were|did)\b",
+    r"\bflip\b", r"\bshort it\b", r"\b(?:better|worse|safer|riskier) than\b", r"\bthe other (?:way|side|direction)\b",
 )
-_MARKERS_ZH = ("如果", "要是", "假如", "换成", "改成", "只看", "只比较", "呢")
+_MARKERS_ZH = ("如果", "要是", "假如", "换成", "改成", "只看", "只比较", "呢", "反过来", "反向", "对比", "比较")
 _WHATIF = re.compile("|".join(_MARKERS + _MARKERS_ZH), re.I)
 
 
@@ -166,6 +167,11 @@ def rule_change(question: str, ticket: dict, tickers: list[str], features: dict 
     # "What if I held it" names a holding verb, not a direction: only an explicit flip counts.
     if side == "long" and not re.search(r"\blong\b|\bbuy\b|做多|买入", question, re.I):
         side = None
+    # "Flip it", "反过来": the other side of whatever is on screen, named by neither word.
+    from nightwatch.api.converse import FLIP
+
+    if side is None and FLIP.search(question) and ticket.get("side") in ("long", "short"):
+        side = "short" if ticket["side"] == "long" else "long"
     kind, hours = parsed.horizon_kind, parsed.horizon_hours
     hte = (features or {}).get("hours_to_earnings")
     note = ""

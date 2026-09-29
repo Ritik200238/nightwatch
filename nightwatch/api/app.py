@@ -736,6 +736,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         # A question about the report already on screen, rather than a new trade idea.
         context = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
+        from nightwatch.api import converse
+
+        # "thanks, that helps" is not the start of a trade.
+        if latest and converse.is_ack(latest):
+            return converse.ack_reply(context, language_of(latest))
         # "What's the safest way to hold this?" - the same idea run several ways, side by side.
         from nightwatch.api import ways
 
@@ -744,7 +749,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             if got is not None:
                 return got
 
-        if context and latest and followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, list(s.ctx.tickers_with_data())):
+        tickers_now = list(s.ctx.tickers_with_data())
+        # "Compare to SPY", "short it instead": the trade on screen, changed, not a new one.
+        carried = bool(context and latest and converse.carries_the_trade(latest, context, tickers_now))
+        if context and latest and (carried or (followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, tickers_now))):
             # "What if I held it twelve hours", "was it worse on earnings nights". The
             # report on screen cannot answer those - they are a different report - so the
             # desk runs one. The model names what changed and the engine does the rest.
