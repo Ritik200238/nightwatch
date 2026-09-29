@@ -164,7 +164,15 @@ The scorecard above measures the forecasts. The **Studies** page measures the th
 makes them: eleven questions about the retrieval, each written so it could come back no,
 each recomputed from the stored bars and the journal by `nightwatch studies`. Five came
 back no, three could not be decided (numbers below are the 26 Sep run; the page recomputes
-them, so a last digit can move), and the most useful are the ones that cost us something:
+them, so a last digit can move), and the most useful are the ones that cost us something.
+
+Asking eleven questions makes a lucky "yes" likely, so the page also corrects for it
+(Benjamini–Hochberg, 5% false discovery rate, over the nine that are real hypothesis
+tests). **Only one of the three "yes" answers survives**: a model reading an SEC filing
+does pick the ones that move the price (q = 0.004). "The analogs beat random hours" and
+"narrowing to earnings nights gives a truer tail" each have p ≈ 0.03–0.04 alone and
+q = 0.095 corrected: suggestive, not established. The desk still narrows to earnings
+nights automatically on that evidence, and the report says it did.
 
 * **Closer analogs do not have tighter outcomes — they have wider ones.** The near half
   of a retrieval is 13% wider by standard deviation and 19% by interquartile range, and

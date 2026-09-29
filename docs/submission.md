@@ -195,7 +195,9 @@ All figures **observed** on the build as of 2026-09-22 unless labelled otherwise
   three days the unfiltered tail was breached **22.0%** of the time against a 5% target;
   the narrowed one **7.0%** (n = 100, 12 of 18 tokens better, clustered t = +2.9). On the
   night before earnings itself it was **54.2% against 4.2%** — but on 24 nights, under the
-  30-night bar set before the run, so it is reported and not counted. Volatile nights
+  30-night bar set before the run, so it is reported and not counted. Corrected for the
+  eleven questions asked at once (Benjamini–Hochberg), this result has q = 0.095:
+  suggestive, not established, and the Studies page says so beside it. Volatile nights
   improved narrowly (15.8% to 13.9%, t = +2.0); five other conditions showed no separable
   difference, and none scored worse. The same sweep found a bug: "FOMC ahead" had enough
   hours but only a dozen separate meeting dates on 471 of 474 nights, and the desk used to
@@ -556,7 +558,7 @@ compliance requirement and a reply does not satisfy it.
 > https://nightwatch-gules.vercel.app/studies
 > #BitgetHackathon @Bitget_AI
 
-*Attach: screenshot of the Studies scoreboard — 11 asked, 3 yes, 5 no, 3 cannot tell yet.*
+*Attach: screenshot of the Studies scoreboard — 11 asked, 3 yes (1 survives correcting for asking 11), 5 no, 3 cannot tell yet.*
 
 **2/**
 

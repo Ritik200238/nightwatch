@@ -315,7 +315,10 @@ Reproduce: `nightwatch filings --core`, then `GET /sources`.
 Everything above measures the *forecasts*. This measures the thing that makes them.
 Eleven questions, each written so it could come back no, each recomputed from the stored
 bars and the journal by `nightwatch studies` and served at `/studies`. Five came back no,
-three unclear, three yes. Numbers here are the 26 Sep run; `/studies` recomputes them, so
+three unclear, three yes - of which one survives correcting for asking eleven questions
+(Benjamini–Hochberg at a 5% false discovery rate, over the nine that are hypothesis
+tests; `nightwatch/journal/fdr.py`): the filing read, q = 0.004. The analogs-beat-random
+and narrowing results fall to q = 0.095. Numbers here are the 26 Sep run; `/studies` recomputes them, so
 where this page and that one differ, that one is current.
 
 The match-level evidence is 958 point-in-time moments across 24 tokens, 40 retrieved
@@ -413,7 +416,9 @@ Restating §8 with error bars that respect the data. Paired pinball loss at p5 o
 matured forecasts: analogs ahead by **+0.0153**. Clustered by token, t = +2.15 on 15 of 24
 tokens. Block-bootstrapped by week over 26 weeks, 95% interval **[+0.0011, +0.0303]** —
 excludes zero, but only just. A real edge at the edge of detectability. The naive t of
-+2.09 across 2,325 overlapping forecasts would have overstated it.
++2.09 across 2,325 overlapping forecasts would have overstated it. And it does not survive
+correcting for the eleven questions asked together (p = 0.042 on its own, q = 0.095):
+read it as suggestive.
 
 ### 13.7 A token is not obviously best explained by its own past — verdict: unclear
 
