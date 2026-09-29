@@ -66,9 +66,10 @@ def state(seeded_store):  # noqa: F811
 
 
 def test_missing_fields_ask_instead_of_analysing(state):
-    intent = ParsedIntent(kind="clarify", ticker="TSLA", missing_fields=["notional_quote"], reply="How big?")
+    intent = ParsedIntent(kind="clarify", ticker="TSLA", missing_fields=["side", "notional_quote"], reply="How big?")
     out = chat_turn(state, [{"role": "user", "content": "thinking about TSLA"}], client=FakeClient(intent))
-    assert out["reply"] == "How big?" and out["report"] is None and out["ticket"] is None
+    # The model found what the rules found, so the reply says back what landed and asks the rest.
+    assert out["reply"].startswith("Got TSLA.") and "size" in out["reply"] and out["report"] is None and out["ticket"] is None
 
 
 def test_unknown_ticker_is_refused_with_the_available_list(state):

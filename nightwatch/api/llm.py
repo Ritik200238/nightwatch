@@ -316,6 +316,11 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         result = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
         if intent.kind != "analyze" or intent.missing_fields or not intent.ticker or not intent.notional_quote:
             result["reply"] = intent.reply
+            if (lang != "zh" and intent.kind == "clarify" and rules.kind == "clarify" and rules.ticker
+                    and sorted(intent.missing_fields) == sorted(rules.missing_fields)):
+                # The model read no more than the rules did, so say it the rules' way: back
+                # what landed, then the one thing left, the same on every turn it is asked.
+                result["reply"] = rules.reply
             return result
         if intent.ticker.upper() not in tickers:
             result["reply"] = f"{intent.ticker.upper()} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'…' if len(tickers) > 20 else ''}."
