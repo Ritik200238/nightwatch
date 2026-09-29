@@ -236,8 +236,9 @@ def ticket_from(report: dict) -> TradeTicket | None:
             leverage=t.get("leverage"),
             lenses=asked_lenses,
             auto_lens=bool(t.get("auto_lens", True)),
+            open_positions=tuple((str(x[0]).upper(), str(x[1]), float(x[2])) for x in (t.get("open_positions") or ())),
         )
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, IndexError):
         return None
 
 

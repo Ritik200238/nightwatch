@@ -350,6 +350,12 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             from dataclasses import replace
 
             ticket = replace(ticket, leverage=rules.leverage)  # the rules read "5x"; the model's schema has no field for it
+        if rules.open_positions:
+            from dataclasses import replace
+
+            # Holdings are read by the rules (the model's schema has no field for them) and
+            # they change the size, so a model-parsed ticket carries them too.
+            ticket = replace(ticket, open_positions=tuple((t.upper(), side, float(n)) for t, side, n in rules.open_positions))
     with state.lock:
         report = analyze(state.ctx, ticket)
         payload = report.to_dict()

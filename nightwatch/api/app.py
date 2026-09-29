@@ -240,6 +240,34 @@ def _street_client():  # noqa: ANN202
     return BitgetMcpClient()
 
 
+def _with_holdings(state: Any, context: dict[str, Any], text: str, tickers: list[str]) -> dict[str, Any] | None:  # noqa: ANN401
+    """Re-run the trade on screen with the holdings a message states, when that is all it says."""
+    import json
+
+    from nightwatch.api import intake, whatif
+
+    parsed = intake.parse_message(text, tickers)
+    if not parsed.open_positions or parsed.ticker or parsed.notional_quote:
+        return None
+    base = whatif.ticket_from(context)
+    if base is None:
+        return None
+    from dataclasses import replace as _replace
+
+    ticket = _replace(base, open_positions=tuple(intake.merge_positions(list(base.open_positions), parsed.open_positions)))
+    with state.lock:
+        report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
+        payload = report.to_dict()
+    state.keep_hypothetical(payload)
+    narrative = intake.brief_short(report, intake.language_of(text))
+    return {
+        "intent": {"kind": "what_if", "missing_fields": [], "reply": narrative},
+        "ticket": json.loads(json.dumps(ticket.__dict__, default=str)), "report": payload, "report_text": None,
+        "narrative": narrative, "unverified_numbers": [], "reply": narrative, "mode": "what_if", "answer_kind": "book",
+        "answered_about": context.get("forecast_id"), "written_by": "rules",
+    }
+
+
 def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[str, Any] | None:
     """Answer a counterfactual by running it, or return None if it is not one.
 
@@ -817,6 +845,12 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 return got
 
         tickers_now = list(s.ctx.tickers_with_data())
+        # "I also hold 30k NVDA", said about the trade on screen: the same trade, judged
+        # against the book it would join, not a question about the old answer.
+        if context and latest:
+            booked = _with_holdings(s, context, latest, tickers_now)
+            if booked is not None:
+                return booked
         # "Compare to SPY", "short it instead": the trade on screen, changed, not a new one.
         carried = bool(context and latest and converse.carries_the_trade(latest, context, tickers_now))
         if context and latest and (carried or (followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, tickers_now))):

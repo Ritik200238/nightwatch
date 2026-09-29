@@ -81,6 +81,73 @@ _INVALID = re.compile(
     re.I,
 )
 
+# What the trader already holds. "hold 20k of TSLA overnight" is a trade, so the phrases
+# that mean "I have this on already" need a word that says so: also / already / currently /
+# still, or "I own", or an "I'm already long".
+_HOLD_INTRO = re.compile(
+    r"\b(?:(?:i|we)(?:'ve|\s+have)?\s+)?(?:(?:also|already|currently|still|now)\s+)+(?:hold(?:ing)?|have|own|got|carry|am\s+holding)\b"
+    r"|\b(?:i|we)\s+(?:own|have\s+got|'ve\s+got)\b"
+    r"|\bi(?:'m|\s+am)\s+(?:(?:also|already|currently|still)\s+)+(?P<side>long|short)\b"
+    r"|\b(?:my|our)\s+(?:current\s+|existing\s+|open\s+)?(?:positions?|holdings?)\s*(?:are|is|:|=)",
+    re.I,
+)
+_HELD_SEP = re.compile(r"(?:\s*(?:,|;|&|\band\b|\bplus\b|\balso\b|\bthen\b))*\s*", re.I)
+_HELD_ITEM = re.compile(
+    r"(?:(?P<lead>long|short)\s+)?(?:a\s+)?(?:position\s+(?:of|in)\s+)?(?:worth\s+)?"
+    r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmb])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
+    re.I,
+)
+_HELD_NAME = re.compile(r"\$?([A-Za-z][A-Za-z&]{1,11})(?:\s+([A-Za-z]{2,8}))?")
+_HELD_TRAIL = re.compile(r"\s+(?:(?:stock|shares?|token|position)\s+)?(long|short)\b", re.I)
+
+
+def read_positions(text: str, known_tickers: list[str]) -> tuple[list[tuple[str, str, float]], str]:
+    """Holdings the message states, and the message with those clauses blanked out.
+
+    "long 20k TSLA, I also hold 30k NVDA" is one new trade and one holding; blanking the
+    clause is what stops "hold" reading as a long and NVDA reading as the ticker. A list
+    continues over "and"/"&"/"plus" ("... and short 10k AMD"), but a bare comma followed by
+    an explicit side starts a new trade instead ("I hold 30k NVDA, long 20k TSLA").
+    """
+    found: list[tuple[str, str, float]] = []
+    chars = list(text)
+    for intro in _HOLD_INTRO.finditer(text):
+        pos, first, last_end = intro.end(), True, None
+        default_side = (intro.groupdict().get("side") or "long").lower()
+        while True:
+            sep = _HELD_SEP.match(text, pos)
+            m = _HELD_ITEM.match(text, sep.end())
+            if not m:
+                break
+            if not first and m.group("lead") and not re.search(r"and|&|plus", sep.group(), re.I):
+                break  # "..., long 20k TSLA" is the next trade
+            amount = float(m.group("num").replace(",", "")) * (_SCALE[m.group("scale").lower()] if m.group("scale") else 1.0)
+            name = _HELD_NAME.match(text, m.end())
+            if not name or amount < BARE_MONEY_FLOOR:
+                break
+            ticker, end = _find_ticker(name.group(1), known_tickers), name.end(1)
+            if ticker is None and name.group(2):
+                ticker, end = _find_ticker(f"{name.group(1)} {name.group(2)}", known_tickers), name.end(2)
+            if ticker is None:
+                break
+            trail = _HELD_TRAIL.match(text, end)
+            if trail:
+                end = trail.end()
+            found.append((ticker, (m.group("lead") or (trail.group(1) if trail else None) or default_side).lower(), amount))
+            pos, last_end, first = end, end, False
+        if last_end is not None:
+            chars[intro.start():last_end] = " " * (last_end - intro.start())
+    return found, "".join(chars)
+
+
+def merge_positions(*groups: list[tuple[str, str, float]]) -> list[tuple[str, str, float]]:
+    """Holdings across messages: a name held the same way is stated once, the later size winning."""
+    book: dict[tuple[str, str], float] = {}
+    for g in groups:
+        for t, side, n in g:
+            book[(t.upper(), side)] = float(n)
+    return [(t, side, n) for (t, side), n in book.items()]
+
 
 @dataclass
 class RuleIntent:
@@ -103,6 +170,8 @@ class RuleIntent:
     thesis: str | None = None
     invalidation: str | None = None
     hedge_ratio: float | None = None
+    # What the trader already holds, as (ticker, side, notional); merged over a conversation.
+    open_positions: list[tuple[str, str, float]] = field(default_factory=list)
     missing_fields: list[str] = field(default_factory=list)
     reply: str = ""
 
@@ -114,6 +183,7 @@ class RuleIntent:
             "leverage": self.leverage,
             "target_price": self.target_price,
             "thesis": self.thesis, "invalidation": self.invalidation, "hedge_ratio": self.hedge_ratio,
+            "open_positions": [list(p) for p in self.open_positions],
             "missing_fields": self.missing_fields, "reply": self.reply,
         }
 
@@ -185,6 +255,22 @@ def _find_ticker(text: str, known: list[str]) -> str | None:
     return None
 
 
+def describe_book(positions: Any, lang: str = "en") -> str:  # noqa: ANN401
+    """"30,000 USDT NVDA and 10,000 USDT AMD short": the holdings as a trader would say them."""
+    bits = []
+    for t, side, n in list(positions)[:3]:
+        if lang == "zh":
+            bits.append(f"{float(n):,.0f} USDT 的 {t}{'空单' if side == 'short' else ''}")
+        else:
+            bits.append(f"{float(n):,.0f} USDT {t}{' short' if side == 'short' else ''}")
+    more = len(positions) - 3
+    if more > 0:
+        bits.append(f"{more} more" if lang != "zh" else f"另外 {more} 笔")
+    if len(bits) < 2:
+        return "".join(bits)
+    return ("、" if lang == "zh" else ", ").join(bits[:-1]) + (" 和 " if lang == "zh" else " and ") + bits[-1]
+
+
 def _settle(out: RuleIntent) -> RuleIntent:
     out.missing_fields = [n for n, v in (("ticker", out.ticker), ("side", out.side), ("notional_quote", out.notional_quote)) if not v]
     if out.missing_fields:
@@ -201,12 +287,22 @@ def _settle(out: RuleIntent) -> RuleIntent:
     else:
         out.kind = "analyze"
         out.reply = f"Running {out.side} {out.notional_quote:,.0f} USDT in {out.ticker}."
+        if out.open_positions:
+            out.reply = out.reply[:-1] + f", with {describe_book(out.open_positions)} already in the book."
     return out
 
 
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Read one message into a ticket. Nothing is invented; what is absent is asked for."""
     out = RuleIntent()
+    # What is already held is read first and blanked out, so it cannot be mistaken for the trade.
+    held: list[tuple[str, str, float]] = []
+    if _CJK.search(text):
+        from nightwatch.api import intake_zh
+
+        held, text = intake_zh.read_positions(text, {t.upper() for t in known_tickers})
+    more, text = read_positions(text, known_tickers)
+    out.open_positions = merge_positions(held, more)
     out.ticker = _find_ticker(text, known_tickers)
 
     short, long_ = _SHORT.search(text), _LONG.search(text)
@@ -330,8 +426,9 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
             # at 350 became an NVDA stop 56% away that "40 of 40 past moments hit".
             merged.stop_price = merged.target_price = merged.invalidation = None
             merged.stop_pct = merged.stop_dir = None
+        merged.open_positions = merge_positions(merged.open_positions, latest.open_positions)
         for key, value in latest.as_dict().items():
-            if key in ("kind", "reply", "missing_fields") or value in (None, [], ""):
+            if key in ("kind", "reply", "missing_fields", "open_positions") or value in (None, [], ""):
                 continue
             setattr(merged, key, value)
     if merged.account_equity_quote is None and account_equity:
@@ -359,6 +456,7 @@ def intent_to_ticket(p: RuleIntent, account_equity: float | None) -> TradeTicket
         stop_price=p.stop_price, target_price=p.target_price, thesis=p.thesis or "", invalidation=p.invalidation or "",
         stop_offset_pct=None if p.stop_price is not None else stop_offset(p.stop_pct, p.stop_dir, p.side),
         hedge_ratio=p.hedge_ratio, leverage=p.leverage if p.leverage and p.leverage <= 125 else None,
+        open_positions=tuple((t.upper(), side, float(n)) for t, side, n in p.open_positions),
         extra={"horizon_label": label} if label else {},
     )
 
@@ -382,11 +480,11 @@ FAILURE_ZH = {
 # The verdict names in Chinese, for a trader who wrote in Chinese. The numbers are the
 # same numbers, formatted the same way; only the words around them change.
 VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
-CAP_ZH = {"risk_budget": "风险预算", "concentration": "集中度", "regime": "市场状态", "exit_liquidity": "平仓流动性", "stress": "压力测试", "breaker": "熔断"}
+CAP_ZH = {"risk_budget": "风险预算", "concentration": "集中度", "regime": "市场状态", "exit_liquidity": "平仓流动性", "stress": "压力测试", "breaker": "熔断", "book_tail": "整体持仓尾部风险"}
 RULE_ZH = {
     "written_plan": "书面计划", "stop": "止损", "position_size": "仓位大小", "market_posture": "市场状态",
     "liquidity": "流动性", "circuit_breaker": "熔断", "basis": "价差", "event": "事件", "data_quality": "数据质量",
-    "liquidation": "强平风险", "exit_liquidity": "平仓流动性", "revenge": "报复性交易冷静期", "concentration": "集中度", "risk_budget": "风险预算",
+    "liquidation": "强平风险", "exit_liquidity": "平仓流动性", "revenge": "报复性交易冷静期", "concentration": "集中度", "risk_budget": "风险预算", "book_tail": "整体持仓风险",
 }
 
 
@@ -529,6 +627,51 @@ def _leverage_line(lev: dict[str, Any], lang: str) -> str:
     return line
 
 
+def book_line(report: Any, lang: str = "en") -> str | None:  # noqa: ANN401
+    """What the trader already holds, and what this trade does to the whole book.
+
+    Every figure is copied from the report's portfolio section, which is measured on one
+    shared set of historical windows for the holdings and the trade together.
+    """
+    t, port = report.ticket, getattr(report, "portfolio", None)
+    if not t.open_positions or port is None:
+        return None
+    zh = lang == "zh"
+    held = describe_book(t.open_positions, lang)
+    before, after = port.before.tail_loss_quote, port.after.tail_loss_quote
+    bits: list[str] = []
+    if before is None or after is None:
+        bits.append(f"你已有 {held}，但缺少足够的历史来衡量整个持仓的风险，所以没有计入尾部风险。" if zh
+                    else f"With your {held}: there is not enough stored history to measure the whole book, so no book limit was applied.")
+    else:
+        delta = after - before
+        verb = ("增加" if delta < 0 else "减少") if zh else ("adds" if delta < 0 else "removes")
+        if zh:
+            bits.append(f"你已有 {held}：整个持仓的二十分之一亏损从 {abs(before):,.0f} USDT 变为 {abs(after):,.0f} USDT（这笔交易{verb} {abs(delta):,.0f}）。")
+        else:
+            bits.append(f"With your {held}: your book's one-in-twenty loss goes from {abs(before):,.0f} to {abs(after):,.0f} USDT with this trade at the size you asked ({verb} {abs(delta):,.0f}).")
+        rec = report.verdict.recommended_notional
+        if port.book_cap_binds and port.book_cap_quote is not None:
+            tail_rec = port.tail_after_recommended_quote
+            pct = port.book_cap_pct_of_equity
+            if zh:
+                bits.append(f"整体持仓上限把这笔交易限制在 {port.book_cap_quote:,.0f} USDT（持仓尾部亏损不超过账户的 {pct:g}%）。")
+            else:
+                tail_txt = f", which leaves the book at {abs(tail_rec):,.0f}" if tail_rec is not None else ""
+                bits.append(f"The book cap holds it to {port.book_cap_quote:,.0f} USDT ({pct:g}% of equity for the whole book){tail_txt}.")
+        elif rec is not None and abs(rec - t.notional_quote) > 1 and port.tail_after_recommended_quote is not None:
+            bits.append(f"按建议的 {rec:,.0f} USDT，整个持仓的二十分之一亏损为 {abs(port.tail_after_recommended_quote):,.0f} USDT。" if zh
+                        else f"At the recommended {rec:,.0f} it is {abs(port.tail_after_recommended_quote):,.0f}.")
+    same = port.same_name
+    if same:
+        bits.append(f"你已持有 {abs(same['held_signed_quote']):,.0f} USDT 的 {same['ticker']}，加上这笔后该股共 {abs(same['combined_signed_quote']):,.0f} USDT。" if zh
+                    else f"You already hold {abs(same['held_signed_quote']):,.0f} of {same['ticker']}, so with this trade that name is {abs(same['combined_signed_quote']):,.0f}.")
+    if port.unknown:
+        names = ", ".join(port.unknown)
+        bits.append(f"{names} 没有足够的历史数据，未计入尾部风险。" if zh else f"No stored history for {names}, so it is left out of the tail (not counted as zero).")
+    return "".join(bits) if zh else " ".join(bits)
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -558,6 +701,9 @@ def brief(report: Any, lang: str = "en") -> str:
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."
     lines.append(head)
+    bk = book_line(report, lang)
+    if bk:
+        lines.append(bk)
     wk = weekend_line(report, lang)
     if wk:
         lines.append(wk)
@@ -736,6 +882,9 @@ def brief_short(report: Any, lang: str = "en") -> str:
     full = brief(report, lang).split("\n\n")
     keep = _SHORT_KEEP_ZH if zh else _SHORT_KEEP_EN
     out = [full[0]]
+    bk = book_line(report, lang)
+    if bk:
+        out.append(bk)
     wk = weekend_line(report, lang)
     if wk:
         out.append(wk)

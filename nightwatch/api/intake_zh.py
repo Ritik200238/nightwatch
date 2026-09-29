@@ -129,6 +129,65 @@ def ask(missing: list[str], known: dict[str, object] | None = None) -> str:
     return head + "还需要知道：" + "、".join(ASKS_ZH[m] for m in wanted) + "。例如：“周末持有两万美元的特斯拉，止损350”。"
 
 
+# "我还持有", "我已经持有", "我手上有", "目前持仓：": what is already on, as opposed to a trade
+# being asked about. A bare 持有 is a trade ("周末持有两万美元的特斯拉"), so an adverb or a
+# place ("手上") is required.
+_HOLD_INTRO = re.compile(
+    r"(?:我|咱)?(?:现在|目前|已经|还|也|另外|同时)+(?:持有|持仓|拿着|有)"
+    r"|(?:我|咱)?(?:手上|手里)(?:还|已经|目前)?(?:持有|有|拿着)"
+    r"|(?:现有|目前|当前)?持仓\s*[:：]"
+)
+_HELD_SEP = re.compile(r"(?:\s*(?:[,，、;；]|和|以及|还有|并且|另外|外加|加上|还|也))*\s*")
+_HELD_ITEM = re.compile(
+    r"(?P<lead>做多|做空|多单|空单)?\s*(?P<num>[0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(?P<scale>万|千|k|K)?\s*(?P<money>美元|美金|刀|USDT|usdt|U|u|块)?\s*(?:的)?\s*"
+)
+_HELD_TRAIL = re.compile(r"\s*(多单|空单|多头|空头|做多|做空)")
+_TRAIL_SIDE = {"多单": "long", "多头": "long", "做多": "long", "空单": "short", "空头": "short", "做空": "short"}
+
+
+def _name_at(text: str, pos: int, known: set[str]) -> tuple[str, int] | None:
+    for name in sorted(ALIASES_ZH, key=len, reverse=True):
+        if text.startswith(name, pos) and ALIASES_ZH[name] in known:
+            return ALIASES_ZH[name], pos + len(name)
+    m = _LATIN_TICKER.match(text, pos)
+    if m and m.group(1).upper() in known:
+        return m.group(1).upper(), m.end()
+    return None
+
+
+def read_positions(text: str, known: set[str]) -> tuple[list[tuple[str, str, float]], str]:
+    """Holdings a Chinese message states, and the message with those clauses blanked out."""
+    found: list[tuple[str, str, float]] = []
+    chars = list(text)
+    for intro in _HOLD_INTRO.finditer(text):
+        pos, first, last_end = intro.end(), True, None
+        while True:
+            sep = _HELD_SEP.match(text, pos)
+            m = _HELD_ITEM.match(text, sep.end())
+            if not m:
+                break
+            number, scale, money = m.group("num"), m.group("scale"), m.group("money")
+            if not (scale or money or re.search("[百千]", number)):
+                break  # a bare number is a price or a duration, not a holding
+            if not first and m.group("lead") and not re.search("和|以及|并且|外加|加上", sep.group()):
+                break  # a comma then a side starts the next trade
+            value = chinese_number(number)
+            got = _name_at(text, m.end(), known)
+            if value is None or got is None:
+                break
+            value *= 10_000 if scale == "万" else 1_000 if scale in ("千", "k", "K") else 1
+            ticker, end = got
+            trail = _HELD_TRAIL.match(text, end)
+            side = _TRAIL_SIDE.get(m.group("lead") or "") or (_TRAIL_SIDE[trail.group(1)] if trail else "long")
+            if trail:
+                end = trail.end()
+            found.append((ticker, side, value))
+            pos, last_end, first = end, end, False
+        if last_end is not None:
+            chars[intro.start():last_end] = " " * (last_end - intro.start())
+    return found, "".join(chars)
+
+
 def read(text: str, known: set[str]) -> dict[str, object]:
     """The fields a Chinese message states. Anything not stated is left out."""
     out: dict[str, object] = {}
