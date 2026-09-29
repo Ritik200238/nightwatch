@@ -24,6 +24,7 @@ from datetime import datetime
 
 from nightwatch.data.models import OrderBookSnapshot
 from nightwatch.decision.gate import GateDecision, GateInputs, GatePolicy, GateReport, evaluate_gate
+from nightwatch.decision.portfolio import BookModel, same_name_exposure
 from nightwatch.decision.sizing import SizingInputs, SizingPolicy, SizingResult, VerdictResult, decide, recommend_size
 from nightwatch.decision.ticket import TradeTicket
 from nightwatch.execution.exit_cost import quote_exit
@@ -31,6 +32,7 @@ from nightwatch.stress.scenarios import Position, Scenario, ScenarioImpact, Seve
 
 MAX_SIZE_MULTIPLE = 4.0  # how far above the request the size sweep looks
 BISECTION_STEPS = 24
+BOOK_CAP_STEPS = 24  # the book cap refines a 1/64-of-equity grid cell down to a few cents
 STRESS_CAP_STEPS = 14  # enough for ~0.01% of the search range; each step re-prices the severe presets
 
 
@@ -103,6 +105,13 @@ class DecisionContext:
     # Held fixed across the size sweep: the tier, and so the liquidation distance, moves
     # only at Bitget's tier boundaries, and the leverage is the trader's choice.
     leverage_rule: tuple[str, str] | None = None
+    # The held book on the same historical windows as the trade (None without holdings or
+    # without history for them), and the holdings it had to leave out. Solved against here
+    # so that every what-if sizes against the same book as the headline verdict.
+    book_model: BookModel | None = field(default=None, compare=False, repr=False)
+    book_unknown: tuple[str, ...] = ()
+    book_mean_correlation: float | None = None
+    _book_caps: dict[tuple, tuple[float, str] | None] = field(default_factory=dict, compare=False, repr=False)
     _stress_caps: dict[tuple, float | None] = field(default_factory=dict, compare=False, repr=False)
 
     def worst_severe_loss_quote(self, ticket: TradeTicket, notional: float) -> float | None:
@@ -148,6 +157,51 @@ class DecisionContext:
         self._stress_caps[key] = lo
         return lo
 
+    def book_tail_cap(self, ticket: TradeTicket) -> tuple[float, str] | None:
+        """Largest size of this trade at which the whole book's one-in-twenty loss stays
+        inside the allowed share of equity, and how it was reached. None when there is no
+        book, no equity, or no history to measure the book on.
+
+        The limit is the policy share of equity, or the book's loss as it stands if that
+        is already worse: a trade that lowers the tail (a hedge) is never refused for a
+        breach it did not cause, and one that raises it is refused until the book is back
+        inside. Loss is convex in size beyond its minimum, so a coarse scan finds the last
+        size inside the limit and bisection refines it; it depends on side and equity only.
+        """
+        model, equity = self.book_model, ticket.account_equity_quote
+        if model is None or model.unit is None or not equity or not ticket.open_positions:
+            return None
+        key = (equity, ticket.side)
+        if key in self._book_caps:
+            return self._book_caps[key]
+        side = ticket.side.value
+        budget = equity * self.sizing_policy.max_book_tail_pct_of_equity / 100.0
+
+        def loss(n: float) -> float:
+            return max(0.0, -model.tail(n, side))
+
+        before = loss(0.0)
+        limit = max(budget, before)
+        hi = equity  # a spot position larger than the whole account is not on the table
+        if loss(hi) <= limit:
+            out = (hi, f"the book's one-in-twenty loss stays inside {self.sizing_policy.max_book_tail_pct_of_equity:g}% of equity ({budget:,.0f}) at any size that fits the account")
+        else:
+            grid = [hi * i / 64 for i in range(65)]
+            inside = [g for g in grid if loss(g) <= limit + 1e-9]
+            lo = max(inside)  # grid[0] == 0 is always inside: loss(0) == before <= limit
+            top = min((g for g in grid if g > lo), default=hi)
+            for _ in range(BOOK_CAP_STEPS):
+                mid = (lo + top) / 2
+                if loss(mid) <= limit:
+                    lo = mid
+                else:
+                    top = mid
+            lo = 0.0 if lo < 1.0 else lo
+            held = f"; the book alone is at {before:,.0f}" if before > budget else ""
+            out = (lo, f"the largest size at which the whole book's one-in-twenty loss stays inside {self.sizing_policy.max_book_tail_pct_of_equity:g}% of equity ({budget:,.0f}){held}")
+        self._book_caps[key] = out
+        return out
+
     def evaluate(self, ticket: TradeTicket, *, impacts: list[ScenarioImpact] | None = None, exit_cost_bps: float | None = None, exit_fully_filled: bool | None = None, has_book: bool | None = None) -> Evaluation:
         """Gate, size and decide one ticket. Precomputed pieces are reused when given."""
         if impacts is None:
@@ -168,9 +222,12 @@ class DecisionContext:
                 recent_losing_exits=self.recent_losing_exits,
                 breaker_state=self.breaker_state, breaker_reason=self.breaker_reason, now=self.now,
                 leverage_rule=self.leverage_rule if ticket.leveraged else None,
+                book_given=bool(ticket.open_positions), book_unknown=self.book_unknown, book_mean_correlation=self.book_mean_correlation,
             ),
             self.gate_policy,
         )
+        book_cap = self.book_tail_cap(ticket)
+        _, same_way = same_name_exposure(ticket.open_positions, ticket.ticker, ticket.side.value)
         sizing = recommend_size(
             ticket,
             SizingInputs(
@@ -178,6 +235,8 @@ class DecisionContext:
                 analog_p5_loss_pct=self.analog_p5_loss_pct, risk_multiplier=self.risk_multiplier,
                 max_exit_notional_within_budget=self.max_exit_notional_within_budget, worst_severe_stress_pct=worst_severe,
                 stress_cap_notional=self.stress_cap_notional(ticket),
+                book_tail_cap_notional=book_cap[0] if book_cap else None, book_tail_detail=book_cap[1] if book_cap else "",
+                same_name_exposure_quote=same_way,
                 hedge_cost_bps_of_position=self.hedge_cost_bps_of_position, hedge_residual_p5_loss_pct=self.hedge_residual_p5_loss_pct,
             ),
             self.sizing_policy,

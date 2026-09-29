@@ -35,7 +35,7 @@ from nightwatch.data.sync import UniverseEntry
 from nightwatch.decision.breaker import BreakerPolicy, BreakerReport, BreakerState
 from nightwatch.decision.breaker import evaluate as evaluate_breaker
 from nightwatch.decision.gate import GatePolicy, GateReport
-from nightwatch.decision.portfolio import PortfolioReport
+from nightwatch.decision.portfolio import PortfolioReport, build_book_model
 from nightwatch.decision.portfolio import Position as BookPosition
 from nightwatch.decision.portfolio import evaluate as evaluate_portfolio
 from nightwatch.decision.sensitivity import DecisionContext, SensitivityReport, build_sensitivity
@@ -636,6 +636,32 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         except Exception:  # noqa: BLE001
             log.exception("circuit breaker evaluation failed")
 
+    # The rest of the book, if the trader told us about it. Measured before the decision
+    # because it changes it: it caps the size and colours the gate, and the same context
+    # then drives every what-if, so a swept verdict is the headline verdict's sibling.
+    t0 = time.perf_counter()
+    portfolio = None
+    book_built = None
+    if ticket.open_positions:
+        try:
+            held = [BookPosition(t.upper(), s, float(n)) for t, s, n in ticket.open_positions]
+            frames: dict[str, pd.DataFrame] = {ticket.ticker: frame}
+            for pos in held:
+                if pos.ticker not in frames:
+                    try:
+                        frames[pos.ticker] = ctx.feature_frame(pos.ticker, as_of)
+                    except (InsufficientData, KeyError):
+                        frames[pos.ticker] = pd.DataFrame()
+            book_built = build_book_model(held, ticket.ticker, frames, horizon_h=max(1, int(round(horizon_h))))
+            portfolio = evaluate_portfolio(
+                held, BookPosition(ticket.ticker, ticket.side.value, ticket.notional_quote), frames,
+                equity=ticket.account_equity_quote, horizon_h=horizon_h, built=book_built,
+            )
+        except Exception:  # noqa: BLE001 - the book view must never break the verdict
+            log.exception("portfolio evaluation failed")
+            portfolio = book_built = None
+    timings["portfolio"] = _ms(t0)
+
     # One context drives the headline decision and every what-if, so a swept verdict
     # can never be computed differently from the one on the report.
     dc = DecisionContext(
@@ -649,6 +675,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
         hedge_residual_p5_loss_pct=residual_p5, gate_policy=ctx.gate_policy, sizing_policy=ctx.sizing_policy,
         leverage_rule=leverage_rule,
+        book_model=book_built[0] if book_built else None, book_unknown=book_built[2] if book_built else (),
+        book_mean_correlation=portfolio.mean_correlation_to_book if portfolio else None,
     )
     ev = dc.evaluate(
         ticket, impacts=stress.impacts,
@@ -691,27 +719,19 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         log.exception("regime map failed")
     timings["regimes"] = _ms(t0)
 
-    # 9. The rest of the book, if the trader told us about it.
-    t0 = time.perf_counter()
-    portfolio = None
-    if ticket.open_positions:
-        try:
-            held = [BookPosition(t.upper(), s, float(n)) for t, s, n in ticket.open_positions]
-            frames: dict[str, pd.DataFrame] = {ticket.ticker: frame}
-            for pos in held:
-                if pos.ticker not in frames:
-                    try:
-                        frames[pos.ticker] = ctx.feature_frame(pos.ticker, as_of)
-                    except (InsufficientData, KeyError):
-                        frames[pos.ticker] = pd.DataFrame()
-            portfolio = evaluate_portfolio(
-                held, BookPosition(ticket.ticker, ticket.side.value, ticket.notional_quote), frames,
-                equity=ticket.account_equity_quote, horizon_h=horizon_h,
-            )
-        except Exception:  # noqa: BLE001 - the book view must never break the verdict
-            log.exception("portfolio evaluation failed")
-
-    timings["portfolio"] = _ms(t0)
+    # 9. The rest of the book was measured before the decision (see above), so the size
+    # is sized against it; what is left is to say what the recommended size does to it.
+    if portfolio is not None and book_built is not None and book_built[0] is not None and book_built[0].unit is not None:
+        rec = verdict.recommended_notional
+        model = book_built[0]
+        cap = next((c for c in sizing.caps if c.name == "book_tail"), None)
+        portfolio = replace(
+            portfolio,
+            tail_after_recommended_quote=model.tail(rec, ticket.side.value) if rec is not None else None,
+            book_cap_quote=cap.notional if cap else None,
+            book_cap_pct_of_equity=ctx.sizing_policy.max_book_tail_pct_of_equity if cap else None,
+            book_cap_binds=bool(cap and sizing.binding_cap == "book_tail"),
+        )
 
     # 10. Sensitivity: what would have to change.
     t0 = time.perf_counter()
