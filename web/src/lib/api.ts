@@ -588,6 +588,20 @@ export interface PortfolioReport {
   mean_correlation_to_book: number | null;
   notes: string[];
   horizon_h: number;
+  /** Holdings with no stored history: left out of the tail, never counted as flat. */
+  unknown: string[];
+  /** Start of the historical window in which the whole book lost most. */
+  worst_window: string | null;
+  /** The new trade's name when it is already held: held, combined, share of equity. */
+  same_name: { ticker: string; held_signed_quote: number; combined_signed_quote: number; combined_pct_of_equity: number | null; same_direction_quote: number } | null;
+  /** How many shared historical windows the tail was read from. */
+  windows: number;
+  /** The book's tail with the trade at the size the desk recommends. */
+  tail_after_recommended_quote: number | null;
+  /** The book_tail cap: the largest size that keeps the whole book's one-in-twenty loss inside the limit. */
+  book_cap_quote: number | null;
+  book_cap_pct_of_equity: number | null;
+  book_cap_binds: boolean;
 }
 
 export interface Regime {

@@ -339,6 +339,8 @@ function DecisionCard({ report }: { report: Report }) {
         ))}
       </ul>
 
+      <BookNote report={report} />
+
       {/* The four numbers, in money, because a percentage of a position is not a feeling. */}
       <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Stat
@@ -1225,6 +1227,48 @@ function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean 
         last trade it started on. The p5 column is the one the sizing uses.
       </p>
     </Section>
+  );
+}
+
+/** What the holdings do to this verdict: the book's bad-case loss before and after, and the book cap when it is the one holding the size down. */
+function BookNote({ report }: { report: Report }) {
+  const p = report.portfolio;
+  if (!p) return null;
+  const before = p.before.tail_loss_quote;
+  const after = p.after.tail_loss_quote;
+  const delta = before != null && after != null ? after - before : null;
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+      <p className="font-medium text-foreground">Your book</p>
+      {before != null && after != null && delta != null ? (
+        <p className="text-muted-foreground">
+          One-in-twenty loss{" "}
+          <span className="tabular font-medium text-foreground">
+            {fmtUsd(Math.abs(before))} → {fmtUsd(Math.abs(after))} USDT
+          </span>
+          ; this trade {delta < 0 ? "adds" : "removes"} {fmtUsd(Math.abs(delta))} at the size you asked.
+          {p.book_cap_binds && p.book_cap_quote != null ? (
+            <>
+              {" "}
+              <Pill tone="warning">book cap binds</Pill> The book cap holds it to <span className="tabular font-medium text-foreground">{fmtUsd(p.book_cap_quote)} USDT</span>
+              {p.book_cap_pct_of_equity != null ? ` (${p.book_cap_pct_of_equity}% of equity for the whole book)` : ""}
+              {p.tail_after_recommended_quote != null ? `, which leaves the book at ${fmtUsd(Math.abs(p.tail_after_recommended_quote))}` : ""}.
+            </>
+          ) : p.book_cap_quote != null ? (
+            <> The book cap ({fmtUsd(p.book_cap_quote)} USDT) does not bind.</>
+          ) : null}
+        </p>
+      ) : (
+        <p className="text-muted-foreground">There is not enough stored history to measure the whole book, so no book limit was applied.</p>
+      )}
+      {p.same_name ? (
+        <p className="text-muted-foreground">
+          You already hold {fmtUsd(Math.abs(p.same_name.held_signed_quote))} of {p.same_name.ticker}; with this trade that name is {fmtUsd(Math.abs(p.same_name.combined_signed_quote))}
+          {p.same_name.combined_pct_of_equity != null ? ` (${p.same_name.combined_pct_of_equity.toFixed(0)}% of equity)` : ""}.
+        </p>
+      ) : null}
+      {p.unknown.length ? <p className="text-status-warning">No stored history for {p.unknown.join(", ")}: left out of the tail, not counted as zero.</p> : null}
+    </div>
   );
 }
 
