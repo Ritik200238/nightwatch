@@ -17,6 +17,8 @@ export default function DeskPage() {
   const [universe, setUniverse] = useState<UniverseEntry[] | null>(null);
   const [universeError, setUniverseError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
+  // The language the report was asked for in; the form is English, the chat either.
+  const [reportLang, setReportLang] = useState<"en" | "zh">("en");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<TicketInput | null>(null);
@@ -41,6 +43,7 @@ export default function DeskPage() {
     setError(null);
     setLastTicket(ticket);
     setEquity(ticket.account_equity_quote ?? null);
+    setReportLang("en");
     try {
       // The book travels with the ticket so the report can judge both.
       setReport(await api.analyze({ ...ticket, open_positions: positions }));
@@ -108,7 +111,11 @@ export default function DeskPage() {
             )}
           </TabsContent>
           <TabsContent value="chat" className="pt-3">
-            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} onReport={setReport} />
+            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} onReport={(r, lang) => {
+                setReport(r);
+                setReportLang(lang);
+              }}
+            />
           </TabsContent>
         </Tabs>
       </aside>
@@ -130,6 +137,7 @@ export default function DeskPage() {
           <div className={busy ? "opacity-60 transition-opacity" : ""}>
             <ReportView
               report={report}
+              lang={reportLang}
               onRerun={(patch) => {
                 // The same trade at the same moment, with one thing changed. A report from
                 // chat has no form ticket behind it, so its own ticket is the base.

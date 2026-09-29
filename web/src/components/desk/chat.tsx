@@ -20,7 +20,7 @@ interface Props {
   accountEquity: number | null;
   busy: boolean;
   setBusy: (b: boolean) => void;
-  onReport: (r: Report) => void;
+  onReport: (r: Report, lang: "en" | "zh") => void;
 }
 
 const STARTERS = ["Hold $20k of TSLA through the weekend, stop at 350", "Short 5k NVDA for the next 12 hours", "Long 10k SPY until Monday open, thesis: strong Friday close"];
@@ -108,7 +108,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
       setMessages([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? READ_FROM[res.answer_kind] : undefined }]);
       // A follow-up answers about the report already on screen and leaves it there.
       if (res.report) {
-        onReport(res.report);
+        onReport(res.report, /[\u3400-\u9fff]/.test(content) ? "zh" : "en");
         const id = (res.report.forecast_id as number | null) ?? null;
         setContextId(id);
         if (id != null && res.mode !== "what_if") void followWithTake(id, /[\u3400-\u9fff]/.test(content) ? "zh" : "en");

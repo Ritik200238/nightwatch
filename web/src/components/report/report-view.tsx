@@ -553,7 +553,7 @@ function Hypothetical({ report }: { report: Report }) {
   );
 }
 
-export function ReportView({ report, onRerun }: { report: Report; onRerun?: (patch: Partial<TicketInput>) => void }) {
+export function ReportView({ report, onRerun, lang = "en" }: { report: Report; onRerun?: (patch: Partial<TicketInput>) => void; lang?: "en" | "zh" }) {
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
   const budget = 25;
@@ -563,6 +563,13 @@ export function ReportView({ report, onRerun }: { report: Report; onRerun?: (pat
 
   return (
     <div className="space-y-4">
+      {/* The chat answers a Chinese trader in Chinese; this page is still English. Say so,
+          rather than leave half a translation looking like an oversight. */}
+      {lang === "zh" ? (
+        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" lang="zh">
+          下方的详细报告目前是英文。左侧聊天里的回复是完整的中文摘要，数字与本报告完全一致；可以继续用中文追问（为什么？· 最坏会亏多少？· 仓位减半）。
+        </p>
+      ) : null}
       <Hypothetical report={report} />
       <DecisionCard report={report} />
       <AnalystTakeCard report={report} />
