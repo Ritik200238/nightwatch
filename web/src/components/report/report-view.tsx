@@ -743,6 +743,11 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
           {report.forecast_id != null && report.forecast_id > 0 ? ` · journaled as forecast #${report.forecast_id}` : ""}
           {report.forecast_id != null && report.forecast_id < 0 ? " · a what-if: not journaled, never scored" : ""}
         </span>
+        {report.receipt && report.forecast_id != null && report.forecast_id > 0 ? (
+          <a href={`/api/verify/${report.forecast_id}`} target="_blank" rel="noreferrer" className="font-mono underline underline-offset-2" title={`Receipt ${report.receipt}: chained to every verdict before it`}>
+            receipt {report.receipt.slice(0, 10)}…
+          </a>
+        ) : null}
         {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} /> : null}
       </p>
       {primary ? null : null}

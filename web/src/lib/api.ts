@@ -838,6 +838,8 @@ export interface Report {
   /** Where the stated reason depends on an event the data can date, and does not match. */
   premise?: string[];
   weekend_only?: WeekendOnly | null;
+  /** The chained journal receipt for this verdict; see /verify. */
+  receipt?: string | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
@@ -951,6 +953,8 @@ export const api = {
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
   studies: () => request<StudiesResponse>("/studies"),
+  verify: () => request<VerifyResponse>("/verify"),
+  misses: () => request<MissesResponse>("/misses"),
   analystStart: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`, { method: "POST" }),
   analystGet: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`),
   lenses: (ticker?: string) =>
@@ -988,4 +992,36 @@ export interface WeekendOnly {
   typical_h: number;
   today: string;
   hold_from_now_h: number;
+}
+
+/** The receipt chain over every live verdict, recomputed on request. */
+export interface VerifyResponse {
+  ok: boolean;
+  checked: number;
+  head: string;
+  first_break: { seq: number; forecast_id: number; reason: string } | null;
+  unchained: number;
+  chained_since: number | null;
+}
+
+/** A live verdict whose outcome went past the one-in-twenty line it stated. */
+export interface Miss {
+  id: number;
+  as_of: string;
+  ticker: string;
+  side: string;
+  notional: number;
+  horizon_h: number;
+  verdict: string | null;
+  stated_p5_pct: number;
+  outcome_pct: number;
+  loss_quote: number;
+  beyond_quote: number;
+  receipt: string | null;
+}
+
+export interface MissesResponse {
+  totals: Record<string, { scored: number; missed: number; rate: number }>;
+  misses: Miss[];
+  target_rate: number;
 }

@@ -25,7 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/" className="rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none">
                 Nightwatch
               </Link>
-              {/* Wraps for the same reason the header does. Five destinations do not fit
+              {/* Wraps for the same reason the header does. Six destinations do not fit
                   on one line next to the brand at 375px, and a nav that runs off the
                   screen edge is worse than one that takes a second line. */}
               <nav aria-label="Primary" className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
@@ -43,6 +43,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 </Link>
                 <Link href="/journal" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
                   Journal
+                </Link>
+                <Link href="/wrong" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                  What we got wrong
                 </Link>
               </nav>
             </div>
