@@ -22,6 +22,15 @@ const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "c
   REVIEW: "muted",
 };
 
+/** What each verdict means, for someone seeing the badge for the first time. */
+const VERDICT_MEANING: [Report["verdict"]["verdict"], string][] = [
+  ["GO", "every check passed at the size you asked for"],
+  ["REDUCE_TO", "the idea passes, but only at the smaller size shown"],
+  ["HEDGE", "keep the size, and hedge part of it with the stock's Bitget perpetual"],
+  ["REVIEW", "something is missing or unclear (a stop, a plan, your account size); say it and it re-runs"],
+  ["NO_GO", "a hard limit refuses it as asked, and the reason says which one"],
+];
+
 const VERDICT_TEXT: Record<Report["verdict"]["verdict"], string> = {
   GO: "Go at the requested size",
   REDUCE_TO: "Reduce the size",
@@ -310,6 +319,17 @@ function DecisionCard({ report }: { report: Report }) {
         {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
         {v.hedge_ratio ? <span className="text-muted-foreground"> → hedge {fmtRatio(v.hedge_ratio)} via perp</span> : null}
       </p>
+      <details className="mt-1 text-xs text-muted-foreground">
+        <summary className="cursor-pointer select-none hover:text-foreground">What the verdicts mean</summary>
+        <ul className="mt-1 space-y-0.5">
+          {VERDICT_MEANING.map(([k, text]) => (
+            <li key={k} className={k === v.verdict ? "text-foreground" : undefined}>
+              <span className="font-medium">{k.replace("_", " ")}</span>: {text}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1">The desk sizes and warns; it never places the trade. You decide.</p>
+      </details>
       <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
         {v.reasons.map((r) => (
           <li key={r} className="flex gap-2">

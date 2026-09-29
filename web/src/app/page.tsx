@@ -6,6 +6,7 @@ import { Chat } from "@/components/desk/chat";
 import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
 import { Sources } from "@/components/desk/sources";
 import { TicketForm } from "@/components/desk/ticket-form";
+import { Working } from "@/components/desk/working";
 import { ReportView } from "@/components/report/report-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -59,6 +60,16 @@ export default function DeskPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Stress-test a trade</h1>
           <p className="text-sm text-muted-foreground">Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.</p>
+          {/* On a phone the explainer on the right sits under this whole form, so a first
+              visitor scrolls past twelve fields before learning what the desk does. */}
+          {!report ? (
+            <p className="mt-2 text-sm text-muted-foreground lg:hidden">
+              Describe a trade (form or chat, English or 中文) → the desk shows what past moments like now did, stress-tests it, prices the exit on Bitget&apos;s live
+              book → you get a sized verdict: <span className="font-medium text-foreground">GO</span>, <span className="font-medium text-foreground">REDUCE</span>,{" "}
+              <span className="font-medium text-foreground">HEDGE</span>, <span className="font-medium text-foreground">REVIEW</span> or{" "}
+              <span className="font-medium text-foreground">NO GO</span>. You decide.
+            </p>
+          ) : null}
         </div>
         <Tabs defaultValue="form">
           <TabsList className="w-full">
@@ -139,8 +150,8 @@ export default function DeskPage() {
                 prices the exit on the live order book.
               </li>
               <li>
-                <span className="font-medium text-foreground">3.</span> You get a sized verdict in money, your own plan checked against the data, and an AI analyst&apos;s read of it.
-                You decide.
+                <span className="font-medium text-foreground">3.</span> You get a sized verdict in money - GO, REDUCE to a smaller size, HEDGE with the perp, REVIEW (something
+                missing) or NO GO - your own plan checked against the data, and an AI analyst&apos;s read of it. You decide.
               </li>
             </ol>
             <Button
@@ -174,8 +185,9 @@ export default function DeskPage() {
 
 function ReportSkeleton() {
   return (
-    <div className="space-y-4" aria-hidden>
-      <Skeleton className="h-36 w-full rounded-lg" />
+    <div className="space-y-4">
+      <Working />
+      <Skeleton className="h-36 w-full rounded-lg" aria-hidden />
       <Skeleton className="h-28 w-full rounded-lg" />
       <Skeleton className="h-72 w-full rounded-lg" />
       <Skeleton className="h-64 w-full rounded-lg" />
