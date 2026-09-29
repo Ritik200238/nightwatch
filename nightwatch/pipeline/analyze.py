@@ -374,6 +374,29 @@ class HorizonReport:
     p5_adjusted: float | None = None  # tail-calibrated (see journal.adjust)
     p95_adjusted: float | None = None
     adjustment: dict[str, Any] | None = None  # k_lo, k_hi, c_lo, n_fit, fitted_through
+    # The same distribution as the position's profit and loss, in percent. The cohort is
+    # the token's move; a short loses when it rises, so its one-in-twenty loss is the
+    # token's 95th percentile turned over, not its 5th. Every consumer that sizes, gates
+    # or states "the one-in-twenty loss" reads these, never p5 directly.
+    loss_p5_pct: float | None = None
+    pnl_median_pct: float | None = None
+    pnl_win_rate: float | None = None
+
+
+def _position_view(h: HorizonReport, side: str) -> None:
+    """Fill the position's own view of a horizon from the token's."""
+    c = h.cohort
+    if c.insufficient:
+        return
+    if side == "short":
+        up = h.p95_adjusted if h.p95_adjusted is not None else c.p95
+        h.loss_p5_pct = -up if up is not None else None
+        h.pnl_median_pct = -c.median_pct if c.median_pct is not None else None
+        h.pnl_win_rate = (1.0 - c.win_rate) if c.win_rate is not None else None
+    else:
+        h.loss_p5_pct = h.p5_adjusted if h.p5_adjusted is not None else c.p5
+        h.pnl_median_pct = c.median_pct
+        h.pnl_win_rate = c.win_rate
 
 
 @dataclass
@@ -802,7 +825,7 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
         verdict=r.verdict.verdict.value, recommended_notional=r.verdict.recommended_notional,
         payload={
             "gate": r.gate.decision.value, "reasons": r.verdict.reasons, "labels": r.snapshot.labels, "flags": r.snapshot.quality_flags, "sources": r.sources,
-            "p5_adjusted": (h.p5_adjusted if h else None), "p95_adjusted": (h.p95_adjusted if h else None), "adjustment": (h.adjustment if h else None),
+            "p5_adjusted": (h.p5_adjusted if h else None), "p95_adjusted": (h.p95_adjusted if h else None), "loss_p5_pct": (h.loss_p5_pct if h else None), "adjustment": (h.adjustment if h else None),
         },
     )
 
@@ -1016,6 +1039,8 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
             }
         horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison, p5_adjusted=p5_adj, p95_adjusted=p95_adj, adjustment=adjustment)
     _floor_longer_holds(horizons)
+    for h in horizons.values():
+        _position_view(h, ticket.side.value)
     if primary in horizons and horizons[primary].cohort.insufficient:
         warnings.append(f"analog cohort for the {primary} horizon is below the minimum sample; verdict falls back to the stop for risk")
 
@@ -1040,16 +1065,26 @@ def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
     already breached 6.3% of the time against a 5% target - too narrow, not too wide - so
     the floor moves it the way the scorecard says it should go.
     """
+    # Both tails: the lower one is a long's loss, the upper one a short's.
     worst: tuple[float, str] | None = None
+    worst_up: tuple[float, str] | None = None
     for name, h in sorted(horizons.items(), key=lambda kv: kv[1].hours):
-        p5 = h.p5_adjusted if h.p5_adjusted is not None else (None if h.cohort.insufficient else h.cohort.p5)
-        if p5 is None:
+        if h.cohort.insufficient:
             continue
-        if worst is not None and p5 > worst[0]:
-            h.p5_adjusted = worst[0]
-            h.adjustment = {**(h.adjustment or {}), "floored_by": worst[1]}
-        elif worst is None or p5 < worst[0]:
-            worst = (p5, name)
+        p5 = h.p5_adjusted if h.p5_adjusted is not None else h.cohort.p5
+        if p5 is not None:
+            if worst is not None and p5 > worst[0]:
+                h.p5_adjusted = worst[0]
+                h.adjustment = {**(h.adjustment or {}), "floored_by": worst[1]}
+            elif worst is None or p5 < worst[0]:
+                worst = (p5, name)
+        p95 = h.p95_adjusted if h.p95_adjusted is not None else getattr(h.cohort, "p95", None)
+        if p95 is not None:
+            if worst_up is not None and p95 < worst_up[0]:
+                h.p95_adjusted = worst_up[0]
+                h.adjustment = {**(h.adjustment or {}), "floored_up_by": worst_up[1]}
+            elif worst_up is None or p95 > worst_up[0]:
+                worst_up = (p95, name)
 
 
 def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str]) -> StressSection:
@@ -1180,7 +1215,7 @@ def _primary_p5(analog: AnalogSection | None, primary: str) -> float | None:
     h = analog.horizons[primary]
     if h.cohort.insufficient:
         return None
-    return h.p5_adjusted if h.p5_adjusted is not None else h.cohort.p5
+    return h.loss_p5_pct
 
 
 def _ms(t0: float) -> int:

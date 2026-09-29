@@ -566,17 +566,25 @@ def brief(report: Any, lang: str = "en") -> str:
     horizon = analog.horizons.get(report.primary_horizon) if analog else None
     if horizon is not None and horizon.cohort.n:
         c = horizon.cohort
-        p5 = horizon.p5_adjusted if horizon.p5_adjusted is not None else c.p5
-        if p5 is not None and c.median_pct is not None:
+        # The position's own outcome: a short gains what the token loses.
+        p5, median = horizon.loss_p5_pct, horizon.pnl_median_pct
+        short = t.side == Side.SHORT
+        raw = (-c.p95 if c.p95 is not None else None) if short else c.p5
+        adjusted = horizon.p95_adjusted if short else horizon.p5_adjusted
+        if p5 is not None and median is not None:
             if zh:
-                line = f"历史：找到 {c.n} 个与现在相似的时刻；中位结果 {_pct(c.median_pct)}，最差的二十分之一低于 {_pct(p5)}。"
+                line = f"历史：找到 {c.n} 个与现在相似的时刻；这笔仓位的中位结果 {_pct(median)}，最差的二十分之一低于 {_pct(p5)}。"
+                if short:
+                    line += "（做空时，坏情况是股价上涨。）"
             else:
-                line = f"History: {c.n} past moments like this one; the middle outcome was {_pct(c.median_pct)} and one in twenty was worse than {_pct(p5)}."
+                line = f"History: {c.n} past moments like this one; for this position the middle outcome was {_pct(median)} and one in twenty was worse than {_pct(p5)}."
+                if short:
+                    line += " For a short, the bad case is the stock rising."
                 adj = horizon.adjustment or {}
                 if adj.get("uncalibrated"):
                     line += " That is the raw history: no forecast held this long has been scored, so it is not calibrated."
-                elif c.p5 is not None and horizon.p5_adjusted is not None and abs(c.p5 - horizon.p5_adjusted) >= 1.0:
-                    line += f" (The raw count of these moments said {_pct(c.p5)}; adjusted by how past calls of this length actually came out.)"
+                elif raw is not None and adjusted is not None and abs(raw - p5) >= 1.0:
+                    line += f" (The raw count of these moments said {_pct(raw)}; adjusted by how past calls of this length actually came out.)"
             lens = getattr(analog, "lens", None)
             if lens is not None and lens.applied and lens.lenses:
                 from nightwatch.analog.lens import describe

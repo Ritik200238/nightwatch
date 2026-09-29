@@ -63,7 +63,7 @@ def test_a_stress_test_returns_the_engines_numbers_and_is_not_journalled(state):
     assert r["isError"] is False
     s = r["structuredContent"]
     assert s["ticker"] == "TSLA" and s["verdict"] in ("GO", "REDUCE", "HEDGE", "REVIEW", "NO_GO")
-    assert s["history"]["matches"] and s["history"]["p5_pct"] is not None
+    assert s["history"]["matches"] and s["history"]["loss_p5_pct"] is not None
     assert s["verdict"] in r["content"][0]["text"], "the text is the same briefing the chat gives"
 
 

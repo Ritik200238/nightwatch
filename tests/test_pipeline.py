@@ -281,3 +281,32 @@ def test_no_calibration_is_applied_past_the_longest_scored_hold(seeded_store):  
     long_ = [h for h in report.analog.horizons.values() if h.hours > CALIBRATED_MAX_H]
     assert long_ and all((h.adjustment or {}).get("uncalibrated") for h in long_)
     ctx.store.close()
+
+
+def test_a_short_is_sized_on_the_token_rising_not_falling(seeded_store):  # noqa: F811
+    """A short loses when the token rises. Its one-in-twenty loss is the token's 95th
+    percentile turned over; sizing it on the 5th - the short's gain - is what the desk
+    used to do, and 'short it instead' came back with the long's loss unchanged."""
+    ctx = _ctx(seeded_store)
+    base = dict(ticker="TSLA", notional_quote=20_000.0, account_equity_quote=200_000.0, thesis="t", invalidation="i")
+    long_ = analyze(ctx, TradeTicket(side=Side.LONG, **base), as_of=AS_OF, record=False)
+    short = analyze(ctx, TradeTicket(side=Side.SHORT, **base), as_of=AS_OF, record=False)
+    hl, hs = long_.analog.horizons[long_.primary_horizon], short.analog.horizons[short.primary_horizon]
+    assert hl.loss_p5_pct == (hl.p5_adjusted if hl.p5_adjusted is not None else hl.cohort.p5)
+    up = hs.p95_adjusted if hs.p95_adjusted is not None else hs.cohort.p95
+    assert hs.loss_p5_pct == -up and hs.loss_p5_pct < 0
+    assert hs.pnl_median_pct == -hs.cohort.median_pct
+
+
+def test_the_upper_tail_is_floored_for_longer_holds_too():
+    from types import SimpleNamespace
+
+    from nightwatch.pipeline.analyze import HorizonReport, _floor_longer_holds
+
+    def h(name, hours, p95):  # noqa: ANN001, ANN202
+        return HorizonReport(horizon=name, hours=hours, cohort=SimpleNamespace(insufficient=False, p5=-1.0, p95=p95), baseline=None,
+                             p5_adjusted=-1.0, p95_adjusted=p95, adjustment={})
+
+    hs = {"5h": h("5h", 5, 4.5), "24h": h("24h", 24, 3.0), "72h": h("72h", 72, 6.0)}
+    _floor_longer_holds(hs)
+    assert hs["24h"].p95_adjusted == 4.5 and hs["24h"].adjustment["floored_up_by"] == "5h" and hs["72h"].p95_adjusted == 6.0

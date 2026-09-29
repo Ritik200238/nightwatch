@@ -9,7 +9,7 @@ def stub(**over):
     """A report-shaped object with only the fields the second opinion reads."""
     cohort = SimpleNamespace(insufficient=False, p5=-5.0, es5_pct=-7.0, es5_n=2, win_rate=0.4, n=40)
     horizon = SimpleNamespace(
-        cohort=cohort, p5_adjusted=-6.0,
+        cohort=cohort, p5_adjusted=-6.0, loss_p5_pct=-6.0, pnl_win_rate=0.4,
         baseline=SimpleNamespace(permutation_p_value=0.5, mean_diff_pct=-0.1),
     )
     scenario = SimpleNamespace(name="Earnings gap: worst observed", probability_note="worst of 4 past reactions")
@@ -80,10 +80,10 @@ def test_a_refusal_gets_the_case_for_taking_it():
 
 def test_a_winning_setup_is_reported_as_support_not_opposition():
     s = stub()
-    s.analog.horizons["24h"].cohort.win_rate = 0.7
+    s.analog.horizons["24h"].pnl_win_rate = 0.7
     so = build(s)
-    assert any("70% of those moments ended positive" in c.text for c in so.supporting)
-    assert not any("ended positive" in c.text for c in so.against)
+    assert any("70% of those moments went this position's way" in c.text for c in so.supporting)
+    assert not any("went this position's way" in c.text for c in so.against)
 
 
 def test_a_thin_report_still_produces_something():

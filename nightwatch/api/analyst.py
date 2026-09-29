@@ -56,6 +56,14 @@ def _pct(v: Any, d: int = 1) -> str:  # noqa: ANN401
     return "n/a" if v is None else f"{v:+.{d}f}%"
 
 
+def _loss_p5(h: dict[str, Any]) -> float | None:
+    """The position's one-in-twenty loss: the token's upper tail turned over for a short."""
+    if "loss_p5_pct" in h:
+        return h["loss_p5_pct"]
+    c = h.get("cohort") or {}
+    return h.get("p5_adjusted") if h.get("p5_adjusted") is not None else c.get("p5")
+
+
 def fact_sheet(r: dict[str, Any]) -> str:
     """The report's decision-relevant facts, compact enough to keep the model quick."""
     t = r.get("ticket") or {}
@@ -64,7 +72,7 @@ def fact_sheet(r: dict[str, Any]) -> str:
     ph = r.get("primary_horizon")
     h = (a.get("horizons") or {}).get(ph) or {}
     c = h.get("cohort") or {}
-    p5 = h.get("p5_adjusted") if h.get("p5_adjusted") is not None else c.get("p5")
+    p5 = _loss_p5(h)
     lines = [
         f"Trade: {t.get('side')} {t.get('notional_quote'):,.0f} USDT of {t.get('ticker')}, held {r.get('horizon_h', 0):.0f} hours.",
         f"Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
@@ -100,8 +108,8 @@ def fact_sheet(r: dict[str, Any]) -> str:
         lens = (a.get("lens") or {})
         narrowed = f" (compared only against {lens.get('description')})" if lens.get("applied") and lens.get("description") else ""
         lines.append(
-            f"History{narrowed}: {c['n']} similar past moments; typical outcome {_pct(c.get('median_pct'))}; "
-            f"a bad night, one in twenty, worse than {_pct(p5)}; ended up {c.get('win_rate', 0) * 100:.0f}% of the time."
+            f"History{narrowed}: {c['n']} similar past moments; typical outcome for this position {_pct(h.get('pnl_median_pct', c.get('median_pct')))}; "
+            f"a bad night, one in twenty, worse than {_pct(p5)}; went this position's way {(h.get('pnl_win_rate', c.get('win_rate')) or 0) * 100:.0f}% of the time."
         )
     paths = a.get("paths") or {}
     if t.get("stop_price") and paths.get("stop_pct") is not None:
@@ -160,7 +168,7 @@ def relations(r: dict[str, Any]) -> list[str]:
     a = r.get("analog") or {}
     h = (a.get("horizons") or {}).get(r.get("primary_horizon")) or {}
     c = h.get("cohort") or {}
-    p5 = h.get("p5_adjusted") if h.get("p5_adjusted") is not None else c.get("p5")
+    p5 = _loss_p5(h)
     paths = a.get("paths") or {}
     n = len(paths.get("paths") or [])
     stop_pct = paths.get("stop_pct") if t.get("stop_price") else None

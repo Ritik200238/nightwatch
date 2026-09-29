@@ -395,7 +395,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             horizon = (report.analog.horizons.get(report.primary_horizon) if report.analog else None)
             p5 = None
             if horizon is not None:
-                p5 = horizon.p5_adjusted if horizon.p5_adjusted is not None else horizon.cohort.p5
+                p5 = horizon.loss_p5_pct
 
             priced = [(sc, im) for sc, im in zip(report.stress.presets, report.stress.impacts, strict=False) if im.total_pnl_quote is not None]
             worst = min(priced, key=lambda x: x[1].total_pnl_quote) if priced else None

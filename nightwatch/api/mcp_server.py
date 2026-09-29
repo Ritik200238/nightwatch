@@ -153,7 +153,7 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
         "ticker": ticker, "side": side, "notional_usdt": notional,
         "verdict": payload["verdict"]["verdict"], "recommended_notional_usdt": payload["verdict"].get("recommended_notional"),
         "reasons": payload["verdict"].get("reasons", []), "horizon_hours": payload.get("horizon_h"),
-        "history": {"matches": c.get("n"), "median_pct": c.get("median_pct"), "p5_pct": h["p5_adjusted"] if h.get("p5_adjusted") is not None else c.get("p5"),
+        "history": {"matches": c.get("n"), "median_pct": c.get("median_pct"), "loss_p5_pct": h.get("loss_p5_pct"), "position_median_pct": h.get("pnl_median_pct"),
                     "scope": a.get("scope"), "narrowed_to": ((a.get("lens") or {}).get("description") or None)},
         "exit_cost_bps": ((payload.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"),
         "leverage": {k: (payload.get("leverage") or {}).get(k) for k in ("leverage", "liquidation_price", "liquidation_distance_pct", "analog_hits", "analog_of", "mc_share", "presets_hit")} if payload.get("leverage") else None,

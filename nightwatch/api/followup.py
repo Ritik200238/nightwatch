@@ -187,7 +187,23 @@ def _p5(r: dict) -> float | None:
     h = _primary(r)
     if not h:
         return None
+    # The position's own one-in-twenty loss; a report stored before that field existed
+    # carries only the token's, which is right for a long.
+    if "loss_p5_pct" in h:
+        return h["loss_p5_pct"]
     return h.get("p5_adjusted") if h.get("p5_adjusted") is not None else (h.get("cohort") or {}).get("p5")
+
+
+def _median(r: dict) -> float | None:
+    """The position's middle outcome: the token's median, turned over for a short."""
+    h = _primary(r) or {}
+    return h["pnl_median_pct"] if "pnl_median_pct" in h else (h.get("cohort") or {}).get("median_pct")
+
+
+def _wins(r: dict) -> float | None:
+    """The share of past moments that went this position's way."""
+    h = _primary(r) or {}
+    return h["pnl_win_rate"] if "pnl_win_rate" in h else (h.get("cohort") or {}).get("win_rate")
 
 
 def _a_worst(r: dict, _q: str) -> Answer | None:
@@ -248,9 +264,9 @@ def _a_history(r: dict, _q: str) -> Answer | None:
     if c.get("insufficient") or not c.get("n"):
         return Answer("history", f"There were not enough distinct past moments like this one to answer: {(a.get('result') or {}).get('reason', 'too few matches')}.", ("analog cohort",))
     bits = [
-        f"{c['n']} distinct past moments looked like this one. The middle outcome over {r.get('primary_horizon')} was {_pct(c.get('median_pct'))}, "
-        f"one in twenty was worse than {_pct(_p5(r))}, and {c['win_rate'] * 100:.0f}% ended positive." if c.get("win_rate") is not None else
-        f"{c['n']} distinct past moments looked like this one; the middle outcome was {_pct(c.get('median_pct'))}."
+        f"{c['n']} distinct past moments looked like this one. For this position the middle outcome over {r.get('primary_horizon')} was {_pct(_median(r))}, "
+        f"one in twenty was worse than {_pct(_p5(r))}, and {_wins(r) * 100:.0f}% went its way." if _wins(r) is not None else
+        f"{c['n']} distinct past moments looked like this one; for this position the middle outcome was {_pct(_median(r))}."
     ]
     base = h.get("baseline") or {}
     if base.get("permutation_p_value") is not None:
@@ -620,7 +636,7 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
     if c.get("n") and not c.get("insufficient"):
         p5, loss = _loss_at_size(r)
         bits.append(f"The desk found {c['n']} past moments that looked like right now and checked what happened next. Usually the move was small "
-                    f"(the middle one was {_pct(c.get('median_pct'))}), but about one time in twenty it lost more than {_pct(p5)}"
+                    f"(the middle one was {_pct(_median(r))}), but about one time in twenty it lost more than {_pct(p5)}"
                     + (f", which on your size is about {_usd(-loss)} USDT." if loss is not None else "."))
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:

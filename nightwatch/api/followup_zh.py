@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from nightwatch.api.followup import Answer, _bps, _p5, _pct, _primary, _usd
+from nightwatch.api.followup import Answer, _bps, _median, _p5, _pct, _primary, _usd, _wins
 
 VERDICT_ZH = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
 RULE_ZH = {
@@ -119,9 +119,9 @@ def _a_history(r: dict, _q: str) -> Answer | None:
     c = h.get("cohort") or {}
     if c.get("insufficient") or not c.get("n"):
         return Answer("history", "相似的历史时刻不够多，无法回答。", ("analog cohort",))
-    text = f"找到 {c['n']} 个与现在相似的历史时刻。{r.get('primary_horizon')} 内的中位结果是 {_pct(c.get('median_pct'))}，最差的二十分之一低于 {_pct(_p5(r))}"
-    if c.get("win_rate") is not None:
-        text += f"，{c['win_rate'] * 100:.0f}% 以上涨收尾"
+    text = f"找到 {c['n']} 个与现在相似的历史时刻。这笔仓位在 {r.get('primary_horizon')} 内的中位结果是 {_pct(_median(r))}，最差的二十分之一低于 {_pct(_p5(r))}"
+    if _wins(r) is not None:
+        text += f"，{_wins(r) * 100:.0f}% 对这笔仓位有利"
     return Answer("history", text + "。", ("analog cohort",))
 
 
@@ -256,7 +256,7 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
     c = (h or {}).get("cohort") or {}
     if c.get("n") and not c.get("insufficient"):
         p5, loss = _loss(r)
-        bits.append(f"系统找到了 {c['n']} 个和现在很像的历史时刻，看了之后发生了什么：通常波动不大（中间值 {_pct(c.get('median_pct'))}），"
+        bits.append(f"系统找到了 {c['n']} 个和现在很像的历史时刻，看了之后发生了什么：通常波动不大（中间值 {_pct(_median(r))}），"
                     f"但大约每二十次有一次亏损超过 {_pct(p5)}" + (f"，按你的仓位约 {_usd(-loss)} USDT。" if loss is not None else "。"))
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:

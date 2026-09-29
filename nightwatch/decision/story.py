@@ -254,15 +254,18 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
     # Nothing dramatic: the ordinary way a trade loses.
     h = r.analog.horizons.get(r.primary_horizon) if r.analog else None
     c = h.cohort if h is not None else None
-    if c is not None and c.n and c.win_rate is not None and c.median_pct is not None and c.win_rate < 0.5:
+    wins, median = (h.pnl_win_rate, h.pnl_median_pct) if h is not None else (None, None)
+    if c is not None and c.n and wins is not None and median is not None and wins < 0.5:
+        # "The wrong way" is down for a long and up for a short.
+        way = "lower" if t.closing_long else "higher"
         out.append(FailureMode(
             "drift", "A quiet drift the wrong way",
             "No event at all",
-            "the price simply ends lower, as most moments like this one did",
-            c.median_pct / 100.0 * t.notional_quote, c.median_pct,
-            f"{1 - c.win_rate:.0%} of {c.n} past moments like this ended down", "analog cohort",
-            "no event; the price just ends lower",
-            1 - c.win_rate,
+            f"the price simply ends {way}, as most moments like this one did",
+            median / 100.0 * t.notional_quote, median,
+            f"{1 - wins:.0%} of {c.n} past moments like this ended {'down' if t.closing_long else 'up'}", "analog cohort",
+            f"no event; the price just ends {way}",
+            1 - wins,
         ))
 
     return _rank(_cap_at_margin(out, lev))

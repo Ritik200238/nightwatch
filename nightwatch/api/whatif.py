@@ -29,7 +29,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 
 from nightwatch.analog import lens as lens_mod
-from nightwatch.api.followup import Answer, _p5, _pct, _primary, _usd
+from nightwatch.api.followup import Answer, _median, _p5, _pct, _primary, _usd
 from nightwatch.decision.ticket import HorizonKind, Side, TradeTicket
 
 # Fields a what-if may touch. Anything outside this set is not a what-if the desk knows
@@ -340,29 +340,31 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
             cohort += ", searched across the pooled history because one token's own past does not hold enough of them"
         bits.append(cohort + ".")
 
-    cb, ca = _cohort(before), _cohort(after)
+
     hb, ha = before.get("primary_horizon"), after.get("primary_horizon")
     # Changing how long the position is held changes what the two medians are measured
     # over, so both windows are named. "Moves from +0.2% to 0.0% over 6h" would quietly
     # compare two numbers that are not measured over the same thing.
     moved_h = bool(hb and ha and hb != ha)
-    unchanged = cb.get("median_pct") == ca.get("median_pct") and _p5(before) == _p5(after)
+    # Each report's own position: "short it instead" compares a long's outcome with a short's.
+    mb, ma = _median(before), _median(after)
+    unchanged = mb == ma and _p5(before) == _p5(after)
     if zh:
         fh, th = (f"（{hb}）", f"（{ha}）") if moved_h else ("", "")
         if unchanged:
-            bits.append(f"中位结果和最差二十分之一不变：{_pct(ca.get('median_pct'))} 和 {_pct(_p5(after))}。")
+            bits.append(f"中位结果和最差二十分之一不变：{_pct(ma)} 和 {_pct(_p5(after))}。")
         else:
-            bits.append(f"中位结果从 {_pct(cb.get('median_pct'))}{fh} 变为 {_pct(ca.get('median_pct'))}{th}，最差二十分之一从 {_pct(_p5(before))} 变为 {_pct(_p5(after))}。")
+            bits.append(f"中位结果从 {_pct(mb)}{fh} 变为 {_pct(ma)}{th}，最差二十分之一从 {_pct(_p5(before))} 变为 {_pct(_p5(after))}。")
     else:
         from_h = f" over {hb}" if moved_h else ""
         to_h = f" over {ha}" if ha and (not hb or hb != ha) else ""
         if unchanged:
             # A lens that filtered nothing, or a change the distribution did not feel.
             # Saying "moves from -3.3% to -3.3%" is true and reads like a mistake.
-            bits.append(f"The middle outcome{to_h} and the one-in-twenty loss are unchanged, at {_pct(ca.get('median_pct'))} and {_pct(_p5(after))}.")
+            bits.append(f"The middle outcome{to_h} and the one-in-twenty loss are unchanged, at {_pct(ma)} and {_pct(_p5(after))}.")
         else:
             bits.append(
-                f"The middle outcome moves from {_pct(cb.get('median_pct'))}{from_h} to {_pct(ca.get('median_pct'))}{to_h}, "
+                f"The middle outcome moves from {_pct(mb)}{from_h} to {_pct(ma)}{to_h}, "
                 f"and the one-in-twenty loss from {_pct(_p5(before))} to {_pct(_p5(after))}."
             )
 

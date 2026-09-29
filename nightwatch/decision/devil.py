@@ -59,17 +59,20 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
     primary = report.analog.horizons.get(report.primary_horizon) if report.analog else None
     if primary and not primary.cohort.insufficient:
         c = primary.cohort
-        p5 = primary.p5_adjusted if primary.p5_adjusted is not None else c.p5
+        p5 = primary.loss_p5_pct
         if p5 is not None:
             # The tail is one idea, so it is one point: where it starts and how far past it went.
             tail = f"One time in twenty, moments like this lost {abs(p5):.1f}% or more over the horizon, about {_q(abs(size * p5 / 100.0))} USDT."
-            if c.es5_pct is not None and c.es5_n:
-                tail += f" When it did go past that, the average was {c.es5_pct:+.1f}%, on {c.es5_n} episode{'s' if c.es5_n != 1 else ''}."
-            against.append(Counterpoint("against", tail, abs(size * (c.es5_pct if c.es5_pct is not None else p5) / 100.0), "analog cohort"))
-        if c.win_rate is not None and c.win_rate < 0.5:
-            against.append(Counterpoint("against", f"Only {c.win_rate:.0%} of those moments ended positive, on {c.n} episodes.", None, "analog cohort"))
-        elif c.win_rate is not None:
-            supporting.append(Counterpoint("for", f"{c.win_rate:.0%} of those moments ended positive, on {c.n} episodes.", None, "analog cohort"))
+            # The cohort's expected shortfall is the token's lower tail: a long's loss, a short's gain.
+            es5 = c.es5_pct if getattr(report.ticket, "closing_long", True) else None
+            if es5 is not None and c.es5_n:
+                tail += f" When it did go past that, the average was {es5:+.1f}%, on {c.es5_n} episode{'s' if c.es5_n != 1 else ''}."
+            against.append(Counterpoint("against", tail, abs(size * (es5 if es5 is not None else p5) / 100.0), "analog cohort"))
+        wins = primary.pnl_win_rate
+        if wins is not None and wins < 0.5:
+            against.append(Counterpoint("against", f"Only {wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort"))
+        elif wins is not None:
+            supporting.append(Counterpoint("for", f"{wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort"))
         base = primary.baseline
         if base and base.permutation_p_value is not None and base.permutation_p_value > 0.2:
             against.append(Counterpoint("against", f"The resemblance may be doing nothing: against random hours of the same kind the difference in mean outcome is {base.mean_diff_pct:+.2f}% with p = {base.permutation_p_value:.2f}.", None, "baseline test"))

@@ -48,7 +48,7 @@ def _row(label: str, r: Any) -> dict[str, Any]:  # noqa: ANN401 - an AnalysisRep
     h = r.analog.horizons.get(r.primary_horizon) if r.analog else None
     p5 = None
     if h is not None and not h.cohort.insufficient:
-        p5 = h.p5_adjusted if h.p5_adjusted is not None else h.cohort.p5
+        p5 = h.loss_p5_pct
     size = r.verdict.recommended_notional if r.verdict.recommended_notional is not None else r.ticket.notional_quote
     priced = [i for i in r.stress.impacts if i.total_pnl_quote is not None]
     worst = min((i.total_pnl_quote for i in priced), default=None)
