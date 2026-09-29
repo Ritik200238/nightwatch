@@ -96,6 +96,30 @@ exit cost), `list_conditions` (what the search can be narrowed to, and what each
 evidence) and `list_tokens`. The calling model picks the tool and fills in the trade;
 every number in the reply comes from the engine. Nothing here can place an order.
 
+It also ships as an Agent Hub-style skill, [`skills/nightwatch-stress-test`](skills/nightwatch-stress-test/SKILL.md),
+in the same format as Bitget's `bitget-signal` skills: when to reach for it (English and
+中文 triggers), how to call the tools, and how to present a verdict without inventing a
+number. Installed next to Agent Hub, it is the step that runs before an order is drafted:
+
+```bash
+mkdir -p ~/.claude/skills/nightwatch-stress-test
+curl -fsSL https://raw.githubusercontent.com/Ritik200238/nightwatch/main/skills/nightwatch-stress-test/SKILL.md \
+  -o ~/.claude/skills/nightwatch-stress-test/SKILL.md
+```
+
+### Bitget integration, checked
+
+| Bitget service | What the desk uses it for | Status |
+|---|---|---|
+| Spot and futures REST (`api.bitget.com`) | rToken and perp candles, order books every 30 s, funding, perp margin tiers for liquidation prices | live |
+| `bitget-mcp-server` (`agent.bitget.com/mcp`) | live quote while the US market is shut, analyst ratings and targets, insider trades, fear & greed | live |
+| `bitget-signal` skills' data server | probed on 29 Sep: news, earnings, sentiment, macro, rates and prices returned empty errors; only technical analysis answered, with Bollinger bands inverted (upper below lower) | not used until it answers |
+
+The `bitget-mcp-server` feed had been silently empty in production: the server refuses
+new sessions over this box's IPv4 ("Too many open sessions") and accepts them over IPv6,
+and the API's container had only IPv4. It now runs on the host network; `/sources` shows
+how many tokens currently have Bitget street data.
+
 It reads the other way too: every analysis of today pulls Bitget's own US-stock data
 (`bitget-mcp-server`) for the stock's live price while the US market is shut, analyst
 ratings and targets, insider trades and market fear & greed.
