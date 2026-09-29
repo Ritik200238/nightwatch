@@ -27,6 +27,7 @@ services:
       # answers from the rules and /health says so rather than claiming a model.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       BITGET_QWEN_API_KEY: ${BITGET_QWEN_API_KEY:-}
+      BITGET_QWEN_API_KEY_2: ${BITGET_QWEN_API_KEY_2:-}
       NIGHTWATCH_LLM_PROVIDER: ${NIGHTWATCH_LLM_PROVIDER:-auto}
       FRED_API_KEY: ${FRED_API_KEY:-}
       # How many feature frames the API keeps. Frames are keyed by hour, so with room for

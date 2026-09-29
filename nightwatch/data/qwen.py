@@ -36,6 +36,11 @@ log = logging.getLogger(__name__)
 BASE_URL = "https://hackathon.bitgetops.com/v1"
 MODEL = "qwen3.8-max"
 KEY_ENV = "BITGET_QWEN_API_KEY"
+# A second subsidy key. Used when the first is refused or out of quota, so a key running
+# dry mid-judging costs one retry, not the chat.
+SPARE_KEY_ENV = "BITGET_QWEN_API_KEY_2"
+# Refusals that mean "this key", not "this moment": move to the spare rather than wait.
+KEY_REFUSED = frozenset({401, 402, 403})
 
 RETRYABLE = frozenset({408, 409, 425, 429, 500, 502, 503, 504})
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
@@ -63,8 +68,13 @@ class Answer:
     model: str
 
 
+def _env_keys() -> list[str]:
+    keys = [os.environ.get(name, "").strip() for name in (KEY_ENV, SPARE_KEY_ENV)]
+    return list(dict.fromkeys(k for k in keys if k))
+
+
 def credentials_present() -> bool:
-    return bool(os.environ.get(KEY_ENV, "").strip())
+    return bool(_env_keys())
 
 
 def _strip_fence(text: str) -> str:
@@ -83,16 +93,17 @@ class QwenClient:
         max_attempts: int = 4,
         rate_per_sec: float = 2.0,
     ):
-        key = api_key or os.environ.get(KEY_ENV, "").strip()
-        if not key:
+        self._keys = [api_key] if api_key else _env_keys()
+        if not self._keys:
             raise QwenError(f"{KEY_ENV} is not set")
+        self._key_at = 0
         self.model = model
         self._max_attempts = max_attempts
         self._min_gap = 1.0 / rate_per_sec if rate_per_sec > 0 else 0.0
         self._last_call = 0.0
         self._client = httpx.Client(
             base_url=(base_url or os.environ.get("BITGET_QWEN_BASE_URL") or BASE_URL).rstrip("/"),
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            headers={"Content-Type": "application/json"},
             timeout=timeout,
         )
 
@@ -137,7 +148,7 @@ class QwenClient:
             if gap > 0:
                 time.sleep(gap)
             try:
-                resp = self._client.post("/chat/completions", json=body)
+                resp = self._client.post("/chat/completions", json=body, headers={"Authorization": f"Bearer {self._keys[self._key_at]}"})
             except (httpx.TransportError, httpx.TimeoutException) as exc:
                 last = exc
                 self._backoff(attempt)
@@ -145,6 +156,12 @@ class QwenClient:
             finally:
                 self._last_call = time.monotonic()
 
+            spare = self._key_at + 1 < len(self._keys)
+            if spare and (resp.status_code in KEY_REFUSED or resp.status_code == 429):
+                log.warning("qwen key %d refused (HTTP %s); moving to the spare", self._key_at + 1, resp.status_code)
+                self._key_at += 1
+                last = QwenError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+                continue
             if resp.status_code in RETRYABLE:
                 last = QwenError(f"HTTP {resp.status_code}: {resp.text[:200]}")
                 self._backoff(attempt, resp.headers.get("Retry-After"))
