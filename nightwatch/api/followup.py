@@ -614,9 +614,9 @@ def _a_decide(r: dict, _q: str) -> Answer | None:
     t = _ticket(r)
     p5, loss = _loss_at_size(r)
     bits = [f"The desk's answer is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}"
-            + (f", at {_usd(v.get('recommended_notional'))} USDT" if v.get("recommended_notional") is not None and v["verdict"] == "REDUCE_TO" else "") + "."]
+            + (f", at {_usd(v.get('recommended_notional'))}" if v.get("recommended_notional") is not None and v["verdict"] == "REDUCE_TO" else "") + "."]
     if loss is not None:
-        bits.append(f"If you do it at {_usd(t.get('notional_quote'))} USDT, one time in twenty history says it loses more than {_usd(-loss)} USDT ({_pct(p5)}).")
+        bits.append(f"If you do it at {_usd(t.get('notional_quote'))}, one time in twenty history says it loses more than {_usd(-loss)} ({_pct(p5)}).")
     bits.append("Whether the stock goes up is not something it can tell you: on thousands of scored forecasts it has no edge on direction, "
                 "only on how bad the bad case is. That part is your call.")
     failed = [x for x in ((r.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
@@ -631,19 +631,19 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
     if not v.get("verdict") or not t:
         return None
     side = "buy and hold" if t.get("side") == "long" else "short"
-    bits = [f"In plain words: you want to {side} {_usd(t.get('notional_quote'))} USDT of {t.get('ticker')} for about {r.get('horizon_h', 0):.0f} hours."]
+    bits = [f"In plain words: you want to {side} {_usd(t.get('notional_quote'))} of {t.get('ticker')} for about {r.get('horizon_h', 0):.0f} hours."]
     c = (h or {}).get("cohort") or {}
     if c.get("n") and not c.get("insufficient"):
         p5, loss = _loss_at_size(r)
         bits.append(f"The desk found {c['n']} past moments that looked like right now and checked what happened next. Usually the move was small "
                     f"(the middle one was {_pct(_median(r))}), but about one time in twenty it lost more than {_pct(p5)}"
-                    + (f", which on your size is about {_usd(-loss)} USDT." if loss is not None else "."))
+                    + (f", which on your size is about {_usd(-loss)}." if loss is not None else "."))
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:
-        bits.append(f"The way this most likely hurts: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])} USDT.")
+        bits.append(f"The way this most likely hurts: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])}.")
     q = (r.get("execution") or {}).get("exit_quote") or {}
     if q.get("total_cost_bps") is not None:
-        bits.append(f"Selling it again right now would cost about {_bps(q['total_cost_bps'])} ({_usd(q.get('total_cost_quote'))} USDT) on Bitget's live order book.")
+        bits.append(f"Selling it again right now would cost about {_bps(q['total_cost_bps'])} ({_usd(q.get('total_cost_quote'))}) on Bitget's live order book.")
     bits.append(f"So the verdict is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}. The desk never places the trade; you decide.")
     return Answer("plain", " ".join(bits), ("analog cohort", "failure modes", "order book", "verdict"))
 

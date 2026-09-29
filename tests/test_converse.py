@@ -86,3 +86,11 @@ def test_the_same_answers_in_chinese(client):  # noqa: F811
 
 def test_a_reduce_verdict_is_named_in_chinese_not_as_a_code():
     assert followup_zh.VERDICT_ZH["REDUCE_TO"] == "建议减仓"
+
+
+def test_money_is_written_once_with_its_unit(client):  # noqa: F811
+    first, _ = _first(client)
+    r = first["report"]
+    for q, fn in (("explain it simply", followup.answer), ("should I buy?", followup.answer), ("简单解释一下", followup_zh.answer), ("要不要买", followup_zh.answer)):
+        got = fn(r, q)
+        assert got is not None and "USDT USDT" not in got.text and "USDT USDT" not in got.text.replace("  ", " "), q

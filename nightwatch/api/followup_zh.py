@@ -252,18 +252,18 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
     if not v or not t:
         return None
     side = "买入并持有" if t.get("side") == "long" else "做空"
-    bits = [f"简单说：你想{side} {_usd(t.get('notional_quote'))} USDT 的 {t.get('ticker')}，大约 {r.get('horizon_h', 0):.0f} 小时。"]
+    bits = [f"简单说：你想{side} {_usd(t.get('notional_quote'))} 的 {t.get('ticker')}，大约 {r.get('horizon_h', 0):.0f} 小时。"]
     c = (h or {}).get("cohort") or {}
     if c.get("n") and not c.get("insufficient"):
         p5, loss = _loss(r)
         bits.append(f"系统找到了 {c['n']} 个和现在很像的历史时刻，看了之后发生了什么：通常波动不大（中间值 {_pct(_median(r))}），"
-                    f"但大约每二十次有一次亏损超过 {_pct(p5)}" + (f"，按你的仓位约 {_usd(-loss)} USDT。" if loss is not None else "。"))
+                    f"但大约每二十次有一次亏损超过 {_pct(p5)}" + (f"，按你的仓位约 {_usd(-loss)}。" if loss is not None else "。"))
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:
-        bits.append(f"最可能亏钱的方式：{FAILURE_ZH.get(modes[0]['key'], modes[0]['title'])}，约 {_usd(modes[0]['loss_quote'])} USDT。")
+        bits.append(f"最可能亏钱的方式：{FAILURE_ZH.get(modes[0]['key'], modes[0]['title'])}，约 {_usd(modes[0]['loss_quote'])}。")
     q = (r.get("execution") or {}).get("exit_quote") or {}
     if q.get("total_cost_bps") is not None:
-        bits.append(f"如果现在在 Bitget 实时盘口上卖出，成本约 {_bps(q['total_cost_bps'])}（{_usd(q.get('total_cost_quote'))} USDT）。")
+        bits.append(f"如果现在在 Bitget 实时盘口上卖出，成本约 {_bps(q['total_cost_bps'])}（{_usd(q.get('total_cost_quote'))}）。")
     bits.append(f"所以结论是{VERDICT_ZH.get(v, v)}：{_PLAIN_ZH.get(v, '')}。系统不会替你下单，由你决定。")
     return Answer("plain", "".join(bits), ("analog cohort", "failure modes", "order book", "verdict"))
 
@@ -275,7 +275,7 @@ def _a_decide(r: dict, _q: str) -> Answer | None:
     p5, loss = _loss(r)
     bits = [f"系统的回答是{VERDICT_ZH.get(v, v)}：{_PLAIN_ZH.get(v, '')}。"]
     if loss is not None:
-        bits.append(f"如果按 {_usd(t.get('notional_quote'))} USDT 做，历史上大约每二十次有一次亏损超过 {_usd(-loss)} USDT（{_pct(p5)}）。")
+        bits.append(f"如果按 {_usd(t.get('notional_quote'))} 做，历史上大约每二十次有一次亏损超过 {_usd(-loss)}（{_pct(p5)}）。")
     bits.append("股票会不会涨，它回答不了：在几千次已评分的预测里，它对方向没有优势，只对“坏情况有多坏”有把握。这一步由你决定。")
     return Answer("decide", "".join(bits), ("verdict", "analog cohort"))
 
