@@ -26,7 +26,8 @@ interface Props {
 const STARTERS = ["Hold $20k of TSLA through the weekend, stop at 350", "Short 5k NVDA for the next 12 hours", "Long 10k SPY until Monday open, thesis: strong Friday close"];
 
 /** Offered once a report is on screen, because until then there is nothing to ask about. */
-const FOLLOW_UPS = ["Why not bigger?", "What if I double it?", "Was it worse on earnings nights?", "What if I only held it 6 hours?", "Has this setup burned me before?", "Talk me out of it"];
+const FOLLOW_UPS = ["Why?", "Explain it simply", "What's the safest way to hold it?", "What if it gaps down 10%?", "Compare it with SPY", "Short it instead", "Talk me out of it"];
+const FOLLOW_UPS_ZH = ["为什么？", "简单解释一下", "最安全的持有方式是什么？", "如果跌 10% 呢？", "和 SPY 比呢？", "反过来做空呢？", "最坏会亏多少？"];
 
 /** What each kind of question was answered out of. Shown under the answer so the reader
  *  can go and check it rather than take the sentence on trust. */
@@ -45,6 +46,9 @@ const READ_FROM: Record<string, string> = {
   trust: "the tail adjustment",
   now: "the snapshot",
   what_if: "a fresh run of the desk against the same moment",
+  plain: "the analog cohort, the failure modes, the order book and the verdict",
+  decide: "the verdict and the analog cohort",
+  data: "the list of live sources",
 };
 
 export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
@@ -160,7 +164,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
             guesses that a stress tester will tell them what a 6% stop would do. */}
         {contextId != null && !busy ? (
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {FOLLOW_UPS.map((q) => (
+            {(/[\u3400-\u9fff]/.test(messages.filter((m) => m.role === "user").at(-1)?.content ?? "") ? FOLLOW_UPS_ZH : FOLLOW_UPS).map((q) => (
               <button
                 key={q}
                 type="button"
