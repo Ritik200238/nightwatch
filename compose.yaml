@@ -14,8 +14,12 @@ services:
     build: .
     image: nightwatch:latest
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # The host's network, not a bridge. Bitget's data MCP (agent.bitget.com) refuses every
+    # new session over this box's IPv4 with "Too many open sessions" and accepts it over
+    # IPv6; a bridged container has only IPv4, so the street, insider and fear-and-greed
+    # context silently came back empty. On the host network the API listens on :8000
+    # directly, exactly where the bridge used to publish it.
+    network_mode: host
     environment:
       NIGHTWATCH_DATA_DIR: /data
       NIGHTWATCH_CORS: ${NIGHTWATCH_CORS:-*}
