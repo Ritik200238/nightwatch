@@ -148,6 +148,10 @@ uncomfortable one included:
 * **Shorts were not being stress-tested, and now are.** Every price preset used to be a
   fall — a gain for a short — so a TSLA short's "1-in-100 gap" read as +7.4%. Presets now
   come from the tail that hurts the position's own side; the same short reads −6.8%.
+  The same mistake was in the history: a short was sized on the cohort's 5th percentile,
+  its gain. It is now sized on the calibrated 95th percentile turned over, which is
+  breached 5.8% of the time out of sample (6.8% on the quietest third, so slightly
+  optimistic there; two fixes were measured and neither passed).
 * **More history is not automatically better.** Backfilling 2025 earnings dates brought
   back 15% more searchable hours and made the 5th percentile slightly *less* accurate on
   820 replayed moments (9 of 24 tokens better, t = −0.76). It was not shipped.
