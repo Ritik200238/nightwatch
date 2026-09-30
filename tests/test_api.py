@@ -256,3 +256,11 @@ def test_a_question_about_another_token_runs_that_token_instead(client, monkeypa
     # desk used to ask for the side and size again, although they were on screen.
     assert moved["mode"] == "what_if" and moved["ticket"]["ticker"] == "NVDA"
     assert moved["ticket"]["notional_quote"] == 20000 and moved["ticket"]["side"] == "long"
+
+
+def test_slow_read_only_pages_are_served_from_a_short_cache(client):
+    first = client.get("/studies")
+    again = client.get("/studies")
+    assert first.status_code == again.status_code == 200 and first.json() == again.json()
+    assert first.headers["x-nightwatch-cache"] == "miss" and again.headers["x-nightwatch-cache"] == "hit"
+    assert "x-nightwatch-cache" not in client.get("/health").headers

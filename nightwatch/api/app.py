@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any
@@ -46,6 +47,8 @@ log = logging.getLogger(__name__)
 # How often the idle API re-reads its cached frames so they are not swapped out.
 TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
+PAGE_CACHE_TTL_S = 60.0
+CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
 
 
 class PositionIn(BaseModel):
@@ -249,6 +252,7 @@ class AppState:
             if self.ctx.signal_client is not None:
                 threading.Thread(target=self.refresh_signal, name="signal-refresh", daemon=True).start()
             self.warm()
+            self.warm_pages()
             now = utc_now()
             next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, seconds=45))
             # Between rebuilds, keep the frames resident: warm is not the same as in
@@ -259,6 +263,17 @@ class AppState:
                     self.ctx.touch_frames()
                 except RuntimeError:
                     pass  # the cache changed under us; the next pass catches it
+
+    def warm_pages(self) -> None:
+        """Ask this API for the pages a judge opens first, so their cache is full before
+        anyone arrives. Best effort: the port is the one the container serves on."""
+        import urllib.request
+
+        for path in CACHED_PAGES:
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}{path}", timeout=120).read()
+            except Exception:  # noqa: BLE001 - warming must never stop the warm loop
+                log.info("could not warm %s", path)
 
     def start_warm(self) -> None:
         self.warm_thread = threading.Thread(target=self.warm_forever, name="warm-frames", daemon=True)
@@ -425,6 +440,27 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     app = FastAPI(title="Nightwatch", version=__version__, lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("NIGHTWATCH_CORS", "*").split(","), allow_methods=["*"], allow_headers=["*"])
+
+    # The read-only pages a judge opens first each recompute from the database in 2-7 s on
+    # a cold box. They change slowly, so a successful answer is kept for a minute and the
+    # warm-up fills them before anyone asks (AppState.warm_pages).
+    page_cache: dict[str, tuple[float, bytes, str]] = {}
+
+    @app.middleware("http")
+    async def cache_slow_pages(request: Request, call_next):  # noqa: ANN001, ANN202
+        path = request.url.path
+        if request.method != "GET" or path not in CACHED_PAGES:
+            return await call_next(request)
+        key = path + "?" + request.url.query
+        hit = page_cache.get(key)
+        if hit and time.monotonic() - hit[0] < PAGE_CACHE_TTL_S:
+            return Response(hit[1], media_type=hit[2], headers={"x-nightwatch-cache": "hit"})
+        response = await call_next(request)
+        if response.status_code != 200:
+            return response
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        page_cache[key] = (time.monotonic(), body, response.media_type or "application/json")
+        return Response(body, status_code=200, media_type=response.media_type or "application/json", headers={"x-nightwatch-cache": "miss"})
 
     def st() -> AppState:
         return app.state.nw
