@@ -7,9 +7,15 @@ import { LangProvider } from "@/lib/lang";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://nightwatch-gules.vercel.app";
+const TAGLINE = "Stress-test a tokenized-US-stock trade before you place it.";
+
 export const metadata: Metadata = {
-  title: "Nightwatch",
-  description: "Stress-test a tokenized-US-stock trade before you place it.",
+  metadataBase: new URL(SITE),
+  title: { default: "Nightwatch", template: "%s · Nightwatch" },
+  description: TAGLINE,
+  openGraph: { type: "website", siteName: "Nightwatch", title: "Nightwatch", description: TAGLINE },
+  twitter: { card: "summary_large_image", title: "Nightwatch", description: TAGLINE },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
