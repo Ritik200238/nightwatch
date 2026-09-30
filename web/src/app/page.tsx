@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang } from "@/lib/lang";
 import { scrollIntoViewOnSmall } from "@/lib/scroll";
+import { snapshot } from "@/snapshot";
 import { ApiError, api, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 
 export default function DeskPage() {
@@ -34,6 +35,7 @@ export default function DeskPage() {
   const deepLinked = useRef(false);
   const [equity, setEquity] = useState<number | null>(200000);
   const { positions, setPositions } = useOpenPositions();
+  const exampleReport = (snapshot?.reports.TSLA as unknown as Report | undefined) ?? null;
 
   async function loadUniverse() {
     setUniverseError(null);
@@ -63,6 +65,20 @@ export default function DeskPage() {
     window.history.replaceState(null, "", window.location.pathname);
     runScenario(steps);
   }, []);
+
+  function demoTicket(): TicketInput {
+    return {
+      ticker: "TSLA",
+      side: "long",
+      notional_quote: 20000,
+      account_equity_quote: 200000,
+      horizon_kind: "next_open",
+      horizon_hours: null,
+      stop_price: null,
+      thesis: tx("Strength into the close carries through the night.", "收盘前的强势会延续到夜盘。"),
+      invalidation: tx("Wrong if it drops 3% before the open.", "开盘前跌 3% 就说明判断错了。"),
+    };
+  }
 
   async function run(ticket: TicketInput) {
     setBusy(true);
@@ -178,6 +194,18 @@ export default function DeskPage() {
               }}
             />
           </div>
+        ) : !busy && !error && exampleReport ? (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2">
+              <p className="text-sm text-muted-foreground">
+                {tx(`Example from ${new Date(snapshot!.generated_at).toLocaleString()} — press to run it live now`, `示例，生成于 ${new Date(snapshot!.generated_at).toLocaleString()} — 点击立即实时运行`)}
+              </p>
+              <Button size="sm" disabled={busy || !universe} onClick={() => void run(demoTicket())}>
+                {tx("Run this trade live", "实时运行这笔交易")}
+              </Button>
+            </div>
+            <ReportView report={exampleReport} lang={lang} hideTake />
+          </div>
         ) : !busy && !error ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
             <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
@@ -195,19 +223,7 @@ export default function DeskPage() {
             <Button
               className="mt-2 h-auto max-w-full whitespace-normal py-2 text-center"
               disabled={busy}
-              onClick={() =>
-                void run({
-                  ticker: "TSLA",
-                  side: "long",
-                  notional_quote: 20000,
-                  account_equity_quote: 200000,
-                  horizon_kind: "next_open",
-                  horizon_hours: null,
-                  stop_price: null,
-                  thesis: tx("Strength into the close carries through the night.", "收盘前的强势会延续到夜盘。"),
-                  invalidation: tx("Wrong if it drops 3% before the open.", "开盘前跌 3% 就说明判断错了。"),
-                })
-              }
+              onClick={() => void run(demoTicket())}
             >
               {tx("See it on a real trade: $20k of TSLA held to the next open", "看一笔真实交易：持有 2 万美元 TSLA 到下次开盘")}
             </Button>
