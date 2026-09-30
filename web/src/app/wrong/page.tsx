@@ -104,7 +104,7 @@ export default function WrongPage() {
 
       <Section
         title={tx("Live verdicts that went past their line", "亏损超过所述线的实时结论")}
-        subtitle={tx("Scored exactly as the calibration page scores them: the tail that was in force when the verdict was given, fitted only on forecasts that had already matured. If the desk is honest, about 5% should miss.", "评分方式与校准页面完全一致：使用给出结论时生效的尾部，只用已到期的预测拟合。如果交易台是诚实的，大约 5% 会突破。")}
+        subtitle={tx("Scored the same way as the calibration page: the tail in force when the verdict was given, fitted only on forecasts that had already matured. Live and replayed are counted apart here; the calibration page pools them, so its single rate sits between the two. If the desk is honest, about 5% should miss.", "评分方式与校准页面相同：使用给出结论时生效的尾部，只用已到期的预测拟合。这里把实盘和回放分开统计；校准页面把两者合并，所以它的比例介于两者之间。如果交易台是诚实的，大约 5% 会突破。")}
       >
         {!misses && !error ? (
           <Skeleton className="h-24 w-full" />
