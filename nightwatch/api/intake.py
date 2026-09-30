@@ -965,6 +965,7 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         if report.forecast_id is not None:
             try:
                 state.reports.save(report.forecast_id, payload)
+                state.prefetch_take(report.forecast_id, payload, language_of(messages[-1].get("content", "") if messages else ""))
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
     narrative = brief_short(report, language_of(messages[-1].get("content", "") if messages else ""))

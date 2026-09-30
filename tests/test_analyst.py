@@ -38,8 +38,8 @@ def test_a_sentence_with_an_invented_number_is_removed():
 class FakeProvider:
     model = "fake"
 
-    def __init__(self, text="The call\\nGO at 20,000 USDT.", delay=0.0):  # noqa: ANN001
-        self.text, self.delay, self.calls = text.replace("\\n", "\n"), delay, []
+    def __init__(self, text="The call\nGO at 20,000 USDT [desk].", delay=0.0):  # noqa: ANN001
+        self.text, self.delay, self.calls = text, delay, []
 
     def write(self, *, system, user, max_tokens=1500):  # noqa: ANN001, ANN003, ANN201
         self.calls.append(system)

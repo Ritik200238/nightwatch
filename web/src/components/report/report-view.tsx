@@ -61,6 +61,19 @@ const TAKE_HEADINGS = new Set<string>([...STRINGS.en.takeHeadings, ...STRINGS.zh
  *  nobody should wait for it. It cannot change the verdict, and any sentence citing a
  *  number that is not in the report is removed before it is shown - the count is printed.
  */
+/** Text with its [section] source tags shown as small muted labels, so a figure can be traced. */
+function withSourceTags(text: string) {
+  return text.split(/(\[[A-Za-z ]+\])/).map((part, i) =>
+    /^\[[A-Za-z ]+\]$/.test(part) ? (
+      <span key={i} className="mx-0.5 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+        {part.slice(1, -1)}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
 function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang }) {
   const id = report.forecast_id;
   const [take, setTake] = useState<AnalystTake | null>(null);
@@ -106,6 +119,25 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
         <p className="mt-2 text-sm text-muted-foreground">{lang === "zh" ? "这次 AI 分析师没有写出看法；上面的结论不受影响。" : "The analyst could not write a take this time; the verdict above stands on its own."}</p>
       ) : (
         <div className="mt-2 space-y-1 text-sm">
+          {take.for || take.against ? (
+            <div className="space-y-2 pb-2">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {take.for ? (
+                  <div className="rounded-md border border-border p-2">
+                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{tr(lang)("Case for", "支持的理由")}</p>
+                    <p className="mt-1 leading-relaxed">{withSourceTags(take.for)}</p>
+                  </div>
+                ) : null}
+                {take.against ? (
+                  <div className="rounded-md border border-border p-2">
+                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{tr(lang)("Case against", "反对的理由")}</p>
+                    <p className="mt-1 leading-relaxed">{withSourceTags(take.against)}</p>
+                  </div>
+                ) : null}
+              </div>
+              {take.reconcile ? <p className="text-xs text-muted-foreground">{withSourceTags(take.reconcile)}</p> : null}
+            </div>
+          ) : null}
           {take.text
             .split("\n")
             .filter((l) => l.trim())
@@ -117,7 +149,7 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
                 </p>
               ) : (
                 <p key={i} className="leading-relaxed">
-                  {l.replace(/^[-•*]\s*/, "• ")}
+                  {withSourceTags(l.replace(/^[-•*]\s*/, "• "))}
                 </p>
               );
             })}

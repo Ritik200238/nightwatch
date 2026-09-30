@@ -31,7 +31,7 @@ for _, x in shorts.sort_values("as_of").iterrows():
     if not (fl and fs and fb):
         continue
     p5, p50, r = x.p5, x.p50, x.ret_pct
-    a = fl.for_hours(x.horizon_h); b = fs.for_hours(x.horizon_h); c = fb.for_hours(x.horizon_h)
+    a, b, c = fl.for_hours(x.horizon_h), fs.for_hours(x.horizon_h), fb.for_hours(x.horizon_h)
     rows.append({"ticker": x.ticker, "r": r, "w": p50 - p5,
                  "A": p50 + a.k_hi * (p5 - p50), "B": p50 + b.k_lo * (p5 - p50) - b.c_lo, "C": p50 + c.k_lo * (p5 - p50) - c.c_lo})
 e = pd.DataFrame(rows)
