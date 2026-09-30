@@ -12,7 +12,7 @@ const TAGLINE = "Stress-test a tokenized-US-stock trade before you place it.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: "Nightwatch", template: "%s · Nightwatch" },
+  title: { default: "Nightwatch", template: "%s Â· Nightwatch" },
   description: TAGLINE,
   openGraph: { type: "website", siteName: "Nightwatch", title: "Nightwatch", description: TAGLINE },
   twitter: { card: "summary_large_image", title: "Nightwatch", description: TAGLINE },
