@@ -24,22 +24,22 @@ async function call(path, init, ms) {
 async function main() {
   if (!ORIGIN) return console.log("[snapshot] NIGHTWATCH_API_ORIGIN unset; skipping");
   const out = { generated_at: new Date().toISOString(), gets: {}, reports: {} };
-  await Promise.all([
-    ...GETS.map(async (p) => {
-      try {
-        out.gets[p] = await call(p, {}, 30000);
-      } catch (e) {
-        console.log(`[snapshot] skip ${p}: ${e.message}`);
-      }
-    }),
-    ...DEMOS.map(async (d) => {
-      try {
-        out.reports[d.ticker] = await call("/analyze", { method: "POST", body: JSON.stringify(d) }, 120000);
-      } catch (e) {
-        console.log(`[snapshot] skip ${d.ticker}: ${e.message}`);
-      }
-    }),
-  ]);
+  // One at a time: the API serialises analyses behind one lock on a small box, so fetching
+  // in parallel made the slow pages (calibration) time out behind the demo analyses.
+  for (const p of GETS) {
+    try {
+      out.gets[p] = await call(p, {}, 90000);
+    } catch (e) {
+      console.log(`[snapshot] skip ${p}: ${e.message}`);
+    }
+  }
+  for (const d of DEMOS) {
+    try {
+      out.reports[d.ticker] = await call("/analyze", { method: "POST", body: JSON.stringify(d) }, 120000);
+    } catch (e) {
+      console.log(`[snapshot] skip ${d.ticker}: ${e.message}`);
+    }
+  }
   if (!Object.keys(out.gets).length && !Object.keys(out.reports).length && existsSync(OUT)) return console.log("[snapshot] nothing fetched; keeping previous file");
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(out));
