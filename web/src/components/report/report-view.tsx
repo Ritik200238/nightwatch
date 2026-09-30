@@ -102,7 +102,19 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
     };
   }, [id, lang]);
 
-  if (id == null || !take || take.status === "unavailable" || take.status === "none") return null;
+  if (id == null || take?.status === "unavailable" || take?.status === "none") return null;
+  if (!take) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-4" role="status">
+        <p className="text-sm font-semibold">{lang === "zh" ? "分析师的看法" : "The analyst's take"}</p>
+        <p className="mt-2 animate-pulse text-sm text-muted-foreground">{lang === "zh" ? "分析师撰写中…（约 10 秒）" : "Analyst writing… (about 10 s)"}</p>
+        <div className="mt-2 space-y-1.5" aria-hidden>
+          <div className="h-2.5 w-full animate-pulse rounded bg-foreground/10" />
+          <div className="h-2.5 w-4/5 animate-pulse rounded bg-foreground/10" />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -116,7 +128,7 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
       {take.status === "done" && take.removed ? <GuardNote n={take.removed} lang={lang} className="mt-1 text-xs text-muted-foreground" /> : null}
       {take.status === "pending" ? (
         <p className="mt-2 animate-pulse text-sm text-muted-foreground">
-          {lang === "zh" ? "AI 分析师正在阅读这份报告（通常不到 15 秒）。上面的结论已经完整。" : "The AI analyst is reading the report (usually under 15 s). The verdict above is already complete."}
+          {lang === "zh" ? "分析师撰写中…（约 10 秒）。上面的结论已经完整。" : "Analyst writing… (about 10 s). The verdict above is already complete."}
         </p>
       ) : take.status === "failed" || !take.text ? (
         <p className="mt-2 text-sm text-muted-foreground">{lang === "zh" ? "这次 AI 分析师没有写出看法；上面的结论不受影响。" : "The analyst could not write a take this time; the verdict above stands on its own."}</p>

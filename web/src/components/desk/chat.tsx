@@ -88,6 +88,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
   const contextRef = useRef<number | null>(null);
   const ranScript = useRef<number | null>(null);
   const [draft, setDraft] = useState("");
+  const [takePending, setTakePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // null = not checked yet. The desk works without a model; only this tab needs one.
   const [ready, setReady] = useState<boolean | null>(null);
@@ -111,6 +112,15 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
   /** The instant answer is the desk's own; a few seconds later the model's reading of
    *  the same report follows as a second message, the way an analyst would reply. */
   async function followWithTake(id: number, lang: "en" | "zh") {
+    setTakePending(true);
+    try {
+      await pollTake(id, lang);
+    } finally {
+      setTakePending(false);
+    }
+  }
+
+  async function pollTake(id: number, lang: "en" | "zh") {
     for (let i = 0; i < 40; i++) {
       try {
         const t = i === 0 ? await api.analystStart(id, lang) : await api.analystGet(id, lang);
@@ -234,6 +244,15 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         {busy ? (
           <div className="mr-2 rounded-lg bg-muted px-3 py-2" aria-label={tx("Working", "计算中")}>
             <Working compact lang={lang} />
+          </div>
+        ) : null}
+        {takePending ? (
+          <div className="mr-2 rounded-lg bg-muted px-3 py-2 text-sm" role="status">
+            <p className="animate-pulse text-muted-foreground">{tx("Analyst writing… (about 10 s)", "分析师撰写中…（约 10 秒）")}</p>
+            <div className="mt-2 space-y-1.5" aria-hidden>
+              <div className="h-2.5 w-full animate-pulse rounded bg-foreground/10" />
+              <div className="h-2.5 w-4/5 animate-pulse rounded bg-foreground/10" />
+            </div>
           </div>
         ) : null}
         {error ? (
