@@ -137,7 +137,8 @@ def fact_sheet(r: dict[str, Any]) -> str:
         if s.get("n_firms"):
             lines.append(f"Analysts, last 90 days: {s['bullish']} buy, {s['neutral']} hold, {s['bearish']} sell; median target {s.get('median_target') or 0:,.0f}.")
         if s.get("insider_sells") or s.get("insider_buys"):
-            lines.append(f"Insiders, last 90 days: {s.get('insider_sells', 0)} sales, {s.get('insider_buys', 0)} purchases.")
+            sells, buys = s.get("insider_sells", 0), s.get("insider_buys", 0)
+            lines.append(f"Insiders, last 90 days: {sells} sale{'' if sells == 1 else 's'}, {buys} purchase{'' if buys == 1 else 's'}.")
         if s.get("mood_score") is not None:
             lines.append(f"Market fear and greed: {s['mood_score']:.0f} ({s.get('mood_rating')}).")
     for f in (r.get("filings") or [])[:2]:

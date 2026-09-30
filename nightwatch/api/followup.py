@@ -580,9 +580,10 @@ def _a_street(r: dict, q: str) -> Answer | None:
     elif re.search(r"analyst|rating|target|upgrade|downgrade", q, re.I):
         bits.append("No analyst firm has rated it in the last 90 days in Bitget's data.")
     if s.get("insider_sells") or s.get("insider_buys"):
+        sells, buys = s.get("insider_sells", 0), s.get("insider_buys", 0)
         bits.append(
-            f"Insiders made {s.get('insider_sells', 0)} open-market sales ({_dollars(s.get('insider_sold_value'))}) and "
-            f"{s.get('insider_buys', 0)} purchases ({_dollars(s.get('insider_bought_value'))}) in the last 90 days."
+            f"Insiders made {sells} open-market sale{'' if sells == 1 else 's'} ({_dollars(s.get('insider_sold_value'))}) and "
+            f"{buys} purchase{'' if buys == 1 else 's'} ({_dollars(s.get('insider_bought_value'))}) in the last 90 days."
         )
     elif re.search(r"insider", q, re.I):
         bits.append("No open-market insider trades in the last 90 days.")

@@ -684,20 +684,32 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     def verify_receipts() -> dict[str, Any]:
         """Recompute every receipt from the forecasts it covers, and name the first break.
 
-        Rows written by a bulk import carry no receipt until chained here; chaining them
-        cannot hide an edit to a row that already had one."""
+        Rows written by a bulk import carry no receipt until the API next starts and chains
+        them; chaining them cannot hide an edit to a row that already had one."""
+        import sqlite3
+
         from nightwatch.journal import anchor, receipts
 
         s = st()
-        with s.lock:
-            receipts.chain_pending(s.store._conn)
-            out = receipts.verify(s.store._conn)
+        cached = s.calibration_cache.get(("verify", ""))
+        if cached and (utc_now() - cached[0]).total_seconds() < 30:
+            return cached[1]
+        # Its own read-only connection, and not the analysis lock: a check anyone can run
+        # must not queue behind a stress test (it waited 12 s behind one). Every live verdict
+        # is chained in the transaction that writes it, and older rows at startup.
+        conn = sqlite3.connect(f"file:{s.settings.db_path}?mode=ro", uri=True, timeout=10)
+        try:
+            out = receipts.verify(conn)
             anchors = anchor.listing(s.settings.data_dir / "anchors")
-            broken = anchor.consistent(s.store._conn, anchors)
+            broken = anchor.consistent(conn, anchors)
+        finally:
+            conn.close()
         # A head timestamped in Bitcoin that no longer matches the chain means the chain was
         # rebuilt after it; that is a break even if every link recomputes.
-        return {**out, "ok": out["ok"] and not broken, "anchors": len(anchors),
-                "anchored_in_bitcoin": sum(1 for a in anchors if a.get("state") == "bitcoin"), "anchors_broken": broken}
+        result = {**out, "ok": out["ok"] and not broken, "anchors": len(anchors),
+                  "anchored_in_bitcoin": sum(1 for a in anchors if a.get("state") == "bitcoin"), "anchors_broken": broken}
+        s.calibration_cache[("verify", "")] = (utc_now(), result)
+        return result
 
     @app.get("/anchors")
     def anchors_list() -> dict[str, Any]:
