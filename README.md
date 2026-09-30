@@ -2,6 +2,18 @@
 
 **Stress-test a tokenized-US-stock trade before you place it.**
 
+[![ci](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml)
+[![uptime](https://github.com/Ritik200238/nightwatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/uptime.yml)
+· Live: https://nightwatch-gules.vercel.app
+
+| Claim | How you can check it yourself |
+|---|---|
+| Every live verdict is on the record, unedited | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the receipt chain; [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) has the daily Bitcoin timestamps (check a `.ots` proof at opentimestamps.org) |
+| The one-in-twenty loss line holds out of sample | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed from the journal |
+| We publish our misses and our mistakes | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) |
+| Studies of the method, corrected for asking eleven questions | [`/studies`](https://nightwatch-gules.vercel.app/studies) |
+| Not verified by us | real-trader adoption; directional edge (measured: none) |
+
 US stocks trade 6.5 hours a day. Tokenized versions of them (rTokens) trade 24/7. The
 dangerous window is the one where only the token can move: nights, weekends, holidays —
 when news lands and the real market is shut.
