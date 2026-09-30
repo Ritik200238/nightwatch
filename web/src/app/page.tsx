@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Chat } from "@/components/desk/chat";
 import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
 import { Sources } from "@/components/desk/sources";
@@ -11,14 +11,18 @@ import { ReportView } from "@/components/report/report-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useLang } from "@/lib/lang";
+import { scrollIntoViewOnSmall } from "@/lib/scroll";
 import { ApiError, api, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 
 export default function DeskPage() {
+  const { lang, setLang, tx } = useLang();
+  const resultRef = useRef<HTMLElement>(null);
   const [universe, setUniverse] = useState<UniverseEntry[] | null>(null);
   const [universeError, setUniverseError] = useState<string | null>(null);
   const [report, setReport] = useState<Report | null>(null);
-  // The language the report was asked for in; the form is English, the chat either.
-  const [reportLang, setReportLang] = useState<"en" | "zh">("en");
+  // True when the report came out of the chat, whose thread already carries the analyst's take.
+  const [fromChat, setFromChat] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<TicketInput | null>(null);
@@ -30,7 +34,7 @@ export default function DeskPage() {
     try {
       setUniverse(await api.universe(true));
     } catch (e) {
-      setUniverseError(e instanceof Error ? e.message : "Could not load the token list.");
+      setUniverseError(e instanceof Error ? e.message : tx("Could not load the token list.", "无法加载代币列表。"));
     }
   }
 
@@ -43,12 +47,13 @@ export default function DeskPage() {
     setError(null);
     setLastTicket(ticket);
     setEquity(ticket.account_equity_quote ?? null);
-    setReportLang("en");
+    setFromChat(false);
+    scrollIntoViewOnSmall(resultRef.current);
     try {
       // The book travels with the ticket so the report can judge both.
       setReport(await api.analyze({ ...ticket, open_positions: positions }));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "The analysis failed.");
+      setError(e instanceof ApiError ? e.message : tx("The analysis failed.", "分析失败。"));
     } finally {
       setBusy(false);
     }
@@ -61,26 +66,26 @@ export default function DeskPage() {
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
       <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Stress-test a trade</h1>
-          <p className="text-sm text-muted-foreground">Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.</p>
+          <h1 className="text-lg font-semibold tracking-tight">{tx("Stress-test a trade", "给交易做压力测试")}</h1>
+          <p className="text-sm text-muted-foreground">{tx("Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.", "代币化美股全天候交易。下单之前，先看看历史上与现在相似的时刻发生了什么、可能出什么问题、以及能不能顺利平仓。")}</p>
           {/* On a phone the explainer on the right sits under this whole form, so a first
               visitor scrolls past twelve fields before learning what the desk does. */}
           {!report ? (
             <p className="mt-2 text-sm text-muted-foreground lg:hidden">
-              Describe a trade (form or chat, English or 中文) → the desk shows what past moments like now did, stress-tests it, prices the exit on Bitget&apos;s live
-              book → you get a sized verdict: <span className="font-medium text-foreground">GO</span>, <span className="font-medium text-foreground">REDUCE</span>,{" "}
-              <span className="font-medium text-foreground">HEDGE</span>, <span className="font-medium text-foreground">REVIEW</span> or{" "}
-              <span className="font-medium text-foreground">NO GO</span>. You decide.
+              {tx("Describe a trade (form or chat, English or 中文) → the desk shows what past moments like now did, stress-tests it, prices the exit on Bitget's live book → you get a sized verdict: ", "描述一笔交易（表单或聊天，English 或中文）→ 交易台展示与现在相似的历史时刻后来怎样，做压力测试，并按 Bitget 实时盘口计算平仓成本 → 给出带仓位的结论：")}
+              <span className="font-medium text-foreground">{tx("GO", "可以做")}</span>, <span className="font-medium text-foreground">{tx("REDUCE", "减仓")}</span>,{" "}
+              <span className="font-medium text-foreground">{tx("HEDGE", "对冲")}</span>, <span className="font-medium text-foreground">{tx("REVIEW", "复核")}</span> {tx("or", "或")}{" "}
+              <span className="font-medium text-foreground">{tx("NO GO", "不建议做")}</span>{tx(". You decide.", "。决定权在你。")}
             </p>
           ) : null}
         </div>
         <Tabs defaultValue="form">
           <TabsList className="w-full">
             <TabsTrigger value="form" className="flex-1">
-              Ticket
+              {tx("Ticket", "表单")}
             </TabsTrigger>
             <TabsTrigger value="chat" className="flex-1">
-              Chat
+              {tx("Chat", "聊天")}
             </TabsTrigger>
           </TabsList>
           <TabsContent value="form" className="pt-3">
@@ -96,10 +101,10 @@ export default function DeskPage() {
               </div>
             ) : universeError ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-                <p className="font-medium">Couldn&apos;t load the token list</p>
+                <p className="font-medium">{tx("Couldn't load the token list", "无法加载代币列表")}</p>
                 <p className="text-xs text-muted-foreground">{universeError}</p>
                 <Button variant="secondary" size="sm" className="mt-2" onClick={() => void loadUniverse()}>
-                  Try again
+                  {tx("Try again", "重试")}
                 </Button>
               </div>
             ) : (
@@ -111,24 +116,25 @@ export default function DeskPage() {
             )}
           </TabsContent>
           <TabsContent value="chat" className="pt-3">
-            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} onReport={(r, lang) => {
+            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} onReport={(r) => {
                 setReport(r);
-                setReportLang(lang);
+                setFromChat(true);
+                scrollIntoViewOnSmall(resultRef.current);
               }}
             />
           </TabsContent>
         </Tabs>
       </aside>
 
-      <section className="min-w-0" aria-live="polite" aria-busy={busy}>
+      <section ref={resultRef} className="min-w-0 scroll-mt-4" aria-live="polite" aria-busy={busy}>
         {busy && !report ? <ReportSkeleton /> : null}
         {error ? (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
-            <p className="font-medium">Couldn&apos;t run the analysis</p>
+            <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
             <p className="text-xs text-muted-foreground">{error}</p>
             {lastTicket ? (
               <Button variant="secondary" size="sm" className="mt-2" onClick={() => void run(lastTicket)} disabled={busy}>
-                Try again
+                {tx("Try again", "重试")}
               </Button>
             ) : null}
           </div>
@@ -137,7 +143,8 @@ export default function DeskPage() {
           <div className={busy ? "opacity-60 transition-opacity" : ""}>
             <ReportView
               report={report}
-              lang={reportLang}
+              lang={lang}
+              hideTake={fromChat}
               onRerun={(patch) => {
                 // The same trade at the same moment, with one thing changed. A report from
                 // chat has no form ticket behind it, so its own ticket is the base.
@@ -148,18 +155,16 @@ export default function DeskPage() {
           </div>
         ) : !busy && !error ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
-            <p className="text-base font-semibold">What happens to your position while the US market is shut?</p>
+            <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
             <ol className="max-w-prose space-y-1 text-left text-sm text-muted-foreground">
               <li>
-                <span className="font-medium text-foreground">1.</span> Describe the trade - in the form, or in plain words in chat (English or 中文).
+                <span className="font-medium text-foreground">1.</span> {tx("Describe the trade - in the form, or in plain words in chat (English or 中文).", "描述这笔交易——用表单，或者在聊天里用大白话（English 或中文）。")}
               </li>
               <li>
-                <span className="font-medium text-foreground">2.</span> The desk finds the past moments most like now and shows what followed, then stress-tests the position and
-                prices the exit on the live order book.
+                <span className="font-medium text-foreground">2.</span> {tx("The desk finds the past moments most like now and shows what followed, then stress-tests the position and prices the exit on the live order book.", "交易台找出与现在最相似的历史时刻并展示后来发生了什么，然后对仓位做压力测试，并按实时盘口计算平仓成本。")}
               </li>
               <li>
-                <span className="font-medium text-foreground">3.</span> You get a sized verdict in money - GO, REDUCE to a smaller size, HEDGE with the perp, REVIEW (something
-                missing) or NO GO - your own plan checked against the data, and an AI analyst&apos;s read of it. You decide.
+                <span className="font-medium text-foreground">3.</span> {tx("You get a sized verdict in money - GO, REDUCE to a smaller size, HEDGE with the perp, REVIEW (something missing) or NO GO - your own plan checked against the data, and an AI analyst's read of it. You decide.", "你会得到一个以金额表示的结论——可以做、减到更小的仓位、用永续合约对冲、需要复核（缺少信息）或不建议做——你自己的计划会对照数据检查，还有 AI 分析师的解读。决定权在你。")}
               </li>
             </ol>
             <Button
@@ -174,15 +179,15 @@ export default function DeskPage() {
                   horizon_kind: "next_open",
                   horizon_hours: null,
                   stop_price: null,
-                  thesis: "Strength into the close carries through the night.",
-                  invalidation: "Wrong if it drops 3% before the open.",
+                  thesis: tx("Strength into the close carries through the night.", "收盘前的强势会延续到夜盘。"),
+                  invalidation: tx("Wrong if it drops 3% before the open.", "开盘前跌 3% 就说明判断错了。"),
                 })
               }
             >
-              See it on a real trade: $20k of TSLA held to the next open
+              {tx("See it on a real trade: $20k of TSLA held to the next open", "看一笔真实交易：持有 2 万美元 TSLA 到下次开盘")}
             </Button>
             <Link href="/tonight" className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground">
-              Or check everything you already hold before the market reopens
+              {tx("Or check everything you already hold before the market reopens", "或者在开盘前检查你已有的全部持仓")}
             </Link>
           </div>
         ) : null}
