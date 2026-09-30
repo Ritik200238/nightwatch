@@ -444,6 +444,14 @@ def write(provider: Any, report: dict[str, Any], lang: str = "en") -> Take:  # n
         parts[key] = clean
         removed += n
         cites += c
+    # A side the model could not argue with checked numbers is filled from the desk's own
+    # second opinion - rules over the report's fields, so nothing in it needs checking - and
+    # says so, rather than showing one side of a debate.
+    for side, key in (("for", "supporting"), ("against", "against")):
+        if not parts[side]:
+            points = [c.get("text", "") for c in ((report.get("second_opinion") or {}).get(key) or []) if c.get("text")][:2]
+            if points:
+                parts[side] = " ".join(points) + (" （由规则根据报告生成）" if lang == "zh" else " (from the desk's own rules)")
     reconcile = _reconcile(_as_text(obj.get("reconcile")), report, sheet, lang) if (parts["for"] or parts["against"]) else ""
     seen: set[tuple[str, str]] = set()
     uniq = [c for c in cites if not ((c["number"], c["source"]) in seen or seen.add((c["number"], c["source"])))]

@@ -118,3 +118,18 @@ def test_a_prefetch_with_no_provider_leaves_no_trace_so_a_later_ask_still_works(
         threading.Event().wait(0.05)
     assert jobs.get(8, "en") is None
     assert jobs.start(8, REPORT, FakeProvider(), "en").status == "pending"
+
+
+
+def test_an_empty_side_of_the_debate_is_filled_from_the_desks_own_rules():
+    """Live, the model's 'for' failed the number check and the card showed one side only."""
+    import copy
+
+    r = copy.deepcopy(REPORT)
+    r["second_opinion"] = {"supporting": [{"text": "The book absorbs this size cheaply."}], "against": []}
+    reply = _reply(**{"for": "Tesla will rally 12% [history].", "against": "A bad night goes past -4.6% [history].",
+                      "reconcile": "The desk says GO at 20,000 [desk] USDT.", "take": "The call
+GO at 20,000 [desk] USDT."})
+    take = analyst.write(FakeProvider(text=reply), r)
+    assert take.case_for == "The book absorbs this size cheaply. (from the desk's own rules)"
+    assert take.case_against.startswith("A bad night")
