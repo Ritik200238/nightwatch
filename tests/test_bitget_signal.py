@@ -193,5 +193,5 @@ def test_sources_shows_the_skill_backend_health_without_waiting(seeded_store, mo
                 if state.ctx._signal_health:
                     break
                 threading.Event().wait(0.05)
-            row = c.get("/sources").json()[-1]
+            row = c.get("/sources?fresh=1").json()[-1]  # a new key: the page itself is cached for a minute
             assert row["key"] == "bitget_signal" and row["latest_label"] == "1 of 5 tools answering"
