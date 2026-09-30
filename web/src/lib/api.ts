@@ -24,6 +24,8 @@ function resolveApiUrl(): string {
 
 export const API_URL = resolveApiUrl();
 
+import { SNAPSHOT_HEADER, snapshotFlag } from "./snapshot";
+
 export type Side = "long" | "short";
 export type HorizonKind = "next_open" | "window_end" | "hours";
 
@@ -976,6 +978,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new ApiError("Cannot reach the Nightwatch API. Is the backend running?", 0);
   }
+  // The proxy sets this header when the box is down and it answered from a saved copy.
+  snapshotFlag.set(res.headers.get(SNAPSHOT_HEADER));
   if (!res.ok) {
     let detail = res.statusText;
     try {

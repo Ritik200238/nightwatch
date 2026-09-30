@@ -1,10 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
+import { snapshotFlag } from "@/lib/snapshot";
 import { HealthPill } from "@/components/health-pill";
 import { LangToggle, useLang } from "@/lib/lang";
 
 const LINK = "rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:px-3";
+
+/** Shown when the proxy answered from a saved copy because the live server is down. */
+function SnapshotBanner() {
+  const { tx, lang } = useLang();
+  const iso = useSyncExternalStore(snapshotFlag.subscribe, snapshotFlag.get, () => null);
+  if (!iso) return null;
+  const when = new Date(iso).toLocaleString(lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+  return (
+    <div role="status" className="border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-center text-sm">
+      {tx(`Live server unreachable — showing a saved snapshot from ${when}`, `实时服务器无法连接，正在显示 ${when} 的已保存快照`)}
+    </div>
+  );
+}
 
 /** Brand, primary nav, language switch and status pill. Client component so the labels
  *  follow the global language; the layout around it stays a server component. */
@@ -19,6 +34,8 @@ export function SiteHeader() {
     ["/wrong", tx("What we got wrong", "我们错在哪")],
   ];
   return (
+    <>
+    <SnapshotBanner />
     <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 md:flex-nowrap md:px-6 lg:px-8">
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 sm:gap-x-6">
         <Link href="/" className="rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none">
@@ -38,6 +55,7 @@ export function SiteHeader() {
         <HealthPill />
       </div>
     </div>
+    </>
   );
 }
 

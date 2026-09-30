@@ -13,6 +13,11 @@
  */
 
 import type { NextRequest } from "next/server";
+import { snapshot } from "@/snapshot";
+import { SNAPSHOT_HEADER, shouldFallback, snapshotGet, snapshotPost } from "@/lib/snapshot";
+
+const GET_TIMEOUT_MS = 12_000;
+const POST_TIMEOUT_MS = 60_000;
 
 export const dynamic = "force-dynamic"; // every call is live data
 export const maxDuration = 120; // an analysis takes seconds; a cold backend can take longer
@@ -39,25 +44,40 @@ function wasRefused(e: unknown): boolean {
  *  Reads retry on anything. Writes retry only on a refused connection: a POST that got as
  *  far as a 502 from the backend may have been applied, and an analysis is journaled, so
  *  sending it twice would write the same forecast down twice. */
-async function withRetry(fn: () => Promise<Response>, isRead: boolean): Promise<Response> {
+async function withRetry(fn: () => Promise<Response>, isRead: boolean, maxRetries = BACKOFF_MS.length): Promise<Response> {
   let last: Response | undefined;
-  for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt - 1]));
     try {
       last = await fn();
       if (!isRead || ![502, 503, 504].includes(last.status)) return last;
     } catch (e) {
       if (!isRead && !wasRefused(e)) throw e;
-      if (attempt === BACKOFF_MS.length) throw e;
+      if (attempt === maxRetries) throw e;
     }
   }
   return last as Response;
 }
 
+/** Saved answer for this call, or null. Sent with a header so the client can say so. */
+function fromSnapshot(req: NextRequest, path: string[], body?: string): Response | null {
+  const joined = path.join("/");
+  const data = req.method === "GET" ? snapshotGet(snapshot, joined, req.nextUrl.search) : snapshotPost(snapshot, joined, body ?? "");
+  if (data === null || !snapshot) return null;
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": "no-store", [SNAPSHOT_HEADER]: snapshot.generated_at },
+  });
+}
+
 async function forward(req: NextRequest, path: string[], body?: string) {
+  const saved = () => fromSnapshot(req, path, body);
   if (!ORIGIN) {
-    return Response.json({ detail: "This deployment has no backend configured. Set NIGHTWATCH_API_ORIGIN." }, { status: 503 });
+    return saved() ?? Response.json({ detail: "This deployment has no backend configured. Set NIGHTWATCH_API_ORIGIN." }, { status: 503 });
   }
+  const isRead = req.method === "GET";
+  // With a saved answer in hand there is no point waiting out the restart backoff.
+  const hasSaved = isRead && snapshotGet(snapshot, path.join("/"), req.nextUrl.search) !== null;
   try {
     const res = await withRetry(
       () =>
@@ -68,16 +88,22 @@ async function forward(req: NextRequest, path: string[], body?: string) {
           cache: "no-store",
           // Keep the backend's own error bodies intact so the UI can show them.
           redirect: "manual",
+          signal: AbortSignal.timeout(isRead ? GET_TIMEOUT_MS : POST_TIMEOUT_MS),
         }),
-      req.method === "GET",
+      isRead,
+      hasSaved ? 0 : undefined,
     );
+    if (shouldFallback(res.status)) {
+      const s = saved();
+      if (s) return s;
+    }
     const text = await res.text();
     return new Response(text, {
       status: res.status,
       headers: { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" },
     });
   } catch {
-    return Response.json({ detail: "Cannot reach the Nightwatch API from the server. Is the backend running?" }, { status: 502 });
+    return saved() ?? Response.json({ detail: "Cannot reach the Nightwatch API from the server. Is the backend running?" }, { status: 502 });
   }
 }
 
