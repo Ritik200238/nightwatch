@@ -24,6 +24,7 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -456,13 +457,26 @@ class AnalystJobs:
     def get(self, forecast_id: int, lang: str = "en") -> Take | None:
         return self._takes.get((forecast_id, lang))
 
+    def prefetch(self, forecast_id: int, report: dict[str, Any], make_provider: Callable[[], Any], lang: str = "en") -> None:
+        """Start the take the moment a report exists, before anyone asks for it.
+
+        The provider is chosen inside the worker so the request that produced the report
+        does not wait on it. If there is no provider nothing is recorded, so a later
+        ``start`` with one still works. A later ``start`` for the same report and language
+        finds this job and joins it rather than writing a second take.
+        """
+        self._launch((forecast_id, lang), report, make_provider, lang, prefetch=True)
+
     def start(self, forecast_id: int, report: dict[str, Any], provider: Any, lang: str = "en") -> Take:  # noqa: ANN401
-        key = (forecast_id, lang)
+        return self._launch((forecast_id, lang), report, (lambda: provider) if provider is not None else None, lang)
+
+    def _launch(self, key: tuple[int, str], report: dict[str, Any], make_provider: Callable[[], Any] | None, lang: str, prefetch: bool = False) -> Take:
+        forecast_id = key[0]
         with self._lock:
             existing = self._takes.get(key)
             if existing and (existing.status in ("pending", "done") or time.time() - existing.started < 60):
                 return existing
-            if provider is None:
+            if make_provider is None:
                 take = Take(status="unavailable", lang=lang)
                 self._takes[key] = take
                 return take
@@ -473,6 +487,15 @@ class AnalystJobs:
 
         def run() -> None:
             try:
+                provider = make_provider()
+                if provider is None:
+                    with self._lock:
+                        # Nothing to write with. A prefetch leaves no trace; an explicit ask says so.
+                        if prefetch:
+                            self._takes.pop(key, None)
+                        else:
+                            self._takes[key] = Take(status="unavailable", lang=lang)
+                    return
                 done = write(provider, report, lang)
             except Exception:  # noqa: BLE001 - a take that fails must not take anything else down
                 log.exception("analyst take for %s failed", forecast_id)

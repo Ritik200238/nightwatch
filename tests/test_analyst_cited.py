@@ -86,3 +86,35 @@ def test_prose_instead_of_json_is_still_a_checked_take_without_a_debate():
 def test_a_fenced_json_reply_is_read():
     fenced = "```json\n" + _reply(**{"for": "Typical outcome -1.8% [history]."}) + "\n```"
     assert analyst.write(FakeProvider(text=fenced), REPORT).case_for == "Typical outcome -1.8% [history]."
+
+
+def _wait(jobs, key, status="done"):  # noqa: ANN001, ANN202
+    import threading
+    for _ in range(80):
+        got = jobs.get(*key)
+        if got and got.status == status:
+            return got
+        threading.Event().wait(0.05)
+    return jobs.get(*key)
+
+
+def test_a_prefetched_take_is_joined_by_the_later_request_not_written_twice():
+    jobs = analyst.AnalystJobs()
+    p = FakeProvider(text=_reply(**{"for": "Typical outcome -1.8% [history]."}), delay=0.2)
+    jobs.prefetch(7, REPORT, lambda: p, "en")
+    assert jobs.get(7, "en").status == "pending", "pending from the moment the report exists"
+    assert jobs.start(7, REPORT, p, "en").status in ("pending", "done")
+    assert _wait(jobs, (7, "en")).status == "done" and len(p.calls) == 1
+    assert jobs.get(7, "zh") is None, "only the requested language is written"
+
+
+def test_a_prefetch_with_no_provider_leaves_no_trace_so_a_later_ask_still_works():
+    jobs = analyst.AnalystJobs()
+    jobs.prefetch(8, REPORT, lambda: None, "en")
+    for _ in range(40):
+        if jobs.get(8, "en") is None:
+            break
+        import threading
+        threading.Event().wait(0.05)
+    assert jobs.get(8, "en") is None
+    assert jobs.start(8, REPORT, FakeProvider(), "en").status == "pending"

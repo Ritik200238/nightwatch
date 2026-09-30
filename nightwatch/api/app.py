@@ -149,6 +149,18 @@ class AppState:
         self.started_at = utc_now()
         self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
 
+    def prefetch_take(self, forecast_id: int | None, payload: dict[str, Any], lang: str = "en") -> None:
+        """Start the analyst's take now, in the report's own language, so it is usually
+        written by the time the page asks. The page's later request joins this job."""
+        if forecast_id is None or forecast_id < 0:
+            return
+        try:
+            from nightwatch.api.providers import select
+
+            self.analyst.prefetch(forecast_id, payload, select, "zh" if lang == "zh" else "en")
+        except Exception as exc:  # noqa: BLE001 - a head start must never fail the analysis
+            log.warning("could not prefetch the analyst take: %s", exc)
+
     def keep_hypothetical(self, payload: dict[str, Any]) -> int:
         """Store a report that was never journalled, under a key that says so."""
         with self.lock:
@@ -615,6 +627,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if report.forecast_id is not None and body.record:
             try:
                 s.reports.save(report.forecast_id, payload)
+                s.prefetch_take(report.forecast_id, payload)
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail an analysis
                 log.warning("could not store report %s: %s", report.forecast_id, exc)
         if text:
