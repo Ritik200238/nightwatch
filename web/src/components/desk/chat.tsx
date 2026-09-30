@@ -107,7 +107,8 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
         const t = i === 0 ? await api.analystStart(id, lang) : await api.analystGet(id, lang);
         if (t.status === "done" && t.text) {
           const label = lang === "zh" ? "分析师的看法" : "Analyst's take";
-          setMessages((m) => [...m, { role: "assistant", content: `${label}\n\n${t.text}`, byline: lang === "zh" ? "由 Qwen 撰写 · 数字已与报告核对，推理是模型自己的，可能出错" : "Written by Qwen · numbers checked against the report; the reasoning is the model's and can be wrong" }]);
+          const debate = [t.for ? `${lang === "zh" ? "支持的理由" : "Case for"}: ${t.for}` : "", t.against ? `${lang === "zh" ? "反对的理由" : "Case against"}: ${t.against}` : "", t.reconcile ?? ""].filter(Boolean).join("\n");
+          setMessages((m) => [...m, { role: "assistant", content: `${label}\n\n${debate ? `${debate}\n\n` : ""}${t.text}`, byline: lang === "zh" ? "由 Qwen 撰写 · 数字已与报告核对，推理是模型自己的，可能出错" : "Written by Qwen · numbers checked against the report; the reasoning is the model's and can be wrong" }]);
           return;
         }
         if (t.status !== "pending") return;

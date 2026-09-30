@@ -704,6 +704,13 @@ export interface AnalystTake {
   model?: string;
   seconds?: number;
   lang?: string;
+  /** Every number the take quotes, with the report section it came from. */
+  citations?: { number: string; source: string }[];
+  /** The two-sided case: each at most two sentences, every number tagged [section]. */
+  for?: string;
+  against?: string;
+  /** One line restating the desk's verdict and size; never a new verdict. */
+  reconcile?: string;
 }
 
 export interface EntryPlan {
