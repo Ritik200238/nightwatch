@@ -102,6 +102,11 @@ export default function CalibrationPage() {
                   value={fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}
                   hint={tx(`target 5% · ${rep.adjusted.n_evaluated.toLocaleString()} forecasts · raw search ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`, `目标 5% · ${rep.adjusted.n_evaluated.toLocaleString()} 个预测 · 原始搜索 ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`)}
                 />
+                {rep.adjusted.raw_lo_coverage > 0.05 ? (
+                  <p className="col-span-2 text-xs text-muted-foreground sm:col-span-4">
+                    {tx(`Raw history breaches more often than it should (${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)} against a 5% target); that is why every verdict uses the adjusted line, which is on target (${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}).`, `原始历史突破坏情形的频率高于应有水平（${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}，目标 5%）；所以每个结论都用调整后的线，它已达标（${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}）。`)}
+                  </p>
+                ) : null}
                 <Stat label={tx("Inside the 5th-95th band", "落在第 5–95 百分位区间内")} value={fmtPct(rep.adjusted.adj_band_coverage * 100, 1, false)} hint={tx(`target 90% · raw ${fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}`, `目标 90% · 原始 ${fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}`)} />
                 {rep.adjusted.bands
                   .filter((b) => b.band !== "pooled")
