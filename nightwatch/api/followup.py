@@ -595,6 +595,18 @@ def _a_street(r: dict, q: str) -> Answer | None:
     return Answer("street", " ".join(bits), ("Bitget US-stock data",))
 
 
+def _a_technicals(r: dict, _q: str) -> Answer | None:
+    g = r.get("signal") or {}
+    if not g:
+        return Answer("technicals", "There is no technical reading on this report: Bitget's signal skill was not reachable, or its RSI did not agree with our own from Bitget candles, so it is not shown.", ())
+    text = (f"Bitget signal skill: RSI {g['rsi']:.1f} on {g.get('timeframe', '4h')} ({g['reading']}); our own from Bitget candles {g['own_rsi']:.1f} - agrees. "
+            "Context only: it did not move the size.")
+    m = g.get("macd")
+    if m:
+        text += f" MACD {m['macd']:+.2f} against signal {m['signal']:+.2f} ({str(m.get('cross') or 'no cross').replace('_', ' ')})."
+    return Answer("technicals", text, ("Bitget signal skill",))
+
+
 _VERDICT_PLAIN = {
     "GO": "every check passed at the size you asked for",
     "REDUCE_TO": "the idea passes, but only at a smaller size",
@@ -681,6 +693,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
     ("options", re.compile(r"(?<!my )(?<!other )(?<!the )\boptions?\b(?! (?:do i|are there|have i))|\bput options?\b|\bcall options?\b|\bbuy (?:a )?puts?\b|\bbuy (?:a )?calls?\b", re.I), _a_options),
     ("shock", SHOCK, _a_shock),
     ("premise", re.compile(r"\bthesis\b|\bmy reason\b|\bsupported\b|\bwhen (?:is|are|were|was|did)\b.*\b(?:earnings|report|results|fomc|fed)\b|\bearnings (?:date|when)\b|\bnext earnings\b|财报什么时候|逻辑成立", re.I), _a_premise),
+    ("technicals", re.compile(r"\brsi\b|\btechnicals?\b|\btechnical (?:analysis|indicators?|read\w*)\b|\bmacd\b|\boversold\b|\boverbought\b|\bmomentum indicators?\b", re.I), _a_technicals),
     ("street", re.compile(r"\banalysts?\b|\bratings?\b|\bprice targets?\b|\bupgrade\w*\b|\bdowngrade\w*\b|\binsiders?\b|\bthe street\b|\bwall street\b|\bfear\b|\bgreed\b|\bsentiment\b|\blive price\b", re.I), _a_street),
     ("stop", re.compile(r"\bstops?\b|\bstop[- ]loss\b|\btighter\b|\bwider\b", re.I), _a_stop),
     ("size", re.compile(r"\bbigger\b|\bsmaller\b|\bmore\b|\bless\b|\bsize\b|\bwhy not\b.*\b(bigger|more)\b|\bcap\b|\bwhat if i (do|did|put|go|went|buy|bought)\b|\bdouble\b|\bhalve\b", re.I), _a_size),

@@ -155,6 +155,15 @@ def _a_street(r: dict, _q: str) -> Answer | None:
     return Answer("street", "".join(bits), ("Bitget US-stock data",))
 
 
+def _a_technicals(r: dict, _q: str) -> Answer | None:
+    g = r.get("signal") or {}
+    if not g:
+        return Answer("technicals", "这份报告没有技术面读数：Bitget 信号技能暂时不可用，或它的 RSI 与我们用 Bitget K 线算的不一致，所以不显示。", ())
+    word = {"oversold": "超卖", "overbought": "超买"}.get(g["reading"], "中性")
+    text = f"Bitget 信号技能：{g.get('timeframe', '4h')} RSI {g['rsi']:.1f}（{word}）；我们用 Bitget K 线自算 {g['own_rsi']:.1f}，一致。仅供参考，没有影响仓位。"
+    return Answer("technicals", text, ("Bitget signal skill",))
+
+
 def _a_hedge(r: dict, _q: str) -> Answer | None:
     hq = (r.get("execution") or {}).get("hedge_quote")
     if not hq:
@@ -299,6 +308,7 @@ ROUTES = (
     ("options", re.compile(r"期权|看跌期权|看涨期权"), _a_options),
     ("shock", re.compile(r"(?:跌|涨|跳空|暴跌|暴涨)[^0-9]{0,6}[0-9]+(?:\.[0-9]+)?\s*[%％]"), _a_shock),
     ("similar", re.compile(r"相似|一样|像现在"), _a_similar),
+    ("technicals", re.compile(r"技术面|技术指标|RSI|rsi|MACD|macd|超卖|超买"), _a_technicals),
     ("street", re.compile(r"分析师|评级|目标价|内部人|高管|恐慌|贪婪|情绪|华尔街|实时价"), _a_street),
     ("stop", re.compile(r"止损"), _a_stop),
     ("size", re.compile(r"仓位|更大|更小|加仓|减仓|为什么不能|上限|多少钱|减半|加倍|翻倍"), _a_size),

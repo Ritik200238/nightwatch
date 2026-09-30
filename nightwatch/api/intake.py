@@ -808,6 +808,14 @@ def brief(report: Any, lang: str = "en") -> str:
         else:
             lines.append(f"Right now the token sits {live:+.0f} bps from the stock's live price (Bitget data).")
 
+    sig = getattr(report, "signal", None)
+    if sig and sig.get("agrees"):
+        if zh:
+            word = {"oversold": "超卖", "overbought": "超买"}.get(sig["reading"], "中性")
+            lines.append(f"Bitget 信号技能：{sig['timeframe']} RSI {sig['rsi']:.1f}（{word}）；我们用 Bitget K 线自算 {sig['own_rsi']:.1f}，一致。仅供参考。")
+        else:
+            lines.append(f"Bitget signal skill: RSI {sig['rsi']:.1f} on {sig['timeframe']} ({sig['reading']}); our own from Bitget candles {sig['own_rsi']:.1f} - agrees. Context only.")
+
     capped = [c for c in v.caps if c.notional is not None]
     if capped:
         binding = min(capped, key=lambda c: c.notional)
