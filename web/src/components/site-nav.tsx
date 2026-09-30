@@ -44,11 +44,22 @@ export function SiteHeader() {
 export function SiteFooter() {
   const { tx } = useLang();
   return (
-    <p className="mx-auto w-full max-w-7xl px-4 py-4 text-xs text-muted-foreground md:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl space-y-1 px-4 py-4 text-xs text-muted-foreground md:px-6 lg:px-8">
+      <p>
       {tx(
         "Research tool. Nightwatch never places orders; the human decides. Every number is computed from stored market data and labelled with its source.",
         "研究工具。Nightwatch 不会下单，决定权在你。每个数字都由存储的市场数据计算得出，并标明来源。",
       )}
-    </p>
+      </p>
+      <p>
+        <Link href="/status" className="underline underline-offset-2 hover:text-foreground">
+          {tx("Status", "状态")}
+        </Link>
+        {" · "}
+        <Link href="/sources" className="underline underline-offset-2 hover:text-foreground">
+          {tx("Data sources", "数据来源")}
+        </Link>
+      </p>
+    </div>
   );
 }
