@@ -12,7 +12,8 @@ import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
-import { bucketLabel, fmtBps, fmtHours, fmtPct, fmtPrice, fmtRatio, fmtTime, fmtUsd, titleCase } from "@/lib/format";
+import { fmtBps, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
+import { fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
 const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
   GO: "good",
@@ -23,21 +24,14 @@ const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "c
 };
 
 /** What each verdict means, for someone seeing the badge for the first time. */
-const VERDICT_MEANING: [Report["verdict"]["verdict"], string][] = [
-  ["GO", "every check passed at the size you asked for"],
-  ["REDUCE_TO", "the idea passes, but only at the smaller size shown"],
-  ["HEDGE", "keep the size, and hedge part of it with the stock's Bitget perpetual"],
-  ["REVIEW", "something is missing or unclear (a stop, a plan, your account size); say it and it re-runs"],
-  ["NO_GO", "a hard limit refuses it as asked, and the reason says which one"],
-];
+const VERDICT_ORDER: Report["verdict"]["verdict"][] = ["GO", "REDUCE_TO", "HEDGE", "REVIEW", "NO_GO"];
 
-const VERDICT_TEXT: Record<Report["verdict"]["verdict"], string> = {
-  GO: "Go at the requested size",
-  REDUCE_TO: "Reduce the size",
-  HEDGE: "Hedge instead of cutting",
-  NO_GO: "Do not take this trade as specified",
-  REVIEW: "Fill in what is missing before deciding",
-};
+/** A verdict or gate decision as a badge label: "REDUCE TO" in English, the Chinese name otherwise. */
+function verdictLabel(lang: Lang, d: string): string {
+  if (lang === "en") return d.replace("_", " ");
+  if (d === "REVIEW_REQUIRED") return "需要复核";
+  return tl(lang, "verdictName", d);
+}
 
 /** The worst stress preset, in money, with the name of the scenario that caused it. */
 function worstPreset(report: Report): { name: string; quote: number; pct: number | null } | null {
@@ -57,7 +51,7 @@ function bindingCap(report: Report) {
 /** Everything a person needs in five seconds: what to do, what it costs to be wrong,
  *  what could go worse, whether you can get out, and the best argument against it.
  *  The twelve sections below are the evidence for this card, and they open on demand. */
-const TAKE_HEADINGS = new Set(["The call", "What matters most tonight", "What would change my mind", "What I'd watch", "结论", "今晚最重要的", "什么会改变我的看法", "我会盯着什么"]);
+const TAKE_HEADINGS = new Set<string>([...STRINGS.en.takeHeadings, ...STRINGS.zh.takeHeadings]);
 
 /** The analyst's take: the model reads the finished report and says what matters.
  *
@@ -66,11 +60,12 @@ const TAKE_HEADINGS = new Set(["The call", "What matters most tonight", "What wo
  *  nobody should wait for it. It cannot change the verdict, and any sentence citing a
  *  number that is not in the report is removed before it is shown - the count is printed.
  */
-function AnalystTakeCard({ report }: { report: Report }) {
+function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang }) {
   const id = report.forecast_id;
   const [take, setTake] = useState<AnalystTake | null>(null);
   const lang: "en" | "zh" =
-    /[\u3400-\u9fff]/.test(`${report.ticket?.thesis ?? ""}${report.ticket?.invalidation ?? ""}`) ||
+    langHint === "zh" ||
+    /[㐀-鿿]/.test(`${report.ticket?.thesis ?? ""}${report.ticket?.invalidation ?? ""}`) ||
     (typeof navigator !== "undefined" && navigator.language?.startsWith("zh"))
       ? "zh"
       : "en";
@@ -142,29 +137,42 @@ function AnalystTakeCard({ report }: { report: Report }) {
  *  on; "if the story changes" is not, and saying so is better than pretending. A reason
  *  that reads against the position is flagged, because that is usually a typo in the side.
  */
-function PlanNote({ report }: { report: Report }) {
+function PlanNote({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const c = report.plan_check;
   if (!c) return null;
   let line: string | null = null;
   if (c.kind === "untested" && c.invalidation) {
-    line = `“${c.invalidation}” is not something the desk can test against data, so it stays as your note.`;
+    line = L(`“${c.invalidation}” is not something the desk can test against data, so it stays as your note.`, `“${c.invalidation}”无法用数据检验，所以只作为你的备注保留。`);
   } else if ((c.kind === "level" || c.kind === "moving_average") && c.level != null && c.distance_pct != null) {
     const what = c.note ? `${c.note} (${fmtPrice(c.level)})` : fmtPrice(c.level);
+    const dist = Math.abs(c.distance_pct).toFixed(1);
     line = c.already
-      ? `Your invalidation, ${what}, is already crossed at the current price.`
-      : `Your invalidation, ${what}, is ${Math.abs(c.distance_pct).toFixed(1)}% away${c.crossed != null ? `; ${c.crossed} of ${c.of} past moments like this crossed it inside the hold` : ""}.`;
+      ? L(`Your invalidation, ${what}, is already crossed at the current price.`, `你的失效条件 ${what} 在当前价格下已经被突破。`)
+      : L(
+          `Your invalidation, ${what}, is ${dist}% away${c.crossed != null ? `; ${c.crossed} of ${c.of} past moments like this crossed it inside the hold` : ""}.`,
+          `你的失效条件 ${what} 距当前价格 ${dist}%${c.crossed != null ? `；过去 ${c.of} 个类似时刻中有 ${c.crossed} 个在持有期内触及过它` : ""}。`,
+        );
   } else if (c.kind === "move" && c.distance_pct != null) {
-    line = `Your invalidation is a ${Math.abs(c.distance_pct).toFixed(1)}% adverse move${c.crossed != null ? `; ${c.crossed} of ${c.of} past moments like this saw one inside the hold` : ""}.`;
+    const dist = Math.abs(c.distance_pct).toFixed(1);
+    line = L(
+      `Your invalidation is a ${dist}% adverse move${c.crossed != null ? `; ${c.crossed} of ${c.of} past moments like this saw one inside the hold` : ""}.`,
+      `你的失效条件是 ${dist}% 的不利波动${c.crossed != null ? `；过去 ${c.of} 个类似时刻中有 ${c.crossed} 个在持有期内出现过这样的波动` : ""}。`,
+    );
   } else if (c.kind === "wrong_side" && c.level != null) {
-    line = `Your invalidation, ${fmtPrice(c.level)}, is ${c.note} the current price - for this direction that reads like a target, not what would prove you wrong.`;
+    const rel = lang === "zh" ? (c.note === "above" ? "高于" : c.note === "below" ? "低于" : c.note) : c.note;
+    line = L(
+      `Your invalidation, ${fmtPrice(c.level)}, is ${c.note} the current price - for this direction that reads like a target, not what would prove you wrong.`,
+      `你的失效条件 ${fmtPrice(c.level)} ${rel}当前价格——对这个方向来说，它更像目标价，而不是能证明你判断错误的位置。`,
+    );
   }
   if (!line && !c.thesis_mismatch) return null;
   return (
     <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
-      <span className="font-medium text-foreground">Your plan, checked: </span>
+      <span className="font-medium text-foreground">{L("Your plan, checked: ", "对你的计划的检查：")}</span>
       <span className="text-muted-foreground">
         {line}
-        {c.thesis_mismatch ? ` Note: ${c.thesis_mismatch}.` : ""}
+        {c.thesis_mismatch ? L(` Note: ${c.thesis_mismatch}.`, ` 注意：${c.thesis_mismatch}。`) : ""}
       </span>
     </div>
   );
@@ -175,31 +183,40 @@ function PlanNote({ report }: { report: Report }) {
  *  A liquidation is not a bad night that can be ridden back: the margin is gone. So it
  *  sits next to the verdict, not in a panel further down.
  */
-function LiquidationNote({ report }: { report: Report }) {
+function LiquidationNote({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const l = report.leverage;
   if (!l) return null;
   let line: string;
   let bad = true;
   if (!l.perp_symbol) {
-    line = `Bitget lists no perpetual for ${report.ticket.ticker}, so ${l.leverage}x is not available; everything below is the spot trade.`;
+    line = L(
+      `Bitget lists no perpetual for ${report.ticket.ticker}, so ${l.leverage}x is not available; everything below is the spot trade.`,
+      `Bitget 没有上线 ${report.ticket.ticker} 的永续合约，所以无法使用 ${l.leverage}x 杠杆；下面的一切都按现货交易计算。`,
+    );
   } else if (!l.allowed) {
-    line = `${l.leverage}x is more than the ${l.max_leverage_at_size}x Bitget allows at this size.`;
+    line = L(`${l.leverage}x is more than the ${l.max_leverage_at_size}x Bitget allows at this size.`, `${l.leverage}x 超过了 Bitget 在这个仓位下允许的 ${l.max_leverage_at_size}x。`);
   } else if (l.liquidation_price == null || l.liquidation_distance_pct == null) {
-    line = `${l.leverage}x noted, but with no entry price the liquidation level is unknown.`;
+    line = L(`${l.leverage}x noted, but with no entry price the liquidation level is unknown.`, `已记录 ${l.leverage}x，但没有入场价，所以强平价格未知。`);
   } else {
     const seen: string[] = [];
-    if (l.analog_of) seen.push(`${l.analog_hits} of ${l.analog_of} past moments like this reached it inside the hold`);
-    if (l.mc_share != null) seen.push(`${fmtRatio(l.mc_share)} of simulated paths do`);
-    if (l.presets_hit.length) seen.push(`${l.presets_hit.length} stress preset${l.presets_hit.length > 1 ? "s" : ""} liquidate it`);
-    line = `${l.leverage}x: about ${fmtUsd(l.margin_quote)} USDT of margin, liquidated near ${fmtPrice(l.liquidation_price)} (${l.liquidation_distance_pct.toFixed(1)}% away). ${seen.join("; ")}.`;
+    if (l.analog_of) seen.push(L(`${l.analog_hits} of ${l.analog_of} past moments like this reached it inside the hold`, `过去 ${l.analog_of} 个类似时刻中有 ${l.analog_hits} 个在持有期内触及强平价`));
+    if (l.mc_share != null) seen.push(L(`${fmtRatio(l.mc_share)} of simulated paths do`, `${fmtRatio(l.mc_share)} 的模拟路径会触及强平价`));
+    if (l.presets_hit.length) seen.push(L(`${l.presets_hit.length} stress preset${l.presets_hit.length > 1 ? "s" : ""} liquidate it`, `${l.presets_hit.length} 个压力情景会将其强平`));
+    line = L(
+      `${l.leverage}x: about ${fmtUsd(l.margin_quote)} USDT of margin, liquidated near ${fmtPrice(l.liquidation_price)} (${l.liquidation_distance_pct.toFixed(1)}% away). ${seen.join("; ")}.`,
+      `${l.leverage}x：保证金约 ${fmtUsd(l.margin_quote)} USDT，价格接近 ${fmtPrice(l.liquidation_price)} 时强平（距当前 ${l.liquidation_distance_pct.toFixed(1)}%）。${seen.join("；")}。`,
+    );
     bad = (l.analog_hits ?? 0) > 0 || l.presets_hit.length > 0 || (l.mc_share ?? 0) >= 0.05;
   }
   return (
     <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${bad ? "border-status-critical/40 bg-status-critical/5" : "border-border bg-muted/30"}`}>
-      <span className="font-medium text-foreground">Liquidation: </span>
+      <span className="font-medium text-foreground">{L("Liquidation: ", "强平：")}</span>
       <span className="text-muted-foreground">
         {line}
-        {l.tiers_source === "assumed" ? ` Bitget's margin tiers were unavailable, so ${(l.mmr * 100).toFixed(1)}% maintenance margin is assumed.` : ` Maintenance margin ${(l.mmr * 100).toFixed(2)}% from Bitget's tier for this size.`}
+        {l.tiers_source === "assumed"
+          ? L(` Bitget's margin tiers were unavailable, so ${(l.mmr * 100).toFixed(1)}% maintenance margin is assumed.`, ` Bitget 的保证金档位不可用，因此按 ${(l.mmr * 100).toFixed(1)}% 的维持保证金率估算。`)
+          : L(` Maintenance margin ${(l.mmr * 100).toFixed(2)}% from Bitget's tier for this size.`, ` 维持保证金率 ${(l.mmr * 100).toFixed(2)}%，取自 Bitget 对这个仓位的档位。`)}
       </span>
     </div>
   );
@@ -208,27 +225,29 @@ function LiquidationNote({ report }: { report: Report }) {
 /** The stated reason, checked against the calendar. */
 /** "Over the weekend" asked on a weekday: say which weekend was measured, and what past
  *  Friday-to-Monday weekends did, so 150 hours does not read as broken clock maths. */
-function WeekendNote({ report }: { report: Report }) {
+function WeekendNote({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const w = report.weekend_only;
   if (!w) return null;
   return (
     <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
-      <span className="font-medium text-foreground">Which weekend: </span>
+      <span className="font-medium text-foreground">{L("Which weekend: ", "指的是哪个周末：")}</span>
       <span className="text-muted-foreground">
-        today is {w.today}, so holding from now is {(w.hold_from_now_h / 24).toFixed(1)} days, to Monday&apos;s open - longer than
-        any hold we have scored. Buying on Friday instead: over {report.ticket.ticker}&apos;s last {w.n} weekends, 1 in 20 lost
-        more than {(-w.p5_pct).toFixed(1)}% from Friday&apos;s close to Monday&apos;s open, and the worst was {w.worst_pct.toFixed(1)}% (raw
-        history, not calibrated). Run it again on Friday for the full check.
+        {L(
+          `today is ${w.today}, so holding from now is ${(w.hold_from_now_h / 24).toFixed(1)} days, to Monday's open - longer than any hold we have scored. Buying on Friday instead: over ${report.ticket.ticker}'s last ${w.n} weekends, 1 in 20 lost more than ${(-w.p5_pct).toFixed(1)}% from Friday's close to Monday's open, and the worst was ${w.worst_pct.toFixed(1)}% (raw history, not calibrated). Run it again on Friday for the full check.`,
+          `今天是 ${w.today}，从现在持有到周一开盘约 ${(w.hold_from_now_h / 24).toFixed(1)} 天，比我们评估过的任何持有期都长。改成周五买入的话：${report.ticket.ticker} 过去 ${w.n} 个周末里，二十分之一的情况从周五收盘到周一开盘亏损超过 ${(-w.p5_pct).toFixed(1)}%，最差的一次是 ${w.worst_pct.toFixed(1)}%（原始历史数据，未经校准）。周五再运行一次，可以得到完整的检查。`,
+        )}
       </span>
     </div>
   );
 }
 
-function PremiseNote({ report }: { report: Report }) {
+function PremiseNote({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   if (!report.premise?.length) return null;
   return (
     <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
-      <span className="font-medium text-foreground">Check your plan: </span>
+      <span className="font-medium text-foreground">{L("Check your plan: ", "请检查你的计划：")}</span>
       <span className="text-muted-foreground">{report.premise.join(" ")}</span>
     </div>
   );
@@ -237,18 +256,23 @@ function PremiseNote({ report }: { report: Report }) {
 /** How this trade loses money: each way it fails, what sets it off, why it costs what it
  *  does, and how often it happened. Written by rules from the report's own numbers; a
  *  model is never asked to invent a causal story. */
-function FailureModes({ report, openAll }: { report: Report; openAll?: boolean }) {
+function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const modes = report.failure_modes ?? [];
   if (!modes.length) return null;
   const worst = modes[0];
+  const worstLoss = worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : "";
   return (
     <Section
       openAll={openAll}
       collapsible
       defaultOpen
-      title="How this trade loses money"
-      subtitle="Each way it fails, what sets it off, why it costs what it does, and how often it happened. Worst first."
-      summary={`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : ""}`}
+      title={L("How this trade loses money", "这笔交易是怎么亏钱的")}
+      subtitle={L(
+        "Each way it fails, what sets it off, why it costs what it does, and how often it happened. Worst first.",
+        "每一种失败方式、由什么触发、为什么会亏这么多，以及历史上发生的频率。最坏的排在最前。",
+      )}
+      summary={L(`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worstLoss}`, `${modes.length} 种方式 · 最坏：${worst.title.toLowerCase()}${worstLoss}`)}
     >
       <ol className="space-y-3">
         {modes.map((m) => (
@@ -261,13 +285,11 @@ function FailureModes({ report, openAll }: { report: Report; openAll?: boolean }
               </span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              <span className="text-foreground">If: </span>
-              {m.trigger}. <span className="text-foreground">Then: </span>
+              <span className="text-foreground">{L("If: ", "如果：")}</span>
+              {m.trigger}. <span className="text-foreground">{L("Then: ", "那么：")}</span>
               {m.mechanism}.
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              How often: {m.likelihood} · from {m.source}
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${m.likelihood} · 来源：${m.source}`)}</p>
           </li>
         ))}
       </ol>
@@ -276,7 +298,8 @@ function FailureModes({ report, openAll }: { report: Report; openAll?: boolean }
 }
 
 /** What the verdict assumes. Caveats are the ones that could make the numbers wrong. */
-function Assumptions({ report, openAll }: { report: Report; openAll?: boolean }) {
+function Assumptions({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const items = report.assumptions ?? [];
   if (!items.length) return null;
   const caveats = items.filter((a) => a.kind === "caveat").length;
@@ -284,9 +307,9 @@ function Assumptions({ report, openAll }: { report: Report; openAll?: boolean })
     <Section
       openAll={openAll}
       collapsible
-      title="What this answer assumes"
-      subtitle="Every input the verdict rests on. The flagged ones are where the numbers could be wrong."
-      summary={`${items.length} assumptions · ${caveats} could change the answer`}
+      title={L("What this answer assumes", "这个结论的前提假设")}
+      subtitle={L("Every input the verdict rests on. The flagged ones are where the numbers could be wrong.", "结论所依赖的每一项输入。带标记的那些，是数字可能出错的地方。")}
+      summary={L(`${items.length} assumptions · ${caveats} could change the answer`, `${items.length} 项假设 · ${caveats} 项可能改变结论`)}
     >
       <ul className="space-y-1.5 text-sm">
         {items.map((a, i) => (
@@ -300,7 +323,8 @@ function Assumptions({ report, openAll }: { report: Report; openAll?: boolean })
   );
 }
 
-function DecisionCard({ report }: { report: Report }) {
+function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const v = report.verdict;
   const t = report.ticket;
   const worst = worstPreset(report);
@@ -310,25 +334,30 @@ function DecisionCard({ report }: { report: Report }) {
 
   return (
     <Section
-      title={`${t.ticker} ${t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
-      subtitle={`Held for ${fmtHours(report.horizon_h)} · as of ${fmtTime(report.as_of)} · market state: ${report.snapshot.labels.regime_label}`}
-      action={<Pill tone={VERDICT_TONE[v.verdict]}>{v.verdict.replace("_", " ")}</Pill>}
+      title={`${t.ticker} ${lang === "zh" ? tl(lang, "side", t.side) : t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
+      subtitle={L(
+        `Held for ${fmtHoursL(report.horizon_h, lang)} · as of ${fmtTimeL(report.as_of, lang)} · market state: ${report.snapshot.labels.regime_label}`,
+        `持有 ${fmtHoursL(report.horizon_h, lang)} · 截至 ${fmtTimeL(report.as_of, lang)} · 市场状态：${report.snapshot.labels.regime_label}`,
+      )}
+      action={<Pill tone={VERDICT_TONE[v.verdict]}>{verdictLabel(lang, v.verdict)}</Pill>}
     >
       <p className="text-2xl font-semibold leading-tight">
-        {VERDICT_TEXT[v.verdict]}
+        {tl(lang, "verdictHeadline", v.verdict)}
         {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
-        {v.hedge_ratio ? <span className="text-muted-foreground"> → hedge {fmtRatio(v.hedge_ratio)} via perp</span> : null}
+        {v.hedge_ratio ? <span className="text-muted-foreground"> → {L(`hedge ${fmtRatio(v.hedge_ratio)} via perp`, `用永续合约对冲 ${fmtRatio(v.hedge_ratio)}`)}</span> : null}
       </p>
       <details className="mt-1 text-xs text-muted-foreground">
-        <summary className="cursor-pointer select-none hover:text-foreground">What the verdicts mean</summary>
+        <summary className="cursor-pointer select-none hover:text-foreground">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
         <ul className="mt-1 space-y-0.5">
-          {VERDICT_MEANING.map(([k, text]) => (
+          {VERDICT_ORDER.map((k) => (
             <li key={k} className={k === v.verdict ? "text-foreground" : undefined}>
-              <span className="font-medium">{k.replace("_", " ")}</span>: {text}
+              <span className="font-medium">{verdictLabel(lang, k)}</span>
+              {L(": ", "：")}
+              {tl(lang, "verdictMeaning", k)}
             </li>
           ))}
         </ul>
-        <p className="mt-1">The desk sizes and warns; it never places the trade. You decide.</p>
+        <p className="mt-1">{L("The desk sizes and warns; it never places the trade. You decide.", "系统只负责给出仓位和风险提示，从不替你下单。决定权在你。")}</p>
       </details>
       <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
         {v.reasons.map((r) => (
@@ -339,55 +368,55 @@ function DecisionCard({ report }: { report: Report }) {
         ))}
       </ul>
 
-      <BookNote report={report} />
+      <BookNote report={report} lang={lang} />
 
       {/* The four numbers, in money, because a percentage of a position is not a feeling. */}
       <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Stat
-          label="If it goes badly"
+          label={L("If it goes badly", "如果走势不利")}
           value={report.gate.risk_quote != null ? `−${fmtUsd(report.gate.risk_quote)}` : "—"}
           hint={report.gate.risk_basis}
           tone="warning"
         />
         <Stat
-          label="If it goes worst"
+          label={L("If it goes worst", "如果走到最坏")}
           value={worst ? fmtUsd(worst.quote) : "—"}
-          hint={worst ? `${worst.name} · ${fmtPct(worst.pct, 1)} of the position` : "no priced scenario"}
+          hint={worst ? L(`${worst.name} · ${fmtPct(worst.pct, 1)} of the position`, `${worst.name} · 占仓位的 ${fmtPct(worst.pct, 1)}`) : L("no priced scenario", "没有可定价的情景")}
           tone="critical"
         />
         <Stat
-          label="Getting out costs"
+          label={L("Getting out costs", "平仓成本")}
           value={exit?.total_cost_quote != null ? `−${fmtUsd(exit.total_cost_quote)}` : "—"}
-          hint={exit?.total_cost_bps != null ? `${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book` : "no order book"}
+          hint={exit?.total_cost_bps != null ? L(`${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book`, `按 ${report.execution.book_source} 盘口计 ${fmtBps(exit.total_cost_bps)}`) : L("no order book", "没有盘口数据")}
         />
         <Stat
-          label={cap ? "Size held down by" : "Size"}
+          label={cap ? L("Size held down by", "仓位被压低的原因") : L("Size", "仓位")}
           value={cap ? fmtUsd(cap.notional as number) : fmtUsd(t.notional_quote)}
-          hint={cap ? `${titleCase(cap.name)} — ${cap.detail}` : "inside every cap"}
+          hint={cap ? `${tl(lang, "cap", cap.name)} — ${cap.detail}` : L("inside every cap", "在所有上限之内")}
           tone={cap ? "warning" : "good"}
         />
       </div>
 
       {against ? (
         <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">The best case against it: </span>
+          <span className="font-medium text-foreground">{L("The best case against it: ", "反对它的最有力理由：")}</span>
           {against.text}
         </p>
       ) : null}
 
-      <LiquidationNote report={report} />
-      <WeekendNote report={report} />
-      <PremiseNote report={report} />
-      <PlanNote report={report} />
-      <ActOnIt report={report} />
+      <LiquidationNote report={report} lang={lang} />
+      <WeekendNote report={report} lang={lang} />
+      <PremiseNote report={report} lang={lang} />
+      <PlanNote report={report} lang={lang} />
+      <ActOnIt report={report} lang={lang} />
       {/* A what-if was never journalled, so there is no forecast to mark taken and
           nothing to score it against later. Offering the button would put a trade the
           trader never made into the circuit breaker's count. */}
-      {report.forecast_id != null && report.forecast_id > 0 ? <TakenButton forecastId={report.forecast_id} /> : null}
+      {report.forecast_id != null && report.forecast_id > 0 ? <TakenButton forecastId={report.forecast_id} lang={lang} /> : null}
       {report.warnings.length ? (
         <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
           <p className="mb-1 flex items-center gap-2 font-medium">
-            <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> Caveats
+            <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> {L("Caveats", "注意事项")}
           </p>
           <ul className="space-y-1 text-muted-foreground">
             {report.warnings.map((w) => (
@@ -422,17 +451,18 @@ const MOVING_TONE: Record<string, "critical" | "warning" | "muted"> = { high: "c
  *  moving with the stock's overnight trading, which makes it a live fair value where the
  *  desk otherwise only has yesterday's close.
  */
-function StreetSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function StreetSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const s = report.street;
   if (!s) return null;
   const live = s.token_vs_live_bps;
   const close = s.token_vs_close_bps;
   const mood = s.mood_score != null ? `${Math.round(s.mood_score)} (${s.mood_rating ?? ""})` : null;
   const summary = [
-    live != null ? `token ${fmtBps(live, 0)} from the live stock price` : null,
-    s.n_firms ? `${s.n_firms} analysts, median target ${fmtUsd(s.median_target, 0)}` : null,
-    s.insider_sells || s.insider_buys ? `insiders ${s.insider_sells} sells / ${s.insider_buys} buys` : null,
-    mood ? `market mood ${mood}` : null,
+    live != null ? L(`token ${fmtBps(live, 0)} from the live stock price`, `代币较股票实时价格 ${fmtBps(live, 0)}`) : null,
+    s.n_firms ? L(`${s.n_firms} analysts, median target ${fmtUsd(s.median_target, 0)}`, `${s.n_firms} 位分析师，目标价中位数 ${fmtUsd(s.median_target, 0)}`) : null,
+    s.insider_sells || s.insider_buys ? L(`insiders ${s.insider_sells} sells / ${s.insider_buys} buys`, `内部人士 ${s.insider_sells} 笔卖出 / ${s.insider_buys} 笔买入`) : null,
+    mood ? L(`market mood ${mood}`, `市场情绪 ${mood}`) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -440,30 +470,37 @@ function StreetSection({ report, openAll }: { report: Report; openAll?: boolean 
     <Section
       openAll={openAll}
       collapsible
-      title="The stock right now, and what the street thinks"
-      subtitle="From Bitget's US-stock data. Context beside the verdict, not an input to it."
+      title={L("The stock right now, and what the street thinks", "这只股票现在的情况，以及华尔街怎么看")}
+      subtitle={L("From Bitget's US-stock data. Context beside the verdict, not an input to it.", "来自 Bitget 的美股数据。只是结论旁边的背景信息，不参与结论的计算。")}
       summary={summary}
     >
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          label="Token vs the stock, live"
+          label={L("Token vs the stock, live", "代币对比股票（实时）")}
           value={live != null ? fmtBps(live, 0) : "—"}
-          hint={close != null ? `against yesterday's close it is ${fmtBps(close, 0)}` : undefined}
+          hint={close != null ? L(`against yesterday's close it is ${fmtBps(close, 0)}`, `相对昨日收盘价为 ${fmtBps(close, 0)}`) : undefined}
         />
         <Stat
-          label={`Analysts, last 90 days (${s.n_firms} firms)`}
-          value={s.n_firms ? `${s.bullish} buy · ${s.neutral} hold · ${s.bearish} sell` : "no coverage"}
-          hint={s.median_target != null ? `median target ${fmtUsd(s.median_target, 0)}${s.target_gap_pct != null ? `, ${fmtPct(s.target_gap_pct, 1)} from here` : ""}` : undefined}
+          label={L(`Analysts, last 90 days (${s.n_firms} firms)`, `分析师，近 90 天（${s.n_firms} 家机构）`)}
+          value={s.n_firms ? L(`${s.bullish} buy · ${s.neutral} hold · ${s.bearish} sell`, `${s.bullish} 买入 · ${s.neutral} 持有 · ${s.bearish} 卖出`) : L("no coverage", "无覆盖")}
+          hint={
+            s.median_target != null
+              ? L(
+                  `median target ${fmtUsd(s.median_target, 0)}${s.target_gap_pct != null ? `, ${fmtPct(s.target_gap_pct, 1)} from here` : ""}`,
+                  `目标价中位数 ${fmtUsd(s.median_target, 0)}${s.target_gap_pct != null ? `，较现价 ${fmtPct(s.target_gap_pct, 1)}` : ""}`,
+                )
+              : undefined
+          }
         />
         <Stat
-          label="Insiders, last 90 days"
-          value={s.insider_sells || s.insider_buys ? `${s.insider_sells} sells · ${s.insider_buys} buys` : "none on the open market"}
-          hint={s.insider_sold_value || s.insider_bought_value ? `sold ${fmtUsd(s.insider_sold_value, 0)}, bought ${fmtUsd(s.insider_bought_value, 0)}` : undefined}
+          label={L("Insiders, last 90 days", "内部人士，近 90 天")}
+          value={s.insider_sells || s.insider_buys ? L(`${s.insider_sells} sells · ${s.insider_buys} buys`, `${s.insider_sells} 笔卖出 · ${s.insider_buys} 笔买入`) : L("none on the open market", "公开市场上没有交易")}
+          hint={s.insider_sold_value || s.insider_bought_value ? L(`sold ${fmtUsd(s.insider_sold_value, 0)}, bought ${fmtUsd(s.insider_bought_value, 0)}`, `卖出 ${fmtUsd(s.insider_sold_value, 0)}，买入 ${fmtUsd(s.insider_bought_value, 0)}`) : undefined}
         />
         <Stat
-          label="Market mood (fear & greed)"
+          label={L("Market mood (fear & greed)", "市场情绪（恐惧与贪婪）")}
           value={mood ?? "—"}
-          hint={s.mood_week_ago != null ? `a week ago ${Math.round(s.mood_week_ago)}, a month ago ${Math.round(s.mood_month_ago ?? 0)}` : undefined}
+          hint={s.mood_week_ago != null ? L(`a week ago ${Math.round(s.mood_week_ago)}, a month ago ${Math.round(s.mood_month_ago ?? 0)}`, `一周前 ${Math.round(s.mood_week_ago)}，一个月前 ${Math.round(s.mood_month_ago ?? 0)}`) : undefined}
         />
       </div>
       {s.recent_changes.length ? (
@@ -471,67 +508,95 @@ function StreetSection({ report, openAll }: { report: Report; openAll?: boolean 
           {s.recent_changes.map((c) => (
             <li key={`${c.date}-${c.firm}`}>
               <span className="tabular text-muted-foreground">{c.date}</span> · {c.firm} {c.action} {c.rating}
-              {c.target != null ? <> · target {fmtUsd(c.target, 0)}</> : null}
+              {c.target != null ? <> · {L("target", "目标价")} {fmtUsd(c.target, 0)}</> : null}
             </li>
           ))}
         </ul>
       ) : null}
       {s.insider_latest.length ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          Latest insider trade: {s.insider_latest[0].name}
-          {s.insider_latest[0].title ? ` (${s.insider_latest[0].title})` : ""} {s.insider_latest[0].side === "sell" ? "sold" : "bought"}{" "}
-          {Math.round(s.insider_latest[0].shares).toLocaleString()} shares on {s.insider_latest[0].date}.
+          {L("Latest insider trade: ", "最近一笔内部人士交易：")}
+          {s.insider_latest[0].name}
+          {s.insider_latest[0].title ? ` (${s.insider_latest[0].title})` : ""}{" "}
+          {L(
+            `${s.insider_latest[0].side === "sell" ? "sold" : "bought"} ${Math.round(s.insider_latest[0].shares).toLocaleString()} shares on ${s.insider_latest[0].date}.`,
+            `于 ${s.insider_latest[0].date} ${s.insider_latest[0].side === "sell" ? "卖出" : "买入"}了 ${Math.round(s.insider_latest[0].shares).toLocaleString()} 股。`,
+          )}
         </p>
       ) : null}
       <p className="mt-3 text-xs text-muted-foreground">
-        Nothing in this section moved the size: none of it has been tested against what the token did overnight. The live price does change what the basis means, and a
-        disagreement between the two sources over the last close is raised as a caveat above.
+        {L(
+          "Nothing in this section moved the size: none of it has been tested against what the token did overnight. The live price does change what the basis means, and a disagreement between the two sources over the last close is raised as a caveat above.",
+          "这一节的内容都没有影响仓位：其中没有任何一项经过代币隔夜实际表现的检验。不过实时价格确实会改变基差的含义；如果两个数据源对上一次收盘价有分歧，会在上方作为注意事项提出。",
+        )}
       </p>
     </Section>
   );
 }
 
-function FreshFilings({ report }: { report: Report }) {
+function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const notes = report.filings ?? [];
   if (!notes.length) return null;
   const worst = notes.reduce((a, b) => (["high", "medium"].includes(b.market_moving) && !["high", "medium"].includes(a.market_moving) ? b : a));
   const flagged = notes.some((n) => n.market_moving === "high" || n.market_moving === "medium");
+  const impactOf = (m: string) => (lang === "zh" ? tl(lang, "impact", m) : m);
 
   return (
     <Section
-      title={notes.length === 1 ? "A filing landed, and the market has not opened since" : `${notes.length} filings landed, and the market has not opened since`}
-      subtitle="Read from the filing's own text. The model says what it is; the history beside it says what followed the ones it flagged the same way."
-      action={<Pill tone={flagged ? MOVING_TONE[worst.market_moving] : "muted"}>{flagged ? `${worst.market_moving} impact` : "routine"}</Pill>}
+      title={
+        notes.length === 1
+          ? L("A filing landed, and the market has not opened since", "有一份文件刚披露，此后市场还没有开盘")
+          : L(`${notes.length} filings landed, and the market has not opened since`, `有 ${notes.length} 份文件刚披露，此后市场还没有开盘`)
+      }
+      subtitle={L(
+        "Read from the filing's own text. The model says what it is; the history beside it says what followed the ones it flagged the same way.",
+        "根据文件原文解读。模型说明这份文件是什么；旁边的历史数据则显示，以同样方式标记的文件之后发生了什么。",
+      )}
+      action={<Pill tone={flagged ? MOVING_TONE[worst.market_moving] : "muted"}>{flagged ? L(`${worst.market_moving} impact`, `${impactOf(worst.market_moving)}影响`) : L("routine", "例行")}</Pill>}
     >
       <div className="space-y-3">
         {notes.map((n) => (
           <div key={`${n.accepted_at}-${n.form}`} className="rounded-lg border border-border bg-muted/20 p-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <p className="text-sm font-medium">{n.headline}</p>
-              <Pill tone={MOVING_TONE[n.market_moving] ?? "muted"}>{n.market_moving}</Pill>
+              <Pill tone={MOVING_TONE[n.market_moving] ?? "muted"}>{impactOf(n.market_moving)}</Pill>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {n.form}
-              {n.items ? ` item ${n.items}` : ""} · {titleCase(n.category)} · filed {fmtHours(n.hours_ago)} ago
-              {n.market_was_shut ? ", while the US market was shut" : ", during the US session"}
-              {n.inside_window ? " · inside your holding window" : ""}
+              {n.items ? L(` item ${n.items}`, ` 第 ${n.items} 项`) : ""} · {titleCase(n.category)} ·{" "}
+              {L(`filed ${fmtHoursL(n.hours_ago, lang)} ago`, `${fmtHoursL(n.hours_ago, lang)}前披露`)}
+              {n.market_was_shut ? L(", while the US market was shut", "，当时美股休市") : L(", during the US session", "，在美股交易时段内")}
+              {n.inside_window ? L(" · inside your holding window", " · 在你的持有期内") : ""}
             </p>
             {n.label_n != null && n.label_p5_pct != null ? (
               <p className="mt-2 text-sm">
-                <span className="text-muted-foreground">What followed the others: </span>
-                the {n.label_n} filings it called <span className="font-medium">{n.market_moving}</span> were followed by a median of{" "}
-                <span className="tabular">{fmtPct(n.label_median_pct, 2)}</span> before the next open, and one in twenty was worse than{" "}
-                <span className="tabular font-medium text-status-critical">{fmtPct(n.label_p5_pct, 2)}</span>.
+                <span className="text-muted-foreground">{L("What followed the others: ", "其他同类文件之后的表现：")}</span>
+                {lang === "zh" ? (
+                  <>
+                    模型标为“<span className="font-medium">{impactOf(n.market_moving)}</span>”的 {n.label_n} 份文件，到下一次开盘前的中位数变动为{" "}
+                    <span className="tabular">{fmtPct(n.label_median_pct, 2)}</span>，二十分之一的情况比{" "}
+                    <span className="tabular font-medium text-status-critical">{fmtPct(n.label_p5_pct, 2)}</span> 更差。
+                  </>
+                ) : (
+                  <>
+                    the {n.label_n} filings it called <span className="font-medium">{n.market_moving}</span> were followed by a median of{" "}
+                    <span className="tabular">{fmtPct(n.label_median_pct, 2)}</span> before the next open, and one in twenty was worse than{" "}
+                    <span className="tabular font-medium text-status-critical">{fmtPct(n.label_p5_pct, 2)}</span>.
+                  </>
+                )}
               </p>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">Too few scored filings carry this label to quote a distribution, so none is shown.</p>
+              <p className="mt-2 text-xs text-muted-foreground">{L("Too few scored filings carry this label to quote a distribution, so none is shown.", "带这个标签且已评分的文件太少，无法给出分布，所以不显示。")}</p>
             )}
           </div>
         ))}
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        The model reads the text and nothing else — no price, and no knowledge of what happened next. It also offers a direction, which measured 49.5% against a coin, so it is not
-        shown and reaches nothing. None of this moved the verdict above.
+        {L(
+          "The model reads the text and nothing else — no price, and no knowledge of what happened next. It also offers a direction, which measured 49.5% against a coin, so it is not shown and reaches nothing. None of this moved the verdict above.",
+          "模型只读文本，别的什么都不看——没有价格，也不知道之后发生了什么。它还会给出一个方向判断，但实测准确率只有 49.5%，和抛硬币没有区别，所以不显示，也不参与任何计算。以上内容都没有影响上面的结论。",
+        )}
       </p>
     </Section>
   );
@@ -545,53 +610,61 @@ function FreshFilings({ report }: { report: Report }) {
  *  so neither is recorded. That exemption is worth saying on the page rather than leaving
  *  a reader to assume this one counts like the others.
  */
-function Hypothetical({ report }: { report: Report }) {
+function Hypothetical({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   if (report.forecast_id == null || report.forecast_id >= 0) return null;
   return (
     <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">A what-if.</span> The desk ran this against the same moment as the report you asked about. It is not journaled and will not be
-      scored, because nobody proposed it as a trade.
+      <span className="font-medium text-foreground">{L("A what-if.", "假设情景。")}</span>{" "}
+      {L(
+        "The desk ran this against the same moment as the report you asked about. It is not journaled and will not be scored, because nobody proposed it as a trade.",
+        "系统是在你所询问的那份报告的同一时刻上运行的。它不会记入日志，也不会被评分，因为没有人把它当作一笔交易提出来。",
+      )}
     </div>
   );
 }
 
 export function ReportView({ report, onRerun, lang = "en" }: { report: Report; onRerun?: (patch: Partial<TicketInput>) => void; lang?: "en" | "zh" }) {
+  const L = tr(lang);
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
   const budget = 25;
   // undefined = every section minds itself; true/false = the reader pressed one of the buttons.
   const [openAll, setOpenAll] = useState<boolean | undefined>(undefined);
   const f = report.snapshot.features;
+  const H = (h: number | null | undefined) => fmtHoursL(h, lang);
+  const flags = report.snapshot.quality_flags.length;
 
   return (
     <div className="space-y-4">
-      {/* The chat answers a Chinese trader in Chinese; this page is still English. Say so,
-          rather than leave half a translation looking like an oversight. */}
+      {/* The whole page is translated; only the text the server writes (reasons, failure
+          modes, caveats) is sent in English. Say so once, rather than leave it looking like
+          an oversight. */}
       {lang === "zh" ? (
-        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground" lang="zh">
-          下方的详细报告目前是英文。左侧聊天里的回复是完整的中文摘要，数字与本报告完全一致；可以继续用中文追问（为什么？· 最坏会亏多少？· 仓位减半）。
+        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground" lang="zh">
+          页面已翻译为中文；由系统按规则生成的理由、失败方式、注意事项等文字可能仍显示为英文，数字与含义不变。
         </p>
       ) : null}
-      <Hypothetical report={report} />
-      <DecisionCard report={report} />
-      <AnalystTakeCard report={report} />
+      <Hypothetical report={report} lang={lang} />
+      <DecisionCard report={report} lang={lang} />
+      <AnalystTakeCard report={report} langHint={lang} />
       {/* Above the disclosures on purpose. Narrowing the search changes what every
           number below it means, so it cannot sit behind a section a reader has to
           open before the summary stops being misleading. */}
-      <LensNote report={report} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
-      <FreshFilings report={report} />
-      <FailureModes report={report} openAll={openAll} />
-      <Assumptions report={report} openAll={openAll} />
-      <StreetSection report={report} openAll={openAll} />
+      <LensNote report={report} lang={lang} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
+      <FreshFilings report={report} lang={lang} />
+      <FailureModes report={report} openAll={openAll} lang={lang} />
+      <Assumptions report={report} openAll={openAll} lang={lang} />
+      <StreetSection report={report} openAll={openAll} lang={lang} />
 
       <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-xs text-muted-foreground">The evidence behind that answer. Open what you want to argue with.</p>
+        <p className="text-xs text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
         <button
           type="button"
           onClick={() => setOpenAll((o) => !o)}
           className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          {openAll ? "Collapse all" : "Expand all"}
+          {openAll ? L("Collapse all", "全部收起") : L("Expand all", "全部展开")}
         </button>
       </div>
 
@@ -599,37 +672,56 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
       <Section
         openAll={openAll}
         collapsible
-        summary={`${fmtPrice(report.snapshot.prices.spot_close)} · vs fair value ${fmtBps(f.basis_index_bps, 0, true)} · volatility ${f.vol_pctl_90d?.toFixed(0) ?? "—"}th pct of 90 days · ${report.snapshot.quality_flags.length ? `${report.snapshot.quality_flags.length} data flag${report.snapshot.quality_flags.length > 1 ? "s" : ""}` : "inputs complete"}`}
-        title="Right now"
-        subtitle={`Last completed bar ${fmtTime(report.snapshot.bar_ts)} · inputs hash ${report.snapshot.content_hash}`}
+        summary={L(
+          `${fmtPrice(report.snapshot.prices.spot_close)} · vs fair value ${fmtBps(f.basis_index_bps, 0, true)} · volatility ${f.vol_pctl_90d?.toFixed(0) ?? "—"}th pct of 90 days · ${flags ? `${flags} data flag${flags > 1 ? "s" : ""}` : "inputs complete"}`,
+          `${fmtPrice(report.snapshot.prices.spot_close)} · 相对公允价值 ${fmtBps(f.basis_index_bps, 0, true)} · 波动率处于近 90 天的第 ${f.vol_pctl_90d?.toFixed(0) ?? "—"} 百分位 · ${flags ? `${flags} 项数据标记` : "输入完整"}`,
+        )}
+        title={L("Right now", "当前状况")}
+        subtitle={L(`Last completed bar ${fmtTimeL(report.snapshot.bar_ts, lang)} · inputs hash ${report.snapshot.content_hash}`, `最近一根已完成的 K 线 ${fmtTimeL(report.snapshot.bar_ts, lang)} · 输入哈希 ${report.snapshot.content_hash}`)}
       >
         {/* Seven tiles across a 820px column truncates every label: "Fair value (in…".
             Four columns and two rows keeps them readable at every width. */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          <Stat label="Token price" value={fmtPrice(report.snapshot.prices.spot_close)} />
-          <Stat label="Fair value (index)" value={fmtPrice(report.snapshot.prices.index_close)} hint={`native close ${fmtPrice(report.snapshot.prices.native_close)} · ${fmtHours(report.snapshot.features.native_close_age_h)} old`} />
-          <Stat label="Token vs fair value" value={fmtBps(report.snapshot.features.basis_index_bps, 1, true)} hint={`z ${report.snapshot.features.basis_index_z?.toFixed(2) ?? "—"}`} />
-          <Stat label="Realised vol (24h)" value={report.snapshot.features.rv_24h != null ? `${(report.snapshot.features.rv_24h * 100).toFixed(0)}%` : "—"} hint={`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`} />
-          <Stat label="Trend vs 30d avg" value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={report.snapshot.labels.trend_state} />
-          <Stat label="Next earnings" value={fmtHours(report.snapshot.features.hours_to_earnings)} hint={`FOMC in ${fmtHours(report.snapshot.features.hours_to_fomc)}`} />
+          <Stat label={L("Token price", "代币价格")} value={fmtPrice(report.snapshot.prices.spot_close)} />
           <Stat
-            label="Last SEC filing"
+            label={L("Fair value (index)", "公允价值（指数）")}
+            value={fmtPrice(report.snapshot.prices.index_close)}
+            hint={L(`native close ${fmtPrice(report.snapshot.prices.native_close)} · ${H(report.snapshot.features.native_close_age_h)} old`, `原生收盘价 ${fmtPrice(report.snapshot.prices.native_close)} · 已过去 ${H(report.snapshot.features.native_close_age_h)}`)}
+          />
+          <Stat label={L("Token vs fair value", "代币相对公允价值")} value={fmtBps(report.snapshot.features.basis_index_bps, 1, true)} hint={`z ${report.snapshot.features.basis_index_z?.toFixed(2) ?? "—"}`} />
+          <Stat
+            label={L("Realised vol (24h)", "已实现波动率（24 小时）")}
+            value={report.snapshot.features.rv_24h != null ? `${(report.snapshot.features.rv_24h * 100).toFixed(0)}%` : "—"}
+            hint={L(`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`, `百分位 ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`)}
+          />
+          <Stat label={L("Trend vs 30d avg", "相对 30 日均线的趋势")} value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={report.snapshot.labels.trend_state} />
+          <Stat label={L("Next earnings", "下次财报")} value={H(report.snapshot.features.hours_to_earnings)} hint={L(`FOMC in ${H(report.snapshot.features.hours_to_fomc)}`, `距 FOMC ${H(report.snapshot.features.hours_to_fomc)}`)} />
+          <Stat
+            label={L("Last SEC filing", "最近一份 SEC 文件")}
             // 720 h is the cap the feature carries, not a measurement: say "over 30 d", not "30 d".
-            value={report.snapshot.features.hours_since_filing != null ? (report.snapshot.features.hours_since_filing >= 720 ? "over 30 d ago" : `${fmtHours(report.snapshot.features.hours_since_filing)} ago`) : "—"}
-            hint={report.snapshot.features.filings_72h ? `${report.snapshot.features.filings_72h} in the last 72h` : "none in the last 72h"}
+            value={
+              report.snapshot.features.hours_since_filing != null
+                ? report.snapshot.features.hours_since_filing >= 720
+                  ? L("over 30 d ago", "超过 30 天前")
+                  : L(`${H(report.snapshot.features.hours_since_filing)} ago`, `${H(report.snapshot.features.hours_since_filing)}前`)
+                : "—"
+            }
+            hint={
+              report.snapshot.features.filings_72h
+                ? L(`${report.snapshot.features.filings_72h} in the last 72h`, `近 72 小时内 ${report.snapshot.features.filings_72h} 份`)
+                : L("none in the last 72h", "近 72 小时内没有")
+            }
             tone={report.snapshot.features.filings_72h ? "warning" : undefined}
           />
         </div>
-        {report.snapshot.quality_flags.length ? (
-          <p className="mt-3 text-xs text-muted-foreground">Flags: {report.snapshot.quality_flags.join(", ")}</p>
-        ) : null}
+        {flags ? <p className="mt-3 text-xs text-muted-foreground">{L("Flags: ", "数据标记：")}{report.snapshot.quality_flags.join(", ")}</p> : null}
       </Section>
 
       {/* Analogs */}
-      <AnalogSection report={report} openAll={openAll} />
+      <AnalogSection report={report} openAll={openAll} lang={lang} />
 
       {/* Stress */}
-      <StressSection report={report} openAll={openAll} />
+      <StressSection report={report} openAll={openAll} lang={lang} />
 
       {/* Exit & hedge */}
       <Section
@@ -637,28 +729,58 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
         collapsible
         summary={
           report.execution.exit_quote?.total_cost_bps != null
-            ? `${fmtBps(report.execution.exit_quote.total_cost_bps)} to exit ${fmtUsd(t.notional_quote)} · ${report.execution.exit_quote.fully_filled ? "fills" : "does not fill"} · largest inside budget ${fmtUsd(report.execution.max_notional_within_budget)}`
-            : "no order book available to cost the exit"
+            ? L(
+                `${fmtBps(report.execution.exit_quote.total_cost_bps)} to exit ${fmtUsd(t.notional_quote)} · ${report.execution.exit_quote.fully_filled ? "fills" : "does not fill"} · largest inside budget ${fmtUsd(report.execution.max_notional_within_budget)}`,
+                `平仓 ${fmtUsd(t.notional_quote)} 需 ${fmtBps(report.execution.exit_quote.total_cost_bps)} · ${report.execution.exit_quote.fully_filled ? "可全部成交" : "无法全部成交"} · 预算内最大平仓量 ${fmtUsd(report.execution.max_notional_within_budget)}`,
+              )
+            : L("no order book available to cost the exit", "没有盘口数据，无法估算平仓成本")
         }
-        title="Getting out"
-        subtitle={`${report.execution.book_source} order book${report.execution.book_ts ? ` · ${fmtTime(report.execution.book_ts)}` : ""}`}
+        title={L("Getting out", "平仓")}
+        subtitle={L(
+          `${report.execution.book_source} order book${report.execution.book_ts ? ` · ${fmtTimeL(report.execution.book_ts, lang)}` : ""}`,
+          `${report.execution.book_source} 盘口${report.execution.book_ts ? ` · ${fmtTimeL(report.execution.book_ts, lang)}` : ""}`,
+        )}
       >
         {report.execution.exit_quote ? (
           <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
             <div className="grid grid-cols-2 gap-2">
-              <Stat label={`Exit ${fmtUsd(report.execution.exit_quote.notional_quote)} USDT`} value={fmtBps(report.execution.exit_quote.total_cost_bps)} hint={`${fmtBps(report.execution.exit_quote.walk_cost_bps)} walk + ${report.execution.exit_quote.fee_bps.toFixed(0)} bps fee`} tone={report.execution.exit_quote.fully_filled ? undefined : "critical"} />
-              <Stat label="Fills" value={report.execution.exit_quote.fully_filled ? "Yes" : "No"} hint={`${report.execution.exit_quote.levels_consumed} levels`} tone={report.execution.exit_quote.fully_filled ? "good" : "critical"} />
-              <Stat label="Largest exit inside budget" value={fmtUsd(report.execution.max_notional_within_budget)} hint={`USDT that still exits under ${budget} bps`} />
+              <Stat
+                label={L(`Exit ${fmtUsd(report.execution.exit_quote.notional_quote)} USDT`, `平仓 ${fmtUsd(report.execution.exit_quote.notional_quote)} USDT`)}
+                value={fmtBps(report.execution.exit_quote.total_cost_bps)}
+                hint={L(
+                  `${fmtBps(report.execution.exit_quote.walk_cost_bps)} walk + ${report.execution.exit_quote.fee_bps.toFixed(0)} bps fee`,
+                  `${fmtBps(report.execution.exit_quote.walk_cost_bps)} 盘口冲击 + ${report.execution.exit_quote.fee_bps.toFixed(0)} bps 手续费`,
+                )}
+                tone={report.execution.exit_quote.fully_filled ? undefined : "critical"}
+              />
+              <Stat
+                label={L("Fills", "能否成交")}
+                value={report.execution.exit_quote.fully_filled ? L("Yes", "是") : L("No", "否")}
+                hint={L(`${report.execution.exit_quote.levels_consumed} levels`, `吃掉 ${report.execution.exit_quote.levels_consumed} 档`)}
+                tone={report.execution.exit_quote.fully_filled ? "good" : "critical"}
+              />
+              <Stat
+                label={L("Largest exit inside budget", "预算内最大平仓量")}
+                value={fmtUsd(report.execution.max_notional_within_budget)}
+                hint={L(`USDT that still exits under ${budget} bps`, `平仓成本仍低于 ${budget} bps 的 USDT 数量`)}
+              />
               {report.execution.hedge_quote ? (
-                <Stat label={`Hedge 100% via ${report.execution.hedge_quote.perp_symbol}`} value={fmtBps(report.execution.hedge_quote.total_cost_bps_of_position)} hint={`fees ${fmtUsd(report.execution.hedge_quote.entry_fee_quote + report.execution.hedge_quote.exit_fee_quote, 2)} USDT · funding ${fmtUsd(report.execution.hedge_quote.funding_quote, 2)} USDT · residual basis p95 ${fmtBps(report.execution.hedge_quote.residual_basis_p95_bps, 0)}`} />
+                <Stat
+                  label={L(`Hedge 100% via ${report.execution.hedge_quote.perp_symbol}`, `通过 ${report.execution.hedge_quote.perp_symbol} 100% 对冲`)}
+                  value={fmtBps(report.execution.hedge_quote.total_cost_bps_of_position)}
+                  hint={L(
+                    `fees ${fmtUsd(report.execution.hedge_quote.entry_fee_quote + report.execution.hedge_quote.exit_fee_quote, 2)} USDT · funding ${fmtUsd(report.execution.hedge_quote.funding_quote, 2)} USDT · residual basis p95 ${fmtBps(report.execution.hedge_quote.residual_basis_p95_bps, 0)}`,
+                    `手续费 ${fmtUsd(report.execution.hedge_quote.entry_fee_quote + report.execution.hedge_quote.exit_fee_quote, 2)} USDT · 资金费 ${fmtUsd(report.execution.hedge_quote.funding_quote, 2)} USDT · 残余基差 p95 ${fmtBps(report.execution.hedge_quote.residual_basis_p95_bps, 0)}`,
+                  )}
+                />
               ) : null}
             </div>
-            {report.execution.cost_curve ? <CostCurve points={report.execution.cost_curve} requested={t.notional_quote} budgetBps={budget} /> : null}
+            {report.execution.cost_curve ? <CostCurve points={report.execution.cost_curve} requested={t.notional_quote} budgetBps={budget} lang={lang} /> : null}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No order book was available, so exit cost is unknown. Start the recorder or allow live book fetches.</p>
+          <p className="text-sm text-muted-foreground">{L("No order book was available, so exit cost is unknown. Start the recorder or allow live book fetches.", "没有可用的盘口数据，所以平仓成本未知。请启动记录器，或允许实时获取盘口。")}</p>
         )}
-        <LiquidityByTimeOfWeek report={report} />
+        <LiquidityByTimeOfWeek report={report} lang={lang} />
       </Section>
 
       {/* Gate + caps */}
@@ -666,16 +788,27 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
         <Section
           openAll={openAll}
           collapsible
-          summary={`${report.gate.rules.filter((r) => r.decision === "GO").length} of ${report.gate.rules.length} checks passed`}
-          title={`Discipline gate · ${report.gate.decision.replace("_", " ")}`}
-          subtitle={report.gate.risk_quote != null ? `Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})` : undefined}
+          summary={L(
+            `${report.gate.rules.filter((r) => r.decision === "GO").length} of ${report.gate.rules.length} checks passed`,
+            `${report.gate.rules.length} 项检查中有 ${report.gate.rules.filter((r) => r.decision === "GO").length} 项通过`,
+          )}
+          title={L(`Discipline gate · ${verdictLabel(lang, report.gate.decision)}`, `纪律闸门 · ${verdictLabel(lang, report.gate.decision)}`)}
+          subtitle={
+            report.gate.risk_quote != null ? L(`Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})`, `面临的风险 ${fmtUsd(report.gate.risk_quote)}（${report.gate.risk_basis}）`) : undefined
+          }
         >
           <ul className="space-y-2">
             {report.gate.rules.map((r) => (
               <li key={r.rule} className="flex items-start gap-2 text-sm">
-                {r.decision === "GO" ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-label="passed" /> : r.decision === "REVIEW_REQUIRED" ? <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-status-warning" aria-label="needs review" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-label="failed" />}
+                {r.decision === "GO" ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-label={L("passed", "通过")} />
+                ) : r.decision === "REVIEW_REQUIRED" ? (
+                  <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-status-warning" aria-label={L("needs review", "需要复核")} />
+                ) : (
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-label={L("failed", "未通过")} />
+                )}
                 <span>
-                  <span className="font-medium">{titleCase(r.rule)}</span>
+                  <span className="font-medium">{tl(lang, "rule", r.rule)}</span>
                   <span className="text-muted-foreground"> — {r.reason}</span>
                 </span>
               </li>
@@ -685,12 +818,19 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
         <Section
           openAll={openAll}
           collapsible
-          summary={bindingCap(report) ? `${titleCase(bindingCap(report)!.name)} binds at ${fmtUsd(bindingCap(report)!.notional as number)}` : `${report.sizing.caps.length} caps, none cuts the request`}
-          title="Sizing caps"
+          summary={
+            bindingCap(report)
+              ? L(
+                  `${tl(lang, "cap", bindingCap(report)!.name)} binds at ${fmtUsd(bindingCap(report)!.notional as number)}`,
+                  `${tl(lang, "cap", bindingCap(report)!.name)}是限制项，上限 ${fmtUsd(bindingCap(report)!.notional as number)}`,
+                )
+              : L(`${report.sizing.caps.length} caps, none cuts the request`, `${report.sizing.caps.length} 项上限，没有一项削减你的请求`)
+          }
+          title={L("Sizing caps", "仓位上限")}
           subtitle={
             report.verdict.recommended_notional != null && report.verdict.recommended_notional < t.notional_quote - 1
-              ? "The smallest cap binds. Each one is independent and named."
-              : "Each one is independent and named. None of them cuts the requested size."
+              ? L("The smallest cap binds. Each one is independent and named.", "取最小的那个上限。每一项都是独立的，并且有名称。")
+              : L("Each one is independent and named. None of them cuts the requested size.", "每一项都是独立的，并且有名称。没有一项削减所请求的仓位。")
           }
         >
           <ul className="space-y-2">
@@ -705,10 +845,10 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
                 <li key={c.name} className="space-y-1">
                   <div className="flex items-baseline justify-between gap-3 text-sm">
                     <span className={binding ? "font-semibold" : ""}>
-                      {titleCase(c.name)}
-                      {binding ? <Pill tone="warning">binds</Pill> : null}
+                      {tl(lang, "cap", c.name)}
+                      {binding ? <Pill tone="warning">{L("binds", "限制项")}</Pill> : null}
                     </span>
-                    <span className="tabular text-muted-foreground">{c.notional == null ? "n/a" : fmtUsd(c.notional)}</span>
+                    <span className="tabular text-muted-foreground">{c.notional == null ? L("n/a", "不适用") : fmtUsd(c.notional)}</span>
                   </div>
                   <div className="h-1.5 w-full rounded-full bg-muted" aria-hidden>
                     <div className={`h-1.5 rounded-full ${binding ? "bg-status-warning" : "bg-chart-1"}`} style={{ width: `${width}%` }} />
@@ -722,35 +862,42 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
       </div>
 
       {/* The case against */}
-      <SecondOpinionSection report={report} openAll={openAll} />
+      <SecondOpinionSection report={report} openAll={openAll} lang={lang} />
 
       {/* The coarse map */}
-      <RegimeSection report={report} openAll={openAll} />
+      <RegimeSection report={report} openAll={openAll} lang={lang} />
 
       {/* The whole book */}
-      <PortfolioSection report={report} openAll={openAll} />
+      <PortfolioSection report={report} openAll={openAll} lang={lang} />
 
       {/* The trader's own record */}
-      <BreakerStrip report={report} openAll={openAll} />
+      <BreakerStrip report={report} openAll={openAll} lang={lang} />
 
       {/* What happened last time */}
-      <LessonsSection report={report} openAll={openAll} />
+      <LessonsSection report={report} openAll={openAll} lang={lang} />
 
       {/* What would change it */}
-      <SensitivitySection report={report} openAll={openAll} />
+      <SensitivitySection report={report} openAll={openAll} lang={lang} />
 
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
         <span>
-          Computed in {report.timings_ms.total} ms · sources: {report.sources.map((s) => String(s.kind)).join(", ")}
-          {report.forecast_id != null && report.forecast_id > 0 ? ` · journaled as forecast #${report.forecast_id}` : ""}
-          {report.forecast_id != null && report.forecast_id < 0 ? " · a what-if: not journaled, never scored" : ""}
+          {L(`Computed in ${report.timings_ms.total} ms · sources: `, `计算耗时 ${report.timings_ms.total} 毫秒 · 数据来源：`)}
+          {report.sources.map((s) => String(s.kind)).join(", ")}
+          {report.forecast_id != null && report.forecast_id > 0 ? L(` · journaled as forecast #${report.forecast_id}`, ` · 已记入日志，预测编号 #${report.forecast_id}`) : ""}
+          {report.forecast_id != null && report.forecast_id < 0 ? L(" · a what-if: not journaled, never scored", " · 假设情景：不记入日志，也不评分") : ""}
         </span>
         {report.receipt && report.forecast_id != null && report.forecast_id > 0 ? (
-          <a href={`/api/verify/${report.forecast_id}`} target="_blank" rel="noreferrer" className="font-mono underline underline-offset-2" title={`Receipt ${report.receipt}: chained to every verdict before it`}>
-            receipt {report.receipt.slice(0, 10)}…
+          <a
+            href={`/api/verify/${report.forecast_id}`}
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono underline underline-offset-2"
+            title={L(`Receipt ${report.receipt}: chained to every verdict before it`, `回执 ${report.receipt}：与此前的每一条结论链接在一起`)}
+          >
+            {L("receipt", "回执")} {report.receipt.slice(0, 10)}…
           </a>
         ) : null}
-        {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} /> : null}
+        {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
       </p>
       {primary ? null : null}
     </div>
@@ -764,23 +911,24 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
  *  resolved to, and says how much history is left. When the request could not be
  *  honoured it says that instead of quietly answering the wider question.
  */
-function LensNote({ report, onUnfiltered }: { report: Report; onUnfiltered?: () => void }) {
+function LensNote({ report, onUnfiltered, lang }: { report: Report; onUnfiltered?: () => void; lang: Lang }) {
+  const L = tr(lang);
   const l = report.analog?.lens;
   if (!l || !l.lenses.length) return null;
   const share = l.n_before > 0 ? l.n_after / l.n_before : 0;
   return (
     <div className={`mb-4 rounded-lg border p-3 text-sm ${l.applied ? "border-primary/40 bg-primary/5" : "border-status-warning/40 bg-status-warning/5"}`}>
       <p className="font-medium">
-        {l.applied ? <>Narrowed to {l.description}</> : <>Could not narrow to {l.description}</>}
-        {l.auto ? <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-normal">automatic</span> : null}
+        {l.applied ? <>{L("Narrowed to ", "已缩小范围至：")}{l.description}</> : <>{L("Could not narrow to ", "无法缩小范围至：")}{l.description}</>}
+        {l.auto ? <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-normal">{L("automatic", "自动")}</span> : null}
       </p>
       {l.auto ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          The desk {l.auto.replace(/^narrowed/, "narrowed this")}. The evidence is on the{" "}
+          {L(`The desk ${l.auto.replace(/^narrowed/, "narrowed this")}. The evidence is on the`, `系统自动缩小了检索范围：${l.auto}。证据见`)}{" "}
           <Link href="/studies" className="underline underline-offset-2 hover:text-foreground">
-            studies page
+            {L("studies page", "研究页面")}
           </Link>
-          .
+          {L(".", "。")}
           {onUnfiltered ? (
             <>
               {" "}
@@ -789,7 +937,7 @@ function LensNote({ report, onUnfiltered }: { report: Report; onUnfiltered?: () 
                 onClick={onUnfiltered}
                 className="rounded underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
-                Show the unfiltered answer instead
+                {L("Show the unfiltered answer instead", "改为查看未筛选的结果")}
               </button>
             </>
           ) : null}
@@ -797,11 +945,13 @@ function LensNote({ report, onUnfiltered }: { report: Report; onUnfiltered?: () 
       ) : null}
       {l.applied ? (
         <p className="mt-1 text-xs text-muted-foreground">
-          {l.n_after.toLocaleString()} of {l.n_before.toLocaleString()} past hours qualify ({(share * 100).toFixed(1)}%). Everything below is that cohort, not the general one —
-          the distance ranking happened inside it.
+          {L(
+            `${l.n_after.toLocaleString()} of ${l.n_before.toLocaleString()} past hours qualify (${(share * 100).toFixed(1)}%). Everything below is that cohort, not the general one — the distance ranking happened inside it.`,
+            `${l.n_before.toLocaleString()} 个历史小时中有 ${l.n_after.toLocaleString()} 个符合条件（${(share * 100).toFixed(1)}%）。下面的一切都基于这个子集，而不是全部历史——相似度排序也是在这个子集内部进行的。`,
+          )}
         </p>
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">{l.refused || "the filter left too little history to search"}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{l.refused || L("the filter left too little history to search", "筛选之后剩下的历史太少，无法检索")}</p>
       )}
       <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
         {l.lenses.map((x) => (
@@ -814,12 +964,16 @@ function LensNote({ report, onUnfiltered }: { report: Report; onUnfiltered?: () 
   );
 }
 
-function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
+  const H = (h: number | null | undefined) => fmtHoursL(h, lang);
   const a = report.analog;
   if (!a || !a.result.ok) {
     return (
-      <Section title="What history says" subtitle="Nearest past moments to now">
-        <p className="text-sm text-muted-foreground">No analog cohort: {a?.result.reason ?? "search did not run"}. The verdict uses the stop for risk.</p>
+      <Section title={L("What history says", "历史怎么说")} subtitle={L("Nearest past moments to now", "与当下最接近的历史时刻")}>
+        <p className="text-sm text-muted-foreground">
+          {L(`No analog cohort: ${a?.result.reason ?? "search did not run"}. The verdict uses the stop for risk.`, `没有可比的历史样本：${a?.result.reason ?? "检索没有运行"}。结论改用止损来衡量风险。`)}
+        </p>
       </Section>
     );
   }
@@ -829,9 +983,9 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
   const markers =
     c && !c.insufficient
       ? [
-          { value: (primary?.p5_adjusted ?? c.p5) as number, label: primary?.p5_adjusted != null ? "p5 cal." : "p5" },
-          { value: c.median_pct as number, label: "median" },
-          { value: (primary?.p95_adjusted ?? c.p95) as number, label: primary?.p95_adjusted != null ? "p95 cal." : "p95" },
+          { value: (primary?.p5_adjusted ?? c.p5) as number, label: primary?.p5_adjusted != null ? L("p5 cal.", "p5 校准") : "p5" },
+          { value: c.median_pct as number, label: L("median", "中位数") },
+          { value: (primary?.p95_adjusted ?? c.p95) as number, label: primary?.p95_adjusted != null ? L("p95 cal.", "p95 校准") : "p95" },
         ]
       : [];
   // The histogram and the tiles are the token's move; a short loses when it rises, so its
@@ -839,67 +993,127 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
   const short = report.ticket.side === "short";
   const p5shown = primary?.loss_p5_pct ?? primary?.p5_adjusted ?? c?.p5 ?? null;
   const wins = primary?.pnl_win_rate ?? c?.win_rate ?? null;
+  const nMatches = a.result.matches.length;
   return (
     <Section
       openAll={openAll}
       collapsible
       summary={
         c && !c.insufficient
-          ? `${a.result.matches.length} past moments · median ${fmtPct(c.median_pct, 1)} · ${short ? "the position's " : ""}one in twenty worse than ${fmtPct(p5shown, 1)} · went this position's way ${wins != null ? `${(wins * 100).toFixed(0)}%` : "—"} of the time`
-          : "not enough distinct matches to answer"
+          ? L(
+              `${nMatches} past moments · median ${fmtPct(c.median_pct, 1)} · ${short ? "the position's " : ""}one in twenty worse than ${fmtPct(p5shown, 1)} · went this position's way ${wins != null ? `${(wins * 100).toFixed(0)}%` : "—"} of the time`,
+              `${nMatches} 个历史时刻 · 中位数 ${fmtPct(c.median_pct, 1)} · ${short ? "该仓位" : ""}二十分之一的坏情况比 ${fmtPct(p5shown, 1)} 更差 · 有 ${wins != null ? `${(wins * 100).toFixed(0)}%` : "—"} 的时间朝这个仓位的方向走`,
+            )
+          : L("not enough distinct matches to answer", "互不相同的匹配样本太少，无法回答")
       }
-      title="What history says"
-      subtitle={`${a.result.matches.length} distinct past moments most like now (${a.scope === "pooled" ? "pooled across tokens" : "same token"}; ${a.result.n_candidates.toLocaleString()} candidate hours, ${a.result.n_distinct_available.toLocaleString()} distinct)`}
+      title={L("What history says", "历史怎么说")}
+      subtitle={L(
+        `${nMatches} distinct past moments most like now (${a.scope === "pooled" ? "pooled across tokens" : "same token"}; ${a.result.n_candidates.toLocaleString()} candidate hours, ${a.result.n_distinct_available.toLocaleString()} distinct)`,
+        `与当下最像的 ${nMatches} 个互不相同的历史时刻（${a.scope === "pooled" ? "跨代币汇总" : "同一代币"}；${a.result.n_candidates.toLocaleString()} 个候选小时，其中 ${a.result.n_distinct_available.toLocaleString()} 个互不相同）`,
+      )}
     >
       {c && !c.insufficient ? (
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <div>
-            <Histogram values={values} markers={markers} ariaLabel={`Distribution of token returns over ${report.primary_horizon} after the ${a.result.matches.length} most similar past moments`} />
+            <Histogram
+              values={values}
+              markers={markers}
+              lang={lang}
+              ariaLabel={L(
+                `Distribution of token returns over ${report.primary_horizon} after the ${nMatches} most similar past moments`,
+                `最相似的 ${nMatches} 个历史时刻之后 ${report.primary_horizon} 内的代币收益分布`,
+              )}
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Stat label={`Typical outcome over ${report.primary_horizon}`} value={fmtPct(c.median_pct)} hint={`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`} />
-            <Stat label="Ended up" value={fmtRatio(c.win_rate)} hint={`of ${c.n} similar past moments${c.n_pending ? `, ${c.n_pending} still open` : ""}`} />
+            <Stat
+              label={L(`Typical outcome over ${report.primary_horizon}`, `${report.primary_horizon} 内的典型结果`)}
+              value={fmtPct(c.median_pct)}
+              hint={L(`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`, `均值 ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`)}
+            />
+            <Stat
+              label={L("Ended up", "最终收涨")}
+              value={fmtRatio(c.win_rate)}
+              hint={L(`of ${c.n} similar past moments${c.n_pending ? `, ${c.n_pending} still open` : ""}`, `共 ${c.n} 个类似的历史时刻${c.n_pending ? `，其中 ${c.n_pending} 个尚未结束` : ""}`)}
+            />
             {primary?.p5_adjusted != null ? (
-              <Stat label={short ? "Stock falls, 1 in 20 (your gain)" : "Bad night, 1 in 20"} value={fmtPct(primary.p5_adjusted)} hint={`before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`} tone={short ? "good" : "critical"} />
+              <Stat
+                label={short ? L("Stock falls, 1 in 20 (your gain)", "股票下跌，二十分之一（你的收益）") : L("Bad night, 1 in 20", "二十分之一的坏情况")}
+                value={fmtPct(primary.p5_adjusted)}
+                hint={L(
+                  `before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`,
+                  `加安全边际之前 ${fmtPct(c.p5)} · 放宽 ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? `，并设 ${primary.adjustment.c_lo.toFixed(1)} 个百分点的下限` : ""}，依据 ${primary.adjustment?.n_fit} 次已评分的回放`,
+                )}
+                tone={short ? "good" : "critical"}
+              />
             ) : (
-              <Stat label={short ? "Stock falls, 1 in 20 (your gain)" : "Bad night, 1 in 20"} value={fmtPct(c.p5)} hint={`likely range [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`} tone={short ? "good" : "critical"} />
+              <Stat
+                label={short ? L("Stock falls, 1 in 20 (your gain)", "股票下跌，二十分之一（你的收益）") : L("Bad night, 1 in 20", "二十分之一的坏情况")}
+                value={fmtPct(c.p5)}
+                hint={L(`likely range [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`, `可能的区间 [${fmtPct(c.ci_p5?.low)}, ${fmtPct(c.ci_p5?.high)}]`)}
+                tone={short ? "good" : "critical"}
+              />
             )}
-            <Stat label={short ? "Stock's worst 5%, on average" : "Average of the worst 5%"} value={fmtPct(c.es5_pct)} hint={c.es5_n ? `${c.es5_n} episode${c.es5_n === 1 ? "" : "s"} below p5` : undefined} tone={short ? undefined : "critical"} />
-            <Stat label={short ? "Stock's deepest dip during the hold, 1 in 20" : "Deepest dip during the hold, 1 in 20"} value={fmtPct(c.mae_p5_pct)} hint={`median worst ${fmtPct(c.mae_median_pct)}`} />
+            <Stat
+              label={short ? L("Stock's worst 5%, on average", "股票最差 5% 情况的平均值") : L("Average of the worst 5%", "最差 5% 情况的平均值")}
+              value={fmtPct(c.es5_pct)}
+              hint={c.es5_n ? L(`${c.es5_n} episode${c.es5_n === 1 ? "" : "s"} below p5`, `${c.es5_n} 次低于 p5`) : undefined}
+              tone={short ? undefined : "critical"}
+            />
+            <Stat
+              label={short ? L("Stock's deepest dip during the hold, 1 in 20", "持有期内股票的最深回撤，二十分之一") : L("Deepest dip during the hold, 1 in 20", "持有期内的最深回撤，二十分之一")}
+              value={fmtPct(c.mae_p5_pct)}
+              hint={L(`median worst ${fmtPct(c.mae_median_pct)}`, `最差情况的中位数 ${fmtPct(c.mae_median_pct)}`)}
+            />
             {primary?.p95_adjusted != null ? (
-              <Stat label={short ? "Stock rises, 1 in 20 (your loss)" : "Good night, 1 in 20"} value={fmtPct(primary.p95_adjusted)} hint={`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`} tone={short ? "critical" : "good"} />
+              <Stat
+                label={short ? L("Stock rises, 1 in 20 (your loss)", "股票上涨，二十分之一（你的亏损）") : L("Good night, 1 in 20", "二十分之一的好情况")}
+                value={fmtPct(primary.p95_adjusted)}
+                hint={L(`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`, `加安全边际之前 ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`)}
+                tone={short ? "critical" : "good"}
+              />
             ) : (
-              <Stat label={short ? "Stock rises, 1 in 20 (your loss)" : "Good night, 1 in 20"} value={fmtPct(c.p95)} tone={short ? "critical" : "good"} />
+              <Stat
+                label={short ? L("Stock rises, 1 in 20 (your loss)", "股票上涨，二十分之一（你的亏损）") : L("Good night, 1 in 20", "二十分之一的好情况")}
+                value={fmtPct(c.p95)}
+                tone={short ? "critical" : "good"}
+              />
             )}
-            <Stat label="Widest gap to fair value, 1 in 20" value={fmtBps(c.max_abs_basis_p95_bps, 0)} hint="inside the window" />
+            <Stat label={L("Widest gap to fair value, 1 in 20", "与公允价值的最大差距，二十分之一")} value={fmtBps(c.max_abs_basis_p95_bps, 0)} hint={L("inside the window", "在窗口之内")} />
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">Cohort for {report.primary_horizon} is below the minimum sample (n = {c?.n ?? 0}). No distribution is shown.</p>
+        <p className="text-sm text-muted-foreground">
+          {L(
+            `Cohort for ${report.primary_horizon} is below the minimum sample (n = ${c?.n ?? 0}). No distribution is shown.`,
+            `${report.primary_horizon} 的样本数低于最低要求（n = ${c?.n ?? 0}），不显示分布。`,
+          )}
+        </p>
       )}
 
       {a.paths?.paths.length ? (
         <div className="mt-6">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <p className="text-sm font-medium">The scenarios themselves</p>
+            <p className="text-sm font-medium">{L("The scenarios themselves", "情景本身")}</p>
             <p className="text-xs text-muted-foreground">
               {a.paths.stop_pct != null ? (
                 <>
                   <span className={a.paths.stopped ? "text-status-warning" : "text-status-good"}>
-                    {a.paths.stopped} of {a.paths.paths.length}
+                    {L(`${a.paths.stopped} of ${a.paths.paths.length}`, `${a.paths.paths.length} 条中有 ${a.paths.stopped} 条`)}
                   </span>{" "}
-                  would have taken out your stop before the horizon
+                  {L("would have taken out your stop before the horizon", "会在期限之前触发你的止损")}
                 </>
               ) : (
-                "no stop given, so none is drawn"
+                L("no stop given, so none is drawn", "没有设置止损，所以没有画出止损线")
               )}
             </p>
           </div>
-          <Scenarios paths={a.paths} horizonLabel={report.primary_horizon} />
+          <Scenarios paths={a.paths} horizonLabel={report.primary_horizon} lang={lang} />
           <p className="mt-2 text-xs text-muted-foreground">
-            Each line is one of the retrieved moments, replayed from its own entry over the same {fmtHours(report.horizon_h)} you are holding for. The histogram above is where
-            these lines end up; this is how they got there — which is the difference between a slow bleed and a round trip that takes out a stop on the way to an unremarkable
-            close.
+            {L(
+              `Each line is one of the retrieved moments, replayed from its own entry over the same ${H(report.horizon_h)} you are holding for. The histogram above is where these lines end up; this is how they got there — which is the difference between a slow bleed and a round trip that takes out a stop on the way to an unremarkable close.`,
+              `每条线是检索到的一个历史时刻，从它自己的入场点开始，按你计划持有的同样 ${H(report.horizon_h)} 重放。上面的直方图是这些线最终落在哪里；这张图则是它们怎么走到那里的——这正是缓慢阴跌，与中途打掉止损、最后却收在平平无奇位置的一去一回之间的区别。`,
+            )}
           </p>
         </div>
       ) : null}
@@ -908,21 +1122,21 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Horizon</TableHead>
+              <TableHead>{L("Horizon", "周期")}</TableHead>
               <TableHead className="text-right">n</TableHead>
-              <TableHead className="text-right">Median</TableHead>
+              <TableHead className="text-right">{L("Median", "中位数")}</TableHead>
               <TableHead className="text-right">p5</TableHead>
               <TableHead className="text-right">p95</TableHead>
-              <TableHead className="text-right">Win</TableHead>
-              <TableHead className="text-right">vs random hours</TableHead>
-              <TableHead>Outcomes</TableHead>
+              <TableHead className="text-right">{L("Win", "胜率")}</TableHead>
+              <TableHead className="text-right">{L("vs random hours", "对比随机时段")}</TableHead>
+              <TableHead>{L("Outcomes", "结果类型")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {Object.values(a.horizons).map((h) => (
               <TableRow key={h.horizon} className={h.horizon === report.primary_horizon ? "bg-accent/40" : ""}>
                 <TableCell className="font-medium">
-                  {titleCase(h.horizon)} <span className="text-muted-foreground">({fmtHours(h.hours)})</span>
+                  {titleCase(h.horizon)} <span className="text-muted-foreground">({H(h.hours)})</span>
                 </TableCell>
                 <TableCell className="tabular text-right">{h.cohort.n}</TableCell>
                 <TableCell className="tabular text-right">{h.cohort.insufficient ? "—" : fmtPct(h.cohort.median_pct)}</TableCell>
@@ -949,39 +1163,17 @@ function AnalogSection({ report, openAll }: { report: Report; openAll?: boolean 
           </TableBody>
         </Table>
       </div>
-      <ClosestMoments report={report} />
+      <ClosestMoments report={report} lang={lang} />
     </Section>
   );
 }
 
 /** The retrieved scenarios themselves: when they were, why they matched, what followed. */
 // The search features in plain words, for saying why a past moment counts as similar.
-const FEATURE_WORDS: Record<string, string> = {
-  basis_index_bps: "gap to fair value",
-  basis_index_z: "how stretched that gap is",
-  basis_index_d6h_bps: "how fast the gap moves",
-  basis_native_bps: "gap to the last close",
-  rv_24h: "day's volatility",
-  rv_168h: "week's volatility",
-  vol_pctl_90d: "volatility for this stock",
-  trend_sma_pct: "trend",
-  sma_slope_5d_pct: "trend's slope",
-  liq_ratio: "trading activity",
-  no_trade_share_24h: "how often it didn't trade",
-  native_close_age_h: "time since the stock traded",
-  hours_to_earnings: "time to earnings",
-  hours_since_earnings: "time since earnings",
-  macro_events_72h: "macro releases ahead",
-  hours_to_fomc: "time to the Fed",
-  news_count_24h: "news flow",
-  vix_pctl_1y: "the VIX",
-  curve_pctl_1y: "yield curve",
-  dollar_20d_chg_pct: "the dollar",
-  ten_year_20d_chg_bps: "10-year yield",
-};
-const words = (fs?: string[]) => (fs ?? []).map((f) => FEATURE_WORDS[f] ?? f.replace(/_/g, " ")).join(", ");
+const words = (lang: Lang, fs?: string[]) => (fs ?? []).map((f) => STRINGS[lang].feature[f] ?? STRINGS.en.feature[f] ?? f.replace(/_/g, " ")).join(lang === "zh" ? "、" : ", ");
 
-function ClosestMoments({ report }: { report: Report }) {
+function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const a = report.analog;
   const [open, setOpen] = useState(false);
   if (!a || !a.result.ok || a.result.matches.length === 0) return null;
@@ -992,39 +1184,42 @@ function ClosestMoments({ report }: { report: Report }) {
     <div className="mt-4">
       <div className="mb-1 flex items-baseline justify-between gap-3">
         <p className="text-xs font-medium text-muted-foreground">
-          The moments themselves · matched on {a.result.features_used.length} features{a.result.features_dropped.length ? `, ${a.result.features_dropped.length} dropped as constant` : ""}
+          {L(
+            `The moments themselves · matched on ${a.result.features_used.length} features${a.result.features_dropped.length ? `, ${a.result.features_dropped.length} dropped as constant` : ""}`,
+            `这些时刻本身 · 按 ${a.result.features_used.length} 个特征匹配${a.result.features_dropped.length ? `，另有 ${a.result.features_dropped.length} 个因恒定不变而剔除` : ""}`,
+          )}
         </p>
         <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
-          {open ? "Show fewer" : `Show all ${a.result.matches.length}`}
+          {open ? L("Show fewer", "收起") : L(`Show all ${a.result.matches.length}`, `显示全部 ${a.result.matches.length} 个`)}
         </Button>
       </div>
       <div className="overflow-x-auto">
         <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
-              <TableHead>When</TableHead>
-              <TableHead>Session</TableHead>
-              <TableHead className="text-right">Similarity</TableHead>
-              <TableHead className="text-right">Vol pctl</TableHead>
-              <TableHead className="text-right">Basis z</TableHead>
-              <TableHead className="text-right">Trend</TableHead>
-              <TableHead className="text-right">To earnings</TableHead>
-              <TableHead className="text-right">What followed</TableHead>
+              <TableHead>{L("When", "时间")}</TableHead>
+              <TableHead>{L("Session", "时段")}</TableHead>
+              <TableHead className="text-right">{L("Similarity", "相似度")}</TableHead>
+              <TableHead className="text-right">{L("Vol pctl", "波动率分位")}</TableHead>
+              <TableHead className="text-right">{L("Basis z", "基差 z")}</TableHead>
+              <TableHead className="text-right">{L("Trend", "趋势")}</TableHead>
+              <TableHead className="text-right">{L("To earnings", "距财报")}</TableHead>
+              <TableHead className="text-right">{L("What followed", "之后的结果")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {a.result.query ? (
               <TableRow className="bg-muted/40">
-                <TableCell className="font-medium">Now</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{bucketLabel(report.snapshot.labels.bucket)}</TableCell>
+                <TableCell className="font-medium">{L("Now", "现在")}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{tl(lang, "bucket", report.snapshot.labels.bucket)}</TableCell>
                 <TableCell className="tabular text-right text-muted-foreground">—</TableCell>
                 <TableCell className="tabular text-right font-medium">{f(a.result.query.vol_pctl_90d, 0)}</TableCell>
                 <TableCell className="tabular text-right font-medium">{f(a.result.query.basis_index_z)}</TableCell>
                 <TableCell className="tabular text-right font-medium">{fmtPct(a.result.query.trend_sma_pct, 1)}</TableCell>
                 <TableCell className="tabular text-right font-medium">
-                  {a.result.query.hours_to_earnings == null ? "—" : a.result.query.hours_to_earnings >= 720 ? "> 30 d" : `${a.result.query.hours_to_earnings.toFixed(0)} h`}
+                  {a.result.query.hours_to_earnings == null ? "—" : a.result.query.hours_to_earnings >= 720 ? L("> 30 d", "> 30 天") : `${a.result.query.hours_to_earnings.toFixed(0)} ${L("h", "小时")}`}
                 </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground">what we&apos;re asking about</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground">{L("what we're asking about", "我们正在询问的这一刻")}</TableCell>
               </TableRow>
             ) : null}
             {shown.map((m) => {
@@ -1033,25 +1228,25 @@ function ClosestMoments({ report }: { report: Report }) {
               return (
                 <TableRow key={`${m.ticker}-${m.ts}`}>
                   <TableCell className="whitespace-nowrap">
-                    {fmtTime(m.ts)}
+                    {fmtTimeL(m.ts, lang)}
                     {m.ticker !== report.ticket.ticker ? <span className="block text-xs text-muted-foreground">{m.ticker}</span> : null}
-                    {m.alike_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-muted-foreground">alike on {words(m.alike_on)}</span> : null}
-                    {m.differs_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-status-warning">differs on {words(m.differs_on)}</span> : null}
+                    {m.alike_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-muted-foreground">{L("alike on ", "相似之处：")}{words(lang, m.alike_on)}</span> : null}
+                    {m.differs_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-status-warning">{L("differs on ", "不同之处：")}{words(lang, m.differs_on)}</span> : null}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{bucketLabel(m.bucket)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{tl(lang, "bucket", m.bucket)}</TableCell>
                   <TableCell className="tabular text-right">{fmtRatio(m.similarity)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.vol_pctl_90d, 0)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.basis_index_z)}</TableCell>
                   <TableCell className="tabular text-right">{fmtPct(m.features.trend_sma_pct, 1)}</TableCell>
-                  <TableCell className="tabular text-right">{hte == null ? "—" : hte >= 720 ? "> 30 d" : `${hte.toFixed(0)} h`}</TableCell>
+                  <TableCell className="tabular text-right">{hte == null ? "—" : hte >= 720 ? L("> 30 d", "> 30 天") : `${hte.toFixed(0)} ${L("h", "小时")}`}</TableCell>
                   <TableCell className="tabular text-right">
                     {o?.status === "MATURED" ? (
                       <>
                         <span className={o.ret_pct != null && o.ret_pct < 0 ? "text-status-critical" : "text-status-good"}>{fmtPct(o.ret_pct)}</span>
-                        <span className="block text-xs text-muted-foreground">worst {fmtPct(o.mae_pct)}</span>
+                        <span className="block text-xs text-muted-foreground">{L("worst", "最差")} {fmtPct(o.mae_pct)}</span>
                       </>
                     ) : (
-                      <span className="text-muted-foreground">still open</span>
+                      <span className="text-muted-foreground">{L("still open", "尚未结束")}</span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -1075,24 +1270,20 @@ const LESSON_TONE: Record<string, "good" | "warning" | "critical" | "info" | "mu
   no_distribution: "muted",
 };
 
-const LESSON_LABEL: Record<string, string> = {
-  worse_than_stress: "worse than the stress case",
-  bad_tail: "bad tail",
-  as_expected: "as expected",
-  good_tail: "good tail",
-  better_than_forecast: "better than forecast",
-  no_distribution: "no forecast",
-};
-
-function SecondOpinionSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function SecondOpinionSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const so = report.second_opinion;
   if (!so || (so.against.length === 0 && so.supporting.length === 0)) return null;
+  const largest = so.against[0]?.magnitude_quote != null ? fmtUsd(Math.abs(so.against[0].magnitude_quote)) : null;
   return (
     <Section
       openAll={openAll}
       collapsible
-      summary={`${so.against.length} point${so.against.length === 1 ? "" : "s"} against${so.against[0]?.magnitude_quote != null ? `, the largest worth ${fmtUsd(Math.abs(so.against[0].magnitude_quote))}` : ""}${so.supporting.length ? ` · ${so.supporting.length} for` : ""}`}
-      title="The case against this"
+      summary={L(
+        `${so.against.length} point${so.against.length === 1 ? "" : "s"} against${largest != null ? `, the largest worth ${largest}` : ""}${so.supporting.length ? ` · ${so.supporting.length} for` : ""}`,
+        `${so.against.length} 条反对${largest != null ? `，最大的一条价值 ${largest}` : ""}${so.supporting.length ? ` · ${so.supporting.length} 条支持` : ""}`,
+      )}
+      title={L("The case against this", "反对这笔交易的理由")}
       subtitle={so.summary}
     >
       <ul className="space-y-2">
@@ -1113,41 +1304,57 @@ function SecondOpinionSection({ report, openAll }: { report: Report; openAll?: b
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-muted-foreground">Every point quotes a number from this report. Ranked by what it is worth in money, with one point from each source before any source repeats.</p>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {L(
+          "Every point quotes a number from this report. Ranked by what it is worth in money, with one point from each source before any source repeats.",
+          "每一条都引用了本报告里的数字。按折算成金额的大小排序，每个来源先各取一条，然后才轮到重复的来源。",
+        )}
+      </p>
     </Section>
   );
 }
 
 /** The recorded archive: is the book always this good, or only right now? */
-function LiquidityByTimeOfWeek({ report }: { report: Report }) {
+function LiquidityByTimeOfWeek({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const h = report.execution.liquidity_history;
   if (!h || h.buckets.length === 0) return null;
   const usable = h.buckets.filter((b) => !b.thin);
   if (usable.length === 0) {
-    return <p className="mt-4 text-xs text-muted-foreground">The book archive has {h.n_snapshots.toLocaleString()} snapshots so far, not yet enough in any one part of the week to compare. It fills in as the recorder runs.</p>;
+    return (
+      <p className="mt-4 text-xs text-muted-foreground">
+        {L(
+          `The book archive has ${h.n_snapshots.toLocaleString()} snapshots so far, not yet enough in any one part of the week to compare. It fills in as the recorder runs.`,
+          `盘口存档目前有 ${h.n_snapshots.toLocaleString()} 份快照，在一周中的任何一段时间内都还不够用来比较。记录器运行之后会逐渐补齐。`,
+        )}
+      </p>
+    );
   }
   return (
     <div className="mt-4">
       <p className="mb-1 text-xs font-medium text-muted-foreground">
-        The same book at other times of the week · {h.n_snapshots.toLocaleString()} recorded snapshots{h.since ? ` since ${fmtTime(h.since)}` : ""}
+        {L(
+          `The same book at other times of the week · ${h.n_snapshots.toLocaleString()} recorded snapshots${h.since ? ` since ${fmtTimeL(h.since, lang)}` : ""}`,
+          `同一盘口在一周其他时段的情况 · 共 ${h.n_snapshots.toLocaleString()} 份记录的快照${h.since ? `，自 ${fmtTimeL(h.since, lang)} 起` : ""}`,
+        )}
       </p>
       <div className="overflow-x-auto">
         <Table className="min-w-[520px]">
           <TableHeader>
             <TableRow>
-              <TableHead>When</TableHead>
-              <TableHead className="text-right">Spread</TableHead>
-              <TableHead className="text-right">Sellable inside 25 bps</TableHead>
-              <TableHead className="text-right">Bad case</TableHead>
-              <TableHead className="text-right">Too thin for {fmtUsd(h.reference_notional)}</TableHead>
+              <TableHead>{L("When", "时间")}</TableHead>
+              <TableHead className="text-right">{L("Spread", "买卖价差")}</TableHead>
+              <TableHead className="text-right">{L("Sellable inside 25 bps", "25 bps 以内可卖出的量")}</TableHead>
+              <TableHead className="text-right">{L("Bad case", "坏情况")}</TableHead>
+              <TableHead className="text-right">{L(`Too thin for ${fmtUsd(h.reference_notional)}`, `不足以承接 ${fmtUsd(h.reference_notional)} 的占比`)}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {h.buckets.map((b) => (
               <TableRow key={b.bucket}>
                 <TableCell>
-                  {bucketLabel(b.bucket)}
-                  {b.thin ? <span className="ml-2 text-xs text-muted-foreground">thin</span> : null}
+                  {tl(lang, "bucket", b.bucket)}
+                  {b.thin ? <span className="ml-2 text-xs text-muted-foreground">{L("thin", "偏薄")}</span> : null}
                 </TableCell>
                 <TableCell className="tabular text-right">{fmtBps(b.spread_median_bps, 1)}</TableCell>
                 <TableCell className="tabular text-right">{fmtUsd(b.depth_25bps_median)}</TableCell>
@@ -1165,7 +1372,9 @@ function LiquidityByTimeOfWeek({ report }: { report: Report }) {
   );
 }
 
-function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
+  const H = (x: number | null | undefined) => fmtHoursL(x, lang);
   const m = report.regimes;
   if (!m || m.regimes.length === 0) return null;
   const current = m.regimes.find((r) => r.id === m.current) ?? null;
@@ -1174,22 +1383,32 @@ function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean 
     <Section
       openAll={openAll}
       collapsible
-      summary={current ? `now: ${current.description} · ${fmtPct(current.share * 100, 0, false)} of the last ${m.n_fitted.toLocaleString()} hours · stays put ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}` : `${m.regimes.length} states over ${m.n_fitted.toLocaleString()} hours`}
-      title="What kind of market this is"
-      subtitle={`${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, gap to fair value, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`}
-      action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>now: {current.description}</Pill> : null}
+      summary={
+        current
+          ? L(
+              `now: ${current.description} · ${fmtPct(current.share * 100, 0, false)} of the last ${m.n_fitted.toLocaleString()} hours · stays put ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}`,
+              `当前：${current.description} · 占最近 ${m.n_fitted.toLocaleString()} 小时的 ${fmtPct(current.share * 100, 0, false)} · 保持不变的概率 ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}`,
+            )
+          : L(`${m.regimes.length} states over ${m.n_fitted.toLocaleString()} hours`, `${m.n_fitted.toLocaleString()} 小时内共 ${m.regimes.length} 个状态`)
+      }
+      title={L("What kind of market this is", "这是一个什么样的市场")}
+      subtitle={L(
+        `${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, gap to fair value, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`,
+        `把过去 ${m.n_fitted.toLocaleString()} 小时按波动率、与公允价值的差距、趋势和流动性分成 ${m.regimes.length} 个状态。只用此刻之前的数据拟合，按从最平静到最动荡排序。`,
+      )}
+      action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>{L("now: ", "当前：")}{current.description}</Pill> : null}
     >
       <div className="overflow-x-auto">
         <Table className="min-w-[720px]">
           <TableHeader>
             <TableRow>
-              <TableHead>State</TableHead>
-              <TableHead className="text-right">Share of hours</TableHead>
-              <TableHead className="text-right">Stays put</TableHead>
-              <TableHead className="text-right">Next {fmtHours(m.horizon_h)}, median</TableHead>
-              <TableHead className="text-right">Never moved</TableHead>
-              <TableHead className="text-right">Next {fmtHours(m.horizon_h)}, p5</TableHead>
-              <TableHead className="text-right">Episodes</TableHead>
+              <TableHead>{L("State", "状态")}</TableHead>
+              <TableHead className="text-right">{L("Share of hours", "占比（小时）")}</TableHead>
+              <TableHead className="text-right">{L("Stays put", "保持不变")}</TableHead>
+              <TableHead className="text-right">{L(`Next ${H(m.horizon_h)}, median`, `未来 ${H(m.horizon_h)}，中位数`)}</TableHead>
+              <TableHead className="text-right">{L("Never moved", "从未变动")}</TableHead>
+              <TableHead className="text-right">{L(`Next ${H(m.horizon_h)}, p5`, `未来 ${H(m.horizon_h)}，p5`)}</TableHead>
+              <TableHead className="text-right">{L("Episodes", "样本数")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1197,7 +1416,7 @@ function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean 
               <TableRow key={r.id} className={r.id === m.current ? "bg-accent/40" : ""}>
                 <TableCell>
                   <span className={r.id === m.current ? "font-semibold" : ""}>{r.description}</span>
-                  {r.id === m.current ? <span className="ml-2 text-xs text-muted-foreground">now</span> : null}
+                  {r.id === m.current ? <span className="ml-2 text-xs text-muted-foreground">{L("now", "当前")}</span> : null}
                 </TableCell>
                 <TableCell className="tabular text-right">{fmtPct(r.share * 100, 0, false)}</TableCell>
                 <TableCell className="tabular text-right text-muted-foreground">{r.persistence == null ? "—" : fmtPct(r.persistence * 100, 0, false)}</TableCell>
@@ -1212,26 +1431,31 @@ function RegimeSection({ report, openAll }: { report: Report; openAll?: boolean 
       </div>
       {nextLikely.length ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          If it changes, the usual next states are{" "}
+          {L("If it changes, the usual next states are", "如果状态发生变化，通常接下来会转向")}{" "}
           {nextLikely.map((x, i) => (
             <span key={x.j}>
-              {i > 0 ? " and " : ""}
-              <span className="text-foreground">{m.regimes.find((r) => r.id === x.j)?.description}</span> ({fmtPct(x.p * 100, 0, false)})
+              {i > 0 ? L(" and ", "和") : ""}
+              <span className="text-foreground">{m.regimes.find((r) => r.id === x.j)?.description}</span> {L("(", "（")}
+              {fmtPct(x.p * 100, 0, false)}
+              {L(")", "）")}
             </span>
           ))}
-          .
+          {L(".", "。")}
         </p>
       ) : null}
       <p className="mt-2 text-xs text-muted-foreground">
-        The medians sit on zero because these tokens do not trade every hour: in the &ldquo;never moved&rdquo; share of windows the price ends on the same
-        last trade it started on. The p5 column is the one the sizing uses.
+        {lang === "zh"
+          ? "中位数接近零，是因为这些代币并不是每个小时都有成交：在“从未变动”占比的那些窗口里，价格结束时停在的，仍是它开始时的最后一笔成交价。仓位计算用的是 p5 这一列。"
+          : <>The medians sit on zero because these tokens do not trade every hour: in the &ldquo;never moved&rdquo; share of windows the price ends on the same
+        last trade it started on. The p5 column is the one the sizing uses.</>}
       </p>
     </Section>
   );
 }
 
 /** What the holdings do to this verdict: the book's bad-case loss before and after, and the book cap when it is the one holding the size down. */
-function BookNote({ report }: { report: Report }) {
+function BookNote({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
   const p = report.portfolio;
   if (!p) return null;
   const before = p.before.tail_loss_quote;
@@ -1239,80 +1463,133 @@ function BookNote({ report }: { report: Report }) {
   const delta = before != null && after != null ? after - before : null;
   return (
     <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
-      <p className="font-medium text-foreground">Your book</p>
+      <p className="font-medium text-foreground">{L("Your book", "你的组合")}</p>
       {before != null && after != null && delta != null ? (
         <p className="text-muted-foreground">
-          One-in-twenty loss{" "}
+          {L("One-in-twenty loss", "二十分之一的亏损")}{" "}
           <span className="tabular font-medium text-foreground">
             {fmtUsd(Math.abs(before))} → {fmtUsd(Math.abs(after))} USDT
           </span>
-          ; this trade {delta < 0 ? "adds" : "removes"} {fmtUsd(Math.abs(delta))} at the size you asked.
+          {L(
+            `; this trade ${delta < 0 ? "adds" : "removes"} ${fmtUsd(Math.abs(delta))} at the size you asked.`,
+            `；这笔交易在你要求的仓位下会${delta < 0 ? "增加" : "减少"} ${fmtUsd(Math.abs(delta))}。`,
+          )}
           {p.book_cap_binds && p.book_cap_quote != null ? (
             <>
               {" "}
-              <Pill tone="warning">book cap binds</Pill> The book cap holds it to <span className="tabular font-medium text-foreground">{fmtUsd(p.book_cap_quote)} USDT</span>
-              {p.book_cap_pct_of_equity != null ? ` (${p.book_cap_pct_of_equity}% of equity for the whole book)` : ""}
-              {p.tail_after_recommended_quote != null ? `, which leaves the book at ${fmtUsd(Math.abs(p.tail_after_recommended_quote))}` : ""}.
+              <Pill tone="warning">{L("book cap binds", "组合上限生效")}</Pill> {L("The book cap holds it to ", "组合上限把它限制在 ")}
+              <span className="tabular font-medium text-foreground">{fmtUsd(p.book_cap_quote)} USDT</span>
+              {p.book_cap_pct_of_equity != null ? L(` (${p.book_cap_pct_of_equity}% of equity for the whole book)`, `（整个组合占权益的 ${p.book_cap_pct_of_equity}%）`) : ""}
+              {p.tail_after_recommended_quote != null ? L(`, which leaves the book at ${fmtUsd(Math.abs(p.tail_after_recommended_quote))}`, `，此时组合的坏情况亏损为 ${fmtUsd(Math.abs(p.tail_after_recommended_quote))}`) : ""}
+              {L(".", "。")}
             </>
           ) : p.book_cap_quote != null ? (
-            <> The book cap ({fmtUsd(p.book_cap_quote)} USDT) does not bind.</>
+            <> {L(`The book cap (${fmtUsd(p.book_cap_quote)} USDT) does not bind.`, `组合上限（${fmtUsd(p.book_cap_quote)} USDT）没有生效。`)}</>
           ) : null}
         </p>
       ) : (
-        <p className="text-muted-foreground">There is not enough stored history to measure the whole book, so no book limit was applied.</p>
+        <p className="text-muted-foreground">{L("There is not enough stored history to measure the whole book, so no book limit was applied.", "已存的历史数据不足以衡量整个组合，所以没有应用组合限制。")}</p>
       )}
       {p.same_name ? (
         <p className="text-muted-foreground">
-          You already hold {fmtUsd(Math.abs(p.same_name.held_signed_quote))} of {p.same_name.ticker}; with this trade that name is {fmtUsd(Math.abs(p.same_name.combined_signed_quote))}
-          {p.same_name.combined_pct_of_equity != null ? ` (${p.same_name.combined_pct_of_equity.toFixed(0)}% of equity)` : ""}.
+          {L(
+            `You already hold ${fmtUsd(Math.abs(p.same_name.held_signed_quote))} of ${p.same_name.ticker}; with this trade that name is ${fmtUsd(Math.abs(p.same_name.combined_signed_quote))}${p.same_name.combined_pct_of_equity != null ? ` (${p.same_name.combined_pct_of_equity.toFixed(0)}% of equity)` : ""}.`,
+            `你已持有 ${fmtUsd(Math.abs(p.same_name.held_signed_quote))} 的 ${p.same_name.ticker}；加上这笔交易后，该标的为 ${fmtUsd(Math.abs(p.same_name.combined_signed_quote))}${p.same_name.combined_pct_of_equity != null ? `（占权益的 ${p.same_name.combined_pct_of_equity.toFixed(0)}%）` : ""}。`,
+          )}
         </p>
       ) : null}
-      {p.unknown.length ? <p className="text-status-warning">No stored history for {p.unknown.join(", ")}: left out of the tail, not counted as zero.</p> : null}
+      {p.unknown.length ? (
+        <p className="text-status-warning">{L(`No stored history for ${p.unknown.join(", ")}: left out of the tail, not counted as zero.`, `没有 ${p.unknown.join("、")} 的历史数据：已排除在尾部风险计算之外，没有按零处理。`)}</p>
+      ) : null}
     </div>
   );
 }
 
-function PortfolioSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function PortfolioSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const p = report.portfolio;
   if (!p) return null;
   const added = p.before.tail_loss_quote != null && p.after.tail_loss_quote != null ? p.after.tail_loss_quote - p.before.tail_loss_quote : null;
   const div = p.after.diversification_ratio;
+  const n = p.positions.length;
   return (
     <Section
       openAll={openAll}
       collapsible
-      summary={`${p.positions.length} position${p.positions.length === 1 ? "" : "s"} · gross ${fmtUsd(p.after.gross_quote)}${added != null ? ` · this trade adds ${fmtUsd(Math.abs(added))} to the bad case` : ""}`}
-      title="What it does to the book"
-      subtitle={`Your ${p.positions.length} position${p.positions.length === 1 ? "" : "s"} together, over ${fmtHours(p.horizon_h)}. Correlations are measured on the tokens' own hourly history, not assumed.`}
-      action={div != null ? <Pill tone={div > 0.9 ? "critical" : div > 0.75 ? "warning" : "good"}>{div > 0.9 ? "one bet" : div > 0.75 ? "thin diversification" : "diversified"}</Pill> : null}
+      summary={L(
+        `${n} position${n === 1 ? "" : "s"} · gross ${fmtUsd(p.after.gross_quote)}${added != null ? ` · this trade adds ${fmtUsd(Math.abs(added))} to the bad case` : ""}`,
+        `${n} 个持仓 · 总敞口 ${fmtUsd(p.after.gross_quote)}${added != null ? ` · 这笔交易使坏情况亏损增加 ${fmtUsd(Math.abs(added))}` : ""}`,
+      )}
+      title={L("What it does to the book", "对整个组合的影响")}
+      subtitle={L(
+        `Your ${n} position${n === 1 ? "" : "s"} together, over ${fmtHoursL(p.horizon_h, lang)}. Correlations are measured on the tokens' own hourly history, not assumed.`,
+        `你的 ${n} 个持仓合在一起，持有 ${fmtHoursL(p.horizon_h, lang)}。相关性是根据各代币自己的小时级历史测得的，不是假设出来的。`,
+      )}
+      action={
+        div != null ? (
+          <Pill tone={div > 0.9 ? "critical" : div > 0.75 ? "warning" : "good"}>
+            {div > 0.9 ? L("one bet", "等于押同一注") : div > 0.75 ? L("thin diversification", "分散度不足") : L("diversified", "分散良好")}
+          </Pill>
+        ) : null
+      }
     >
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Gross exposure" value={fmtUsd(p.after.gross_quote)} hint={p.after.gross_pct_of_equity != null ? `${p.after.gross_pct_of_equity.toFixed(0)}% of equity · was ${fmtUsd(p.before.gross_quote)}` : `was ${fmtUsd(p.before.gross_quote)}`} />
-          <Stat label="Net exposure" value={fmtUsd(p.after.net_quote)} hint={p.after.net_pct_of_equity != null ? `${p.after.net_pct_of_equity.toFixed(0)}% of equity` : undefined} />
-          <Stat label="Largest name" value={p.after.largest_name ?? "—"} hint={p.after.largest_pct_of_gross != null ? `${p.after.largest_pct_of_gross.toFixed(0)}% of gross · top three ${p.after.top3_pct_of_gross?.toFixed(0)}%` : undefined} tone={p.after.largest_pct_of_gross != null && p.after.largest_pct_of_gross > 60 ? "warning" : undefined} />
           <Stat
-            label="Whole book, bad night (1 in 20)"
+            label={L("Gross exposure", "总敞口")}
+            value={fmtUsd(p.after.gross_quote)}
+            hint={
+              p.after.gross_pct_of_equity != null
+                ? L(`${p.after.gross_pct_of_equity.toFixed(0)}% of equity · was ${fmtUsd(p.before.gross_quote)}`, `占权益的 ${p.after.gross_pct_of_equity.toFixed(0)}% · 之前 ${fmtUsd(p.before.gross_quote)}`)
+                : L(`was ${fmtUsd(p.before.gross_quote)}`, `之前 ${fmtUsd(p.before.gross_quote)}`)
+            }
+          />
+          <Stat
+            label={L("Net exposure", "净敞口")}
+            value={fmtUsd(p.after.net_quote)}
+            hint={p.after.net_pct_of_equity != null ? L(`${p.after.net_pct_of_equity.toFixed(0)}% of equity`, `占权益的 ${p.after.net_pct_of_equity.toFixed(0)}%`) : undefined}
+          />
+          <Stat
+            label={L("Largest name", "最大持仓标的")}
+            value={p.after.largest_name ?? "—"}
+            hint={
+              p.after.largest_pct_of_gross != null
+                ? L(`${p.after.largest_pct_of_gross.toFixed(0)}% of gross · top three ${p.after.top3_pct_of_gross?.toFixed(0)}%`, `占总敞口的 ${p.after.largest_pct_of_gross.toFixed(0)}% · 前三大合计 ${p.after.top3_pct_of_gross?.toFixed(0)}%`)
+                : undefined
+            }
+            tone={p.after.largest_pct_of_gross != null && p.after.largest_pct_of_gross > 60 ? "warning" : undefined}
+          />
+          <Stat
+            label={L("Whole book, bad night (1 in 20)", "整个组合的坏情况（二十分之一）")}
             value={fmtUsd(p.after.tail_loss_quote)}
-            hint={added != null ? `this trade adds ${fmtUsd(Math.abs(added))}` : "needs history for every name"}
+            hint={added != null ? L(`this trade adds ${fmtUsd(Math.abs(added))}`, `这笔交易增加 ${fmtUsd(Math.abs(added))}`) : L("needs history for every name", "需要每个标的的历史数据")}
             tone="critical"
           />
           {p.after.standalone_tail_sum_quote != null ? (
-            <Stat label="If the names were independent" value={fmtUsd(p.after.standalone_tail_sum_quote)} hint={div != null ? `the book keeps ${fmtPct(div * 100, 0, false)} of that` : undefined} />
+            <Stat
+              label={L("If the names were independent", "如果各标的互相独立")}
+              value={fmtUsd(p.after.standalone_tail_sum_quote)}
+              hint={div != null ? L(`the book keeps ${fmtPct(div * 100, 0, false)} of that`, `组合保留其中的 ${fmtPct(div * 100, 0, false)}`) : undefined}
+            />
           ) : null}
           {p.mean_correlation_to_book != null ? (
-            <Stat label={`${report.ticket.ticker} vs the book`} value={p.mean_correlation_to_book.toFixed(2)} hint="mean measured correlation" tone={p.mean_correlation_to_book > 0.7 ? "warning" : undefined} />
+            <Stat
+              label={L(`${report.ticket.ticker} vs the book`, `${report.ticket.ticker} 与组合的相关性`)}
+              value={p.mean_correlation_to_book.toFixed(2)}
+              hint={L("mean measured correlation", "平均实测相关性")}
+              tone={p.mean_correlation_to_book > 0.7 ? "warning" : undefined}
+            />
           ) : null}
         </div>
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Measured correlation</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{L("Measured correlation", "实测相关性")}</p>
           <div className="overflow-x-auto">
             <Table className="min-w-[320px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Pair</TableHead>
-                  <TableHead className="text-right">Correlation</TableHead>
-                  <TableHead className="text-right">Hours</TableHead>
+                  <TableHead>{L("Pair", "配对")}</TableHead>
+                  <TableHead className="text-right">{L("Correlation", "相关性")}</TableHead>
+                  <TableHead className="text-right">{L("Hours", "小时数")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1321,7 +1598,9 @@ function PortfolioSection({ report, openAll }: { report: Report; openAll?: boole
                     <TableCell>
                       {c.a} · {c.b}
                     </TableCell>
-                    <TableCell className={`tabular text-right ${c.correlation != null && c.correlation > 0.7 ? "text-status-warning" : ""}`}>{c.correlation == null ? "not enough overlap" : c.correlation.toFixed(2)}</TableCell>
+                    <TableCell className={`tabular text-right ${c.correlation != null && c.correlation > 0.7 ? "text-status-warning" : ""}`}>
+                      {c.correlation == null ? L("not enough overlap", "重叠数据不足") : c.correlation.toFixed(2)}
+                    </TableCell>
                     <TableCell className="tabular text-right text-muted-foreground">{c.overlap_hours.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
@@ -1333,38 +1612,50 @@ function PortfolioSection({ report, openAll }: { report: Report; openAll?: boole
       {p.attribution && p.attribution.book_tail_quote != null ? (
         <div className="mt-4 overflow-x-auto">
           <p className="mb-1 text-xs font-medium text-muted-foreground">
-            Who carries the bad case · measured in the {p.attribution.n_windows.toLocaleString()} historical windows where this book was at its worst
+            {L(
+              `Who carries the bad case · measured in the ${p.attribution.n_windows.toLocaleString()} historical windows where this book was at its worst`,
+              `谁承担了坏情况的亏损 · 取自这个组合表现最差的 ${p.attribution.n_windows.toLocaleString()} 个历史窗口`,
+            )}
           </p>
           <Table className="min-w-[560px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Position</TableHead>
-                <TableHead className="text-right">Weight</TableHead>
-                <TableHead className="text-right">Share of the loss</TableHead>
-                <TableHead className="text-right">Loss in the bad case</TableHead>
-                <TableHead className="text-right">If you dropped it</TableHead>
+                <TableHead>{L("Position", "持仓")}</TableHead>
+                <TableHead className="text-right">{L("Weight", "权重")}</TableHead>
+                <TableHead className="text-right">{L("Share of the loss", "亏损占比")}</TableHead>
+                <TableHead className="text-right">{L("Loss in the bad case", "坏情况下的亏损")}</TableHead>
+                <TableHead className="text-right">{L("If you dropped it", "如果把它平掉")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {p.attribution.contributions.map((c) => (
                 <TableRow key={`${c.ticker}-${c.side}-${c.notional_quote}`}>
                   <TableCell>
-                    <span className="font-medium">{c.ticker}</span> <span className="text-muted-foreground">{c.side}</span>
+                    <span className="font-medium">{c.ticker}</span> <span className="text-muted-foreground">{lang === "zh" ? tl(lang, "side", c.side) : c.side}</span>
                     <span className="block text-xs text-muted-foreground">{fmtUsd(c.notional_quote)}</span>
                   </TableCell>
                   <TableCell className="tabular text-right text-muted-foreground">{fmtPct(c.share_of_gross * 100, 0, false)}</TableCell>
                   <TableCell className={`tabular text-right ${c.component_share != null && c.component_share > c.share_of_gross * 1.25 ? "text-status-warning" : ""}`}>
-                    {c.component_share == null ? c.note || "unknown" : fmtPct(c.component_share * 100, 0, false)}
+                    {c.component_share == null ? c.note || L("unknown", "未知") : fmtPct(c.component_share * 100, 0, false)}
                   </TableCell>
                   <TableCell className="tabular text-right">{c.component_quote == null ? "—" : fmtUsd(c.component_quote)}</TableCell>
                   <TableCell className="tabular text-right text-muted-foreground">
-                    {c.marginal_quote == null ? "—" : c.marginal_quote < 0 ? `tail improves ${fmtUsd(Math.abs(c.marginal_quote))}` : `tail worsens ${fmtUsd(Math.abs(c.marginal_quote))}`}
+                    {c.marginal_quote == null
+                      ? "—"
+                      : c.marginal_quote < 0
+                        ? L(`tail improves ${fmtUsd(Math.abs(c.marginal_quote))}`, `尾部风险改善 ${fmtUsd(Math.abs(c.marginal_quote))}`)
+                        : L(`tail worsens ${fmtUsd(Math.abs(c.marginal_quote))}`, `尾部风险恶化 ${fmtUsd(Math.abs(c.marginal_quote))}`)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          <p className="mt-1 text-xs text-muted-foreground">A share of the loss well above the weight means that position is doing more damage than its size suggests.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {L(
+              "A share of the loss well above the weight means that position is doing more damage than its size suggests.",
+              "亏损占比远高于权重，说明这个持仓造成的伤害，比它的仓位大小所显示的更大。",
+            )}
+          </p>
         </div>
       ) : null}
       {p.notes.length ? (
@@ -1379,14 +1670,15 @@ function PortfolioSection({ report, openAll }: { report: Report; openAll?: boole
 }
 
 /** Marking a trade taken is what turns an analysis into part of the loss record. */
-function TakenButton({ forecastId }: { forecastId: number }) {
+function TakenButton({ forecastId, lang }: { forecastId: number; lang: Lang }) {
+  const L = tr(lang);
   const [state, setState] = useState<"idle" | "saving" | "taken" | "error">("idle");
   if (state === "taken") {
     return (
       <p className="mt-4 text-sm text-status-good">
-        Logged as taken. It now counts towards your loss limits, and will be scored when the horizon passes.{" "}
+        {L("Logged as taken. It now counts towards your loss limits, and will be scored when the horizon passes.", "已记为已成交。它现在计入你的亏损限额，持有期结束后会被评分。")}{" "}
         <button type="button" className="underline underline-offset-2" onClick={() => { setState("saving"); api.markTaken(forecastId, false).then(() => setState("idle")).catch(() => setState("error")); }}>
-          Undo
+          {L("Undo", "撤销")}
         </button>
       </p>
     );
@@ -1399,29 +1691,37 @@ function TakenButton({ forecastId }: { forecastId: number }) {
         disabled={state === "saving"}
         onClick={() => { setState("saving"); api.markTaken(forecastId, true).then(() => setState("taken")).catch(() => setState("error")); }}
       >
-        I took this trade
+        {L("I took this trade", "我做了这笔交易")}
       </Button>
       <span className="text-xs text-muted-foreground">
-        {state === "error" ? "Could not save that. Try again." : "Only trades you mark are counted by the circuit breaker."}
+        {state === "error" ? L("Could not save that. Try again.", "保存失败，请重试。") : L("Only trades you mark are counted by the circuit breaker.", "熔断机制只统计你标记过的交易。")}
       </span>
     </div>
   );
 }
 
-function BreakerStrip({ report, openAll }: { report: Report; openAll?: boolean }) {
+function BreakerStrip({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const b = report.breaker;
   if (!b) return null;
   // Nothing to say to someone who has not logged a trade yet.
   if (b.state === "NORMAL" && b.n_taken === 0) return null;
   const tone = b.state === "HALTED" ? "critical" : b.state === "COOLDOWN" ? "warning" : "good";
+  const stateName = lang === "en" ? b.state.toLowerCase() : tl(lang, "breaker", b.state);
   return (
     <Section
       openAll={openAll}
       collapsible
-      summary={`${b.state.toLowerCase()} · ${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} taken${b.losing_streak ? ` · ${b.losing_streak} losing in a row` : ""}`}
-      title="Your recent record"
-      subtitle={`${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} marked as taken. Only these count; analyses you did not act on are ignored.`}
-      action={<Pill tone={tone}>{b.state.toLowerCase()}</Pill>}
+      summary={L(
+        `${stateName} · ${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} taken${b.losing_streak ? ` · ${b.losing_streak} losing in a row` : ""}`,
+        `${stateName} · 已做 ${b.n_taken} 笔交易${b.losing_streak ? ` · 连续亏损 ${b.losing_streak} 笔` : ""}`,
+      )}
+      title={L("Your recent record", "你最近的交易记录")}
+      subtitle={L(
+        `${b.n_taken} trade${b.n_taken === 1 ? "" : "s"} marked as taken. Only these count; analyses you did not act on are ignored.`,
+        `已标记 ${b.n_taken} 笔交易为已成交。只统计这些；你没有实际操作的分析不计入。`,
+      )}
+      action={<Pill tone={tone}>{stateName}</Pill>}
     >
       <ul className="mb-3 space-y-1 text-sm text-muted-foreground">
         {b.reasons.map((r) => (
@@ -1432,9 +1732,13 @@ function BreakerStrip({ report, openAll }: { report: Report; openAll?: boolean }
         {b.windows.map((w) => (
           <Stat
             key={w.name}
-            label={`Last ${w.name}`}
+            label={L(`Last ${w.name}`, `最近 ${w.name}`)}
             value={fmtUsd(w.realised_quote)}
-            hint={w.limit_quote != null ? `${fmtPct((w.used_fraction ?? 0) * 100, 0, false)} of the ${fmtUsd(w.limit_quote)} limit · ${w.n_trades} trades` : `${w.n_trades} trades · no limit without equity`}
+            hint={
+              w.limit_quote != null
+                ? L(`${fmtPct((w.used_fraction ?? 0) * 100, 0, false)} of the ${fmtUsd(w.limit_quote)} limit · ${w.n_trades} trades`, `已用 ${fmtUsd(w.limit_quote)} 限额的 ${fmtPct((w.used_fraction ?? 0) * 100, 0, false)} · ${w.n_trades} 笔交易`)
+                : L(`${w.n_trades} trades · no limit without equity`, `${w.n_trades} 笔交易 · 没有账户权益，所以没有限额`)
+            }
             tone={w.used_fraction != null && w.used_fraction >= 1 ? "critical" : w.used_fraction != null && w.used_fraction >= 0.75 ? "warning" : undefined}
           />
         ))}
@@ -1443,24 +1747,29 @@ function BreakerStrip({ report, openAll }: { report: Report; openAll?: boolean }
   );
 }
 
-function LessonsSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function LessonsSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const lessons = report.lessons ?? [];
   if (lessons.length === 0) return null;
+  const bad = lessons.filter((l) => l.classification === "worse_than_stress" || l.classification === "bad_tail").length;
   return (
     <Section
       openAll={openAll}
       collapsible
-      summary={`${lessons.length} past call${lessons.length === 1 ? "" : "s"} recalled${(() => {
-        const bad = lessons.filter((l) => l.classification === "worse_than_stress" || l.classification === "bad_tail").length;
-        return bad ? ` · ${bad} finished below the level they were sized against` : " · none breached the level they were sized against";
-      })()}`}
-      title="What happened last time"
-      subtitle="Past calls in conditions like these, scored after the fact. Each is one episode, not evidence: the distribution above is what you size against."
+      summary={L(
+        `${lessons.length} past call${lessons.length === 1 ? "" : "s"} recalled${bad ? ` · ${bad} finished below the level they were sized against` : " · none breached the level they were sized against"}`,
+        `回顾了 ${lessons.length} 次过往判断${bad ? ` · 其中 ${bad} 次的结果低于当时定仓所依据的水平` : " · 没有一次突破当时定仓所依据的水平"}`,
+      )}
+      title={L("What happened last time", "上一次发生了什么")}
+      subtitle={L(
+        "Past calls in conditions like these, scored after the fact. Each is one episode, not evidence: the distribution above is what you size against.",
+        "在类似条件下的过往判断，事后已评分。每一条只是一个个案，不算证据：定仓依据的是上面的分布。",
+      )}
     >
       <ul className="space-y-2">
         {lessons.map((l) => (
           <li key={l.forecast_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
-            <Pill tone={LESSON_TONE[l.classification] ?? "muted"}>{LESSON_LABEL[l.classification] ?? l.classification}</Pill>
+            <Pill tone={LESSON_TONE[l.classification] ?? "muted"}>{tl(lang, "lesson", l.classification)}</Pill>
             <span className="flex-1 text-muted-foreground">{l.text}</span>
           </li>
         ))}
@@ -1469,7 +1778,8 @@ function LessonsSection({ report, openAll }: { report: Report; openAll?: boolean
   );
 }
 
-function SensitivitySection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function SensitivitySection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const sen = report.sensitivity;
   if (!sen || sen.sizes.length === 0) return null;
   const requested = sen.requested_notional;
@@ -1478,10 +1788,22 @@ function SensitivitySection({ report, openAll }: { report: Report; openAll?: boo
     <Section
       openAll={openAll}
       collapsible
-      summary={`${sen.sizes.length} sizes and ${sen.stops.length} stop distances, each re-run through the whole gate${sen.max_go_notional != null ? ` · a GO up to ${fmtUsd(sen.max_go_notional)}` : ""}`}
-      title="What would change it"
-      subtitle="The same gate, caps and verdict, re-run at other sizes and stops. Nothing here is an estimate of the verdict; it is the verdict."
-      action={sen.max_go_notional != null ? <Pill tone="good">GO up to {fmtUsd(sen.max_go_notional)}</Pill> : <Pill tone="critical">no size is a GO</Pill>}
+      summary={L(
+        `${sen.sizes.length} sizes and ${sen.stops.length} stop distances, each re-run through the whole gate${sen.max_go_notional != null ? ` · a GO up to ${fmtUsd(sen.max_go_notional)}` : ""}`,
+        `${sen.sizes.length} 档仓位和 ${sen.stops.length} 档止损距离，每一档都完整重跑了一遍闸门${sen.max_go_notional != null ? ` · 最高 ${fmtUsd(sen.max_go_notional)} 仍然可以做` : ""}`,
+      )}
+      title={L("What would change it", "什么会改变结论")}
+      subtitle={L(
+        "The same gate, caps and verdict, re-run at other sizes and stops. Nothing here is an estimate of the verdict; it is the verdict.",
+        "同样的闸门、上限和结论，在其他仓位和止损下重新运行。这里没有任何一项是对结论的估算，它们就是结论本身。",
+      )}
+      action={
+        sen.max_go_notional != null ? (
+          <Pill tone="good">{L(`GO up to ${fmtUsd(sen.max_go_notional)}`, `最高 ${fmtUsd(sen.max_go_notional)} 可以做`)}</Pill>
+        ) : (
+          <Pill tone="critical">{L("no size is a GO", "没有任何仓位可以做")}</Pill>
+        )
+      }
     >
       <div className="space-y-4">
         <ul className="space-y-1 text-sm">
@@ -1492,7 +1814,7 @@ function SensitivitySection({ report, openAll }: { report: Report; openAll?: boo
           ))}
         </ul>
         <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Verdict by size</p>
+          <p className="text-xs font-medium text-muted-foreground">{L("Verdict by size", "不同仓位下的结论")}</p>
           <ul className="space-y-1">
             {sen.sizes.map((p) => {
               const isRequest = Math.abs(p.notional - requested) < 1;
@@ -1500,18 +1822,18 @@ function SensitivitySection({ report, openAll }: { report: Report; openAll?: boo
                 <li key={p.notional} className="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-0.5 text-xs sm:grid-cols-[5.5rem_8rem_6rem_1fr]">
                   <span className={`tabular text-right ${isRequest ? "font-semibold" : "text-muted-foreground"}`}>
                     {fmtUsd(p.notional)}
-                    {isRequest ? <span className="block text-[10px] font-normal text-muted-foreground">requested</span> : null}
+                    {isRequest ? <span className="block text-[10px] font-normal text-muted-foreground">{L("requested", "所请求")}</span> : null}
                   </span>
                   <span className="hidden h-2 w-full rounded-full bg-muted sm:block" aria-hidden>
                     <span className="block h-2 rounded-full" style={{ width: `${Math.max(3, (p.notional / maxNotional) * 100)}%`, background: `var(--${p.verdict === "GO" ? "status-good" : p.verdict === "NO_GO" ? "status-critical" : p.verdict === "HEDGE" ? "chart-1" : "status-warning"})` }} />
                   </span>
                   <span className="justify-self-start">
-                    <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{p.verdict.replace("_", " ")}</Pill>
+                    <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{verdictLabel(lang, p.verdict)}</Pill>
                   </span>
                   <span className="col-span-2 text-muted-foreground sm:col-span-1">
-                    {p.binding_cap ? `${titleCase(p.binding_cap)} binds` : ""}
-                    {p.exit_cost_bps != null ? ` · exit ${fmtBps(p.exit_cost_bps, 0)}` : ""}
-                    {p.risk_pct_of_equity != null ? ` · risk ${p.risk_pct_of_equity.toFixed(2)}% of equity` : ""}
+                    {p.binding_cap ? L(`${tl(lang, "cap", p.binding_cap)} binds`, `${tl(lang, "cap", p.binding_cap)}是限制项`) : ""}
+                    {p.exit_cost_bps != null ? L(` · exit ${fmtBps(p.exit_cost_bps, 0)}`, ` · 平仓 ${fmtBps(p.exit_cost_bps, 0)}`) : ""}
+                    {p.risk_pct_of_equity != null ? L(` · risk ${p.risk_pct_of_equity.toFixed(2)}% of equity`, ` · 风险占权益 ${p.risk_pct_of_equity.toFixed(2)}%`) : ""}
                   </span>
                 </li>
               );
@@ -1520,15 +1842,15 @@ function SensitivitySection({ report, openAll }: { report: Report; openAll?: boo
         </div>
         {sen.stops.length ? (
           <div className="overflow-x-auto">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Risk by stop distance, at the requested size</p>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">{L("Risk by stop distance, at the requested size", "所请求仓位下，不同止损距离的风险")}</p>
             <Table className="min-w-[420px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Stop distance</TableHead>
-                  <TableHead className="text-right">Stop price</TableHead>
-                  <TableHead className="text-right">Risk, % of equity</TableHead>
-                  <TableHead className="text-right">Risk-budget cap</TableHead>
-                  <TableHead className="text-right">Verdict</TableHead>
+                  <TableHead>{L("Stop distance", "止损距离")}</TableHead>
+                  <TableHead className="text-right">{L("Stop price", "止损价")}</TableHead>
+                  <TableHead className="text-right">{L("Risk, % of equity", "风险，占权益 %")}</TableHead>
+                  <TableHead className="text-right">{L("Risk-budget cap", "风险预算上限")}</TableHead>
+                  <TableHead className="text-right">{L("Verdict", "结论")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1539,7 +1861,7 @@ function SensitivitySection({ report, openAll }: { report: Report; openAll?: boo
                     <TableCell className="tabular text-right">{p.risk_pct_of_equity != null ? `${p.risk_pct_of_equity.toFixed(2)}%` : "—"}</TableCell>
                     <TableCell className="tabular text-right">{fmtUsd(p.risk_budget_notional)}</TableCell>
                     <TableCell className="text-right">
-                      <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{p.verdict.replace("_", " ")}</Pill>
+                      <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{verdictLabel(lang, p.verdict)}</Pill>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1552,45 +1874,48 @@ function SensitivitySection({ report, openAll }: { report: Report; openAll?: boo
   );
 }
 
-function StressSection({ report, openAll }: { report: Report; openAll?: boolean }) {
+function StressSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
   const s = report.stress;
   const mc = s.monte_carlo;
   const rows = s.presets.map((p, i) => ({ p, imp: s.impacts[i] }));
   const sevTone = (sev: string): "good" | "warning" | "critical" | "muted" => (sev === "extreme" ? "critical" : sev === "severe" ? "warning" : "muted");
+  const w = worstPreset(report);
+  const inp = s.inputs_summary;
+  const earningsDays = typeof inp.hours_to_earnings === "number" && inp.hours_to_earnings < 700 ? Math.round(inp.hours_to_earnings / 24) : null;
   return (
     <Section
       openAll={openAll}
       collapsible
-      summary={`${s.presets.length} presets from this token's own history${(() => {
-        const w = worstPreset(report);
-        return w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : "";
-      })()}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`}
-      title="What could go wrong"
-      subtitle={`Presets calibrated from this token's own history: ${s.inputs_summary.closed_windows_n} closed windows, ${s.inputs_summary.earnings_gaps_n} earnings gaps, ${s.inputs_summary.closed_basis_obs_n} closed-hour fair-value gaps${
-        s.inputs_summary.earnings_in_window === false
-          ? `. Earnings presets left out: no report falls inside this hold${
-              typeof s.inputs_summary.hours_to_earnings === "number" && s.inputs_summary.hours_to_earnings < 700
-                ? ` (next in about ${Math.round(s.inputs_summary.hours_to_earnings / 24)} days)`
-                : ""
-            }`
-          : ""
-      }`}
+      summary={L(
+        `${s.presets.length} presets from this token's own history${w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : ""}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`,
+        `基于该代币自身历史的 ${s.presets.length} 个预设情景${w ? ` · 最坏 ${fmtUsd(w.quote)}（${w.name}）` : ""}${mc ? ` · 模拟的尾部亏损 ${fmtPct(mc.p5, 1)}` : ""}`,
+      )}
+      title={L("What could go wrong", "可能会出什么问题")}
+      subtitle={L(
+        `Presets calibrated from this token's own history: ${inp.closed_windows_n} closed windows, ${inp.earnings_gaps_n} earnings gaps, ${inp.closed_basis_obs_n} closed-hour fair-value gaps${
+          inp.earnings_in_window === false ? `. Earnings presets left out: no report falls inside this hold${earningsDays != null ? ` (next in about ${earningsDays} days)` : ""}` : ""
+        }`,
+        `预设情景根据该代币自身的历史校准：${inp.closed_windows_n} 个休市窗口、${inp.earnings_gaps_n} 次财报跳空、${inp.closed_basis_obs_n} 个休市时段的公允价值差距${
+          inp.earnings_in_window === false ? `。已省略财报情景：这次持有期内没有财报${earningsDays != null ? `（下一次约在 ${earningsDays} 天后）` : ""}` : ""
+        }`,
+      )}
     >
       <div className="space-y-4">
         <div className="overflow-x-auto">
           <Table className="min-w-[560px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Scenario</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead className="text-right">Shock</TableHead>
-                <TableHead className="text-right">P&amp;L</TableHead>
+                <TableHead>{L("Scenario", "情景")}</TableHead>
+                <TableHead>{L("Severity", "严重程度")}</TableHead>
+                <TableHead className="text-right">{L("Shock", "冲击")}</TableHead>
+                <TableHead className="text-right">{L("P&L", "盈亏")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map(({ p, imp }) => {
                 const breach = Object.entries(imp.breaches).filter(([, v]) => v).map(([k]) => titleCase(k));
-                const shock = p.price_move_pct ? fmtPct(p.price_move_pct, 1) : p.basis_shock_bps ? fmtBps(p.basis_shock_bps, 0) : p.depth_multiplier !== 1 ? `depth ×${p.depth_multiplier}` : p.funding_rate ? `${(p.funding_rate * 1e4).toFixed(1)} bps / 8h` : "—";
+                const shock = p.price_move_pct ? fmtPct(p.price_move_pct, 1) : p.basis_shock_bps ? fmtBps(p.basis_shock_bps, 0) : p.depth_multiplier !== 1 ? L(`depth ×${p.depth_multiplier}`, `深度 ×${p.depth_multiplier}`) : p.funding_rate ? `${(p.funding_rate * 1e4).toFixed(1)} bps / 8h` : "—";
                 return (
                   <TableRow key={p.id}>
                     <TableCell>
@@ -1598,7 +1923,7 @@ function StressSection({ report, openAll }: { report: Report; openAll?: boolean 
                       <span className="block text-xs text-muted-foreground">{p.probability_note}</span>
                     </TableCell>
                     <TableCell>
-                      <Pill tone={sevTone(p.severity)}>{p.severity}</Pill>
+                      <Pill tone={sevTone(p.severity)}>{lang === "zh" ? (STRINGS.zh.severity[p.severity] ?? p.severity) : p.severity}</Pill>
                     </TableCell>
                     <TableCell className="tabular text-right">{shock}</TableCell>
                     <TableCell className="tabular text-right">
@@ -1616,16 +1941,33 @@ function StressSection({ report, openAll }: { report: Report; openAll?: boolean 
         <div className="grid gap-4 md:grid-cols-2">
           {mc ? (
             <>
-              <Histogram values={mc.terminal_ret_pct} bins={mc.terminal_hist} markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]} binCount={40} height={180} ariaLabel={`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`} />
+              <Histogram
+                values={mc.terminal_ret_pct}
+                bins={mc.terminal_hist}
+                markers={[{ value: mc.p5, label: "p5" }, { value: mc.p50, label: "p50" }, { value: mc.p95, label: "p95" }]}
+                binCount={40}
+                height={180}
+                lang={lang}
+                ariaLabel={L(`Monte Carlo terminal return distribution over ${mc.horizon_h} hours`, `${mc.horizon_h} 小时内蒙特卡洛模拟的期末收益分布`)}
+              />
               <div className="grid grid-cols-2 gap-2 content-start">
-                <Stat label={`Simulated bad night, 1 in 20 (${mc.horizon_h}h)`} value={fmtPct(mc.p5)} hint={`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`} tone="critical" />
-                <Stat label="Expected shortfall (5%)" value={fmtPct(mc.expected_shortfall_5_pct)} hint={`P(loss > 5%) ${fmtRatio(mc.prob_loss_gt["5.0"])}`} />
-                <Stat label="Deepest simulated dip, 1 in 20" value={fmtPct(mc.drawdown_p5)} />
-                <Stat label="Move that loses 5% after costs" value={fmtPct(s.reverse_move_pct_for_5pct_loss)} />
+                <Stat
+                  label={L(`Simulated bad night, 1 in 20 (${mc.horizon_h}h)`, `模拟的二十分之一坏情况（${mc.horizon_h} 小时）`)}
+                  value={fmtPct(mc.p5)}
+                  hint={L(`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`, `${mc.n_paths.toLocaleString()} 条路径 · 对 ${mc.source_hours.toLocaleString()} 小时数据做分块自助抽样`)}
+                  tone="critical"
+                />
+                <Stat
+                  label={L("Expected shortfall (5%)", "预期缺口（最差 5%）")}
+                  value={fmtPct(mc.expected_shortfall_5_pct)}
+                  hint={L(`P(loss > 5%) ${fmtRatio(mc.prob_loss_gt["5.0"])}`, `亏损超过 5% 的概率 ${fmtRatio(mc.prob_loss_gt["5.0"])}`)}
+                />
+                <Stat label={L("Deepest simulated dip, 1 in 20", "模拟的最深回撤，二十分之一")} value={fmtPct(mc.drawdown_p5)} />
+                <Stat label={L("Move that loses 5% after costs", "扣除成本后亏损 5% 所需的价格变动")} value={fmtPct(s.reverse_move_pct_for_5pct_loss)} />
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">Not enough hourly history for a Monte Carlo over this horizon.</p>
+            <p className="text-sm text-muted-foreground">{L("Not enough hourly history for a Monte Carlo over this horizon.", "小时级历史数据不足，无法在这个持有期上做蒙特卡洛模拟。")}</p>
           )}
         </div>
       </div>
