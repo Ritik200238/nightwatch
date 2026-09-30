@@ -203,17 +203,21 @@ class AnalysisContext:
 
         threading.Thread(target=run, name=f"street-{ticker}", daemon=True).start()
 
-    def tail_factors(self, as_of: datetime):  # noqa: ANN201
+    def tail_factors(self, as_of: datetime, side: str = "long"):  # noqa: ANN201
         """Tail-calibration factors fitted on replay forecasts matured before ``as_of``
-        (None when the journal is absent or has too few matured replays)."""
+        (None when the journal is absent or has too few matured replays).
+
+        ``side="short"`` fits the loss tail of the short replays alone: the same nights,
+        replayed the other way, so a short's loss line is calibrated on shorts' outcomes."""
         if self.journal is None:
             return None
-        key = ensure_utc(as_of).replace(minute=0, second=0, microsecond=0).isoformat()
+        key = side + ensure_utc(as_of).replace(minute=0, second=0, microsecond=0).isoformat()
         if key not in self._factors_cache:
             from nightwatch.journal.adjust import factors_as_of
 
             try:
-                df = self.journal.forecasts(kind="replay", matured_only=True)
+                df = self.journal.forecasts(kind="replay", matured_only=True, short_replays=side == "short")
+                df = df[df["side"] == side] if not df.empty else df
                 self._factors_cache[key] = factors_as_of(df, as_of) if not df.empty else None
             except Exception:  # noqa: BLE001
                 log.exception("tail factor fit failed")
@@ -383,14 +387,27 @@ class HorizonReport:
     pnl_win_rate: float | None = None
 
 
-def _position_view(h: HorizonReport, side: str) -> None:
-    """Fill the position's own view of a horizon from the token's."""
+def _position_view(h: HorizonReport, side: str, short_factors: Any = None) -> None:  # noqa: ANN401
+    """Fill the position's own view of a horizon from the token's.
+
+    A short's loss line is the more cautious of two: the token's upper tail widened by the
+    long-fitted factor, and the short's own loss tail widened by factors fitted on short
+    replays of the same nights. Scored out of sample on 2,301 short replays
+    (research/short_calibration.py) the combination breached 4.7% against 5%, 5.7% on the
+    narrowest third instead of 7.8%, at the same pinball loss (t = -0.02)."""
     c = h.cohort
     if c.insufficient:
         return
     if side == "short":
         up = h.p95_adjusted if h.p95_adjusted is not None else c.p95
         h.loss_p5_pct = -up if up is not None else None
+        own = short_factors.for_hours(h.hours) if short_factors is not None and not (h.adjustment or {}).get("uncalibrated") else None
+        if own is not None and c.p95 is not None and c.median_pct is not None:
+            p5_s, p50_s = -c.p95, -c.median_pct
+            line = p50_s + own.k_lo * (p5_s - p50_s) - own.c_lo
+            if h.loss_p5_pct is None or line < h.loss_p5_pct:
+                h.loss_p5_pct = line
+                h.adjustment = {**(h.adjustment or {}), "short_own_fit": {"k_lo": own.k_lo, "c_lo": own.c_lo, "n_fit": own.n_fit}}
         h.pnl_median_pct = -c.median_pct if c.median_pct is not None else None
         h.pnl_win_rate = (1.0 - c.win_rate) if c.win_rate is not None else None
     else:
@@ -1074,8 +1091,9 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
             }
         horizons[name] = HorizonReport(horizon=name, hours=hours, cohort=stats, baseline=comparison, p5_adjusted=p5_adj, p95_adjusted=p95_adj, adjustment=adjustment)
     _floor_longer_holds(horizons)
+    short_factors = ctx.tail_factors(as_of, side="short") if ticket.side.value == "short" else None
     for h in horizons.values():
-        _position_view(h, ticket.side.value)
+        _position_view(h, ticket.side.value, short_factors)
     if primary in horizons and horizons[primary].cohort.insufficient:
         warnings.append(f"analog cohort for the {primary} horizon is below the minimum sample; verdict falls back to the stop for risk")
 

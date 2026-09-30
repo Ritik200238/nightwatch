@@ -230,9 +230,17 @@ class Journal:
 
     # ------------------------------------------------------------------- reads
 
-    def forecasts(self, *, ticker: str | None = None, kind: str | None = None, matured_only: bool = False) -> pd.DataFrame:
+    def forecasts(self, *, ticker: str | None = None, kind: str | None = None, matured_only: bool = False, short_replays: bool = False) -> pd.DataFrame:
+        """Journaled forecasts, oldest first.
+
+        Short-side replays are left out unless asked for. They exist to calibrate a short's
+        own loss line (``tail_factors(side="short")``); every other reader - the scorecard,
+        the long-side factors, the studies - was built and measured on the long replays and
+        must not change because a second side was added beside them."""
         sql = """SELECT f.*, o.exit_ts, o.exit_price, o.ret_pct, o.mfe_pct, o.mae_pct, o.max_abs_basis_bps, o.matured_at
                  FROM forecasts f LEFT JOIN forecast_outcomes o ON o.forecast_id = f.id WHERE 1=1"""
+        if not short_replays:
+            sql += " AND NOT (f.kind = 'replay' AND f.side = 'short')"
         args: list[object] = []
         if ticker:
             sql += " AND f.ticker=?"

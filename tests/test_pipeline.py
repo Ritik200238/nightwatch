@@ -328,3 +328,21 @@ def test_a_narrowing_the_desk_chose_never_makes_the_loss_line_milder():
     assert narrowed.horizons["12h"].loss_p5_pct == -3.0 and narrowed.horizons["24h"].loss_p5_pct == -5.0
     assert narrowed.horizons["72h"].loss_p5_pct == -6.0 and used == ["12h", "72h"]
     assert narrowed.horizons["12h"].adjustment["cautious_of_two"] == "unfiltered"
+
+
+def test_a_shorts_loss_line_is_the_more_cautious_of_its_two_fits():
+    from types import SimpleNamespace
+
+    from nightwatch.pipeline.analyze import HorizonReport, _position_view
+
+    cohort = SimpleNamespace(insufficient=False, p5=-3.0, p95=2.0, median_pct=0.0, win_rate=0.5)
+    own = SimpleNamespace(k_lo=1.5, c_lo=1.0, n_fit=500)
+    factors = SimpleNamespace(for_hours=lambda h: own)
+    h = HorizonReport(horizon="12h", hours=12, cohort=cohort, baseline=None, p95_adjusted=2.5)
+    _position_view(h, "short", factors)
+    # Long-fitted upper tail says -2.5; the short's own fit says 0 + 1.5 * (-2 - 0) - 1 = -4.0.
+    assert h.loss_p5_pct == -4.0 and h.adjustment["short_own_fit"]["n_fit"] == 500
+    milder = SimpleNamespace(for_hours=lambda h: SimpleNamespace(k_lo=1.0, c_lo=0.0, n_fit=500))
+    h2 = HorizonReport(horizon="12h", hours=12, cohort=cohort, baseline=None, p95_adjusted=2.5)
+    _position_view(h2, "short", milder)
+    assert h2.loss_p5_pct == -2.5  # the milder own fit never loosens it
