@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLang } from "@/lib/lang";
 
 /** The stages one analysis runs through, in order, with roughly when each starts on a warm
  *  server (from the report's own timings). Shown while a request is in flight so ten
@@ -15,7 +16,9 @@ const STEPS: { at: number; en: string; zh: string }[] = [
 ];
 const SLOW_AFTER = 20;
 
-export function Working({ lang = "en", compact = false }: { lang?: "en" | "zh"; compact?: boolean }) {
+export function Working({ lang: langProp, compact = false }: { lang?: "en" | "zh"; compact?: boolean }) {
+  const ctx = useLang();
+  const lang = langProp ?? ctx.lang;
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = Date.now();

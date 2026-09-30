@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
-import { HealthPill } from "@/components/health-pill";
+import { SiteFooter, SiteHeader } from "@/components/site-nav";
+import { LangProvider } from "@/lib/lang";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -16,48 +16,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}>
       <body className="flex min-h-full flex-col">
-        <header className="border-b border-border">
-          {/* Wraps rather than clips: at 390px the brand, the links and the status pill do not
-              fit on one line, and hiding a destination behind a scroll is worse than a taller
-              header. The nav inside wraps for the same reason, now that there are five. */}
-          <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 md:flex-nowrap md:px-6 lg:px-8">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 sm:gap-x-6">
-              <Link href="/" className="rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none">
-                Nightwatch
-              </Link>
-              {/* Wraps for the same reason the header does. Six destinations do not fit
-                  on one line next to the brand at 375px, and a nav that runs off the
-                  screen edge is worse than one that takes a second line. */}
-              <nav aria-label="Primary" className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                <Link href="/" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                  Desk
-                </Link>
-                <Link href="/tonight" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:px-3">
-                  Tonight
-                </Link>
-                <Link href="/calibration" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                  Calibration
-                </Link>
-                <Link href="/studies" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                  Studies
-                </Link>
-                <Link href="/journal" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                  Journal
-                </Link>
-                <Link href="/wrong" className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent sm:px-3 hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                  What we got wrong
-                </Link>
-              </nav>
-            </div>
-            <HealthPill />
-          </div>
-        </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 lg:px-8">{children}</main>
-        <footer className="border-t border-border">
-          <p className="mx-auto w-full max-w-7xl px-4 py-4 text-xs text-muted-foreground md:px-6 lg:px-8">
-            Research tool. Nightwatch never places orders; the human decides. Every number is computed from stored market data and labelled with its source.
-          </p>
-        </footer>
+        <LangProvider>
+          <header className="border-b border-border">
+            <SiteHeader />
+          </header>
+          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-6 lg:px-8">{children}</main>
+          <footer className="border-t border-border">
+            <SiteFooter />
+          </footer>
+        </LangProvider>
       </body>
     </html>
   );

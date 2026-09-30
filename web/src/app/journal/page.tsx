@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
+import { useLang } from "@/lib/lang";
+import { t as tl } from "@/lib/i18n";
 import { fmtPct, fmtTime, fmtUsd } from "@/lib/format";
 
 /** One journal row as the API returns it. Everything optional is null until maturity. */
@@ -37,6 +39,8 @@ const KINDS = ["all", "ticket", "replay"] as const;
 const LIMIT = 60; // a readable page; the whole journal is available from the API and the CLI
 
 export default function JournalPage() {
+  const { tx, lang } = useLang();
+  const sideW = (s: string) => (lang === "zh" ? (s === "long" ? "做多" : s === "short" ? "做空" : s) : s);
   const [rows, setRows] = useState<ForecastRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<(typeof KINDS)[number]>("all");
@@ -48,7 +52,7 @@ export default function JournalPage() {
       const r = (await api.forecasts(LIMIT, undefined, kind === "all" ? undefined : kind)) as unknown as ForecastRow[];
       setRows([...r].reverse()); // newest first
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load the journal.");
+      setError(e instanceof Error ? e.message : tx("Could not load the journal.", "无法加载日志。"));
     }
   }
 
@@ -73,16 +77,15 @@ export default function JournalPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Everything it has predicted</h1>
+          <h1 className="text-lg font-semibold tracking-tight">{tx("Everything it has predicted", "它做过的所有预测")}</h1>
           <p className="max-w-prose text-sm text-muted-foreground">
-            Each row was written down before the outcome existed, with the hash of the exact inputs. Replays are point-in-time forecasts over past closed-market windows; tickets are live
-            analyses. Nothing is edited afterwards; maturing only adds the result.
+            {tx("Each row was written down before the outcome existed, with the hash of the exact inputs. Replays are point-in-time forecasts over past closed-market windows; tickets are live analyses. Nothing is edited afterwards; maturing only adds the result.", "每一行都是在结果出现之前写下的，并附上精确输入的哈希。重演是针对过去休市窗口、按当时时点做出的预测；表单交易是实时分析。事后不会修改任何内容；到期只是补上结果。")}
           </p>
         </div>
-        <div className="flex gap-1" role="group" aria-label="Forecast kind">
+        <div className="flex gap-1" role="group" aria-label={tx("Forecast kind", "预测类型")}>
           {KINDS.map((k) => (
             <Button key={k} size="sm" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
-              {k === "all" ? "All" : k === "replay" ? "Replays" : "Live tickets"}
+              {k === "all" ? tx("All", "全部") : k === "replay" ? tx("Replays", "重演") : tx("Live tickets", "实时交易")}
             </Button>
           ))}
         </div>
@@ -90,10 +93,10 @@ export default function JournalPage() {
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
-          <p className="font-medium">Couldn&apos;t load the journal</p>
+          <p className="font-medium">{tx("Couldn't load the journal", "无法加载日志")}</p>
           <p className="text-xs text-muted-foreground">{error}</p>
           <Button variant="secondary" size="sm" className="mt-2" onClick={() => void load()}>
-            Try again
+            {tx("Try again", "重试")}
           </Button>
         </div>
       ) : !rows ? (
@@ -103,20 +106,20 @@ export default function JournalPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
-          <p className="text-sm font-medium">Nothing journaled yet</p>
-          <p className="max-w-prose text-sm text-muted-foreground">Analyse a ticket on the desk, or run a replay to score the forecasts the system would have made over past closed-market windows.</p>
+          <p className="text-sm font-medium">{tx("Nothing journaled yet", "日志里还没有内容")}</p>
+          <p className="max-w-prose text-sm text-muted-foreground">{tx("Analyse a ticket on the desk, or run a replay to score the forecasts the system would have made over past closed-market windows.", "在交易台分析一笔交易，或运行重演，为系统在过去休市窗口本会做出的预测评分。")}</p>
         </div>
       ) : (
         <>
-          <Section title={`${rows.length} most recent`} subtitle={`${matured.length} scored · ${rows.length - matured.length} still open${rows.length === LIMIT ? " · older rows are in the API and the CLI" : ""}`}>
+          <Section title={tx(`${rows.length} most recent`, `最近 ${rows.length} 条`)} subtitle={tx(`${matured.length} scored · ${rows.length - matured.length} still open${rows.length === LIMIT ? " · older rows are in the API and the CLI" : ""}`, `${matured.length} 条已评分 · ${rows.length - matured.length} 条尚未到期${rows.length === LIMIT ? " · 更早的记录在 API 和命令行里" : ""}`)}>
             <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
               <div className="grid grid-cols-2 gap-2">
-                <Stat label="Scored" value={String(matured.length)} hint="horizon passed, outcome recorded" />
-                <Stat label="Inside the p5–p95 band" value={matured.length ? fmtPct((inside / matured.length) * 100, 1, false) : "—"} hint="90% if the distributions are honest" />
-                <Stat label="Tokens" value={String(new Set(rows.map((r) => r.ticker)).size)} />
-                <Stat label="Live tickets" value={String(rows.filter((r) => r.kind === "ticket").length)} hint="analyses a person asked for" />
+                <Stat label={tx("Scored", "已评分")} value={String(matured.length)} hint={tx("horizon passed, outcome recorded", "持有期已过，结果已记录")} />
+                <Stat label={tx("Inside the p5–p95 band", "落在 p5–p95 区间内")} value={matured.length ? fmtPct((inside / matured.length) * 100, 1, false) : "—"} hint={tx("90% if the distributions are honest", "分布若诚实应为 90%")} />
+                <Stat label={tx("Tokens", "代币")} value={String(new Set(rows.map((r) => r.ticker)).size)} />
+                <Stat label={tx("Live tickets", "实时交易")} value={String(rows.filter((r) => r.kind === "ticket").length)} hint={tx("analyses a person asked for", "有人主动请求的分析")} />
               </div>
-              <figure aria-label="Predicted median against realised return">
+              <figure aria-label={tx("Predicted median against realised return", "预测中位数与实际收益对比")}>
                 <ResponsiveContainer width="100%" height={240}>
                   <ScatterChart margin={{ top: 8, right: 12, bottom: 16, left: -12 }}>
                     <CartesianGrid stroke="var(--grid)" />
@@ -129,31 +132,31 @@ export default function JournalPage() {
                     <Tooltip
                       cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }}
                       contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--popover-foreground)", fontSize: 12 }}
-                      formatter={(v, name) => [`${Number(v).toFixed(2)}%`, String(name) === "x" ? "predicted median" : "realised"]}
+                      formatter={(v, name) => [`${Number(v).toFixed(2)}%`, String(name) === "x" ? tx("predicted median", "预测中位数") : tx("realised", "实际")]}
                     />
                     <Scatter data={points} fill="var(--chart-1)" fillOpacity={0.55} isAnimationActive={false} />
                   </ScatterChart>
                 </ResponsiveContainer>
                 <figcaption className="mt-1 text-xs text-muted-foreground">
-                  Predicted median (horizontal) against what happened (vertical). A useful forecast tilts along the diagonal; a useless one is a cloud.
-                  {outside > 0 ? ` ${outside} point${outside === 1 ? "" : "s"} fall outside this view.` : ""}
+                  {tx("Predicted median (horizontal) against what happened (vertical). A useful forecast tilts along the diagonal; a useless one is a cloud.", "预测中位数（横轴）与实际发生的结果（纵轴）。有用的预测会沿对角线倾斜；没用的则是一团散点。")}
+                  {outside > 0 ? tx(` ${outside} point${outside === 1 ? "" : "s"} fall outside this view.`, ` 有 ${outside} 个点在此视图之外。`) : ""}
                 </figcaption>
               </figure>
             </div>
           </Section>
 
-          <Section title="The journal" subtitle="Newest first. The band is the analog distribution at the moment of the call.">
+          <Section title={tx("The journal", "日志")} subtitle={tx("Newest first. The band is the analog distribution at the moment of the call.", "最新的在前。区间是给出结论时相似时刻样本的分布。")}>
             <div className="overflow-x-auto">
               <Table className="min-w-[820px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>When</TableHead>
-                    <TableHead>Trade</TableHead>
-                    <TableHead className="text-right">Horizon</TableHead>
+                    <TableHead>{tx("When", "时间")}</TableHead>
+                    <TableHead>{tx("Trade", "交易")}</TableHead>
+                    <TableHead className="text-right">{tx("Horizon", "持有期")}</TableHead>
                     <TableHead className="text-right">p5 – p50 – p95</TableHead>
-                    <TableHead className="text-right">Realised</TableHead>
-                    <TableHead className="text-right">Verdict</TableHead>
-                    <TableHead className="text-right">Inputs</TableHead>
+                    <TableHead className="text-right">{tx("Realised", "实际")}</TableHead>
+                    <TableHead className="text-right">{tx("Verdict", "结论")}</TableHead>
+                    <TableHead className="text-right">{tx("Inputs", "输入")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -172,12 +175,12 @@ export default function JournalPage() {
                               {fmtTime(r.as_of)}
                             </Link>
                           )}
-                          <span className="block text-xs text-muted-foreground">{r.kind === "replay" ? "replay" : "live ticket"}</span>
+                          <span className="block text-xs text-muted-foreground">{r.kind === "replay" ? tx("replay", "重演") : tx("live ticket", "实时交易")}</span>
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
-                          <span className="font-medium">{r.ticker}</span> {r.side}
+                          <span className="font-medium">{r.ticker}</span> {sideW(r.side)}
                           <span className="block text-xs text-muted-foreground">
-                            {fmtUsd(r.notional)} · {r.analog_n ?? 0} analogs
+                            {fmtUsd(r.notional)} · {r.analog_n ?? 0} {tx("analogs", "个相似时刻")}
                           </span>
                         </TableCell>
                         <TableCell className="tabular text-right">{r.horizon_h.toFixed(0)}h</TableCell>
@@ -187,19 +190,19 @@ export default function JournalPage() {
                               {fmtPct(r.p5)} · {fmtPct(r.p50)} · {fmtPct(r.p95)}
                             </>
                           ) : (
-                            <span className="text-muted-foreground">refused: too few analogs</span>
+                            <span className="text-muted-foreground">{tx("refused: too few analogs", "拒绝：相似时刻太少")}</span>
                           )}
                         </TableCell>
                         <TableCell className="tabular text-right">
                           {r.ret_pct == null ? (
-                            <span className="text-muted-foreground">open</span>
+                            <span className="text-muted-foreground">{tx("open", "未到期")}</span>
                           ) : (
                             <span className={insideBand ? "" : "text-status-warning"}>{fmtPct(r.ret_pct)}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
                           {r.verdict ? (
-                            <Pill tone={r.verdict === "GO" ? "good" : r.verdict === "NO_GO" ? "critical" : r.verdict === "HEDGE" ? "info" : "warning"}>{r.verdict.replace("_", " ")}</Pill>
+                            <Pill tone={r.verdict === "GO" ? "good" : r.verdict === "NO_GO" ? "critical" : r.verdict === "HEDGE" ? "info" : "warning"}>{lang === "zh" ? tl(lang, "verdictName", r.verdict) : r.verdict.replace("_", " ")}</Pill>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}

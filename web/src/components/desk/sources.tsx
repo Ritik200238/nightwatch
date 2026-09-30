@@ -2,6 +2,7 @@
 
 import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLang } from "@/lib/lang";
 import { api, type DataSource } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 
@@ -13,17 +14,19 @@ function ageHours(iso: string | null): number | null {
   return (Date.now() - new Date(iso).getTime()) / 3_600_000;
 }
 
-function fmtAge(iso: string | null): string {
+function fmtAge(iso: string | null, zh: boolean): string {
   const h = ageHours(iso);
-  if (h == null) return "never";
-  if (h < 1) return `${Math.max(1, Math.round(h * 60))} min ago`;
-  if (h < 48) return `${h.toFixed(h < 10 ? 1 : 0)} h ago`;
-  return `${Math.round(h / 24)} d ago`;
+  if (h == null) return zh ? "从未" : "never";
+  if (h < 1) return zh ? `${Math.max(1, Math.round(h * 60))} 分钟前` : `${Math.max(1, Math.round(h * 60))} min ago`;
+  if (h < 48) return zh ? `${h.toFixed(h < 10 ? 1 : 0)} 小时前` : `${h.toFixed(h < 10 ? 1 : 0)} h ago`;
+  return zh ? `${Math.round(h / 24)} 天前` : `${Math.round(h / 24)} d ago`;
 }
 
 /** The six feeds behind every report, with when each was last pulled. Collapsed by
  *  default: a user wants it once, a judge wants it every time. */
 export function Sources() {
+  const { tx, lang } = useLang();
+  const zh = lang === "zh";
   const [rows, setRows] = useState<DataSource[] | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +61,8 @@ export function Sources() {
     <div>
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
         <span>
-          <span className="text-sm font-medium">Data sources</span>{" "}
-          <span className="ml-2 text-xs text-muted-foreground">{rows ? `${rows.length} live feeds${stale ? ` · ${stale} behind` : ""}` : error ? "unavailable" : "checking…"}</span>
+          <span className="text-sm font-medium">{tx("Data sources", "数据来源")}</span>{" "}
+          <span className="ml-2 text-xs text-muted-foreground">{rows ? tx(`${rows.length} live feeds${stale ? ` · ${stale} behind` : ""}`, `${rows.length} 个实时数据源${stale ? ` · ${stale} 个滞后` : ""}`) : error ? tx("unavailable", "不可用") : tx("checking…", "检查中…")}</span>
         </span>
         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
@@ -77,21 +80,21 @@ export function Sources() {
                       {r.label}
                     </a>
                   </span>
-                  <span className="tabular text-muted-foreground" title={r.last_update ? `pulled ${fmtTime(r.last_update)}` : "never pulled"}>
-                    pulled {fmtAge(r.last_update)}
+                  <span className="tabular text-muted-foreground" title={r.last_update ? tx(`pulled ${fmtTime(r.last_update)}`, `拉取于 ${fmtTime(r.last_update)}`) : tx("never pulled", "从未拉取")}>
+                    {tx("pulled ", "拉取于 ")}{fmtAge(r.last_update, zh)}
                   </span>
                 </div>
                 <p className="mt-1 text-muted-foreground">{r.what}</p>
                 <p className="mt-1 text-muted-foreground">
-                  {r.rows.toLocaleString()} rows · {r.cadence}
-                  {r.latest ? ` · ${r.latest_label ?? "newest"}: ${fmtTime(r.latest)}` : ""}
+                  {r.rows.toLocaleString()} {tx("rows", "行")} · {r.cadence}
+                  {r.latest ? ` · ${r.latest_label ?? tx("newest", "最新")}: ${fmtTime(r.latest)}` : ""}
                 </p>
               </li>
             );
           })}
         </ul>
       ) : open && error ? (
-        <p className="mt-2 text-xs text-muted-foreground">Could not load the source list: {error}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{tx("Could not load the source list: ", "无法加载数据源列表：")}{error}</p>
       ) : null}
     </div>
   );
