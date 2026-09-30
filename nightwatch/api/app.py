@@ -107,6 +107,19 @@ class ChatIn(BaseModel):
     context_forecast_id: int | None = None
 
 
+class FeedbackIn(BaseModel):
+    forecast_id: int
+    useful: bool
+    note: str = Field(default="", max_length=500)
+    lang: str = "en"
+
+
+class WatchIn(BaseModel):
+    forecast_id: int
+    webhook: str | None = Field(default=None, max_length=500)
+    lang: str = "en"
+
+
 class AppState:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -115,9 +128,11 @@ class AppState:
             self.store.list_instruments(Venue.BITGET_SPOT), self.store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers
         )
         self.journal = Journal(self.store)
-        from nightwatch.journal import receipts
-
         # Forecasts written before receipts existed, or by a bulk import, are chained now.
+        from nightwatch.journal import engagement, receipts, watches
+
+        self.store._conn.executescript(engagement.SCHEMA)
+        self.store._conn.executescript(watches.SCHEMA)
         chained = receipts.chain_pending(self.store._conn)
         if chained:
             log.info("chained %d forecasts that had no receipt", chained)
@@ -381,6 +396,19 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     }
 
 
+def _who(request: Request) -> tuple[str, str, bool]:
+    """(salted client hash, language, is-internal) for a request. Nothing here is stored
+    raw: the browser's random id, or failing that the address, is hashed at once."""
+    from nightwatch.journal import engagement
+
+    q, h = request.query_params, request.headers
+    browser_id = h.get("x-nw-client") or q.get("nw_client")
+    fwd = (h.get("x-forwarded-for") or "").split(",")[0].strip()
+    address = fwd or (request.client.host if request.client else "")
+    internal = (h.get("x-nw-internal") or q.get("nw_internal") or "") == "1"
+    return engagement.hash_client(browser_id, address), engagement.norm_lang(h.get("x-nw-lang") or q.get("nw_lang") or q.get("lang")), internal
+
+
 def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAPI:
     settings = settings or load_settings()
 
@@ -634,7 +662,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, str(exc)) from exc
 
     @app.post("/analyze")
-    def analyze_endpoint(body: TicketIn, text: bool = False) -> Any:
+    def analyze_endpoint(request: Request, body: TicketIn, text: bool = False) -> Any:
         s = st()
         try:
             ticket = body.to_ticket()
@@ -654,6 +682,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         except InsufficientData as exc:
             raise HTTPException(422, str(exc)) from exc
         payload = report.to_dict()
+        if report.forecast_id is not None and body.record:
+            _mark(s, request, report.forecast_id)
         # Keep the finished report so a link can reopen it exactly as it was argued.
         if report.forecast_id is not None and body.record:
             try:
@@ -886,8 +916,93 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                     row[k] = v.isoformat()
         return out
 
+    def _mark(s: AppState, request: Request, forecast_id: int) -> None:
+        from nightwatch.journal import engagement
+
+        client, lang, internal = _who(request)
+        try:
+            engagement.mark_verdict(s.store._conn, forecast_id, lang=lang, client=client, internal=internal)
+        except Exception as exc:  # noqa: BLE001 - counting must never fail an analysis
+            log.warning("could not count verdict %s: %s", forecast_id, exc)
+
     @app.post("/chat")
-    def chat(body: ChatIn) -> dict[str, Any]:
+    def chat(body: ChatIn, request: Request) -> dict[str, Any]:
+        """The desk's conversation, plus the two counts that say whether anyone uses it:
+        a new live verdict is attributed to an anonymous client, and a follow-up is
+        counted by the kind of answer it got (never by what was typed)."""
+        out = _chat(body)
+        try:
+            from nightwatch.journal import engagement
+
+            s = st()
+            _, lang, internal = _who(request)
+            fid = (out.get("report") or {}).get("forecast_id") if isinstance(out.get("report"), dict) else None
+            if isinstance(fid, int) and fid > 0:
+                _mark(s, request, fid)
+            kind = out.get("answer_kind") or (out.get("mode") if body.context_forecast_id else None)
+            if kind and body.context_forecast_id and not internal:
+                engagement.count_chat(s.store._conn, kind=str(kind), lang=lang)
+        except Exception as exc:  # noqa: BLE001 - counting is never worth a failed answer
+            log.warning("chat counters: %s", exc)
+        return out
+
+    @app.post("/feedback")
+    def feedback(body: FeedbackIn, request: Request) -> dict[str, Any]:
+        """Was this verdict useful? One answer per visitor per report, ten per hour."""
+        from nightwatch.journal import engagement
+
+        s = st()
+        if s.store._conn.execute("SELECT 1 FROM forecasts WHERE id=?", (body.forecast_id,)).fetchone() is None:
+            raise HTTPException(404, f"No forecast {body.forecast_id}.")
+        client, _, internal = _who(request)
+        try:
+            engagement.add_feedback(
+                s.store._conn, forecast_id=body.forecast_id, useful=body.useful, note=body.note,
+                lang=body.lang, client=client, internal=internal,
+            )
+        except engagement.RateLimited as exc:
+            raise HTTPException(429, "Too much feedback from one visitor this hour.") from exc
+        except engagement.Duplicate as exc:
+            raise HTTPException(409, "You already answered for this report.") from exc
+        return {"ok": True}
+
+    @app.get("/usage")
+    def usage() -> dict[str, Any]:
+        """Anonymous usage counts. See nightwatch.journal.engagement for exactly what is kept."""
+        from nightwatch.journal import engagement
+
+        return engagement.usage(st().store._conn)
+
+    @app.post("/watch")
+    def watch_create(body: WatchIn, request: Request) -> dict[str, Any]:
+        """Re-check a stored report at the next US regular close. Email is not implemented;
+        an optional https webhook gets a short JSON POST with the before and after."""
+        from nightwatch.journal import engagement, watches
+
+        s = st()
+        report = s.reports.get(body.forecast_id)
+        if report is None or body.forecast_id <= 0:
+            raise HTTPException(404, f"No stored report {body.forecast_id} to watch.")
+        try:
+            hook = watches.check_webhook(body.webhook)
+        except watches.BadWebhook as exc:
+            raise HTTPException(422, str(exc)) from exc
+        client, _, _ = _who(request)
+        try:
+            return watches.create(s.store._conn, forecast_id=body.forecast_id, report=report, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+        except watches.TooMany as exc:
+            raise HTTPException(429, "Too many re-checks from one visitor this hour.") from exc
+
+    @app.get("/watch/{watch_id}")
+    def watch_get(watch_id: str) -> dict[str, Any]:
+        from nightwatch.journal import watches
+
+        got = watches.get(st().store._conn, watch_id)
+        if got is None:
+            raise HTTPException(404, "No such re-check.")
+        return got
+
+    def _chat(body: ChatIn) -> dict[str, Any]:
         """Talk to the desk in plain language.
 
         Two implementations, one contract. With an Anthropic key the model parses the

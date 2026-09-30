@@ -6,6 +6,7 @@ import argparse
 import logging
 import sys
 from datetime import datetime
+from typing import Any
 
 import pandas as pd
 
@@ -134,6 +135,22 @@ def cmd_news(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def _run_watches(store: Store, settings: Settings, journal: Any) -> int:  # noqa: ANN401
+    """Re-run due watches. The context has no live order-book clients: the re-check runs
+    on stored bars and the recorded book, which is all a run at the close needs."""
+    from nightwatch.journal import watches
+    from nightwatch.journal.reports import ReportStore
+    from nightwatch.pipeline.analyze import AnalysisContext
+
+    store._conn.executescript(watches.SCHEMA)
+    # The whole universe, not the recorder's selection: a visitor may have watched any token.
+    from nightwatch.data.sync import build_universe
+
+    entries = build_universe(store.list_instruments(Venue.BITGET_SPOT), store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers)
+    ctx = AnalysisContext(store=store, entries=entries, journal=journal)
+    return watches.run_due(store._conn, watches.make_rerun(ctx), ReportStore(store).get)
+
+
 def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
     spot, perp = _clients(settings)
     with Store(settings.db_path) as store:
@@ -170,6 +187,8 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 # Timestamp the receipt chain's head in Bitcoin once a day, and collect the
                 # finished proofs; see journal.anchor.
                 PeriodicJob("anchor-receipts", 3600, lambda: anchor.tick(settings.db_path, settings.data_dir / "anchors")),
+                # Re-check the trades visitors asked to watch, once the US market has closed.
+                PeriodicJob("watches", 600, lambda: _run_watches(store, settings, journal), run_at_start=False),
             ]
         rec = OrderBookRecorder(
             store, spot=spot, perp=perp, entries=entries, interval_sec=args.interval,
