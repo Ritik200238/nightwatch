@@ -565,7 +565,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             leverage=float(ticket.leverage or 1.0), notional=ticket.notional_quote, entry=entry_price, long=ticket.closing_long,
             perp_symbol=spec.perp_symbol, tiers=ctx.margin_tiers(spec.perp_symbol), taker_fee=fees["perp_taker"],
         )
-    sources.append({"kind": "features", "ticker": ticket.ticker, "bar_ts": snapshot.bar_ts.isoformat(), "hash": snapshot.content_hash, "history_hours": snapshot.history_hours})
+    sources.append({"kind": "features", "label": "Computed features", "ticker": ticket.ticker, "bar_ts": snapshot.bar_ts.isoformat(), "hash": snapshot.content_hash, "history_hours": snapshot.history_hours})
 
     # 2. Analog search + outcomes.
     t0 = time.perf_counter()
@@ -616,7 +616,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     t0 = time.perf_counter()
     book, book_source = _get_book(ctx, spec.spot_symbol, as_of)
     if book is not None:
-        sources.append({"kind": "orderbook", "symbol": spec.spot_symbol, "ts": book.ts.isoformat(), "source": book_source, "levels": len(book.bids) + len(book.asks)})
+        sources.append({"kind": "orderbook", "label": "Bitget order book", "last_ts": book.ts.isoformat(), "rows_used": len(book.bids) + len(book.asks), "symbol": spec.spot_symbol, "ts": book.ts.isoformat(), "source": book_source, "levels": len(book.bids) + len(book.asks)})
     else:
         warnings.append("no order book available: exit cost and liquidity caps are unknown")
     timings["book"] = _ms(t0)
@@ -788,7 +788,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         view = ctx.street_for(ticket.ticker, fetch=False)
         if view is not None and not view.empty:
             street = view.to_dict()
-            sources.append({"kind": "bitget_mcp", "ticker": ticket.ticker, "fetched_at": view.fetched_at})
+            sources.append({"kind": "bitget_mcp", "label": "Bitget US-stock MCP", "last_ts": view.fetched_at, "rows_used": 1, "ticker": ticket.ticker, "fetched_at": view.fetched_at})
             native = snapshot.prices.get("native_close")
             gap = street_mod.quote_disagreement_bps(view, native, snapshot.features.get("native_close_age_h"))
             street["quote_gap_bps"] = gap
@@ -801,6 +801,11 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
                 )
     timings["street"] = _ms(t0)
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
+    from nightwatch.pipeline.feeds import feed_sources
+
+    tiers = ctx.margin_tiers(spec.perp_symbol) if lev_view is not None else None
+    sources.extend(feed_sources(ctx.store, ticker=ticket.ticker, spot_symbol=spec.spot_symbol, perp_symbol=spec.perp_symbol,
+                                yahoo_ticker=spec.yahoo_ticker, as_of=as_of, margin_tier_rows=len(tiers) if tiers else None))
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
@@ -887,7 +892,8 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
 
 # How far back a filing can be and still be worth putting on the report. Beyond a couple
 # of sessions the market has had a chance to price it and it is history, not news.
-FILING_LOOKBACK_H = 36.0
+# Same 72 h the filings_72h feature counts, so the page lists what the feature counted.
+FILING_LOOKBACK_H = 72.0
 # How close to now an analysis must be for today's street data to belong on it.
 STREET_FRESH_S = 6 * 3600
 
@@ -895,9 +901,10 @@ STREET_FRESH_S = 6 * 3600
 def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, horizon_h: float) -> list[FilingNote]:
     """Filings recent enough to still be unpriced, with what the model made of them.
 
-    Shown only when there is a stored read - the desk does not put "an 8-K landed" on a
-    page without being able to say what it was - and the numbers beside it come from the
-    measured distribution for that label, never from the model.
+    The window matches the ``filings_72h`` feature. A filing the model has not read yet is
+    still listed, marked ``unread`` with no impact label: the feature counts it, so the
+    page must too. The numbers beside a read one come from the measured distribution for
+    its label, never from the model.
     """
     from nightwatch.features.filing_outcomes import load_labels
     from nightwatch.features.filing_read import FilingReadStore
@@ -917,6 +924,15 @@ def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, ho
     for f in sorted(recent, key=lambda x: x.accepted_at, reverse=True):
         read = reads.get(f.accession)
         if read is None:
+            # Not yet read by the model: still listed (the feature counted it), plainly
+            # marked, with no impact label and so no history figures beside it.
+            notes.append(FilingNote(
+                ticker=f.ticker, accepted_at=f.accepted_at, form=f.form, items=f.items,
+                hours_ago=(at - ensure_utc(f.accepted_at)).total_seconds() / 3600.0,
+                inside_window=ensure_utc(f.accepted_at) <= window_end,
+                market_was_shut=classify_session(f.accepted_at).is_closed,
+                category="unread", headline=(f.description or f"{f.form} filing") + " (not yet read by the model)", market_moving="unread",
+            ))
             continue
         stats = labels.get(read.market_moving)
         notes.append(FilingNote(
@@ -930,7 +946,7 @@ def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, ho
             label_median_pct=stats.median_pct if stats else None,
             label_mean_abs_pct=stats.mean_abs_pct if stats else None,
         ))
-    return notes[:3]
+    return notes[:5]
 
 
 def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: FeatureSnapshot, frame: pd.DataFrame, as_of: datetime, horizon_h: float, primary: str, warnings: list[str], *, entry_price: float = 0.0, liquidation_price: float | None = None) -> AnalogSection | None:
