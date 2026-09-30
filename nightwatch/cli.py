@@ -140,6 +140,7 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
         entries = _select(resolve_universe(store, spot, perp, settings), core_only=not args.all, tickers=args.tickers, limit=args.limit)
         jobs: list[PeriodicJob] = []
         if not args.no_jobs:
+            from nightwatch.journal import anchor
             from nightwatch.journal.journal import Journal
             from nightwatch.journal.postmortem import mature_and_learn
 
@@ -166,6 +167,9 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 PeriodicJob("filings", 4 * 3600, lambda: sync_filings(store, SecFilingsClient(), tickers), run_at_start=False, age_at_start=age_of("filings")),
                 # Score live tickets as soon as their horizon has passed so calibration stays current.
                 PeriodicJob("mature-forecasts", 900, lambda: mature_and_learn(journal, spot_symbol_for={e.ticker: e.spot_symbol for e in entries})),
+                # Timestamp the receipt chain's head in Bitcoin once a day, and collect the
+                # finished proofs; see journal.anchor.
+                PeriodicJob("anchor-receipts", 3600, lambda: anchor.tick(settings.db_path, settings.data_dir / "anchors")),
             ]
         rec = OrderBookRecorder(
             store, spot=spot, perp=perp, entries=entries, interval_sec=args.interval,

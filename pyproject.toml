@@ -21,6 +21,10 @@ api = [
     "uvicorn[standard]>=0.30",
     "anthropic>=1.0",
 ]
+# Timestamps the receipt chain in Bitcoin (journal.anchor); the recorder runs it.
+anchor = [
+    "opentimestamps-client>=0.7",
+]
 # The test suite covers the API and the language layer, so the dev extra pulls them in:
 # `pip install -e ".[dev]"` on its own used to leave two test modules unable to import.
 dev = [

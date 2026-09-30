@@ -686,12 +686,36 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         Rows written by a bulk import carry no receipt until chained here; chaining them
         cannot hide an edit to a row that already had one."""
-        from nightwatch.journal import receipts
+        from nightwatch.journal import anchor, receipts
 
         s = st()
         with s.lock:
             receipts.chain_pending(s.store._conn)
-            return receipts.verify(s.store._conn)
+            out = receipts.verify(s.store._conn)
+            anchors = anchor.listing(s.settings.data_dir / "anchors")
+            broken = anchor.consistent(s.store._conn, anchors)
+        # A head timestamped in Bitcoin that no longer matches the chain means the chain was
+        # rebuilt after it; that is a break even if every link recomputes.
+        return {**out, "ok": out["ok"] and not broken, "anchors": len(anchors),
+                "anchored_in_bitcoin": sum(1 for a in anchors if a.get("state") == "bitcoin"), "anchors_broken": broken}
+
+    @app.get("/anchors")
+    def anchors_list() -> dict[str, Any]:
+        """Every daily timestamp of the receipt chain, with its Bitcoin block once confirmed."""
+        from nightwatch.journal import anchor
+
+        return {"anchors": anchor.listing(st().settings.data_dir / "anchors")}
+
+    @app.get("/anchors/{name}")
+    def anchor_file(name: str) -> Response:
+        """The anchored text file or its .ots proof, to check at opentimestamps.org."""
+        from nightwatch.journal import anchor
+
+        path = st().settings.data_dir / "anchors" / name
+        if not anchor.NAME.match(name) or not path.exists():
+            raise HTTPException(404, "No such anchor file.")
+        media = "application/octet-stream" if name.endswith(".ots") else "text/plain; charset=utf-8"
+        return Response(path.read_bytes(), media_type=media, headers={"content-disposition": f'attachment; filename="{name}"'})
 
     @app.get("/verify/{forecast_id}")
     def verify_one(forecast_id: int) -> dict[str, Any]:
