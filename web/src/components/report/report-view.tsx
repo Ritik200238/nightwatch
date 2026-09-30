@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
 import { fmtBps, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
+import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
 import { fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
 const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
@@ -63,12 +64,7 @@ const TAKE_HEADINGS = new Set<string>([...STRINGS.en.takeHeadings, ...STRINGS.zh
 function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang }) {
   const id = report.forecast_id;
   const [take, setTake] = useState<AnalystTake | null>(null);
-  const lang: "en" | "zh" =
-    langHint === "zh" ||
-    /[㐀-鿿]/.test(`${report.ticket?.thesis ?? ""}${report.ticket?.invalidation ?? ""}`) ||
-    (typeof navigator !== "undefined" && navigator.language?.startsWith("zh"))
-      ? "zh"
-      : "en";
+  const lang: "en" | "zh" = langHint;
 
   useEffect(() => {
     if (id == null) return;
@@ -289,7 +285,7 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
               {m.trigger}. <span className="text-foreground">{L("Then: ", "那么：")}</span>
               {m.mechanism}.
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${m.likelihood} · 来源：${m.source}`)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${m.likelihood} · 来源：${sourceName(lang, m.source)}`)}</p>
           </li>
         ))}
       </ol>
@@ -337,7 +333,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       title={`${t.ticker} ${lang === "zh" ? tl(lang, "side", t.side) : t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
       subtitle={L(
         `Held for ${fmtHoursL(report.horizon_h, lang)} · as of ${fmtTimeL(report.as_of, lang)} · market state: ${report.snapshot.labels.regime_label}`,
-        `持有 ${fmtHoursL(report.horizon_h, lang)} · 截至 ${fmtTimeL(report.as_of, lang)} · 市场状态：${report.snapshot.labels.regime_label}`,
+        `持有 ${fmtHoursL(report.horizon_h, lang)} · 截至 ${fmtTimeL(report.as_of, lang)} · 市场状态：${stateWord(lang, report.snapshot.labels.regime_label)}`,
       )}
       action={<Pill tone={VERDICT_TONE[v.verdict]}>{verdictLabel(lang, v.verdict)}</Pill>}
     >
@@ -375,19 +371,19 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
         <Stat
           label={L("If it goes badly", "如果走势不利")}
           value={report.gate.risk_quote != null ? `−${fmtUsd(report.gate.risk_quote)}` : "—"}
-          hint={report.gate.risk_basis}
+          hint={riskBasis(lang, report.gate.risk_basis)}
           tone="warning"
         />
         <Stat
           label={L("If it goes worst", "如果走到最坏")}
           value={worst ? fmtUsd(worst.quote) : "—"}
-          hint={worst ? L(`${worst.name} · ${fmtPct(worst.pct, 1)} of the position`, `${worst.name} · 占仓位的 ${fmtPct(worst.pct, 1)}`) : L("no priced scenario", "没有可定价的情景")}
+          hint={worst ? L(`${worst.name} · ${fmtPct(worst.pct, 1)} of the position`, `${presetName(lang, worst.name)} · 占仓位的 ${fmtPct(worst.pct, 1)}`) : L("no priced scenario", "没有可定价的情景")}
           tone="critical"
         />
         <Stat
           label={L("Getting out costs", "平仓成本")}
           value={exit?.total_cost_quote != null ? `−${fmtUsd(exit.total_cost_quote)}` : "—"}
-          hint={exit?.total_cost_bps != null ? L(`${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book`, `按 ${report.execution.book_source} 盘口计 ${fmtBps(exit.total_cost_bps)}`) : L("no order book", "没有盘口数据")}
+          hint={exit?.total_cost_bps != null ? L(`${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book`, `按${stateWord(lang, report.execution.book_source)}盘口计 ${fmtBps(exit.total_cost_bps)}`) : L("no order book", "没有盘口数据")}
         />
         <Stat
           label={cap ? L("Size held down by", "仓位被压低的原因") : L("Size", "仓位")}
@@ -624,7 +620,7 @@ function Hypothetical({ report, lang }: { report: Report; lang: Lang }) {
   );
 }
 
-export function ReportView({ report, onRerun, lang = "en" }: { report: Report; onRerun?: (patch: Partial<TicketInput>) => void; lang?: "en" | "zh" }) {
+export function ReportView({ report, onRerun, lang = "en", hideTake = false }: { report: Report; onRerun?: (patch: Partial<TicketInput>) => void; lang?: "en" | "zh"; hideTake?: boolean }) {
   const L = tr(lang);
   const t = report.ticket;
   const primary = report.analog?.horizons[report.primary_horizon];
@@ -647,7 +643,8 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
       ) : null}
       <Hypothetical report={report} lang={lang} />
       <DecisionCard report={report} lang={lang} />
-      <AnalystTakeCard report={report} langHint={lang} />
+      {/* A report that came out of the chat already has the take in the conversation. */}
+      {hideTake ? null : <AnalystTakeCard report={report} langHint={lang} />}
       {/* Above the disclosures on purpose. Narrowing the search changes what every
           number below it means, so it cannot sit behind a section a reader has to
           open before the summary stops being misleading. */}
@@ -673,7 +670,7 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
         openAll={openAll}
         collapsible
         summary={L(
-          `${fmtPrice(report.snapshot.prices.spot_close)} · vs fair value ${fmtBps(f.basis_index_bps, 0, true)} · volatility ${f.vol_pctl_90d?.toFixed(0) ?? "—"}th pct of 90 days · ${flags ? `${flags} data flag${flags > 1 ? "s" : ""}` : "inputs complete"}`,
+          `${fmtPrice(report.snapshot.prices.spot_close)} · vs fair value ${fmtBps(f.basis_index_bps, 0, true)} · volatility ${f.vol_pctl_90d != null ? ordinal(Math.round(f.vol_pctl_90d)) : "—"} percentile of 90 days · ${flags ? `${flags} data flag${flags > 1 ? "s" : ""}` : "inputs complete"}`,
           `${fmtPrice(report.snapshot.prices.spot_close)} · 相对公允价值 ${fmtBps(f.basis_index_bps, 0, true)} · 波动率处于近 90 天的第 ${f.vol_pctl_90d?.toFixed(0) ?? "—"} 百分位 · ${flags ? `${flags} 项数据标记` : "输入完整"}`,
         )}
         title={L("Right now", "当前状况")}
@@ -692,9 +689,9 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
           <Stat
             label={L("Realised vol (24h)", "已实现波动率（24 小时）")}
             value={report.snapshot.features.rv_24h != null ? `${(report.snapshot.features.rv_24h * 100).toFixed(0)}%` : "—"}
-            hint={L(`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`, `百分位 ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`)}
+            hint={L(`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`, `百分位 ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${stateWord(lang, report.snapshot.labels.vol_state)}`)}
           />
-          <Stat label={L("Trend vs 30d avg", "相对 30 日均线的趋势")} value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={report.snapshot.labels.trend_state} />
+          <Stat label={L("Trend vs 30d avg", "相对 30 日均线的趋势")} value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={stateWord(lang, report.snapshot.labels.trend_state)} />
           <Stat label={L("Next earnings", "下次财报")} value={H(report.snapshot.features.hours_to_earnings)} hint={L(`FOMC in ${H(report.snapshot.features.hours_to_fomc)}`, `距 FOMC ${H(report.snapshot.features.hours_to_fomc)}`)} />
           <Stat
             label={L("Last SEC filing", "最近一份 SEC 文件")}
@@ -738,7 +735,7 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
         title={L("Getting out", "平仓")}
         subtitle={L(
           `${report.execution.book_source} order book${report.execution.book_ts ? ` · ${fmtTimeL(report.execution.book_ts, lang)}` : ""}`,
-          `${report.execution.book_source} 盘口${report.execution.book_ts ? ` · ${fmtTimeL(report.execution.book_ts, lang)}` : ""}`,
+          `${stateWord(lang, report.execution.book_source)}盘口${report.execution.book_ts ? ` · ${fmtTimeL(report.execution.book_ts, lang)}` : ""}`,
         )}
       >
         {report.execution.exit_quote ? (
@@ -794,7 +791,7 @@ export function ReportView({ report, onRerun, lang = "en" }: { report: Report; o
           )}
           title={L(`Discipline gate · ${verdictLabel(lang, report.gate.decision)}`, `纪律闸门 · ${verdictLabel(lang, report.gate.decision)}`)}
           subtitle={
-            report.gate.risk_quote != null ? L(`Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})`, `面临的风险 ${fmtUsd(report.gate.risk_quote)}（${report.gate.risk_basis}）`) : undefined
+            report.gate.risk_quote != null ? L(`Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})`, `面临的风险 ${fmtUsd(report.gate.risk_quote)}（${riskBasis(lang, report.gate.risk_basis)}）`) : undefined
           }
         >
           <ul className="space-y-2">
@@ -1291,7 +1288,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-hidden />
             <span>
-              {c.text} <span className="text-xs text-muted-foreground">{c.source}</span>
+              {c.text} <span className="text-xs text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}
@@ -1299,7 +1296,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-hidden />
             <span>
-              {c.text} <span className="text-xs text-muted-foreground">{c.source}</span>
+              {c.text} <span className="text-xs text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}
@@ -1387,7 +1384,7 @@ function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: bo
         current
           ? L(
               `now: ${current.description} · ${fmtPct(current.share * 100, 0, false)} of the last ${m.n_fitted.toLocaleString()} hours · stays put ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}`,
-              `当前：${current.description} · 占最近 ${m.n_fitted.toLocaleString()} 小时的 ${fmtPct(current.share * 100, 0, false)} · 保持不变的概率 ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}`,
+              `当前：${regimeDescription(lang, current.description)} · 占最近 ${m.n_fitted.toLocaleString()} 小时的 ${fmtPct(current.share * 100, 0, false)} · 保持不变的概率 ${current.persistence != null ? fmtPct(current.persistence * 100, 0, false) : "—"}`,
             )
           : L(`${m.regimes.length} states over ${m.n_fitted.toLocaleString()} hours`, `${m.n_fitted.toLocaleString()} 小时内共 ${m.regimes.length} 个状态`)
       }
@@ -1396,7 +1393,6 @@ function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: bo
         `${m.n_fitted.toLocaleString()} past hours grouped into ${m.regimes.length} states by volatility, gap to fair value, trend and liquidity. Fitted only on hours before this moment, sorted calmest first.`,
         `把过去 ${m.n_fitted.toLocaleString()} 小时按波动率、与公允价值的差距、趋势和流动性分成 ${m.regimes.length} 个状态。只用此刻之前的数据拟合，按从最平静到最动荡排序。`,
       )}
-      action={current ? <Pill tone={current.id >= m.regimes.length - 1 ? "warning" : "muted"}>{L("now: ", "当前：")}{current.description}</Pill> : null}
     >
       <div className="overflow-x-auto">
         <Table className="min-w-[720px]">
@@ -1415,7 +1411,7 @@ function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: bo
             {m.regimes.map((r) => (
               <TableRow key={r.id} className={r.id === m.current ? "bg-accent/40" : ""}>
                 <TableCell>
-                  <span className={r.id === m.current ? "font-semibold" : ""}>{r.description}</span>
+                  <span className={r.id === m.current ? "font-semibold" : ""}>{regimeDescription(lang, r.description)}</span>
                   {r.id === m.current ? <span className="ml-2 text-xs text-muted-foreground">{L("now", "当前")}</span> : null}
                 </TableCell>
                 <TableCell className="tabular text-right">{fmtPct(r.share * 100, 0, false)}</TableCell>
@@ -1435,7 +1431,7 @@ function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: bo
           {nextLikely.map((x, i) => (
             <span key={x.j}>
               {i > 0 ? L(" and ", "和") : ""}
-              <span className="text-foreground">{m.regimes.find((r) => r.id === x.j)?.description}</span> {L("(", "（")}
+              <span className="text-foreground">{regimeDescription(lang, m.regimes.find((r) => r.id === x.j)?.description)}</span> {L("(", "（")}
               {fmtPct(x.p * 100, 0, false)}
               {L(")", "）")}
             </span>
@@ -1889,7 +1885,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
       collapsible
       summary={L(
         `${s.presets.length} presets from this token's own history${w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : ""}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`,
-        `基于该代币自身历史的 ${s.presets.length} 个预设情景${w ? ` · 最坏 ${fmtUsd(w.quote)}（${w.name}）` : ""}${mc ? ` · 模拟的尾部亏损 ${fmtPct(mc.p5, 1)}` : ""}`,
+        `基于该代币自身历史的 ${s.presets.length} 个预设情景${w ? ` · 最坏 ${fmtUsd(w.quote)}（${presetName(lang, w.name)}）` : ""}${mc ? ` · 模拟的尾部亏损 ${fmtPct(mc.p5, 1)}` : ""}`,
       )}
       title={L("What could go wrong", "可能会出什么问题")}
       subtitle={L(
@@ -1919,7 +1915,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                 return (
                   <TableRow key={p.id}>
                     <TableCell>
-                      <span className="font-medium">{p.name}</span>
+                      <span className="font-medium">{presetName(lang, p.name)}</span>
                       <span className="block text-xs text-muted-foreground">{p.probability_note}</span>
                     </TableCell>
                     <TableCell>
