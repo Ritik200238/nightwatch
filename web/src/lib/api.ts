@@ -740,6 +740,19 @@ export interface PlanCheck {
   thesis_mismatch: string;
 }
 
+/** Bitget signal skill's RSI beside the desk's own from Bitget candles. Context only. */
+export interface SignalView {
+  source: string;
+  ticker: string;
+  rsi: number;
+  timeframe: string;
+  reading: "oversold" | "overbought" | "neutral";
+  own_rsi: number;
+  agrees: boolean;
+  fetched_at: string;
+  macd: { macd: number; signal: number; histogram: number; cross: string | null } | null;
+}
+
 /** Bitget's view of the underlying stock right now. None of it reaches the size. */
 export interface StreetView {
   ticker: string;
@@ -867,6 +880,8 @@ export interface Report {
   /** Analysts, insiders, market mood and a live quote for the stock, from Bitget's
    *  US-stock data. Context only; null for past moments and when the service is down. */
   street?: StreetView | null;
+  /** The signal skill's RSI, only when it agrees with our own; null otherwise. Context only. */
+  signal?: SignalView | null;
   /** The trader's invalidation read for a testable level and measured; plus a flag when
    *  the stated reason reads against the position. */
   plan_check?: PlanCheck | null;

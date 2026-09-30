@@ -471,6 +471,25 @@ const MOVING_TONE: Record<string, "critical" | "warning" | "muted"> = { high: "c
  *  No direction is shown. The model offers one and it was measured at 49.5% against a
  *  coin, so it does not travel.
  */
+/** Bitget's signal-skill RSI next to the one the desk computes from Bitget candles.
+ *  Shown only when the two agree (the API withholds it otherwise), and never an input to the size. */
+function SignalLine({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
+  const g = report.signal;
+  if (!g) return null;
+  const word = g.reading === "oversold" ? L("oversold", "超卖") : g.reading === "overbought" ? L("overbought", "超买") : L("neutral", "中性");
+  return (
+    <p className="px-1 text-xs text-muted-foreground">
+      {L(
+        `Bitget signal skill: RSI ${g.rsi.toFixed(1)} on ${g.timeframe} (${word}); our own from Bitget candles ${g.own_rsi.toFixed(1)}, which agrees.`,
+        `Bitget 信号技能：${g.timeframe} RSI ${g.rsi.toFixed(1)}（${word}）；我们用 Bitget K 线自算 ${g.own_rsi.toFixed(1)}，一致。`,
+      )}
+      {g.macd ? L(` MACD ${g.macd.macd.toFixed(2)} vs signal ${g.macd.signal.toFixed(2)}.`, ` MACD ${g.macd.macd.toFixed(2)}，信号线 ${g.macd.signal.toFixed(2)}。`) : null}{" "}
+      {L("Context only; it did not move the size.", "仅供参考，没有影响仓位。")}
+    </p>
+  );
+}
+
 /** What the street and the insiders are doing, from Bitget's own US-stock data.
  *
  *  Shown next to the verdict and said to be context, because none of it has been
@@ -695,6 +714,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <FailureModes report={report} openAll={openAll} lang={lang} />
       <Assumptions report={report} openAll={openAll} lang={lang} />
       <StreetSection report={report} openAll={openAll} lang={lang} />
+      <SignalLine report={report} lang={lang} />
 
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-xs text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
