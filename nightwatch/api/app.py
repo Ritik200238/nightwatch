@@ -48,6 +48,7 @@ log = logging.getLogger(__name__)
 TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
 PAGE_CACHE_TTL_S = 60.0
+PAGE_CACHE_STALE_S = 6 * 3600.0  # beyond this a saved page is too old to show even while refreshing
 CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
 
 
@@ -445,6 +446,25 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     # a cold box. They change slowly, so a successful answer is kept for a minute and the
     # warm-up fills them before anyone asks (AppState.warm_pages).
     page_cache: dict[str, tuple[float, bytes, str]] = {}
+    refreshing_keys: set[str] = set()
+
+    def _refresh_later(key: str) -> None:
+        if key in refreshing_keys:
+            return
+        refreshing_keys.add(key)
+
+        def run() -> None:
+            import urllib.request
+
+            try:
+                req = urllib.request.Request(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}{key}", headers={"x-nw-refresh": "1"})
+                urllib.request.urlopen(req, timeout=120).read()
+            except Exception:  # noqa: BLE001 - the stale copy keeps serving
+                log.info("background refresh of %s failed", key)
+            finally:
+                refreshing_keys.discard(key)
+
+        threading.Thread(target=run, name="page-refresh", daemon=True).start()
 
     @app.middleware("http")
     async def cache_slow_pages(request: Request, call_next):  # noqa: ANN001, ANN202
@@ -453,8 +473,15 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             return await call_next(request)
         key = path + "?" + request.url.query
         hit = page_cache.get(key)
-        if hit and time.monotonic() - hit[0] < PAGE_CACHE_TTL_S:
-            return Response(hit[1], media_type=hit[2], headers={"x-nightwatch-cache": "hit"})
+        refreshing = request.headers.get("x-nw-refresh") == "1"
+        if hit and not refreshing:
+            age = time.monotonic() - hit[0]
+            if age >= PAGE_CACHE_TTL_S and age < PAGE_CACHE_STALE_S:
+                # Serve the saved answer now and refresh it behind the reader's back, so no
+                # visitor waits the 6-8 s a recompute takes on this box.
+                _refresh_later(key)
+            if age < PAGE_CACHE_STALE_S:
+                return Response(hit[1], media_type=hit[2], headers={"x-nightwatch-cache": "hit" if age < PAGE_CACHE_TTL_S else "stale"})
         response = await call_next(request)
         if response.status_code != 200:
             return response
