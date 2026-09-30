@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import type { ScenarioPaths } from "@/lib/api";
+import { type Lang, tr } from "@/lib/i18n";
 
 /** The retrieved scenarios, drawn.
  *
@@ -21,6 +22,7 @@ interface Props {
   paths: ScenarioPaths;
   horizonLabel: string;
   height?: number;
+  lang?: Lang;
 }
 
 /** Near matches one colour, far matches another, so the spread between them is visible.
@@ -35,12 +37,14 @@ function pathColor(rank: number, highlighted: boolean): string {
   return rank < 0.5 ? "var(--chart-1)" : "var(--chart-4)";
 }
 
-function hourLabel(h: number): string {
-  if (h === 0) return "entry";
+function hourLabel(h: number, lang: Lang = "en"): string {
+  if (h === 0) return lang === "zh" ? "入场" : "entry";
+  if (lang === "zh") return h < 24 ? `${Math.round(h)}小时` : `${(h / 24).toFixed(h % 24 === 0 ? 0 : 1)}天`;
   return h < 24 ? `${Math.round(h)}h` : `${(h / 24).toFixed(h % 24 === 0 ? 0 : 1)}d`;
 }
 
-export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
+export function Scenarios({ paths, horizonLabel, height = 300, lang = "en" }: Props) {
+  const L = tr(lang);
   const [hover, setHover] = useState<number | null>(null);
   if (!paths.paths.length) return null;
 
@@ -67,7 +71,7 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
   const near = paths.paths.filter((p) => p.rank < 0.5).length;
 
   return (
-    <figure className="w-full" aria-label={`${paths.paths.length} retrieved past scenarios over ${horizonLabel}, each drawn from its own entry`}>
+    <figure className="w-full" aria-label={L(`${paths.paths.length} retrieved past scenarios over ${horizonLabel}, each drawn from its own entry`, `检索到的 ${paths.paths.length} 个历史情景（${horizonLabel}），各自从其入场点开始绘制`)}>
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={rows} margin={{ top: 12, right: 12, bottom: 4, left: -18 }}>
           <CartesianGrid vertical={false} stroke="var(--grid)" strokeWidth={1} />
@@ -75,7 +79,7 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
             dataKey="h"
             type="number"
             domain={[0, paths.hours[paths.hours.length - 1]]}
-            tickFormatter={hourLabel}
+            tickFormatter={(v: number) => hourLabel(v, lang)}
             tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
             axisLine={{ stroke: "var(--grid)" }}
             tickLine={false}
@@ -111,7 +115,7 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
               stroke="var(--status-critical)"
               strokeWidth={1.5}
               strokeDasharray="5 4"
-              label={{ value: "your stop", position: "insideBottomLeft", fill: "var(--status-critical)", fontSize: 11 }}
+              label={{ value: L("your stop", "你的止损"), position: "insideBottomLeft", fill: "var(--status-critical)", fontSize: 11 }}
             />
           ) : null}
         </ComposedChart>
@@ -119,18 +123,27 @@ export function Scenarios({ paths, horizonLabel, height = 300 }: Props) {
 
       <figcaption className="mt-2 space-y-1 text-xs text-muted-foreground">
         <p>
-          <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-1)" }} /> the {near} closest matches ·{" "}
-          <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-4)" }} /> the {paths.paths.length - near} furthest · shaded, the 5th–95th and
-          25th–75th of all of them · dashed, the median
+          <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-1)" }} />{" "}
+          {L(`the ${near} closest matches`, `最相似的 ${near} 个`)} ·{" "}
+          <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-4)" }} />{" "}
+          {L(`the ${paths.paths.length - near} furthest`, `最不相似的 ${paths.paths.length - near} 个`)}
+          {L(" · shaded, the 5th–95th and 25th–75th of all of them · dashed, the median", " · 阴影为全部路径的 5%–95% 与 25%–75% 区间 · 虚线为中位数")}
         </p>
         {active ? (
           <p className="text-foreground">
-            {active.ticker} · {new Date(active.ts).toISOString().slice(0, 16).replace("T", " ")} UTC · ended {active.values[active.values.length - 1] > 0 ? "+" : ""}
+            {active.ticker} · {new Date(active.ts).toISOString().slice(0, 16).replace("T", " ")} UTC · {L("ended", "最终")} {active.values[active.values.length - 1] > 0 ? "+" : ""}
             {active.values[active.values.length - 1].toFixed(2)}%
-            {active.stopped_at_h != null ? ` · would have stopped you out after ${hourLabel(active.stopped_at_h)}` : paths.stop_pct != null ? " · never reached your stop" : ""}
+            {active.stopped_at_h != null
+              ? ` · ${L(`would have stopped you out after ${hourLabel(active.stopped_at_h, lang)}`, `${hourLabel(active.stopped_at_h, lang)}后会触发你的止损`)}`
+              : paths.stop_pct != null
+                ? ` · ${L("never reached your stop", "从未触及你的止损")}`
+                : ""}
           </p>
         ) : (
-          <p>Hover a line to see which moment it was.{paths.n_dropped ? ` ${paths.n_dropped} more had too little history after them to draw.` : ""}</p>
+          <p>
+            {L("Hover a line to see which moment it was.", "把鼠标移到某条线上，可看到它对应的是哪个时刻。")}
+            {paths.n_dropped ? L(` ${paths.n_dropped} more had too little history after them to draw.`, ` 另有 ${paths.n_dropped} 个因之后的历史数据太少而未绘制。`) : ""}
+          </p>
         )}
       </figcaption>
     </figure>
