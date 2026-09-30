@@ -126,7 +126,7 @@ curl -fsSL https://raw.githubusercontent.com/Ritik200238/nightwatch/main/skills/
 |---|---|---|
 | Spot and futures REST (`api.bitget.com`) | rToken and perp candles, order books every 30 s, funding, perp margin tiers for liquidation prices | live |
 | `bitget-mcp-server` (`agent.bitget.com/mcp`) | live quote while the US market is shut, analyst ratings and targets, insider trades, fear & greed | live |
-| `bitget-signal` skills' data server | probed on 29 Sep: news, earnings, sentiment, macro, rates and prices returned empty errors; only technical analysis answered, with Bollinger bands inverted (upper below lower) | not used until it answers |
+| `bitget-signal` skill backend (`datahub.noxiaohao.com/mcp`) | only the `technical_analysis` tool is used: RSI (4h) and MACD, shown as context (never the size) and only when the RSI agrees within 5 points with RSI14 the desk computes from Bitget spot candles (TSLA on 30 Sep: skill 28.9, ours 28.2). `/sources` shows how many of its tools answer | partly used, cross-checked. `technical_analysis` rsi and macd answered when probed on 30 Sep; news, earnings, sentiment, macro, rates and prices returned empty errors or timed out on 29 Sep and are not used (not re-tested one by one since). Its Bollinger output came back inverted (upper below lower), so it is not read |
 
 The `bitget-mcp-server` feed had been silently empty in production: the server refuses
 new sessions over this box's IPv4 ("Too many open sessions") and accepts them over IPv6,
