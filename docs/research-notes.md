@@ -440,6 +440,11 @@ about 12% of retrieved matches come from the token being asked about.
   tokens, t = +4.29) but raised breaches to 6.3%; added on top of the existing factor it cut
   breaches to 4.7% but scored worse (t = -1.93). A short's loss line is therefore slightly
   optimistic on quiet nights, and this page says so rather than the product hiding it.
+  *Resolved 30 Sep:* the missing piece was data. The same 2,345 nights were replayed as
+  shorts (`research/replay_shorts.py`) and scored (`research/short_calibration.py`). The more
+  cautious of the old line and one fitted on the shorts' own outcomes breaches 4.7%
+  overall, 5.7% / 5.0% / 3.5% by width, at unchanged pinball loss (t = -0.02, 16 of 24
+  tokens); it ships. Short replays are excluded from every long-side reader.
 
 * Bitget's free research data hub (`bitget-signal`) answers the MCP handshake but every
   tool returns empty results; verified the fault is server-side. Not used.

@@ -19,9 +19,8 @@ const FOUND: { when: string; what: string; fix: string; open?: boolean }[] = [
   },
   {
     when: "29 Sep",
-    what: "That upper tail is still slightly optimistic on quiet nights: out of sample it is breached 5.8% of the time against 5%, and 6.8% on the narrowest third of forecasts.",
-    fix: "Two corrections were measured and neither beat the current tail on both breaches and pinball loss, so neither shipped. Open.",
-    open: true,
+    what: "That loss line was still optimistic on quiet nights: every scored replay had been a long, and replayed as shorts the quietest third breached 7.8% of the time against 5%.",
+    fix: "The same 2,345 nights were replayed as shorts. A short's line is now the more cautious of the old one and one fitted on shorts' own outcomes: 4.7% overall, 5.7% on the quietest third, same accuracy.",
   },
   {
     when: "29 Sep",
