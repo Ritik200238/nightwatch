@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ReportView } from "@/components/report/report-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, type Report } from "@/lib/api";
@@ -14,8 +14,7 @@ import { useLang } from "@/lib/lang";
  *  moment, with the hash of the inputs it used, which is the point: a link somebody else
  *  opens has to show them what you saw, not what the market is doing now.
  */
-export default function StoredReportPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export function StoredReport({ id }: { id: string }) {
   const { lang, tx } = useLang();
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
