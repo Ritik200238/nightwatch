@@ -530,6 +530,14 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
   );
 }
 
+/** hours_to_earnings is capped at 720 h: at the cap it means none in 30 days, and null means not known. */
+function earningsAhead(h: number | null | undefined, lang: Lang): string {
+  const L = tr(lang);
+  if (h == null || Number.isNaN(h)) return L("not known", "未知");
+  if (h >= 720) return L("none in 30 d", "30 天内无");
+  return fmtHoursL(h, lang);
+}
+
 function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
   const L = tr(lang);
   const notes = report.filings ?? [];
@@ -542,14 +550,14 @@ function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
     <Section
       title={
         notes.length === 1
-          ? L("A filing landed, and the market has not opened since", "有一份文件刚披露，此后市场还没有开盘")
-          : L(`${notes.length} filings landed, and the market has not opened since`, `有 ${notes.length} 份文件刚披露，此后市场还没有开盘`)
+          ? L("A filing landed in the last 72 hours", "过去 72 小时内有一份文件披露")
+          : L(`${notes.length} filings landed in the last 72 hours`, `过去 72 小时内有 ${notes.length} 份文件披露`)
       }
       subtitle={L(
         "Read from the filing's own text. The model says what it is; the history beside it says what followed the ones it flagged the same way.",
         "根据文件原文解读。模型说明这份文件是什么；旁边的历史数据则显示，以同样方式标记的文件之后发生了什么。",
       )}
-      action={<Pill tone={flagged ? MOVING_TONE[worst.market_moving] : "muted"}>{flagged ? L(`${worst.market_moving} impact`, `${impactOf(worst.market_moving)}影响`) : L("routine", "例行")}</Pill>}
+      action={<Pill tone={flagged ? MOVING_TONE[worst.market_moving] : "muted"}>{flagged ? L(`${worst.market_moving} impact`, `${impactOf(worst.market_moving)}影响`) : notes.every((n) => n.market_moving === "unread") ? L("not yet read", "尚未解读") : L("routine", "例行")}</Pill>}
     >
       <div className="space-y-3">
         {notes.map((n) => (
@@ -582,6 +590,8 @@ function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
                   </>
                 )}
               </p>
+            ) : n.market_moving === "unread" ? (
+              <p className="mt-2 text-xs text-muted-foreground">{L("The model has not read this filing yet, so its impact is unknown and no history is quoted.", "模型还没有解读这份文件，所以影响未知，也不引用历史数据。")}</p>
             ) : (
               <p className="mt-2 text-xs text-muted-foreground">{L("Too few scored filings carry this label to quote a distribution, so none is shown.", "带这个标签且已评分的文件太少，无法给出分布，所以不显示。")}</p>
             )}
@@ -692,7 +702,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
             hint={L(`pctl ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${report.snapshot.labels.vol_state}`, `百分位 ${report.snapshot.features.vol_pctl_90d?.toFixed(0) ?? "—"} · ${stateWord(lang, report.snapshot.labels.vol_state)}`)}
           />
           <Stat label={L("Trend vs 30d avg", "相对 30 日均线的趋势")} value={fmtPct(report.snapshot.features.trend_sma_pct, 1)} hint={stateWord(lang, report.snapshot.labels.trend_state)} />
-          <Stat label={L("Next earnings", "下次财报")} value={H(report.snapshot.features.hours_to_earnings)} hint={L(`FOMC in ${H(report.snapshot.features.hours_to_fomc)}`, `距 FOMC ${H(report.snapshot.features.hours_to_fomc)}`)} />
+          <Stat label={L("Next earnings", "下次财报")} value={earningsAhead(report.snapshot.features.hours_to_earnings, lang)} hint={L(`FOMC in ${H(report.snapshot.features.hours_to_fomc)}`, `距 FOMC ${H(report.snapshot.features.hours_to_fomc)}`)} />
           <Stat
             label={L("Last SEC filing", "最近一份 SEC 文件")}
             // 720 h is the cap the feature carries, not a measurement: say "over 30 d", not "30 d".
@@ -879,7 +889,14 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
         <span>
           {L(`Computed in ${report.timings_ms.total} ms · sources: `, `计算耗时 ${report.timings_ms.total} 毫秒 · 数据来源：`)}
-          {report.sources.map((s) => String(s.kind)).join(", ")}
+          {report.sources
+            .map((s) => {
+              const name = tl(lang, "feed", String(s.kind));
+              const ts = typeof s.last_ts === "string" ? Date.parse(s.last_ts) : NaN;
+              const age = Number.isNaN(ts) ? "" : ` ${fmtHoursL(Math.max(0, (Date.parse(report.as_of) - ts) / 3_600_000), lang)}`;
+              return `${name}${age ? ` (${age.trim()}${lang === "zh" ? "前" : " old"})` : ""}`;
+            })
+            .join(lang === "zh" ? "、" : ", ")}
           {report.forecast_id != null && report.forecast_id > 0 ? L(` · journaled as forecast #${report.forecast_id}`, ` · 已记入日志，预测编号 #${report.forecast_id}`) : ""}
           {report.forecast_id != null && report.forecast_id < 0 ? L(" · a what-if: not journaled, never scored", " · 假设情景：不记入日志，也不评分") : ""}
         </span>
@@ -1214,7 +1231,7 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
                 <TableCell className="tabular text-right font-medium">{f(a.result.query.basis_index_z)}</TableCell>
                 <TableCell className="tabular text-right font-medium">{fmtPct(a.result.query.trend_sma_pct, 1)}</TableCell>
                 <TableCell className="tabular text-right font-medium">
-                  {a.result.query.hours_to_earnings == null ? "—" : a.result.query.hours_to_earnings >= 720 ? L("> 30 d", "> 30 天") : `${a.result.query.hours_to_earnings.toFixed(0)} ${L("h", "小时")}`}
+                  {a.result.query.hours_to_earnings == null ? "—" : a.result.query.hours_to_earnings >= 720 ? L("none in 30 d", "30 天内无") : `${a.result.query.hours_to_earnings.toFixed(0)} ${L("h", "小时")}`}
                 </TableCell>
                 <TableCell className="text-right text-xs text-muted-foreground">{L("what we're asking about", "我们正在询问的这一刻")}</TableCell>
               </TableRow>
@@ -1235,7 +1252,7 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
                   <TableCell className="tabular text-right">{f(m.features.vol_pctl_90d, 0)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.basis_index_z)}</TableCell>
                   <TableCell className="tabular text-right">{fmtPct(m.features.trend_sma_pct, 1)}</TableCell>
-                  <TableCell className="tabular text-right">{hte == null ? "—" : hte >= 720 ? L("> 30 d", "> 30 天") : `${hte.toFixed(0)} ${L("h", "小时")}`}</TableCell>
+                  <TableCell className="tabular text-right">{hte == null ? "—" : hte >= 720 ? L("none in 30 d", "30 天内无") : `${hte.toFixed(0)} ${L("h", "小时")}`}</TableCell>
                   <TableCell className="tabular text-right">
                     {o?.status === "MATURED" ? (
                       <>

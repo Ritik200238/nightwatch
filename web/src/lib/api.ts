@@ -190,7 +190,7 @@ export interface FilingNote {
   market_was_shut: boolean;
   category: string;
   headline: string;
-  market_moving: "none" | "low" | "medium" | "high";
+  market_moving: "none" | "low" | "medium" | "high" | "unread";
   label_n: number | null;
   label_p5_pct: number | null;
   label_median_pct: number | null;

@@ -71,7 +71,12 @@ export const STRINGS = {
       no_distribution: "no forecast",
     },
     severity: { extreme: "extreme", severe: "severe" } as Record<string, string>,
-    impact: { high: "high", medium: "medium", low: "low", none: "none" } as Record<string, string>,
+    impact: { high: "high", medium: "medium", low: "low", none: "none", unread: "not yet read" } as Record<string, string>,
+    feed: {
+      features: "computed features", bitget_candles: "Bitget candles", orderbook: "Bitget order book", bitget_perp: "Bitget perp and funding",
+      bitget_margin_tiers: "Bitget margin tiers", yahoo_bars: "Yahoo stock bars", nasdaq_earnings: "Nasdaq earnings", fred_macro: "FRED macro",
+      rss_news: "RSS news", sec_edgar: "SEC EDGAR", bitget_mcp: "Bitget US-stock MCP",
+    } as Record<string, string>,
     breaker: { NORMAL: "normal", COOLDOWN: "cooldown", HALTED: "halted" } as Record<string, string>,
     side: { long: "long", short: "short", buy: "buy", sell: "sell" } as Record<string, string>,
     feature: {
@@ -155,7 +160,12 @@ export const STRINGS = {
       no_distribution: "无预测",
     },
     severity: { extreme: "极端", severe: "严重" } as Record<string, string>,
-    impact: { high: "高", medium: "中", low: "低", none: "无" } as Record<string, string>,
+    impact: { high: "高", medium: "中", low: "低", none: "无", unread: "尚未解读" } as Record<string, string>,
+    feed: {
+      features: "计算特征", bitget_candles: "Bitget K 线", orderbook: "Bitget 订单簿", bitget_perp: "Bitget 永续与资金费率",
+      bitget_margin_tiers: "Bitget 保证金档位", yahoo_bars: "Yahoo 正股行情", nasdaq_earnings: "Nasdaq 财报日历", fred_macro: "FRED 宏观数据",
+      rss_news: "RSS 新闻", sec_edgar: "SEC EDGAR 文件", bitget_mcp: "Bitget 美股 MCP",
+    } as Record<string, string>,
     breaker: { NORMAL: "正常", COOLDOWN: "冷静期", HALTED: "已暂停" } as Record<string, string>,
     side: { long: "做多", short: "做空", buy: "买入", sell: "卖出" } as Record<string, string>,
     feature: {
