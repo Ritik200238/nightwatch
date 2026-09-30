@@ -7,6 +7,7 @@ import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
 import { Scenarios } from "@/components/charts/scenarios";
 import { ActOnIt } from "@/components/report/act-on-it";
+import { GuardNote } from "@/components/report/guard-note";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
@@ -107,10 +108,11 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
         <p className="text-sm font-semibold">{lang === "zh" ? "分析师的看法" : "The analyst's take"}</p>
         <p className="text-xs text-muted-foreground">
           {take.status === "done"
-            ? `${take.model || "Qwen"} · ${take.seconds ?? "?"}s · ${lang === "zh" ? "数字已与报告核对；推理是模型自己的，可能出错" : "numbers checked against the report; the reasoning is the model's and can be wrong"}${take.removed ? ` · ${take.removed} ${lang === "zh" ? "句因引用报告外的数字被删除" : "sentence(s) removed for citing numbers not in the report"}` : ""}`
+            ? `${take.model || "Qwen"} · ${take.seconds ?? "?"}s · ${lang === "zh" ? "数字已与报告核对；推理是模型自己的，可能出错" : "numbers checked against the report; the reasoning is the model's and can be wrong"}`
             : null}
         </p>
       </div>
+      {take.status === "done" && take.removed ? <GuardNote n={take.removed} lang={lang} className="mt-1 text-xs text-muted-foreground" /> : null}
       {take.status === "pending" ? (
         <p className="mt-2 animate-pulse text-sm text-muted-foreground">
           {lang === "zh" ? "AI 分析师正在阅读这份报告（通常不到 15 秒）。上面的结论已经完整。" : "The AI analyst is reading the report (usually under 15 s). The verdict above is already complete."}

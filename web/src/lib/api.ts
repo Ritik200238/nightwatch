@@ -70,6 +70,8 @@ export interface Health {
   tickers_with_data: number;
   warm: { state: string; done: number; total: number };
   chat_ready: boolean;
+  uptime_s?: number;
+  llm?: { ready: boolean; provider?: string; model?: string };
 }
 
 export interface DataSource {
@@ -1016,6 +1018,7 @@ export const api = {
   },
   studies: () => request<StudiesResponse>("/studies"),
   verify: () => request<VerifyResponse>("/verify"),
+  anchors: () => request<{ anchors: Anchor[] }>("/anchors"),
   misses: () => request<MissesResponse>("/misses"),
   analystStart: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`, { method: "POST" }),
   analystGet: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`),
@@ -1064,6 +1067,21 @@ export interface VerifyResponse {
   first_break: { seq: number; forecast_id: number; reason: string } | null;
   unchained: number;
   chained_since: number | null;
+  anchors?: number;
+  anchored_in_bitcoin?: number;
+  anchors_broken?: string[];
+}
+
+/** One daily head of the receipt chain, timestamped into Bitcoin through OpenTimestamps. */
+export interface Anchor {
+  name: string;
+  seq: number;
+  head: string;
+  verified: string | null;
+  state: string;
+  block: number | null;
+  checked_at: string | null;
+  proof: string | null;
 }
 
 /** A live verdict whose outcome went past the one-in-twenty line it stated. */

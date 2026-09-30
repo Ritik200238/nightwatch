@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, type Report } from "@/lib/api";
 import { useLang } from "@/lib/lang";
+import { GuardNote } from "@/components/report/guard-note";
 import { Working } from "./working";
 
 interface Msg {
@@ -15,6 +16,8 @@ interface Msg {
   readFrom?: string;
   /** Who wrote it, when it was the model rather than the desk's own fields. */
   byline?: string;
+  /** Sentences the number guard dropped from a model take. */
+  removed?: number;
 }
 
 interface Props {
@@ -22,6 +25,8 @@ interface Props {
   busy: boolean;
   setBusy: (b: boolean) => void;
   onReport: (r: Report, lang: "en" | "zh") => void;
+  /** A canned run: each step is sent as if typed, once, in order. */
+  script?: { id: number; steps: string[] } | null;
 }
 
 const STARTERS = ["Hold $20k of TSLA through the weekend, stop at 350", "Short 5k NVDA for the next 12 hours", "Long 10k SPY until Monday open, thesis: strong Friday close"];
@@ -73,11 +78,15 @@ const READ_FROM: Record<string, string> = {
   data: "the list of live sources",
 };
 
-export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
+export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) {
   const { lang, setLang, tx } = useLang();
   const [messages, setMessages] = useState<Msg[]>([]);
   // The report the conversation is currently about. Questions are answered from it.
   const [contextId, setContextId] = useState<number | null>(null);
+  // Refs mirror the two above so a scripted run sees its own earlier steps.
+  const messagesRef = useRef<Msg[]>([]);
+  const contextRef = useRef<number | null>(null);
+  const ranScript = useRef<number | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   // null = not checked yet. The desk works without a model; only this tab needs one.
@@ -108,7 +117,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
         if (t.status === "done" && t.text) {
           const label = lang === "zh" ? "分析师的看法" : "Analyst's take";
           const debate = [t.for ? `${lang === "zh" ? "支持的理由" : "Case for"}: ${t.for}` : "", t.against ? `${lang === "zh" ? "反对的理由" : "Case against"}: ${t.against}` : "", t.reconcile ?? ""].filter(Boolean).join("\n");
-          setMessages((m) => [...m, { role: "assistant", content: `${label}\n\n${debate ? `${debate}\n\n` : ""}${t.text}`, byline: lang === "zh" ? "由 Qwen 撰写 · 数字已与报告核对，推理是模型自己的，可能出错" : "Written by Qwen · numbers checked against the report; the reasoning is the model's and can be wrong" }]);
+          setMessages((m) => [...m, { role: "assistant", content: `${label}\n\n${debate ? `${debate}\n\n` : ""}${t.text}`, byline: lang === "zh" ? "由 Qwen 撰写 · 数字已与报告核对，推理是模型自己的，可能出错" : "Written by Qwen · numbers checked against the report; the reasoning is the model's and can be wrong", removed: t.removed }]);
           return;
         }
         if (t.status !== "pending") return;
@@ -119,14 +128,19 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
     }
   }
 
+  function commit(m: Msg[]) {
+    messagesRef.current = m;
+    setMessages(m);
+  }
+
   async function send(text: string) {
     const content = text.trim();
     if (!content || busy) return;
     // Writing Chinese switches the whole page to Chinese; an English message leaves it as it is.
     const chatLang: "en" | "zh" = HAS_ZH.test(content) ? "zh" : lang;
     if (chatLang !== lang) setLang(chatLang);
-    const next: Msg[] = [...messages, { role: "user", content }];
-    setMessages(next);
+    const next: Msg[] = [...messagesRef.current, { role: "user", content }];
+    commit(next);
     setDraft("");
     setError(null);
     setBusy(true);
@@ -134,24 +148,38 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
       const res = await api.chat(
         next.map((m) => ({ role: m.role, content: m.content })),
         accountEquity,
-        contextId,
+        contextRef.current,
       );
-      setMessages([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined }]);
+      commit([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined }]);
       // A follow-up answers about the report already on screen and leaves it there.
       if (res.report) {
         onReport(res.report, chatLang);
         const id = (res.report.forecast_id as number | null) ?? null;
+        contextRef.current = id;
         setContextId(id);
         if (id != null && res.mode !== "what_if") void followWithTake(id, chatLang);
       }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : tx("Something went wrong.", "出错了。");
       setError(msg);
-      setMessages(next);
+      commit(next);
     } finally {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!script || ranScript.current === script.id) return;
+    ranScript.current = script.id;
+    void (async () => {
+      for (const step of script.steps) {
+        await send(step);
+        // A failed step leaves the error on screen; do not stack the next question on it.
+        if (!contextRef.current) break;
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [script]);
 
   return (
     <div className="flex h-full min-h-[320px] flex-col">
@@ -183,6 +211,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport }: Props) {
             <p className="whitespace-pre-wrap">{m.content}</p>
             {m.readFrom ? <p className="mt-2 text-xs text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}
             {m.byline ? <p className="mt-2 text-xs text-muted-foreground">{m.byline}</p> : null}
+            {m.removed ? <GuardNote n={m.removed} lang={lang} /> : null}
             {m.unverified && m.unverified.length ? <p className="mt-2 text-xs text-status-warning">{tx("Numbers not found in the report: ", "报告中找不到这些数字：")}{m.unverified.join(", ")}</p> : null}
           </div>
         ))}
