@@ -132,6 +132,7 @@ class AppState:
             perp_client=BitgetPublicClient(Venue.BITGET_UMCBL, rate_per_sec=4) if live else None,
             frame_cache_size=settings.frame_cache_size,
             street_client=_street_client(),
+            signal_client=_signal_client(),
         )
         self.lock = threading.Lock()  # serialises analyses that share the frame cache
         # Scoring the whole journal takes seconds; it only changes when forecasts mature.
@@ -214,6 +215,13 @@ class AppState:
             for t in tickers:
                 pool.submit(self.ctx.street_for, t, max_age=timedelta(minutes=50))
 
+    def refresh_signal(self) -> None:
+        """The signal skill's reading for every token, one at a time: its backend is flaky
+        and slow, so it gets no parallel load, and it runs outside the analysis lock."""
+        for t in self.ctx.tickers_with_data():
+            self.ctx.signal_for(t, max_age=timedelta(minutes=50), fetch=True)
+        self.ctx.signal_health(max_age=timedelta(minutes=50))
+
     def warm_forever(self) -> None:
         """Warm now, then again just after every hour boundary.
 
@@ -223,6 +231,8 @@ class AppState:
         while True:
             if self.ctx.street_client is not None:
                 threading.Thread(target=self.refresh_street, name="street-refresh", daemon=True).start()
+            if self.ctx.signal_client is not None:
+                threading.Thread(target=self.refresh_signal, name="signal-refresh", daemon=True).start()
             self.warm()
             now = utc_now()
             next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1, seconds=45))
@@ -250,6 +260,15 @@ def _street_client():  # noqa: ANN202
     from nightwatch.data.bitget_mcp import BitgetMcpClient
 
     return BitgetMcpClient()
+
+
+def _signal_client():  # noqa: ANN202
+    """Bitget's bitget-signal Skill backend, unless turned off (NIGHTWATCH_BITGET_SIGNAL=0)."""
+    if os.environ.get("NIGHTWATCH_BITGET_SIGNAL", "1") != "1":
+        return None
+    from nightwatch.data.bitget_signal import BitgetSignalClient
+
+    return BitgetSignalClient()
 
 
 def _with_holdings(state: Any, context: dict[str, Any], text: str, tickers: list[str]) -> dict[str, Any] | None:  # noqa: ANN401
@@ -576,6 +595,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
                 "rows": len(cached), "latest": newest.isoformat() if newest else None,
                 "latest_label": f"{len(cached)} tokens with current street data", "url": "https://agent.bitget.com/mcp",
+            })
+        if s.ctx.signal_client is not None:
+            health = s.ctx.signal_health()
+            shown = [(ts, v) for ts, v in s.ctx._signal.values() if v and v.get("agrees")]
+            newest = max((ts for ts, _ in shown), default=None)
+            out.append({
+                "key": "bitget_signal", "label": "Bitget signal skill backend",
+                "what": "RSI (4h) from the bitget-signal technical-analysis tool, shown only when it agrees with our own RSI from Bitget candles. Its other tools are mostly failing.",
+                "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
+                "rows": len(shown), "latest": newest.isoformat() if newest else None,
+                "latest_label": f"{health['answering']} of {health['tried']} tools answering" if health else "health check pending",
+                "url": "https://datahub.noxiaohao.com/mcp",
             })
         return out
 

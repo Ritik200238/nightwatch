@@ -105,6 +105,9 @@ class AnalysisContext:
     # street and insider context and an independent quote. Optional: without it the
     # report simply has no street section.
     street_client: Any = None
+    # Bitget's bitget-signal Skill backend (nightwatch.data.bitget_signal.BitgetSignalClient):
+    # an RSI reading, shown only when it agrees with the desk's own candles. Context only.
+    signal_client: Any = None
     sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
@@ -113,6 +116,9 @@ class AnalysisContext:
     _factors_cache: dict[str, Any] = field(default_factory=dict)
     _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
     _street_pending: set[str] = field(default_factory=set)
+    _signal: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
+    _signal_pending: set[str] = field(default_factory=set)
+    _signal_health: tuple[datetime, dict] | None = None
     _profiles: dict[str, tuple[datetime, dict[str, float]]] = field(default_factory=dict)
     _degraded: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     _tiers: dict[str, tuple[datetime, list[Any]]] = field(default_factory=dict)
@@ -202,6 +208,69 @@ class AnalysisContext:
                 self._street_pending.discard(ticker)
 
         threading.Thread(target=run, name=f"street-{ticker}", daemon=True).start()
+
+    def signal_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=1), fetch: bool = False) -> dict | None:
+        """The checked bitget-signal reading for a ticker, from cache when fresh enough.
+
+        Same contract as ``street_for``: an analysis passes ``fetch=False`` and never
+        waits; a miss returns what is cached and asks for a background refresh."""
+        if self.signal_client is None:
+            return None
+        hit = self._signal.get(ticker)
+        if hit and utc_now() - hit[0] <= max_age:
+            return hit[1]
+        if not fetch:
+            self.refresh_signal_later(ticker)
+            return hit[1] if hit else None
+        return self._fetch_signal(ticker) or (hit[1] if hit else None)
+
+    def _fetch_signal(self, ticker: str) -> dict | None:
+        from nightwatch.features import signal as signal_mod
+
+        try:
+            spec = self.spec(ticker)
+            bars = self.store.get_bars(Venue.BITGET_SPOT, spec.spot_symbol, Interval.H1, start=utc_now() - timedelta(days=30), as_of=utc_now())
+            view = signal_mod.build(self.signal_client, ticker, bars["close"] if len(bars) else None)
+        except Exception:  # noqa: BLE001 - context must never fail an analysis
+            log.exception("signal context for %s failed", ticker)
+            return None
+        self._signal[ticker] = (utc_now(), view)
+        return view
+
+    def refresh_signal_later(self, ticker: str) -> None:
+        if self.signal_client is None or ticker in self._signal_pending:
+            return
+        self._signal_pending.add(ticker)
+
+        def run() -> None:
+            try:
+                self._fetch_signal(ticker)
+            finally:
+                self._signal_pending.discard(ticker)
+
+        threading.Thread(target=run, name=f"signal-{ticker}", daemon=True).start()
+
+    def signal_health(self, *, max_age: timedelta = timedelta(hours=1)) -> dict | None:
+        """{answering, tried, checked_at} from cache; a stale or missing value triggers a
+        background probe and is returned as is, so the sources page never waits on it."""
+        if self.signal_client is None:
+            return None
+        hit = self._signal_health
+        if hit is None or utc_now() - hit[0] > max_age:
+            if "_health" not in self._signal_pending:
+                self._signal_pending.add("_health")
+
+                def run() -> None:
+                    try:
+                        h = self.signal_client.health()
+                        self._signal_health = (utc_now(), h)
+                    except Exception:  # noqa: BLE001
+                        log.exception("signal health probe failed")
+                    finally:
+                        self._signal_pending.discard("_health")
+
+                threading.Thread(target=run, name="signal-health", daemon=True).start()
+        return {**hit[1], "checked_at": hit[0].isoformat()} if hit else None
 
     def tail_factors(self, as_of: datetime, side: str = "long"):  # noqa: ANN201
         """Tail-calibration factors fitted on replay forecasts matured before ``as_of``
@@ -509,6 +578,9 @@ class AnalysisReport:
     # nightwatch.features.street.StreetView as a dict: analysts, insiders, market mood and
     # an independent quote, from Bitget's data. Context only; None for past moments.
     street: dict | None = None
+    # nightwatch.features.signal.build: Bitget's signal-skill RSI beside our own from
+    # Bitget candles. Context only: not read by the gate or the size.
+    signal: dict | None = None
     # The trader's invalidation read for a testable level and measured against the
     # analogs; plus a flag when the stated reason reads against the position.
     plan_check: dict | None = None
@@ -800,6 +872,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
                     f"one of them is wrong, so read the basis with care"
                 )
     timings["street"] = _ms(t0)
+
+    signal = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        sig = ctx.signal_for(ticket.ticker)
+        if sig is not None and sig.get("agrees"):
+            signal = sig
+            sources.append({"kind": "bitget_signal", "label": "Bitget signal skill (technical analysis)", "last_ts": sig["fetched_at"], "rows_used": 1, "ticker": ticket.ticker, "fetched_at": sig["fetched_at"]})
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
     from nightwatch.pipeline.feeds import feed_sources
 
@@ -809,7 +888,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,

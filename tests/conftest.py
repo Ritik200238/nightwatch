@@ -11,3 +11,4 @@ import pytest
 @pytest.fixture(autouse=True)
 def _no_external_data_services(monkeypatch):
     monkeypatch.setenv("NIGHTWATCH_BITGET_MCP", "0")
+    monkeypatch.setenv("NIGHTWATCH_BITGET_SIGNAL", "0")
