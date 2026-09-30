@@ -5,6 +5,7 @@
  * the fields the UI renders and are intentionally loose where the report carries
  * large or optional structures.
  */
+import { withIdentity } from "@/lib/identity";
 
 /**
  * Where the backend lives.
@@ -972,7 +973,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
+    res = await fetch(`${API_URL}${withIdentity(path)}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
   } catch {
     throw new ApiError("Cannot reach the Nightwatch API. Is the backend running?", 0);
   }

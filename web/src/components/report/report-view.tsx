@@ -7,6 +7,7 @@ import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
 import { Scenarios } from "@/components/charts/scenarios";
 import { ActOnIt } from "@/components/report/act-on-it";
+import { Feedback, WatchButton } from "@/components/report/feedback";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
@@ -965,6 +966,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         ) : null}
         {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
       </p>
+      {report.forecast_id != null && report.forecast_id > 0 ? (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          <Feedback forecastId={report.forecast_id} lang={lang} />
+          <WatchButton forecastId={report.forecast_id} lang={lang} />
+        </div>
+      ) : null}
       {primary ? null : null}
     </div>
   );
