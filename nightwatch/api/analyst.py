@@ -27,6 +27,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from nightwatch.features.phrases import earnings_ahead
+
 log = logging.getLogger(__name__)
 
 SYSTEM_EN = (
@@ -127,6 +129,7 @@ def fact_sheet(r: dict[str, Any]) -> str:
         lines.append(f"Worst stress test: {p['name']}, {_pct(i.get('total_pct_of_notional'))} of the position, {i['total_pnl_quote']:,.0f} USDT.")
     if (st.get("inputs_summary") or {}).get("earnings_in_window") is False:
         lines.append("No earnings report falls inside this hold.")
+    lines.append(f"Next earnings: {earnings_ahead(feats.get('hours_to_earnings'))}. Never quote this as a number of hours when it says no earnings in 30 days.")
     q = (r.get("execution") or {}).get("exit_quote") or {}
     if q.get("total_cost_bps") is not None:
         lines.append(f"Getting out costs {q['total_cost_bps']:.0f} bps on the order book.")
@@ -142,7 +145,10 @@ def fact_sheet(r: dict[str, Any]) -> str:
         if s.get("mood_score") is not None:
             lines.append(f"Market fear and greed: {s['mood_score']:.0f} ({s.get('mood_rating')}).")
     for f in (r.get("filings") or [])[:2]:
-        lines.append(f"Fresh filing: {f.get('headline')} ({f.get('market_moving')} impact).")
+        if f.get("market_moving") == "unread":
+            lines.append(f"Fresh filing: a {f.get('form')} landed {f.get('hours_ago', 0):.0f}h ago; the model has not read it yet, so its impact is unknown.")
+        else:
+            lines.append(f"Fresh filing: {f.get('headline')} ({f.get('market_moving')} impact).")
     for w in (r.get("warnings") or [])[:3]:
         lines.append(f"Caveat: {w}.")
     rel = relations(r)

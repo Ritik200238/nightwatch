@@ -24,6 +24,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from nightwatch.features.phrases import earnings_ahead
+
 # ------------------------------------------------------------------ small formatters
 
 
@@ -540,7 +542,7 @@ def _a_premise(r: dict, _q: str) -> Answer | None:
     elif (_ticket(r).get("thesis") or "").strip():
         bits.append("Nothing in your reason depends on an event the data can date against this hold.")
     if not any("earnings" in x for x in premise):
-        bits.append(f"Last earnings report: {when(f.get('hours_since_earnings'), True)}; next: {when(f.get('hours_to_earnings'), False)}"
+        bits.append(f"Last earnings report: {when(f.get('hours_since_earnings'), True)}; next: {earnings_ahead(f.get('hours_to_earnings'))}"
                     + (" - inside this hold, so the earnings-gap presets are included." if f.get("hours_to_earnings") is not None and f["hours_to_earnings"] <= horizon else "."))
     if f.get("hours_to_fomc") is not None:
         bits.append(f"Next FOMC decision: {when(f.get('hours_to_fomc'), False)}.")

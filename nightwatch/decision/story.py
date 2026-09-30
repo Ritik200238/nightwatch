@@ -25,6 +25,8 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from nightwatch.features.phrases import earnings_ahead
+
 
 @dataclass(frozen=True)
 class Assumption:
@@ -127,7 +129,9 @@ def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
     if hte is not None and hte <= r.horizon_h:
         out.append(Assumption("events", f"Earnings fall inside the hold (in {_days(hte)}); the earnings-gap presets are included.", "caveat"))
     elif hte is not None:
-        out.append(Assumption("events", f"No earnings inside the hold (next in {_days(hte)})."))
+        out.append(Assumption("events", f"No earnings inside the hold ({earnings_ahead(hte)})." if hte >= _EVENT_CAP_H else f"No earnings inside the hold (next in {_days(hte)})."))
+    else:
+        out.append(Assumption("events", "Earnings timing is not known (no upcoming date on the earnings calendar), so the earnings-gap presets are not tied to this hold.", "caveat"))
     return out
 
 
@@ -363,11 +367,11 @@ def premise(r: Any) -> list[str]:  # noqa: ANN401
     since, until = f.get("hours_since_earnings"), f.get("hours_to_earnings")
     if _EARN.search(thesis):
         if _POST.search(thesis) and (since is None or since > 7 * 24):
-            out.append(f"Your reason leans on a recent earnings report, but the last one was {_days(since)} ago" + (f" and the next is {_days(until)} away" if until is not None else "") + ".")
+            out.append(f"Your reason leans on a recent earnings report, but the last one was {_days(since)} ago" + (f" and next: {earnings_ahead(until)}" if until is not None else "") + ".")
         elif _PRE.search(thesis) and (until is None or until > 14 * 24):
-            out.append(f"Your reason leans on earnings coming up, but the next report is {_days(until)} away, well past this hold.")
+            out.append(f"Your reason leans on earnings coming up, but next earnings: {earnings_ahead(until)}, well past this hold.")
         elif not _POST.search(thesis) and not _PRE.search(thesis) and (since is None or since > 7 * 24) and (until is None or until > r.horizon_h + 24):
-            out.append(f"Your reason mentions earnings, but none fall near this hold (last {_days(since)} ago, next in {_days(until)}).")
+            out.append(f"Your reason mentions earnings, but none fall near this hold (last {_days(since)} ago; next: {earnings_ahead(until)}).")
     fomc = f.get("hours_to_fomc")
     if _FED.search(thesis):
         if fomc is None:
