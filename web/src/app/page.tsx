@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Chat } from "@/components/desk/chat";
 import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
+import { ProofStrip } from "@/components/desk/proof-strip";
+import { ScenarioChips } from "@/components/desk/scenarios";
 import { Sources } from "@/components/desk/sources";
 import { TicketForm } from "@/components/desk/ticket-form";
 import { Working } from "@/components/desk/working";
@@ -26,6 +28,10 @@ export default function DeskPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<TicketInput | null>(null);
+  const [tab, setTab] = useState("form");
+  // A canned run for the chat to play once: the id makes each click a new run.
+  const [script, setScript] = useState<{ id: number; steps: string[] } | null>(null);
+  const deepLinked = useRef(false);
   const [equity, setEquity] = useState<number | null>(200000);
   const { positions, setPositions } = useOpenPositions();
 
@@ -40,6 +46,22 @@ export default function DeskPage() {
 
   useEffect(() => {
     void loadUniverse();
+  }, []);
+
+  function runScenario(steps: string[]) {
+    setTab("chat");
+    setScript({ id: Date.now(), steps });
+  }
+
+  // /?q=<text> runs that text once through the chat; repeat q for a follow-up question.
+  useEffect(() => {
+    if (deepLinked.current) return;
+    deepLinked.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const steps = params.getAll("q").map((q) => q.trim().slice(0, 500)).filter(Boolean);
+    if (!steps.length) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    runScenario(steps);
   }, []);
 
   async function run(ticket: TicketInput) {
@@ -63,6 +85,8 @@ export default function DeskPage() {
     // min-w-0 on both columns: a grid track is auto-sized by default, so one wide table
     // in the report stretches the whole column past the viewport and takes the sidebar
     // with it. With it, the tables' own overflow-x-auto wrappers do the scrolling.
+    <div className="space-y-6">
+    <ProofStrip stocks={universe?.length ?? null} />
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
       <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
         <div>
@@ -79,7 +103,8 @@ export default function DeskPage() {
             </p>
           ) : null}
         </div>
-        <Tabs defaultValue="form">
+        <ScenarioChips disabled={busy} onPick={runScenario} />
+        <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
           <TabsList className="w-full">
             <TabsTrigger value="form" className="flex-1">
               {tx("Ticket", "表单")}
@@ -116,7 +141,7 @@ export default function DeskPage() {
             )}
           </TabsContent>
           <TabsContent value="chat" className="pt-3">
-            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} onReport={(r) => {
+            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} script={script} onReport={(r) => {
                 setReport(r);
                 setFromChat(true);
                 scrollIntoViewOnSmall(resultRef.current);
@@ -192,6 +217,7 @@ export default function DeskPage() {
           </div>
         ) : null}
       </section>
+    </div>
     </div>
   );
 }
