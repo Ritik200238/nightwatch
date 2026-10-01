@@ -4,6 +4,7 @@
 
 [![ci](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml)
 [![uptime](https://github.com/Ritik200238/nightwatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/uptime.yml)
+[![browser-smoke](https://github.com/Ritik200238/nightwatch/actions/workflows/browser-smoke.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/browser-smoke.yml)
 · Live: https://nightwatch-gules.vercel.app
 
 | Claim | How you can check it yourself |
