@@ -1,0 +1,39 @@
+# Real-browser check of the live site. uptime.yml only curls endpoints, so a client-side crash
+# (a TypeError while rendering a report) broke the chat for two days unnoticed. This opens the
+# site in Chromium, runs every starter and demo chip plus a typed message, and fails on any
+# page error or a report that never appears. A failed run emails the repository owner.
+name: browser-smoke
+
+on:
+  schedule:
+    - cron: "12,42 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  smoke:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the deploy to go live
+        if: github.event_name == 'workflow_run'
+        run: sleep 360
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm i playwright@1.49.1
+          npx playwright install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+      - name: Run smoke
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw/run" && cp web/e2e/smoke.mjs "$RUNNER_TEMP/pw/smoke.mjs"
+          cd "$RUNNER_TEMP/pw" && node smoke.mjs https://nightwatch-gules.vercel.app
