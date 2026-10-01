@@ -29,10 +29,12 @@ export default function DeskPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<TicketInput | null>(null);
-  const [tab, setTab] = useState("form");
+  const [tab, setTab] = useState("chat");
   // A canned run for the chat to play once: the id makes each click a new run.
   const [script, setScript] = useState<{ id: number; steps: string[] } | null>(null);
   const deepLinked = useRef(false);
+  const [heroDraft, setHeroDraft] = useState("");
+  const [heroUsed, setHeroUsed] = useState(false);
   const [equity, setEquity] = useState<number | null>(200000);
   const { positions, setPositions } = useOpenPositions();
   const exampleReport = (snapshot?.reports.TSLA as unknown as Report | undefined) ?? null;
@@ -52,6 +54,7 @@ export default function DeskPage() {
 
   function runScenario(steps: string[]) {
     setTab("chat");
+    setHeroDraft("");
     setScript({ id: Date.now(), steps });
   }
 
@@ -102,6 +105,17 @@ export default function DeskPage() {
     // in the report stretches the whole column past the viewport and takes the sidebar
     // with it. With it, the tables' own overflow-x-auto wrappers do the scrolling.
     <div className="space-y-6">
+    {!report && !heroUsed ? (
+      <Hero
+        draft={heroDraft}
+        setDraft={setHeroDraft}
+        busy={busy}
+        onSend={(text) => {
+          setHeroUsed(true);
+          runScenario([text]);
+        }}
+      />
+    ) : null}
     <ProofStrip stocks={universe?.length ?? null} />
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
       <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
@@ -237,6 +251,61 @@ export default function DeskPage() {
       </section>
     </div>
     </div>
+  );
+}
+
+// Each chip is a full ticket the desk can parse (ticker, side, size, horizon); `send` may
+// carry a written plan the label leaves out so the verdict is not just "plan missing".
+const HERO_CHIPS: { en: string; zh: string; send?: string }[] = [
+  { en: "Long NVDA over the weekend — is 15k safe?", zh: "周末做多 NVDA，1.5 万安全吗？", send: "Long NVDA over the weekend, 15k, thesis: earnings momentum, wrong if it closes below 170 — is it safe?" },
+  { en: "5x long TSLA overnight?", zh: "5 倍杠杆做多 TSLA 过夜？", send: "5x long 10k TSLA overnight — safe?" },
+  { en: "周末做多特斯拉 2万U 安全吗？", zh: "周末做多特斯拉 2万U 安全吗？", send: "周末做多 TSLA 2万U，安全吗？" },
+];
+
+function Hero({ draft, setDraft, busy, onSend }: { draft: string; setDraft: (s: string) => void; busy: boolean; onSend: (t: string) => void }) {
+  const { lang, tx } = useLang();
+  const text = draft.trim();
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 sm:p-6" aria-label={tx("Describe a trade", "描述一笔交易")}>
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{tx("Is your trade safe to hold while the US market is shut?", "美股休市期间，你的仓位能安全持有吗？")}</h1>
+      <form
+        className="mt-4 flex flex-col gap-2 sm:flex-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (text && !busy) onSend(text);
+        }}
+      >
+        <label htmlFor="hero-input" className="sr-only">
+          {tx("Describe a trade", "描述一笔交易")}
+        </label>
+        <input
+          id="hero-input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={tx("Describe a trade — e.g. long NVDA over the weekend, 15k", "描述一笔交易——例如 周末做多 NVDA，1.5 万")}
+          disabled={busy}
+          className="h-14 min-w-0 flex-1 rounded-lg border border-input bg-background px-4 text-base focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:text-lg"
+        />
+        <Button type="submit" disabled={busy || !text} className="h-14 px-6 text-base">
+          {tx("Get the verdict", "获取结论")}
+        </Button>
+      </form>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {HERO_CHIPS.map((c) => (
+          <li key={c.en}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSend(c.send ?? c.en)}
+              className="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+            >
+              {lang === "zh" ? c.zh : c.en}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs text-muted-foreground">{tx("Prefer fields? Use the Ticket tab on the left — one click away.", "更喜欢填表？点左侧的“表单”标签即可。")}</p>
+    </section>
   );
 }
 
