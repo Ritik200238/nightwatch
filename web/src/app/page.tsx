@@ -197,7 +197,9 @@ export default function DeskPage() {
         ) : !busy && !error && exampleReport ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2">
-              <p className="text-sm text-muted-foreground">
+              {/* The time is formatted in the reader's locale and zone, which the server cannot know;
+                  React is told the difference is expected rather than re-rendering the page. */}
+              <p className="text-sm text-muted-foreground" suppressHydrationWarning>
                 {tx(`Example from ${new Date(snapshot!.generated_at).toLocaleString()} — press to run it live now`, `示例，生成于 ${new Date(snapshot!.generated_at).toLocaleString()} — 点击立即实时运行`)}
               </p>
               <Button size="sm" disabled={busy || !universe} onClick={() => void run(demoTicket())}>
