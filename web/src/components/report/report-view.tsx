@@ -9,6 +9,7 @@ import { Scenarios } from "@/components/charts/scenarios";
 import { ActOnIt } from "@/components/report/act-on-it";
 import { GuardNote } from "@/components/report/guard-note";
 import { Feedback, WatchButton } from "@/components/report/feedback";
+import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
@@ -384,12 +385,18 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       )}
       action={<Pill tone={VERDICT_TONE[v.verdict]}>{verdictLabel(lang, v.verdict)}</Pill>}
     >
-      <p className="text-2xl font-semibold leading-tight">
+      <p className="text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
         {tl(lang, "verdictHeadline", v.verdict)}
         {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
         {v.hedge_ratio ? <span className="text-muted-foreground"> → {L(`hedge ${fmtRatio(v.hedge_ratio)} via perp`, `用永续合约对冲 ${fmtRatio(v.hedge_ratio)}`)}</span> : null}
       </p>
-      <details className="mt-1 text-xs text-muted-foreground">
+      <CredStrip lang={lang} />
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <StressBars report={report} lang={lang} />
+        <AnalogMini report={report} lang={lang} />
+      </div>
+      <BuildTrace report={report} lang={lang} />
+      <details className="mt-3 text-xs text-muted-foreground">
         <summary className="cursor-pointer select-none hover:text-foreground">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
         <ul className="mt-1 space-y-0.5">
           {VERDICT_ORDER.map((k) => (
