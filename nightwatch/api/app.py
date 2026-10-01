@@ -144,6 +144,9 @@ class AppState:
         from nightwatch.api.analyst import AnalystJobs
 
         self.analyst = AnalystJobs()
+        from nightwatch.api.agent import AgentJobs
+
+        self.agent = AgentJobs()
         live = os.environ.get("NIGHTWATCH_LIVE_BOOK", "1") == "1"
         self.ctx = AnalysisContext(
             store=self.store, entries=self.entries, journal=self.journal,
@@ -781,6 +784,24 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     def analyst_get(forecast_id: int, lang: str = "en") -> dict[str, Any]:
         take = st().analyst.get(forecast_id, "zh" if lang == "zh" else "en")
         return take.to_dict() if take else {"status": "none"}
+
+    @app.post("/agent/{forecast_id}")
+    def agent_start(forecast_id: int, lang: str = "en") -> dict[str, Any]:
+        """Start the stress-test agent on a stored report: the model plans up to five tool
+        calls against the desk's own engine and writes a cited conclusion. Poll GET."""
+        from nightwatch.api.providers import select
+
+        s = st()
+        report = s.reports.get(forecast_id)
+        if report is None:
+            raise HTTPException(404, f"No stored report {forecast_id}.")
+        run = s.agent.start(forecast_id, report, select(), s, "zh" if lang == "zh" else "en")
+        return {"job": f"{forecast_id}:{run.lang}", "status": run.status}
+
+    @app.get("/agent/{forecast_id}")
+    def agent_get(forecast_id: int, lang: str = "en") -> dict[str, Any]:
+        run = st().agent.get(forecast_id, "zh" if lang == "zh" else "en")
+        return run.to_dict() if run else {"status": "none", "steps": [], "final": None, "removed": 0}
 
     @app.get("/reports/{forecast_id}")
     def stored_report(forecast_id: int) -> dict[str, Any]:
