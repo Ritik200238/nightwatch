@@ -58,7 +58,9 @@ SYSTEM_EN = (
     "CITATIONS: quote only numbers that appear on the fact sheet or in a tool result, exactly as written, and put the [section] "
     "id right after every number, for example: -2.7% [history], 12 bps [order book], 4,200 USDT [rerun]. An untagged or "
     "unsupported number is deleted with its sentence. Never compute a new number. Do not predict direction. You cannot change "
-    "the desk's verdict or size; restate them. Never tell the trader what to do; they decide."
+    "the desk's verdict or size; restate them. Never tell the trader what to do; they decide. Each call must test something "
+    "different from the ticket and from earlier calls (size, hold, leverage, side, a condition, the base rate of a move); each "
+    "thought must say what that call can reveal, in new words - do not repeat an earlier thought."
 )
 SYSTEM_ZH = SYSTEM_EN + (
     " Write thought, summary and findings in Simplified Chinese, but keep the [section] ids, tool names, JSON keys and the "
@@ -114,6 +116,17 @@ def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:
     )
     if change.empty:
         raise ValueError("no valid change given; set at least one field")
+    # A change to what the ticket already is re-runs the same report and wastes a call:
+    # live, the agent spent one of its five checks re-running "to the next open" on an
+    # overnight ticket. Say so, so it picks something that can tell it something new.
+    t = report.get("ticket") or {}
+    same = ((change.side is None or change.side == t.get("side"))
+            and (change.horizon_kind is None or (change.horizon_kind == t.get("horizon_kind") and change.horizon_hours in (None, t.get("horizon_hours"))))
+            and (change.notional_quote is None or abs(change.notional_quote - float(t.get("notional_quote") or 0)) < 1)
+            and (change.leverage is None or change.leverage == (t.get("leverage") or 1.0))
+            and not change.lenses)
+    if same:
+        raise ValueError("that is the trade as it already stands; change something that is different from the ticket")
     with state.lock:
         payload = analyze(state.ctx, change.apply_to(base), as_of=whatif.as_of_of(report), record=False).to_dict()
     return f"Change: {change.describe()}. Result: {_summarise_report(payload)}."

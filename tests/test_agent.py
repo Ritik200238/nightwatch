@@ -166,3 +166,14 @@ def test_the_endpoints_run_the_real_tools_and_steps_appear_as_they_finish(client
     assert [s["tool"] for s in got["steps"]] == ["rerun", "safest_ways", "explain"]
     assert "10,000 USDT" in got["steps"][0]["result_summary"] and "verdict" in got["steps"][0]["result_summary"]
     assert client.post("/agent/99999").status_code == 404
+
+
+def test_a_rerun_that_changes_nothing_is_refused_before_it_costs_a_run():
+    import pytest as _pytest
+
+    from nightwatch.api import agent as agent_mod
+
+    report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 20000.0, "horizon_kind": "next_open", "horizon_hours": None},
+              "as_of": "2026-09-12T14:00:00+00:00"}
+    with _pytest.raises(ValueError, match="as it already stands"):
+        agent_mod.tool_rerun(None, report, {"horizon_kind": "next_open"})
