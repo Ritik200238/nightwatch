@@ -471,7 +471,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         path = request.url.path
         if request.method != "GET" or path not in CACHED_PAGES:
             return await call_next(request)
-        key = path + "?" + request.url.query
+        # The anonymous visitor id and language travel as query params; they do not change
+        # these pages, and keyed on them every visitor got a cold, uncached page.
+        query = "&".join(f"{k}={v}" for k, v in sorted(request.query_params.multi_items()) if not k.startswith("nw_"))
+        key = path + "?" + query
         hit = page_cache.get(key)
         refreshing = request.headers.get("x-nw-refresh") == "1"
         if hit and not refreshing:

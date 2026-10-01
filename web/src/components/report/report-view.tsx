@@ -1128,8 +1128,8 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
                 label={short ? L("Stock falls, 1 in 20 (your gain)", "股票下跌，二十分之一（你的收益）") : L("Bad night, 1 in 20", "二十分之一的坏情况")}
                 value={fmtPct(primary.p5_adjusted)}
                 hint={L(
-                  `before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`,
-                  `加安全边际之前 ${fmtPct(c.p5)} · 放宽 ×${primary.adjustment?.k_lo.toFixed(2)}${primary.adjustment?.c_lo ? `，并设 ${primary.adjustment.c_lo.toFixed(1)} 个百分点的下限` : ""}，依据 ${primary.adjustment?.n_fit} 次已评分的回放`,
+                  `before the safety margin ${fmtPct(c.p5)} · widened ×${primary.adjustment?.k_lo?.toFixed(2) ?? "—"}${primary.adjustment?.c_lo ? ` and a ${primary.adjustment.c_lo.toFixed(1)}-point floor` : ""} from ${primary.adjustment?.n_fit} scored replays`,
+                  `加安全边际之前 ${fmtPct(c.p5)} · 放宽 ×${primary.adjustment?.k_lo?.toFixed(2) ?? "—"}${primary.adjustment?.c_lo ? `，并设 ${primary.adjustment.c_lo.toFixed(1)} 个百分点的下限` : ""}，依据 ${primary.adjustment?.n_fit} 次已评分的回放`,
                 )}
                 tone={short ? "good" : "critical"}
               />
@@ -1156,7 +1156,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
               <Stat
                 label={short ? L("Stock rises, 1 in 20 (your loss)", "股票上涨，二十分之一（你的亏损）") : L("Good night, 1 in 20", "二十分之一的好情况")}
                 value={fmtPct(primary.p95_adjusted)}
-                hint={L(`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`, `加安全边际之前 ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi.toFixed(2)}`)}
+                hint={L(`before the safety margin ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi?.toFixed(2) ?? "—"}`, `加安全边际之前 ${fmtPct(c.p95)} · ×${primary.adjustment?.k_hi?.toFixed(2) ?? "—"}`)}
                 tone={short ? "critical" : "good"}
               />
             ) : (

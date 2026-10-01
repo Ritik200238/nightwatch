@@ -264,3 +264,9 @@ def test_slow_read_only_pages_are_served_from_a_short_cache(client):
     assert first.status_code == again.status_code == 200 and first.json() == again.json()
     assert first.headers["x-nightwatch-cache"] == "miss" and again.headers["x-nightwatch-cache"] == "hit"
     assert "x-nightwatch-cache" not in client.get("/health").headers
+
+
+def test_the_page_cache_ignores_the_anonymous_visitor_id(client):
+    first = client.get("/studies?nw_client=aaa")
+    other = client.get("/studies?nw_client=bbb&nw_lang=zh")
+    assert first.headers["x-nightwatch-cache"] == "miss" and other.headers["x-nightwatch-cache"] == "hit"

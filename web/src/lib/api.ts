@@ -138,7 +138,9 @@ export interface HorizonReport {
   } | null;
   p5_adjusted: number | null;
   p95_adjusted: number | null;
-  adjustment: { k_lo: number; k_hi: number; c_lo?: number; n_fit: number; fitted_through: string | null; scope: string } | null;
+  /** Empty of factors when the horizon is past the longest scored hold ("uncalibrated"),
+   *  which can still carry a floor; every factor is therefore optional. */
+  adjustment: { k_lo?: number; k_hi?: number; c_lo?: number; n_fit?: number; fitted_through?: string | null; scope?: string; uncalibrated?: boolean; floored_by?: string } | null;
   /** The position's own view: for a short, the token's upper tail turned over. */
   loss_p5_pct?: number | null;
   pnl_median_pct?: number | null;
