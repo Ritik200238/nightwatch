@@ -704,6 +704,22 @@ export interface TonightReport {
 
 /** The model's reading of a finished report. Written in the background; never changes
  *  the verdict, and any sentence citing a number not in the report is removed. */
+export interface AgentStep {
+  n: number;
+  thought?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  result_summary?: string;
+  seconds?: number;
+}
+export interface AgentRun {
+  status: "running" | "done" | "failed" | "none";
+  steps?: AgentStep[];
+  final?: { summary?: string; findings?: string[]; verdict_restated?: string } | null;
+  removed?: number;
+  error?: string;
+}
+
 export interface AnalystTake {
   status: "pending" | "done" | "failed" | "unavailable" | "none";
   text?: string;
@@ -1024,6 +1040,8 @@ export const api = {
   anchors: () => request<{ anchors: Anchor[] }>("/anchors"),
   misses: () => request<MissesResponse>("/misses"),
   analystStart: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`, { method: "POST" }),
+  agentStart: (forecastId: number, lang: "en" | "zh") => request<AgentRun>(`/agent/${forecastId}?lang=${lang}`, { method: "POST" }),
+  agentGet: (forecastId: number, lang: "en" | "zh") => request<AgentRun>(`/agent/${forecastId}?lang=${lang}`),
   analystGet: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`),
   lenses: (ticker?: string) =>
     request<{

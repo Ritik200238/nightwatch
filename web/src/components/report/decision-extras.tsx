@@ -7,6 +7,7 @@ import { Histogram } from "@/components/charts/histogram";
 import { api, type MissesResponse, type Report, type VerifyResponse } from "@/lib/api";
 import { fmtPct, fmtUsd } from "@/lib/format";
 import { presetName } from "@/lib/i18n-terms";
+import { useAgent } from "@/lib/agent-run";
 import { type Lang, tr } from "@/lib/i18n";
 
 /** Loss per stress test, in USDT, as horizontal bars (worst first). Built from report.stress. */
@@ -109,12 +110,27 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
           </li>
         ))}
         <QwenItem report={report} lang={lang} />
+        <AgentItem report={report} lang={lang} />
       </ul>
       <p className="mt-1 text-[11px] text-muted-foreground">
         {L("Built from this report's own fields", "依据本报告自身的字段生成")}
         {tm.total != null ? L(` · ${tm.total} ms in total`, ` · 总计 ${tm.total} 毫秒`) : ""}
       </p>
     </div>
+  );
+}
+
+/** Shown only once the stress-test agent has actually run on this report. */
+function AgentItem({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
+  const st = useAgent(report.forecast_id, lang);
+  if (st.run?.status !== "done") return null;
+  const n = st.run.steps?.length ?? 0;
+  return (
+    <li className="flex items-center gap-1">
+      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-good" aria-hidden />
+      <span>{L(`Qwen stress-test agent (${n} engine checks)`, `Qwen 压力测试代理（${n} 项引擎检查）`)}</span>
+    </li>
   );
 }
 

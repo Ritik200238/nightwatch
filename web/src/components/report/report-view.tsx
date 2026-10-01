@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { CostCurve } from "@/components/charts/cost-curve";
 import { Histogram } from "@/components/charts/histogram";
 import { Scenarios } from "@/components/charts/scenarios";
+import { AgentPanel } from "@/components/report/agent-panel";
 import { ActOnIt } from "@/components/report/act-on-it";
 import { GuardNote } from "@/components/report/guard-note";
 import { Feedback, WatchButton } from "@/components/report/feedback";
@@ -728,6 +729,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <DecisionCard report={report} lang={lang} />
       {/* A report that came out of the chat already has the take in the conversation. */}
       {hideTake ? null : <AnalystTakeCard report={report} langHint={lang} />}
+      {report.forecast_id != null && report.forecast_id > 0 ? <AgentPanel forecastId={report.forecast_id} lang={lang} /> : null}
       {/* Above the disclosures on purpose. Narrowing the search changes what every
           number below it means, so it cannot sit behind a section a reader has to
           open before the summary stops being misleading. */}

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ApiError, api, type Report } from "@/lib/api";
 import { useLang } from "@/lib/lang";
+import { startAgent, useAgent } from "@/lib/agent-run";
 import { GuardNote } from "@/components/report/guard-note";
 import { Working } from "./working";
 
@@ -93,6 +94,19 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
   // null = not checked yet. The desk works without a model; only this tab needs one.
   const [ready, setReady] = useState<boolean | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const agent = useAgent(contextId, lang);
+  const postedAgent = useRef<string | null>(null);
+
+  // When the agent finishes, its summary joins the conversation once.
+  useEffect(() => {
+    const f = agent.run?.final;
+    const tag = contextId != null ? `${contextId}:${lang}` : null;
+    if (agent.run?.status !== "done" || !f || !tag || postedAgent.current === tag) return;
+    postedAgent.current = tag;
+    const n = agent.run.steps?.length ?? 0;
+    const body = [f.summary, ...(f.findings ?? []).map((x) => `- ${x}`), f.verdict_restated].filter(Boolean).join("\n");
+    setMessages((m) => [...m, { role: "assistant", content: body, removed: agent.run?.removed, byline: lang === "zh" ? `Nightwatch 代理 · Qwen · 在引擎上运行了 ${n} 项检查，数字已核对` : `Nightwatch agent · Qwen · ${n} checks run on the engine, numbers verified` }]);
+  }, [agent.run, contextId, lang]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
@@ -229,6 +243,20 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
             guesses that a stress tester will tell them what a 6% stop would do. */}
         {contextId != null && !busy ? (
           <div className="flex flex-wrap gap-1.5 pt-1">
+            {contextId > 0 && !agent.started ? (
+              <button
+                type="button"
+                onClick={() => startAgent(contextId, lang)}
+                className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-medium hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {tx("Let the AI stress-test it", "让 AI 压力测试")}
+              </button>
+            ) : null}
+            {agent.started && agent.run?.status === "running" ? (
+              <span className="px-1 py-1 text-xs text-muted-foreground" role="status">
+                {tx(`Agent running… ${agent.run.steps?.length ?? 0} checks done`, `代理运行中… 已完成 ${agent.run.steps?.length ?? 0} 项检查`)}
+              </span>
+            ) : null}
             {(lang === "zh" ? FOLLOW_UPS_ZH : FOLLOW_UPS).map((q) => (
               <button
                 key={q}
