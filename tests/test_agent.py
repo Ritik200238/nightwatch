@@ -177,3 +177,13 @@ def test_a_rerun_that_changes_nothing_is_refused_before_it_costs_a_run():
               "as_of": "2026-09-12T14:00:00+00:00"}
     with _pytest.raises(ValueError, match="as it already stands"):
         agent_mod.tool_rerun(None, report, {"horizon_kind": "next_open"})
+
+
+def test_hours_on_a_next_open_hold_are_still_the_same_trade():
+    import pytest as _pytest
+
+    from nightwatch.api import agent as agent_mod
+
+    report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 20000.0, "horizon_kind": "next_open", "horizon_hours": None}}
+    with _pytest.raises(ValueError, match="as it already stands"):
+        agent_mod.tool_rerun(None, report, {"horizon_kind": "next_open", "horizon_hours": 6})

@@ -121,7 +121,9 @@ def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:
     # overnight ticket. Say so, so it picks something that can tell it something new.
     t = report.get("ticket") or {}
     same = ((change.side is None or change.side == t.get("side"))
-            and (change.horizon_kind is None or (change.horizon_kind == t.get("horizon_kind") and change.horizon_hours in (None, t.get("horizon_hours"))))
+            # Hours only matter for an "hours" hold: "next_open, 6 h" is still the next-open hold.
+            and (change.horizon_kind is None or (change.horizon_kind == t.get("horizon_kind")
+                                                 and (change.horizon_kind != "hours" or change.horizon_hours in (None, t.get("horizon_hours")))))
             and (change.notional_quote is None or abs(change.notional_quote - float(t.get("notional_quote") or 0)) < 1)
             and (change.leverage is None or change.leverage == (t.get("leverage") or 1.0))
             and not change.lenses)
@@ -233,7 +235,8 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             wrap_up = calls >= max_calls or time.time() - t0 > budget_s
             user = f"{TOOLS_DOC}\nFACT SHEET\n\n{sheet}\n"
             if transcript:
-                user += "\nTOOL CALLS SO FAR\n" + "\n".join(transcript) + "\n"
+                user += ("\nTOOL CALLS SO FAR (each with the thought you gave; do not repeat a check or reuse a thought)\n"
+                         + "\n".join(transcript) + "\n")
             user += ("\nNo more tool calls are allowed. Reply with the final JSON now.\n" if wrap_up
                      else f"\nYou have {max_calls - calls} tool call(s) left. Reply with one JSON object.\n")
             raw = provider.write(system=system, user=user, max_tokens=MAX_TOKENS)
@@ -270,7 +273,7 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             run.removed += nrm
             if ok:
                 results.append(f"[{SECTION[name]}] {_compact(text)}")
-                transcript.append(f"{calls + 1}. {name} {json.dumps(args, ensure_ascii=False)} ->\n{results[-1]}")
+                transcript.append(f"{calls + 1}. [thought: {thought}] {name} {json.dumps(args, ensure_ascii=False)} ->\n{results[-1]}")
             else:
                 transcript.append(f"{calls + 1}. {name} {json.dumps(args, ensure_ascii=False)} -> {text}")
             run.steps.append({"n": calls + 1, "thought": thought, "tool": name, "args": args,
