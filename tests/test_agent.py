@@ -187,3 +187,14 @@ def test_hours_on_a_next_open_hold_are_still_the_same_trade():
     report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 20000.0, "horizon_kind": "next_open", "horizon_hours": None}}
     with _pytest.raises(ValueError, match="as it already stands"):
         agent_mod.tool_rerun(None, report, {"horizon_kind": "next_open", "horizon_hours": 6})
+
+
+def test_through_the_weekend_on_a_weekend_ticket_is_the_same_trade():
+    import pytest as _pytest
+
+    from nightwatch.api import agent as agent_mod
+
+    report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 20000.0, "horizon_kind": "hours", "horizon_hours": 98.5,
+                         "extra": {"horizon_label": "through the weekend, to the next open after it"}}}
+    with _pytest.raises(ValueError, match="as it already stands"):
+        agent_mod.tool_rerun(None, report, {"horizon_kind": "through_weekend"})

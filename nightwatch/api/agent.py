@@ -120,9 +120,12 @@ def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:
     # live, the agent spent one of its five checks re-running "to the next open" on an
     # overnight ticket. Say so, so it picks something that can tell it something new.
     t = report.get("ticket") or {}
+    # A weekend ticket is stored as an hours hold with a weekend label.
+    weekend_now = "weekend" in str(((t.get("extra") or {}) if isinstance(t.get("extra"), dict) else {}).get("horizon_label") or "")
     same = ((change.side is None or change.side == t.get("side"))
             # Hours only matter for an "hours" hold: "next_open, 6 h" is still the next-open hold.
-            and (change.horizon_kind is None or (change.horizon_kind == t.get("horizon_kind")
+            and (change.horizon_kind is None or (change.horizon_kind == "through_weekend" and weekend_now)
+                 or (change.horizon_kind == t.get("horizon_kind")
                                                  and (change.horizon_kind != "hours" or change.horizon_hours in (None, t.get("horizon_hours")))))
             and (change.notional_quote is None or abs(change.notional_quote - float(t.get("notional_quote") or 0)) < 1)
             and (change.leverage is None or change.leverage == (t.get("leverage") or 1.0))
@@ -130,7 +133,7 @@ def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:
     if same:
         raise ValueError("that is the trade as it already stands; change something that is different from the ticket")
     with state.lock:
-        payload = analyze(state.ctx, change.apply_to(base), as_of=whatif.as_of_of(report), record=False).to_dict()
+        payload = analyze(state.ctx, change.apply_to(base, entry=((report.get("snapshot") or {}).get("prices") or {}).get("spot_close")), as_of=whatif.as_of_of(report), record=False).to_dict()
     return f"Change: {change.describe()}. Result: {_summarise_report(payload)}."
 
 

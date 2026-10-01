@@ -120,8 +120,19 @@ class Change:
             bits.append(f"{self.notional_quote:,.0f} USDT")
         return ", ".join(bits)
 
-    def apply_to(self, ticket: TradeTicket) -> TradeTicket:
-        """The same ticket with the asked-for fields replaced, and nothing else touched."""
+    def apply_to(self, ticket: TradeTicket, *, entry: float | None = None) -> TradeTicket:
+        """The same ticket with the asked-for fields replaced, and nothing else touched.
+
+        One exception: flipping the side mirrors the stop around the entry. A long's stop
+        below the price is on the wrong side for a short, and 'short it instead' came back
+        NO GO for a stop the trader never set for the short."""
+        flipped = self.side is not None and Side(self.side) != ticket.side
+        if flipped and ticket.stop_price is not None:
+            ref = ticket.entry_price or entry
+            ticket = (replace(ticket, stop_price=round(2 * ref - ticket.stop_price, 6)) if ref and 0 < ticket.stop_price < 2 * ref
+                      else replace(ticket, stop_price=None))
+        elif flipped and ticket.stop_offset_pct is not None:
+            ticket = replace(ticket, stop_offset_pct=-ticket.stop_offset_pct)
         kind = HorizonKind(self.horizon_kind) if self.horizon_kind and self.horizon_kind != "through_weekend" else ticket.horizon_kind
         hours = self.horizon_hours if self.horizon_hours else ticket.horizon_hours
         if self.horizon_hours:

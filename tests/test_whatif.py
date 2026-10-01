@@ -389,3 +389,14 @@ def test_size_multiples_are_exact_re_runs_and_an_undatable_earnings_hold_is_said
     for q in ("halve it", "use 5x", "hold until Wednesday"):
         assert whatif.looks_like_a_what_if(q, tickers=("TSLA",), current="TSLA"), q
     assert not whatif.looks_like_a_what_if("why?", tickers=("TSLA",), current="TSLA")
+
+
+def test_flipping_the_side_mirrors_the_stop_around_the_entry():
+    """'Short it instead' kept the long's stop below the price and came back NO GO."""
+    from nightwatch.api.whatif import Change
+
+    long_ = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=20_000.0, stop_price=215.0)
+    short = Change(side="short").apply_to(long_, entry=231.0)
+    assert short.side == Side.SHORT and short.stop_price == 247.0
+    assert Change(side="short").apply_to(long_).stop_price is None  # no price to mirror around: dropped, not kept wrong
+    assert Change(notional_quote=10_000.0).apply_to(long_).stop_price == 215.0

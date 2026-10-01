@@ -386,7 +386,7 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     if change.empty:
         return None
 
-    ticket = change.apply_to(base)
+    ticket = change.apply_to(base, entry=((context.get("snapshot") or {}).get("prices") or {}).get("spot_close"))
     with state.lock:
         report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
         payload = report.to_dict()
