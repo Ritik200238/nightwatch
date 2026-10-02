@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
 import { fmtBps, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
+import { plainText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
 import { fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
@@ -39,11 +40,11 @@ function verdictLabel(lang: Lang, d: string): string {
 }
 
 /** The worst stress preset, in money, with the name of the scenario that caused it. */
-function worstPreset(report: Report): { name: string; quote: number; pct: number | null } | null {
+function worstPreset(report: Report): { name: string; zh?: string; quote: number; pct: number | null } | null {
   const rows = report.stress.presets.map((p, i) => ({ p, imp: report.stress.impacts[i] })).filter((r) => r.imp?.total_pnl_quote != null);
   if (!rows.length) return null;
   const worst = rows.reduce((a, b) => ((a.imp.total_pnl_quote ?? 0) <= (b.imp.total_pnl_quote ?? 0) ? a : b));
-  return { name: worst.p.name, quote: worst.imp.total_pnl_quote as number, pct: worst.imp.total_pct_of_notional };
+  return { name: worst.p.name, zh: worst.p.name_zh, quote: worst.imp.total_pnl_quote as number, pct: worst.imp.total_pct_of_notional };
 }
 
 /** The cap that actually cuts the requested size, if one does. */
@@ -65,17 +66,9 @@ const TAKE_HEADINGS = new Set<string>([...STRINGS.en.takeHeadings, ...STRINGS.zh
  *  nobody should wait for it. It cannot change the verdict, and any sentence citing a
  *  number that is not in the report is removed before it is shown - the count is printed.
  */
-/** Text with its [section] source tags shown as small muted labels, so a figure can be traced. */
-function withSourceTags(text: string) {
-  return text.split(/(\[[A-Za-z ]+\])/).map((part, i) =>
-    /^\[[A-Za-z ]+\]$/.test(part) ? (
-      <span key={i} className="mx-0.5 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
-        {part.slice(1, -1)}
-      </span>
-    ) : (
-      part
-    ),
-  );
+/** The analyst's text without its [section] source markers; the citations travel as separate data. */
+function withSourceTags(text: string, lang: Lang) {
+  return plainText(text, lang);
 }
 
 function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang }) {
@@ -142,17 +135,17 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
                 {take.for ? (
                   <div className="rounded-md border border-border p-2">
                     <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{tr(lang)("Case for", "支持的理由")}</p>
-                    <p className="mt-1 leading-relaxed">{withSourceTags(take.for)}</p>
+                    <p className="mt-1 leading-relaxed">{withSourceTags(take.for, lang)}</p>
                   </div>
                 ) : null}
                 {take.against ? (
                   <div className="rounded-md border border-border p-2">
                     <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{tr(lang)("Case against", "反对的理由")}</p>
-                    <p className="mt-1 leading-relaxed">{withSourceTags(take.against)}</p>
+                    <p className="mt-1 leading-relaxed">{withSourceTags(take.against, lang)}</p>
                   </div>
                 ) : null}
               </div>
-              {take.reconcile ? <p className="text-xs text-muted-foreground">{withSourceTags(take.reconcile)}</p> : null}
+              {take.reconcile ? <p className="text-xs text-muted-foreground">{withSourceTags(take.reconcile, lang)}</p> : null}
             </div>
           ) : null}
           {take.text
@@ -166,7 +159,7 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
                 </p>
               ) : (
                 <p key={i} className="leading-relaxed">
-                  {withSourceTags(l.replace(/^[-•*]\s*/, "• "))}
+                  {withSourceTags(l.replace(/^[-•*]\s*/, "• "), lang)}
                 </p>
               );
             })}
@@ -301,6 +294,11 @@ function PremiseNote({ report, lang }: { report: Report; lang: Lang }) {
 /** How this trade loses money: each way it fails, what sets it off, why it costs what it
  *  does, and how often it happened. Written by rules from the report's own numbers; a
  *  model is never asked to invent a causal story. */
+/** A failure mode's title in the reader's language: the backend's Chinese name when it has one. */
+function modeTitle(m: { title: string; title_zh?: string }, lang: Lang): string {
+  return lang === "zh" && m.title_zh ? m.title_zh : m.title;
+}
+
 function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
   const L = tr(lang);
   const modes = report.failure_modes ?? [];
@@ -317,16 +315,17 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
         "Each way it fails, what sets it off, why it costs what it does, and how often it happened. Worst first.",
         "每一种失败方式、由什么触发、为什么会亏这么多，以及历史上发生的频率。最坏的排在最前。",
       )}
-      summary={L(`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worstLoss}`, `${modes.length} 种方式 · 最坏：${worst.title.toLowerCase()}${worstLoss}`)}
+      summary={L(`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worstLoss}`, `${modes.length} 种方式 · 最坏：${modeTitle(worst, lang)}${worstLoss}`)}
     >
       <ol className="space-y-3">
         {modes.map((m) => (
           <li key={m.key} className="rounded-lg border border-border px-3 py-2">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span className="font-medium">{m.title}</span>
+              <span className="font-medium">{modeTitle(m, lang)}</span>
               <span className="tabular text-sm font-medium text-status-critical">
                 {m.loss_quote != null ? `${fmtUsd(m.loss_quote)} USDT` : "—"}
                 {m.loss_pct != null ? <span className="text-muted-foreground"> · {fmtPct(m.loss_pct, 1)}</span> : null}
+                {m.loss_quote_at_recommended != null ? <span className="text-xs font-normal text-muted-foreground"> {L(`(at the recommended ${fmtUsd(report.verdict.recommended_notional ?? 0)}: ${fmtUsd(m.loss_quote_at_recommended)})`, `（按建议仓位 ${fmtUsd(report.verdict.recommended_notional ?? 0)}：${fmtUsd(m.loss_quote_at_recommended)}）`)}</span> : null}
               </span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -376,6 +375,9 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
   const cap = bindingCap(report);
   const exit = report.execution.exit_quote;
   const against = report.second_opinion?.against?.[0];
+  // Both tiles are priced at the size asked for; say so when the verdict is a smaller one.
+  const atRequested =
+    v.recommended_notional != null && v.recommended_notional < t.notional_quote - 1 ? L(`at your ${fmtUsd(t.notional_quote)} USDT`, `按你要求的 ${fmtUsd(t.notional_quote)} USDT 计`) : "";
 
   return (
     <Section
@@ -388,6 +390,9 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
     >
       <p className="text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
         {tl(lang, "verdictHeadline", v.verdict)}
+        {/* A review can be about the market posture rather than a missing field, so the
+            headline does not say "fill in"; it names the first reason instead. */}
+        {v.verdict === "REVIEW" && lang === "en" && v.reasons[0] ? `: ${plainText(v.reasons[0], lang)}` : null}
         {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
         {v.hedge_ratio ? <span className="text-muted-foreground"> → {L(`hedge ${fmtRatio(v.hedge_ratio)} via perp`, `用永续合约对冲 ${fmtRatio(v.hedge_ratio)}`)}</span> : null}
       </p>
@@ -414,7 +419,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
         {v.reasons.map((r) => (
           <li key={r} className="flex gap-2">
             <span aria-hidden>–</span>
-            <span>{r}</span>
+            <span>{plainText(r, lang)}</span>
           </li>
         ))}
       </ul>
@@ -424,15 +429,15 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       {/* The four numbers, in money, because a percentage of a position is not a feeling. */}
       <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
         <Stat
-          label={L("If it goes badly", "如果走势不利")}
+          label={report.gate.risk_basis === "distance to stop" ? L("If your stop is hit", "如果触及你的止损") : L("One-in-twenty loss", "二十分之一的亏损")}
           value={report.gate.risk_quote != null ? `−${fmtUsd(report.gate.risk_quote)}` : "—"}
-          hint={riskBasis(lang, report.gate.risk_basis)}
+          hint={[riskBasis(lang, report.gate.risk_basis), atRequested].filter(Boolean).join(" · ")}
           tone="warning"
         />
         <Stat
-          label={L("If it goes worst", "如果走到最坏")}
+          label={L("Worst stress scenario", "最坏的压力情景")}
           value={worst ? fmtUsd(worst.quote) : "—"}
-          hint={worst ? L(`${worst.name} · ${fmtPct(worst.pct, 1)} of the position`, `${presetName(lang, worst.name)} · 占仓位的 ${fmtPct(worst.pct, 1)}`) : L("no priced scenario", "没有可定价的情景")}
+          hint={worst ? `${L(`${worst.name} · ${fmtPct(worst.pct, 1)} of the position`, `${presetName(lang, worst.name, worst.zh)} · 占仓位的 ${fmtPct(worst.pct, 1)}`)}${atRequested ? ` · ${atRequested}` : ""}` : L("no priced scenario", "没有可定价的情景")}
           tone="critical"
         />
         <Stat
@@ -463,7 +468,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       {/* A what-if was never journalled, so there is no forecast to mark taken and
           nothing to score it against later. Offering the button would put a trade the
           trader never made into the circuit breaker's count. */}
-      {report.forecast_id != null && report.forecast_id > 0 ? <TakenButton forecastId={report.forecast_id} lang={lang} /> : null}
+      {report.forecast_id != null && report.forecast_id > 0 ? <TakenButton forecastId={report.forecast_id} lang={lang} noGo={v.verdict === "NO_GO"} /> : null}
       {report.warnings.length ? (
         <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
           <p className="mb-1 flex items-center gap-2 font-medium">
@@ -880,6 +885,11 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
             report.gate.risk_quote != null ? L(`Risk at stake ${fmtUsd(report.gate.risk_quote)} (${report.gate.risk_basis})`, `面临的风险 ${fmtUsd(report.gate.risk_quote)}（${riskBasis(lang, report.gate.risk_basis)}）`) : undefined
           }
         >
+          {report.gate.decision === "GO" && (report.verdict.verdict === "REDUCE_TO" || report.verdict.verdict === "HEDGE") ? (
+            <p className="mb-2 text-xs text-muted-foreground">
+              {L("The gate passed every check; the size cap, not the gate, is what reduced the answer.", "闸门的每项检查都通过了；改变结论的是仓位上限，而不是闸门。")}
+            </p>
+          ) : null}
           <ul className="space-y-2">
             {report.gate.rules.map((r) => (
               <li key={r.rule} className="flex items-start gap-2 text-sm">
@@ -1765,7 +1775,7 @@ function PortfolioSection({ report, openAll, lang }: { report: Report; openAll?:
 }
 
 /** Marking a trade taken is what turns an analysis into part of the loss record. */
-function TakenButton({ forecastId, lang }: { forecastId: number; lang: Lang }) {
+function TakenButton({ forecastId, lang, noGo }: { forecastId: number; lang: Lang; noGo?: boolean }) {
   const L = tr(lang);
   const [state, setState] = useState<"idle" | "saving" | "taken" | "error">("idle");
   if (state === "taken") {
@@ -1786,7 +1796,7 @@ function TakenButton({ forecastId, lang }: { forecastId: number; lang: Lang }) {
         disabled={state === "saving"}
         onClick={() => { setState("saving"); api.markTaken(forecastId, true).then(() => setState("taken")).catch(() => setState("error")); }}
       >
-        {L("I took this trade", "我做了这笔交易")}
+        {noGo ? L("I took it anyway", "我还是做了") : L("I took this trade", "我做了这笔交易")}
       </Button>
       <span className="text-xs text-muted-foreground">
         {state === "error" ? L("Could not save that. Try again.", "保存失败，请重试。") : L("Only trades you mark are counted by the circuit breaker.", "熔断机制只统计你标记过的交易。")}
@@ -1984,7 +1994,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
       collapsible
       summary={L(
         `${s.presets.length} presets from this token's own history${w ? ` · worst ${fmtUsd(w.quote)} (${w.name})` : ""}${mc ? ` · simulated tail ${fmtPct(mc.p5, 1)}` : ""}`,
-        `基于该代币自身历史的 ${s.presets.length} 个预设情景${w ? ` · 最坏 ${fmtUsd(w.quote)}（${presetName(lang, w.name)}）` : ""}${mc ? ` · 模拟的尾部亏损 ${fmtPct(mc.p5, 1)}` : ""}`,
+        `基于该代币自身历史的 ${s.presets.length} 个预设情景${w ? ` · 最坏 ${fmtUsd(w.quote)}（${presetName(lang, w.name, w.zh)}）` : ""}${mc ? ` · 模拟的尾部亏损 ${fmtPct(mc.p5, 1)}` : ""}`,
       )}
       title={L("What could go wrong", "可能会出什么问题")}
       subtitle={L(
@@ -2014,7 +2024,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                 return (
                   <TableRow key={p.id}>
                     <TableCell>
-                      <span className="font-medium">{presetName(lang, p.name)}</span>
+                      <span className="font-medium">{presetName(lang, p.name, p.name_zh)}</span>
                       <span className="block text-xs text-muted-foreground">{p.probability_note}</span>
                     </TableCell>
                     <TableCell>

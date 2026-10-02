@@ -14,8 +14,8 @@ import { type Lang, tr } from "@/lib/i18n";
 export function StressBars({ report, lang }: { report: Report; lang: Lang }) {
   const L = tr(lang);
   const rows = report.stress.presets
-    .map((p, i) => ({ name: p.name, v: report.stress.impacts[i]?.total_pnl_quote }))
-    .filter((r): r is { name: string; v: number } => typeof r.v === "number")
+    .map((p, i) => ({ name: p.name, zh: p.name_zh, v: report.stress.impacts[i]?.total_pnl_quote }))
+    .filter((r): r is { name: string; zh: string | undefined; v: number } => typeof r.v === "number")
     .sort((a, b) => a.v - b.v)
     .slice(0, 6);
   if (!rows.length) return null;
@@ -26,8 +26,8 @@ export function StressBars({ report, lang }: { report: Report; lang: Lang }) {
       <ul className="space-y-1">
         {rows.map((r) => (
           <li key={r.name} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-2 text-xs">
-            <span className="truncate text-muted-foreground" title={presetName(lang, r.name)}>
-              {presetName(lang, r.name)}
+            <span className="truncate text-muted-foreground" title={presetName(lang, r.name, r.zh)}>
+              {presetName(lang, r.name, r.zh)}
             </span>
             <span className="h-2.5 rounded-sm bg-muted" aria-hidden>
               <span className={`block h-full rounded-sm ${r.v < 0 ? "bg-status-critical" : "bg-status-good"}`} style={{ width: `${Math.max(2, (Math.abs(r.v) / max) * 100)}%` }} />

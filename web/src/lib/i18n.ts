@@ -22,7 +22,7 @@ export const STRINGS = {
       REDUCE_TO: "Reduce the size",
       HEDGE: "Hedge instead of cutting",
       NO_GO: "Do not take this trade as specified",
-      REVIEW: "Fill in what is missing before deciding",
+      REVIEW: "Review before deciding",
     },
     verdictMeaning: {
       GO: "every check passed at the size you asked for",
@@ -111,7 +111,7 @@ export const STRINGS = {
       REDUCE_TO: "建议减小仓位",
       HEDGE: "建议对冲，不必减仓",
       NO_GO: "按当前设定不建议做这笔交易",
-      REVIEW: "先补全缺失的信息再决定",
+      REVIEW: "先复核再决定",
     },
     verdictMeaning: {
       GO: "按你要求的仓位，所有检查都通过",

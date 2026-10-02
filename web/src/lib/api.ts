@@ -413,6 +413,8 @@ export interface MatchOutcome {
 export interface Scenario {
   id: string;
   name: string;
+  /** Chinese name, from the backend's map. */
+  name_zh?: string;
   severity: "mild" | "moderate" | "severe" | "extreme";
   horizon_h: number;
   price_move_pct: number;
@@ -819,6 +821,10 @@ export interface FailureMode {
   likelihood: string;
   source: string;
   short: string;
+  /** Chinese name, from the backend's map, when it has one. */
+  title_zh?: string;
+  /** The same loss at the recommended size, when that is smaller than the one asked for. */
+  loss_quote_at_recommended?: number | null;
 }
 
 export interface LeverageView {

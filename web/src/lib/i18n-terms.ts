@@ -108,8 +108,9 @@ export function riskBasis(lang: Lang, b: string | null | undefined): string {
 }
 
 /** Stress-preset names: "Replay: <crisis>", "Volatility spike ×3", "Closed-window gap, 95th percentile"... */
-export function presetName(lang: Lang, name: string): string {
+export function presetName(lang: Lang, name: string, nameZh?: string | null): string {
   if (lang !== "zh") return name;
+  if (nameZh) return nameZh; // the backend's own Chinese name, from the same map the chat uses
   let m: RegExpMatchArray | null;
   if (name.startsWith("Replay: ")) return `重演：${name.slice(8)}`;
   if ((m = name.match(/^Closed-window gap, (\d+)(?:st|nd|rd|th) percentile$/))) return `休市期间跳空，第 ${m[1]} 百分位`;
