@@ -21,10 +21,10 @@ services:
     # directly, exactly where the bridge used to publish it.
     network_mode: host
     # Hard ceilings on a 1 GB box: the API and recorder leave room for the OS and Docker.
-    # memswap equal to mem means no swap use, so an overrun is killed and restarted rather
-    # than thrashing the whole box.
+    # Swap stays allowed (the box already keeps ~700 MB of cold pages there); the limit caps
+    # what one container can take, so a runaway is killed and restarted, not the host.
     mem_limit: 680m
-    memswap_limit: 680m
+    memswap_limit: 1400m
     environment:
       NIGHTWATCH_DATA_DIR: /data
       NIGHTWATCH_CORS: ${NIGHTWATCH_CORS:-*}
@@ -59,7 +59,7 @@ services:
     restart: unless-stopped
     command: ["nightwatch", "record", "--interval", "60"]
     mem_limit: 220m
-    memswap_limit: 220m
+    memswap_limit: 450m
     # The image's health check belongs to the API. A recorder is healthy when it is
     # still writing: the newest order-book snapshot must be less than five minutes old.
     healthcheck:
