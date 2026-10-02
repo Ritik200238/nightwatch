@@ -218,3 +218,13 @@ The backups share the data volume's disk, so copy one off the box now and then
 Python dependencies are pinned in `requirements.lock` (pip constraints in the Dockerfile).
 Regenerate it from a known-good container with `pip freeze`, dropping the
 `nightwatch @ file:///app` line.
+
+### Turning the proxy secret on without downtime
+
+Order matters, because the API refuses callers without it the moment it is set:
+
+1. Deploy the code with `NIGHTWATCH_PROXY_SECRET` unset on the box (check off).
+2. Add the value in Vercel (Production and Preview), then let a push to `main` rebuild
+   the web app so the proxy and the build-time snapshot start sending the header.
+3. Put the same value in the box's `.env` and recreate the API (`docker compose up -d api`).
+4. Check: `curl http://<box>:8000/calibration` answers 403; the site still works.
