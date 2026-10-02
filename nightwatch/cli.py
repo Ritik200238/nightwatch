@@ -157,10 +157,11 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
         entries = _select(resolve_universe(store, spot, perp, settings), core_only=not args.all, tickers=args.tickers, limit=args.limit)
         jobs: list[PeriodicJob] = []
         if not args.no_jobs:
-            from nightwatch.journal import anchor
+            from nightwatch.journal import anchor, backup
             from nightwatch.journal.journal import Journal
             from nightwatch.journal.postmortem import mature_and_learn
 
+            backup_dir = settings.data_dir / "backups"
             fred = FredClient(settings.fred_api_key)
             nasdaq = NasdaqEarningsClient()
             tickers = [e.ticker for e in entries]
@@ -189,6 +190,8 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 PeriodicJob("anchor-receipts", 3600, lambda: anchor.tick(settings.db_path, settings.data_dir / "anchors")),
                 # Re-check the trades visitors asked to watch, once the US market has closed.
                 PeriodicJob("watches", 600, lambda: _run_watches(store, settings, journal), run_at_start=False),
+                # A dated, gzipped copy of the live database once a day, newest seven kept.
+                PeriodicJob("db-backup", 24 * 3600, lambda: backup.backup_in_background(settings.db_path, backup_dir), run_at_start=False, age_at_start=backup.newest_age_s(backup_dir)),
             ]
         rec = OrderBookRecorder(
             store, spot=spot, perp=perp, entries=entries, interval_sec=args.interval,
