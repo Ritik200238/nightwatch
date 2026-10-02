@@ -29,6 +29,22 @@ function target(req: NextRequest, path: string[]): string {
   return `${ORIGIN}/${path.map(encodeURIComponent).join("/")}${qs}`;
 }
 
+const PROXY_SECRET = process.env.NIGHTWATCH_PROXY_SECRET ?? "";
+
+/** Headers the backend needs beyond content-type: the shared secret (when configured), the
+ *  visitor's real address for per-client rate limits, and the desk's own x-nw-* markers. */
+function upstreamHeaders(req: NextRequest): Record<string, string> {
+  const h: Record<string, string> = { "content-type": "application/json", accept: "application/json" };
+  if (PROXY_SECRET) h["x-nightwatch-proxy-secret"] = PROXY_SECRET;
+  const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || (req.headers.get("x-real-ip") ?? "").trim();
+  if (ip) h["x-nightwatch-client-ip"] = ip;
+  for (const name of ["x-nw-client", "x-nw-lang", "x-nw-internal"]) {
+    const v = req.headers.get(name);
+    if (v) h[name] = v;
+  }
+  return h;
+}
+
 const BACKOFF_MS = [1500, 4000, 9000]; // ~15s of cover: a container restart takes about that
 
 /** A connection the backend refused outright. Nothing was delivered, so nothing can have
@@ -83,7 +99,7 @@ async function forward(req: NextRequest, path: string[], body?: string) {
       () =>
         fetch(target(req, path), {
           method: req.method,
-          headers: { "content-type": "application/json", accept: "application/json" },
+          headers: upstreamHeaders(req),
           body,
           cache: "no-store",
           // Keep the backend's own error bodies intact so the UI can show them.

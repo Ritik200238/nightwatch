@@ -16,7 +16,7 @@ const DEMOS = [
 ];
 
 async function call(path, init, ms) {
-  const res = await fetch(ORIGIN + path, { ...init, headers: { "content-type": "application/json" }, signal: AbortSignal.timeout(ms) });
+  const res = await fetch(ORIGIN + path, { ...init, headers: { "content-type": "application/json", ...(process.env.NIGHTWATCH_PROXY_SECRET ? { "x-nightwatch-proxy-secret": process.env.NIGHTWATCH_PROXY_SECRET } : {}) }, signal: AbortSignal.timeout(ms) });
   if (!res.ok) throw new Error(String(res.status));
   return res.json();
 }
