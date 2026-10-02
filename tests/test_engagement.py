@@ -144,3 +144,13 @@ def test_watch_webhook_gets_a_short_post(client, monkeypatch):
     s = client.app.state.nw
     watches.run_due(s.store._conn, lambda rep: rep, s.reports.get, now=datetime.now(UTC) + timedelta(days=5))
     assert sent["url"].endswith("/abc") and sent["body"]["watch_id"] == w["id"] and sent["body"]["moved"] is False
+
+
+def test_a_webhook_with_a_bad_port_is_refused_not_a_server_error():
+    import pytest as _pytest
+
+    from nightwatch.journal.watches import BadWebhook, check_webhook
+
+    for url in ("https://example.com:99999/hook", "https://example.com:abc/hook"):
+        with _pytest.raises(BadWebhook):
+            check_webhook(url)

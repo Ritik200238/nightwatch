@@ -2,6 +2,7 @@ import sqlite3
 import threading
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
 from nightwatch.api import guard, providers
@@ -11,6 +12,13 @@ from tests.test_api import AS_OF, _frozen_clock, client  # noqa: F401 - fixtures
 from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
 
 SECRET_H = {guard.SECRET_HEADER: "s3cret"}
+
+
+@pytest.fixture(autouse=True)
+def _strict_chat_limit(monkeypatch):
+    """One chat a minute, two in a burst: a test machine slow enough to refill the real
+    12-a-minute bucket between requests made these tests pass or fail by timing."""
+    monkeypatch.setattr(guard, "RULES", (("POST", "/chat", 1, 2),) + tuple(r for r in guard.RULES if r[1] != "/chat"))
 
 
 def test_secret_unset_lets_everything_through(client, monkeypatch):  # noqa: F811
@@ -55,12 +63,18 @@ def test_limits_are_per_forwarded_client_when_secret_validates(client, monkeypat
     assert client.post("/chat", json={"messages": []}, headers=b).status_code != 429
 
 
-def test_internal_marker_exempts_only_with_valid_secret(client, monkeypatch):  # noqa: F811
+def test_the_internal_marker_never_exempts_from_rate_limits(client, monkeypatch):  # noqa: F811
+    """The proxy adds the secret to every visitor's request, so a header the visitor can send
+    must not lift the limit: anyone could have had unlimited model calls."""
     monkeypatch.setenv(guard.SECRET_ENV, "s3cret")
-    ok = {**SECRET_H, "x-nw-internal": "1", guard.CLIENT_IP_HEADER: "3.3.3.3"}
-    assert 429 not in _chat_burst(client, ok, 10)
-    monkeypatch.delenv(guard.SECRET_ENV)
-    assert 429 in _chat_burst(client, {"x-nw-internal": "1"}, 10)
+    spoof = {**SECRET_H, "x-nw-internal": "1", guard.CLIENT_IP_HEADER: "3.3.3.3"}
+    assert 429 in _chat_burst(client, spoof, 10)
+
+
+def test_cached_pages_still_need_the_secret(client, monkeypatch):  # noqa: F811
+    monkeypatch.setenv(guard.SECRET_ENV, "s3cret")
+    assert client.get("/studies", headers=SECRET_H).status_code == 200  # fills the cache
+    assert client.get("/studies", headers={guard.CLIENT_IP_HEADER: "9.9.9.9"}).status_code in (403,)
 
 
 def test_limiter_is_bounded_and_refills():

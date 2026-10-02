@@ -116,7 +116,12 @@ async function forward(req: NextRequest, path: string[], body?: string) {
     const text = await res.text();
     return new Response(text, {
       status: res.status,
-      headers: { "content-type": res.headers.get("content-type") ?? "application/json", "cache-control": "no-store" },
+      headers: {
+        "content-type": res.headers.get("content-type") ?? "application/json",
+        "cache-control": "no-store",
+        // A 429's wait time, so the browser knows when to try again.
+        ...(res.headers.get("retry-after") ? { "retry-after": res.headers.get("retry-after") as string } : {}),
+      },
     });
   } catch {
     return saved() ?? Response.json({ detail: "Cannot reach the Nightwatch API from the server. Is the backend running?" }, { status: 502 });

@@ -88,7 +88,11 @@ def check_webhook(url: str | None) -> str | None:
     if p.scheme != "https" or not p.hostname or p.username or p.password or len(url) > 500:
         raise BadWebhook("The webhook must be a plain https:// URL.")
     try:
-        infos = socket.getaddrinfo(p.hostname, p.port or 443, proto=socket.IPPROTO_TCP)
+        try:
+            port = p.port or 443
+        except ValueError as exc:  # ":99999" or ":abc" raises here, not at parse time
+            raise BadWebhook("that webhook URL has an invalid port") from exc
+        infos = socket.getaddrinfo(p.hostname, port, proto=socket.IPPROTO_TCP)
     except OSError as exc:
         raise BadWebhook("The webhook host does not resolve.") from exc
     for info in infos:

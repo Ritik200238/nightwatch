@@ -17,7 +17,9 @@ export interface SnapshotData {
 /** Stable key for a GET: path plus query params sorted, so ?b=1&a=2 equals ?a=2&b=1. */
 export function snapshotKey(path: string, search = ""): string {
   const p = new URLSearchParams(search.replace(/^\?/, ""));
-  const sorted = [...p.entries()].sort(([a], [b]) => a.localeCompare(b));
+  // The anonymous visitor id and language ride along on every call; they do not change the
+  // answer, and kept in the key no browser request ever matched a saved one.
+  const sorted = [...p.entries()].filter(([k]) => !k.startsWith("nw_")).sort(([a], [b]) => a.localeCompare(b));
   const q = new URLSearchParams(sorted).toString();
   return `/${path.replace(/^\/+|\/+$/g, "")}${q ? `?${q}` : ""}`;
 }

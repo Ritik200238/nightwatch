@@ -470,28 +470,6 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     limiter = guard.RateLimiter()
 
-    @app.middleware("http")
-    async def protect(request: Request, call_next):  # noqa: ANN001, ANN202
-        """Proxy secret first, then the per-client rate limit (see nightwatch.api.guard)."""
-        method, path = request.method, request.url.path
-        peer = request.client.host if request.client else ""
-        local = guard.is_local(peer)
-        secret = guard.proxy_secret()
-        trusted = bool(secret) and guard.secret_ok(request.headers, secret)
-        if secret and not trusted and not local and not (method in ("GET", "HEAD") and path == "/health"):
-            return JSONResponse({"detail": "forbidden"}, status_code=403)
-        if local or method == "OPTIONS":
-            return await call_next(request)
-        if trusted and request.headers.get("x-nw-internal") == "1":
-            return await call_next(request)  # our own checks; only believed with the secret
-        rule = guard.rule_for(method, path)
-        if rule is not None:
-            client = (request.headers.get(guard.CLIENT_IP_HEADER, "").strip() if trusted else "") or peer
-            wait = limiter.take(rule[0], client[:64], rule[1], rule[2])
-            if wait > 0:
-                return JSONResponse({"detail": "Too many requests. Please wait a moment and try again."}, status_code=429, headers={"Retry-After": str(max(1, int(wait + 0.999)))})
-        return await call_next(request)
-
     # The read-only pages a judge opens first each recompute from the database in 2-7 s on
     # a cold box. They change slowly, so a successful answer is kept for a minute and the
     # warm-up fills them before anyone asks (AppState.warm_pages).
@@ -546,6 +524,28 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             while len(page_cache) > PAGE_CACHE_MAX:
                 page_cache.pop(next(iter(page_cache)))
         return Response(body, status_code=200, media_type=response.media_type or "application/json", headers={"x-nightwatch-cache": "miss"})
+
+    # Registered after the page cache on purpose: the last middleware added runs first, so
+    # the secret and the rate limit apply to cached answers too.
+    @app.middleware("http")
+    async def protect(request: Request, call_next):  # noqa: ANN001, ANN202
+        """Proxy secret first, then the per-client rate limit (see nightwatch.api.guard)."""
+        method, path = request.method, request.url.path
+        peer = request.client.host if request.client else ""
+        local = guard.is_local(peer)
+        secret = guard.proxy_secret()
+        trusted = bool(secret) and guard.secret_ok(request.headers, secret)
+        if secret and not trusted and not local and not (method in ("GET", "HEAD") and path == "/health"):
+            return JSONResponse({"detail": "forbidden"}, status_code=403)
+        if local or method == "OPTIONS":
+            return await call_next(request)
+        rule = guard.rule_for(method, path)
+        if rule is not None:
+            client = (request.headers.get(guard.CLIENT_IP_HEADER, "").strip() if trusted else "") or peer
+            wait = limiter.take(rule[0], client[:64], rule[1], rule[2])
+            if wait > 0:
+                return JSONResponse({"detail": "Too many requests. Please wait a moment and try again."}, status_code=429, headers={"Retry-After": str(max(1, int(wait + 0.999)))})
+        return await call_next(request)
 
     def st() -> AppState:
         return app.state.nw

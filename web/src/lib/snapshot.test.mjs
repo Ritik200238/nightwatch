@@ -13,4 +13,7 @@ const c = snapshotPost(data, "chat", '{"messages":[{"role":"user","content":"lon
 assert.equal(c.report.t, "NVDA");
 assert.ok(c.reply.startsWith("The live server is unreachable right now; this is a saved example from T0"));
 assert.equal(snapshotPost(null, "chat", "{}"), null);
+// A browser always adds its anonymous id and language; the saved page must still match.
+assert.equal(snapshotKey("/calibration", "?nw_client=abc&nw_lang=zh&nw_internal=1"), snapshotKey("calibration"));
+assert.equal(snapshotKey("universe", "?nw_client=x&core=true"), "/universe?core=true");
 console.log("snapshot tests ok");
