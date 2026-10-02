@@ -183,3 +183,12 @@ def test_hedge_rationale_states_the_loss_at_the_suggested_ratio_not_the_full_hed
     assert full.hedge_ratio_suggested is not None and abs(full.hedge_ratio_suggested - 1.0) < 1e-9
     assert "hedging 100% (fully hedged)" in full.hedge_rationale
     assert "to about -0.6% at that ratio" in full.hedge_rationale
+
+
+def test_a_binding_cap_is_explained_in_plain_words_not_by_its_code_name():
+    t = ticket()
+    gate = evaluate_gate(t, inputs())
+    v = decide(t, gate, recommend_size(t, sizing_inputs(max_exit_notional_within_budget=715.0)))
+    held = next(r for r in v.reasons if r.startswith("Size held at"))
+    assert held.startswith("Size held at 715 USDT: the live order book can absorb only that much within the 25 bps exit-cost budget")
+    assert "exit_liquidity" not in " ".join(v.reasons)

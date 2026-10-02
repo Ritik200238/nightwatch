@@ -26,6 +26,7 @@ the analog evidence and hedge economics:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -178,6 +179,28 @@ def recommend_size(ticket: TradeTicket, inp: SizingInputs, policy: SizingPolicy 
     return SizingResult(recommended, binding.name, caps, hedge_ratio, rationale)
 
 
+_CAP_PLAIN = {
+    "risk_budget": "the loss if the stop is hit would exceed the share of equity you allow at risk",
+    "concentration": "more than that would put too much of your equity in one name",
+    "regime": "the current market regime calls for a smaller position than requested",
+    "exit_liquidity": "the live order book can absorb only that much within the exit-cost budget",
+    "stress": "the worst severe stress scenario would cost more than the allowed share of equity at a larger size",
+    "book_tail": "a larger size would push the whole book's one-in-twenty loss past the allowed share of equity",
+}
+
+
+def plain_cap_reason(sizing: SizingResult, rec: float) -> str:
+    """Which cap binds and why, in words a trader reads without the cap's code name."""
+    name = sizing.binding_cap or ""
+    cap = next((c for c in sizing.caps if c.name == name), None)
+    why = _CAP_PLAIN.get(name, f"the {name.replace('_', ' ')} limit binds")
+    if name == "exit_liquidity" and cap is not None:
+        m = re.search(r"within (\d+) bps", cap.detail)
+        if m:
+            why = f"the live order book can absorb only that much within the {m.group(1)} bps exit-cost budget"
+    return f"Size held at {rec:,.0f} USDT: {why}"
+
+
 def decide(ticket: TradeTicket, gate: GateReport, sizing: SizingResult, *, tolerance: float = 0.05) -> VerdictResult:
     reasons: list[str] = []
     if gate.decision == GateDecision.NO_GO:
@@ -193,12 +216,12 @@ def decide(ticket: TradeTicket, gate: GateReport, sizing: SizingResult, *, toler
     reasons.extend(gate.advisories)
     rec = sizing.recommended_notional
     if rec <= 0:
-        reasons.append(f"no size satisfies the {sizing.binding_cap} cap")
+        reasons.append(f"No size is allowed: {_CAP_PLAIN.get(sizing.binding_cap or '', 'a limit binds')}")
         return VerdictResult(Verdict.NO_GO, ticket.notional_quote, 0.0, None, reasons, sizing.caps)
     if rec >= ticket.notional_quote * (1.0 - tolerance):
         reasons.append("requested size is within every cap")
         return VerdictResult(Verdict.GO, ticket.notional_quote, ticket.notional_quote, ticket.hedge_ratio, reasons, sizing.caps)
-    reasons.append(f"{sizing.binding_cap} cap binds at {rec:,.0f} (requested {ticket.notional_quote:,.0f})")
+    reasons.append(f"{plain_cap_reason(sizing, rec)} (requested {ticket.notional_quote:,.0f}).")
     if sizing.hedge_ratio_suggested is not None and sizing.binding_cap in ("risk_budget", "stress", "regime"):
         reasons.append(sizing.hedge_rationale)
         return VerdictResult(Verdict.HEDGE, ticket.notional_quote, ticket.notional_quote, sizing.hedge_ratio_suggested, reasons, sizing.caps)

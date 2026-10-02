@@ -40,7 +40,17 @@ def _q(x: float | None) -> str:
 def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independent checks
     """``report`` is an AnalysisReport. Everything is read, nothing is recomputed."""
     verdict = report.verdict.verdict.value
-    size = report.verdict.recommended_notional or report.ticket.notional_quote
+    # Every amount here is at the size the trader asked for, the same size the rest of the
+    # report prices; when a smaller size is recommended the same figure at that size follows
+    # in brackets, so one report never quotes two sizes without saying which.
+    size = report.ticket.notional_quote
+    rec = report.verdict.recommended_notional
+    smaller = rec is not None and 0 < rec < size - 1
+
+    def also(frac: float) -> str:
+        """The recommended-size figure for a loss that is ``frac`` of the position."""
+        return f" (at the recommended {_q(rec)}: {_q(abs(rec * frac))})" if smaller else ""
+
     against: list[Counterpoint] = []
     supporting: list[Counterpoint] = []
 
@@ -54,7 +64,7 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
     if worst is not None:
         pct = worst[1].total_pct_of_notional
         money = abs(size * pct / 100.0)
-        against.append(Counterpoint("against", f"{worst[0].name} would cost {pct:+.1f}% of the position, about {_q(money)} USDT at this size. {worst[0].probability_note}.", money, "stress presets"))
+        against.append(Counterpoint("against", f"{worst[0].name} would cost {pct:+.1f}% of the position, about {_q(money)} USDT at {_q(size)}{also(pct / 100.0)}. {worst[0].probability_note}.", money, "stress presets"))
 
     primary = report.analog.horizons.get(report.primary_horizon) if report.analog else None
     if primary and not primary.cohort.insufficient:
@@ -62,7 +72,7 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
         p5 = primary.loss_p5_pct
         if p5 is not None:
             # The tail is one idea, so it is one point: where it starts and how far past it went.
-            tail = f"One time in twenty, moments like this lost {abs(p5):.1f}% or more over the horizon, about {_q(abs(size * p5 / 100.0))} USDT."
+            tail = f"One time in twenty, moments like this lost {abs(p5):.1f}% or more over the horizon, about {_q(abs(size * p5 / 100.0))} USDT at {_q(size)}{also(p5 / 100.0)}."
             # The cohort's expected shortfall is the token's lower tail: a long's loss, a short's gain.
             es5 = c.es5_pct if getattr(report.ticket, "closing_long", True) else None
             if es5 is not None and c.es5_n:
@@ -80,7 +90,7 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
     ex = report.execution
     if ex.exit_quote and ex.exit_quote.total_cost_bps is not None:
         cost = size * ex.exit_quote.total_cost_bps / 1e4
-        against.append(Counterpoint("against", f"Getting out costs {ex.exit_quote.total_cost_bps:.0f} bps on the live book, about {_q(cost)} USDT, before any adverse move.", cost, "order book"))
+        against.append(Counterpoint("against", f"Getting out costs {ex.exit_quote.total_cost_bps:.0f} bps on the live book, about {_q(cost)} USDT at {_q(size)}{also(ex.exit_quote.total_cost_bps / 1e4)}, before any adverse move.", cost, "order book"))
     lh = getattr(ex, "liquidity_history", None)
     if lh:
         thin = [b for b in lh.buckets if not b.thin and (b.share_below_reference or 0) > 0.2]

@@ -108,3 +108,13 @@ def test_the_traders_own_line_is_a_measured_chain_not_a_template(seeded_store): 
     assert any(m.key == "convergence" for m in story.failure_modes(r))  # a long above the stock's price gives it up
     r.street = {"token_vs_live_bps": -40.0}
     assert not any(m.key == "convergence" for m in story.failure_modes(r))  # a discount helps a long
+
+
+def test_failure_mode_loss_is_at_the_requested_size_with_the_recommended_beside_it():
+    from dataclasses import replace
+
+    from nightwatch.decision.story import FailureMode
+
+    m = FailureMode("gap_bad", "t", "x", "y", -1000.0, -10.0, "l", "s")
+    assert m.loss_quote_at_recommended is None
+    assert replace(m, loss_quote_at_recommended=-200.0).to_dict()["loss_quote_at_recommended"] == -200.0

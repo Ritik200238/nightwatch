@@ -97,3 +97,19 @@ def test_a_thin_report_still_produces_something():
 def test_a_review_says_so():
     so = build(stub(verdict=SimpleNamespace(verdict=SimpleNamespace(value="REVIEW"), recommended_notional=None)))
     assert "cannot decide yet" in so.summary
+
+
+def test_amounts_are_at_the_requested_size_with_the_recommended_one_beside_them():
+    rep = stub(ticket=SimpleNamespace(notional_quote=10_000.0, ticker="TSLA"),
+               verdict=SimpleNamespace(verdict=SimpleNamespace(value="REDUCE_TO"), recommended_notional=2_000.0))
+    so = build(rep)
+    stress = next(c for c in so.against if c.source == "stress presets")
+    assert "about 900 USDT at 10,000" in stress.text and "(at the recommended 2,000: 180)" in stress.text
+    assert stress.magnitude_quote == 900.0
+    tail = next(c for c in so.against if c.source == "analog cohort")
+    assert "at 10,000" in tail.text and "(at the recommended 2,000: 120)" in tail.text
+
+
+def test_no_bracket_when_the_recommended_size_is_the_requested_one():
+    so = build(stub())
+    assert "recommended" not in " ".join(c.text for c in so.against)

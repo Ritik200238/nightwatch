@@ -22,7 +22,7 @@ the mismatch is said.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from nightwatch.features.phrases import earnings_ahead
@@ -50,6 +50,9 @@ class FailureMode:
     # a share of simulated paths). None where it is a named crisis or an assumption.
     chance: float | None = None
     capped: bool = False  # a leveraged loss stopped at the margin by liquidation
+    # The same loss at the recommended size, when that is smaller than the request. The
+    # headline loss is always at the requested size, the size the rest of the report prices.
+    loss_quote_at_recommended: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -272,7 +275,12 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
             1 - wins,
         ))
 
-    return _rank(_cap_at_margin(out, lev))
+    ranked = _rank(_cap_at_margin(out, lev))
+    rec = getattr(getattr(r, "verdict", None), "recommended_notional", None)
+    if rec is not None and 0 < rec < t.notional_quote - 1:
+        scale = rec / t.notional_quote
+        ranked = [replace(m, loss_quote_at_recommended=m.loss_quote * scale) if m.loss_quote is not None else m for m in ranked]
+    return ranked
 
 
 def _own_chains(r: Any) -> list[FailureMode]:  # noqa: ANN401
