@@ -26,6 +26,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
+from contextlib import contextmanager
 from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -117,6 +119,24 @@ def _schema_hint(schema: type[BaseModel]) -> str:
     return "{\n" + "\n".join(lines) + "\n}"
 
 
+# At most this many Qwen calls at once across chat parsing, the analyst and the agent: the
+# box is small and the gateway rate-limits, so a burst queues here rather than piling up.
+LLM_CONCURRENCY = 2
+LLM_WAIT_S = 20.0
+_llm_slots = threading.BoundedSemaphore(LLM_CONCURRENCY)
+
+
+@contextmanager
+def llm_slot(wait_s: float | None = None):  # noqa: ANN201
+    """Hold one model slot, or yield False if none frees up within the wait."""
+    got = _llm_slots.acquire(timeout=LLM_WAIT_S if wait_s is None else wait_s)
+    try:
+        yield got
+    finally:
+        if got:
+            _llm_slots.release()
+
+
 class QwenProvider:
     """Qwen through the hackathon gateway: one JSON object, validated here."""
 
@@ -181,9 +201,13 @@ class QwenProvider:
         from nightwatch.data.qwen import QwenError
 
         try:
-            # Writing prose from facts it is handed needs no working out, and the thinking
-            # step is most of the wait: minutes with it, seconds without (measured).
-            answer = self._client.chat([{"role": "user", "content": user}], system=system, max_tokens=max_tokens, thinking=False)
+            with llm_slot() as got:
+                if not got:
+                    log.warning("qwen busy: no model slot within %.0fs", LLM_WAIT_S)
+                    return UNPARSEABLE
+                # Writing prose from facts it is handed needs no working out, and the thinking
+                # step is most of the wait: minutes with it, seconds without (measured).
+                answer = self._client.chat([{"role": "user", "content": user}], system=system, max_tokens=max_tokens, thinking=False)
         except QwenError as exc:
             if "data_inspection_failed" in str(exc).lower():
                 raise ProviderRefusal("the gateway's content filter declined the request") from exc
