@@ -20,6 +20,11 @@ services:
     # context silently came back empty. On the host network the API listens on :8000
     # directly, exactly where the bridge used to publish it.
     network_mode: host
+    # Hard ceilings on a 1 GB box: the API and recorder leave room for the OS and Docker.
+    # memswap equal to mem means no swap use, so an overrun is killed and restarted rather
+    # than thrashing the whole box.
+    mem_limit: 680m
+    memswap_limit: 680m
     environment:
       NIGHTWATCH_DATA_DIR: /data
       NIGHTWATCH_CORS: ${NIGHTWATCH_CORS:-*}
@@ -31,6 +36,9 @@ services:
       NIGHTWATCH_SALT: ${NIGHTWATCH_SALT:-}
       NIGHTWATCH_LLM_PROVIDER: ${NIGHTWATCH_LLM_PROVIDER:-auto}
       FRED_API_KEY: ${FRED_API_KEY:-}
+      # When set, every request except GET /health and the box's own must carry the same
+      # value in x-nightwatch-proxy-secret (the Vercel proxy sends it). Unset = no check.
+      NIGHTWATCH_PROXY_SECRET: ${NIGHTWATCH_PROXY_SECRET:-}
       # How many feature frames the API keeps. Frames are keyed by hour, so with room for
       # more than the 24 tokens the previous hour's set lingers after every hourly warm-up
       # and doubles the working set; on a 1 GB box that is what pushes it into swap.
@@ -50,6 +58,8 @@ services:
     image: nightwatch:latest
     restart: unless-stopped
     command: ["nightwatch", "record", "--interval", "60"]
+    mem_limit: 220m
+    memswap_limit: 220m
     # The image's health check belongs to the API. A recorder is healthy when it is
     # still writing: the newest order-book snapshot must be less than five minutes old.
     healthcheck:
