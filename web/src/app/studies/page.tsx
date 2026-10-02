@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, type StudiesResponse, type Study } from "@/lib/api";
-import { fmtTime } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
 /** The verdict answers the question in the title, and nothing else.
@@ -314,7 +314,7 @@ export default function StudiesPage() {
         <>
           <Section
             title={tx("The scoreboard", "记分牌")}
-            subtitle={tx(`Last recomputed ${rep.last_run ? fmtTime(rep.last_run) : "unknown"}. Every number on this page is derived from the stored bars and the journal by \`nightwatch studies\`; none of it is typed in.`, `上次重新计算：${rep.last_run ? fmtTime(rep.last_run) : "未知"}。本页的每个数字都由 \`nightwatch studies\` 从存储的 K 线和日志推导而来，没有一个是手填的。`)}
+            subtitle={tx(`Last recomputed ${rep.last_run ? fmtTimeL(rep.last_run, lang) : "unknown"}. Every number on this page is derived from the stored bars and the journal by \`nightwatch studies\`; none of it is typed in.`, `上次重新计算：${rep.last_run ? fmtTimeL(rep.last_run, lang) : "未知"}。本页的每个数字都由 \`nightwatch studies\` 从存储的 K 线和日志推导而来，没有一个是手填的。`)}
           >
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               <Stat label={tx("Questions asked", "提出的问题")} value={String(rep.studies.length)} hint={tx("each written so it could come back no", "每个都写成可能得到“否”的形式")} />

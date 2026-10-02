@@ -8,7 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
-import { fmtPct, fmtTime, fmtUsd } from "@/lib/format";
+import { fmtPct, fmtUsd } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 
 /** Mistakes found in the desk itself, newest first. Each one changed a number a trader
  *  was shown; the fix is in the repository's history and the evidence in the notes. */
@@ -138,7 +139,7 @@ export default function WrongPage() {
                   <TableBody>
                     {misses.misses.map((m) => (
                       <TableRow key={m.id}>
-                        <TableCell className="whitespace-nowrap">{fmtTime(m.as_of)}</TableCell>
+                        <TableCell className="whitespace-nowrap">{fmtTimeL(m.as_of, lang)}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
                         </TableCell>

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { Section, Stat } from "@/components/report/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { engagement, type Usage } from "@/lib/engagement";
-import { fmtTime } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
 /** What the desk knows about its own use. Counts only: no accounts, no addresses. */
 export default function UsagePage() {
-  const { tx } = useLang();
+  const { tx, lang } = useLang();
   const [u, setU] = useState<Usage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +27,7 @@ export default function UsagePage() {
   if (error) return <p className="py-10 text-center text-sm text-muted-foreground">{error}</p>;
   if (!u) return <Skeleton className="h-64 w-full" />;
 
-  const since = u.counted_since ? fmtTime(u.counted_since) : tx("no verdicts yet", "暂无结论");
+  const since = u.counted_since ? fmtTimeL(u.counted_since, lang) : tx("no verdicts yet", "暂无结论");
   const asked = u.feedback.useful + u.feedback.not_useful;
   const kinds = Object.entries(u.follow_ups_by_answer_kind);
   return (
@@ -76,7 +76,7 @@ export default function UsagePage() {
             {u.last_notes.map((n) => (
               <li key={n.at + n.note}>
                 <span className="text-muted-foreground">
-                  {n.useful ? tx("useful", "有用") : tx("not useful", "没用")} · {fmtTime(n.at)}
+                  {n.useful ? tx("useful", "有用") : tx("not useful", "没用")} · {fmtTimeL(n.at, lang)}
                 </span>
                 <br />
                 {n.note}

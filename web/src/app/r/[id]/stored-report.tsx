@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ReportView } from "@/components/report/report-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, type Report } from "@/lib/api";
-import { fmtTime } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
 /** One stored report, reopened exactly as it was argued.
@@ -62,7 +62,7 @@ export function StoredReport({ id }: { id: string }) {
       <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
         <p className="font-medium">{tx("A saved report, not a live one", "这是保存的报告，不是实时的")}</p>
         <p className="text-xs text-muted-foreground">
-          This is forecast #{id} exactly as the desk argued it at {fmtTime(report.as_of)}. Nothing on this page has been recomputed since.{" "}
+          This is forecast #{id} exactly as the desk argued it at {fmtTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.{" "}
           <Link href="/" className="underline underline-offset-2">
             Run the same trade now
           </Link>

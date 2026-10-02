@@ -5,19 +5,29 @@ import { use, useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { engagement, EngagementError, type Watch, type WatchSummary } from "@/lib/engagement";
-import { fmtPct, fmtTime, fmtUsd } from "@/lib/format";
+import { fmtPct, fmtUsd } from "@/lib/format";
+import { fmtTimeL, STRINGS } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
+/** The gate's own decision names ("REVIEW_REQUIRED") and the verdict's, as words. */
+function decisionWord(lang: "en" | "zh", d: unknown): string {
+  const k = String(d ?? "-");
+  if (k === "-") return k;
+  if (lang === "zh") return k === "REVIEW_REQUIRED" ? "需要复核" : (STRINGS.zh.verdictName as Record<string, string>)[k] ?? k;
+  return k.replace(/_/g, " ");
+}
+
 function Column({ title, s, empty }: { title: string; s: WatchSummary | null; empty: string }) {
+  const { tx, lang } = useLang();
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-medium">{title}</h3>
       {s ? (
         <div className="grid grid-cols-2 gap-3">
-          <Stat label="Verdict" value={String(s.verdict ?? "-")} hint={s.as_of ? fmtTime(s.as_of) : undefined} />
-          <Stat label="Size" value={s.recommended_notional != null ? fmtUsd(s.recommended_notional) : "-"} />
-          <Stat label="Gate" value={String(s.gate ?? "-")} />
-          <Stat label="1-in-20 loss" value={s.tail_p5_pct != null ? fmtPct(s.tail_p5_pct) : "-"} />
+          <Stat label={tx("Verdict", "结论")} value={decisionWord(lang, s.verdict)} hint={s.as_of ? fmtTimeL(s.as_of, lang) : undefined} />
+          <Stat label={tx("Size", "仓位")} value={s.recommended_notional != null ? fmtUsd(s.recommended_notional) : "-"} />
+          <Stat label={tx("Gate", "风控检查")} value={decisionWord(lang, s.gate)} />
+          <Stat label={tx("1-in-20 loss", "二十分之一的亏损")} value={s.tail_p5_pct != null ? fmtPct(s.tail_p5_pct) : "-"} />
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">{empty}</p>
@@ -29,7 +39,7 @@ function Column({ title, s, empty }: { title: string; s: WatchSummary | null; em
 /** A trade judged again once the market has closed: the verdict then, and now. */
 export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { tx } = useLang();
+  const { tx, lang } = useLang();
   const [w, setW] = useState<Watch | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,9 +81,9 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
         <h1 className="text-lg font-semibold">{tx("Re-check at the US close", "美股收盘复查")}</h1>
         <p className="text-sm text-muted-foreground">
           {w.status === "pending"
-            ? tx(`Waiting for the next US close. It runs a few minutes after ${fmtTime(w.due_at)}; this page refreshes itself.`, `等待下一个美股收盘。将在 ${fmtTime(w.due_at)} 之后几分钟运行；本页会自动刷新。`)
+            ? tx(`Waiting for the next US close. It runs a few minutes after ${fmtTimeL(w.due_at, lang)}; this page refreshes itself.`, `等待下一个美股收盘。将在 ${fmtTimeL(w.due_at, lang)} 之后几分钟运行；本页会自动刷新。`)
             : w.status === "done"
-              ? tx(`Done ${w.done_at ? fmtTime(w.done_at) : ""}.`, `已完成 ${w.done_at ? fmtTime(w.done_at) : ""}。`)
+              ? tx(`Done ${w.done_at ? fmtTimeL(w.done_at, lang) : ""}.`, `已完成 ${w.done_at ? fmtTimeL(w.done_at, lang) : ""}。`)
               : tx("The re-check could not run.", "复查未能运行。")}{" "}
           <Link href={`/r/${w.forecast_id}`} className="underline underline-offset-2">
             {tx("open the original report", "打开原报告")}

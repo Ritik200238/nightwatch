@@ -10,7 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, type TonightReport, type UniverseEntry } from "@/lib/api";
 import { presetName, stateWord } from "@/lib/i18n-terms";
 import { useLang } from "@/lib/lang";
-import { fmtBps, fmtPct, fmtTime, fmtUsd } from "@/lib/format";
+import { fmtBps, fmtPct, fmtUsd } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 
 /** What each flag is, in the words a person would use. Order is the order they are read. */
 const FLAG_LABEL_ZH: Record<string, string> = {
@@ -140,7 +141,7 @@ export default function TonightPage() {
               title={report.market_is_open ? tx("Until the close", "到收盘为止") : tx("Until the next open", "到下次开盘为止")}
               subtitle={
                 report.window_end
-                  ? tx(`${report.hours.toFixed(0)} hours, to ${fmtTime(report.window_end)}. ${report.market_is_open ? "The regular session is open, so this is what you would be carrying into the close." : "Everything below is measured over exactly this window."}`, `${report.hours.toFixed(0)} 小时，到 ${fmtTime(report.window_end)}。${report.market_is_open ? "常规交易时段正在进行，所以这是你带到收盘的仓位。" : "下面的一切都恰好按这个时间窗口计算。"}`)
+                  ? tx(`${report.hours.toFixed(0)} hours, to ${fmtTimeL(report.window_end, lang)}. ${report.market_is_open ? "The regular session is open, so this is what you would be carrying into the close." : "Everything below is measured over exactly this window."}`, `${report.hours.toFixed(0)} 小时，到 ${fmtTimeL(report.window_end, lang)}。${report.market_is_open ? "常规交易时段正在进行，所以这是你带到收盘的仓位。" : "下面的一切都恰好按这个时间窗口计算。"}`)
                   : undefined
               }
               action={

@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 import { t as tl } from "@/lib/i18n";
-import { fmtPct, fmtTime, fmtUsd } from "@/lib/format";
+import { fmtPct, fmtUsd } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 
 /** One journal row as the API returns it. Everything optional is null until maturity. */
 interface ForecastRow {
@@ -169,10 +170,10 @@ export default function JournalPage() {
                           {/* Live tickets keep their full report for a while, so the row
                               opens the argument. Replays keep only the numbers here. */}
                           {r.kind === "replay" ? (
-                            fmtTime(r.as_of)
+                            fmtTimeL(r.as_of, lang)
                           ) : (
                             <Link href={`/r/${r.id}`} className="rounded underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-                              {fmtTime(r.as_of)}
+                              {fmtTimeL(r.as_of, lang)}
                             </Link>
                           )}
                           <span className="block text-xs text-muted-foreground">{r.kind === "replay" ? tx("replay", "重演") : tx("live ticket", "实时交易")}</span>

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useLang } from "@/lib/lang";
+import { holdLabel } from "@/lib/plain";
 import { api, type HorizonKind, type Lens, type Side, type TicketInput, type UniverseEntry } from "@/lib/api";
 
 interface Props {
@@ -138,7 +139,7 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
 }
 
 export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
-  const { tx } = useLang();
+  const { tx, lang } = useLang();
   const [ticker, setTicker] = useState(initial?.ticker ?? "TSLA");
   const [side, setSide] = useState<Side>(initial?.side ?? "long");
   const [notional, setNotional] = useState(String(initial?.notional_quote ?? 20000));
@@ -215,7 +216,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
           <Label htmlFor="side">{tx("Direction", "方向")}</Label>
           <Select value={side} onValueChange={(v) => setSide(v as Side)}>
             <SelectTrigger id="side" className="w-full">
-              <SelectValue />
+              <SelectValue>{side === "short" ? tx("Short", "做空") : tx("Long", "做多")}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="long">{tx("Long", "做多")}</SelectItem>
@@ -237,12 +238,12 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
           <Label htmlFor="horizon">{tx("Hold until", "持有到")}</Label>
           <Select value={horizon} onValueChange={(v) => setHorizon(v as HorizonKind)}>
             <SelectTrigger id="horizon" className="w-full">
-              <SelectValue />
+              <SelectValue>{holdLabel(horizon, lang)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="next_open">{tx("Next US market open", "下次美股开盘")}</SelectItem>
-              <SelectItem value="window_end">{tx("End of this closed window / session", "本次休市窗口 / 时段结束")}</SelectItem>
-              <SelectItem value="hours">{tx("A number of hours", "指定小时数")}</SelectItem>
+              <SelectItem value="next_open">{holdLabel("next_open", lang)}</SelectItem>
+              <SelectItem value="window_end">{holdLabel("window_end", lang)}</SelectItem>
+              <SelectItem value="hours">{holdLabel("hours", lang)}</SelectItem>
             </SelectContent>
           </Select>
         </div>
