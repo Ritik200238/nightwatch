@@ -287,7 +287,7 @@ def _lens_note(after: dict) -> str:
     return ""
 
 
-VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
 
 
 def _describe_zh(change: Change) -> str:
@@ -406,11 +406,11 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
                 held = f", held by the {cap.replace('_', ' ')} cap" if cap else ""
             if moved:
                 bits.append(
-                    f"The verdict moves from {vb['verdict']} at {_usd(vb.get('recommended_notional'))} "
-                    f"to {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}."
+                    f"The verdict moves from {vb['verdict'].replace('_', ' ')} at {_usd(vb.get('recommended_notional'))} "
+                    f"to {va['verdict'].replace('_', ' ')} at {_usd(va.get('recommended_notional'))}{held}."
                 )
             else:
-                bits.append(f"The verdict is unchanged: {va['verdict']} at {_usd(va.get('recommended_notional'))}{held}.")
+                bits.append(f"The verdict is unchanged: {va['verdict'].replace('_', ' ')} at {_usd(va.get('recommended_notional'))}{held}.")
 
     lev = after.get("leverage")
     if lev and lev.get("liquidation_distance_pct") is not None and not zh:

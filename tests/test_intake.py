@@ -560,3 +560,19 @@ def test_an_absurd_hold_is_capped_and_said_and_is_not_read_as_a_size():
     assert r.horizon_hours == 720.0 and r.notional_quote == 5000.0 and r.notes
     assert parse_message("long tsla 5000 hours", KNOWN).notional_quote is None
     assert parse_message("做多特斯拉5千 持有5000小时", KNOWN).horizon_hours == 720.0
+
+
+def test_the_brief_names_the_verdict_and_cap_in_words_not_identifiers(seeded_store):  # noqa: F811
+    from dataclasses import replace
+
+    from nightwatch.api import intake as it
+    from nightwatch.decision.sizing import Cap, Verdict
+
+    r = _report(seeded_store, stop_price=100.0, thesis="t", invalidation="i")
+    caps = [Cap("exit_liquidity", 715.0, "largest size the live book absorbs within 25 bps")]
+    r.verdict = replace(r.verdict, verdict=Verdict.REDUCE_TO, recommended_notional=715.0, caps=caps,
+                        reasons=["Size held at 715 USDT: the live order book can absorb only that much within the 25 bps exit-cost budget (requested 10,000)."])
+    en, zh = it.brief(r), it.brief(r, "zh")
+    assert en.startswith("REDUCE TO on") and "REDUCE_TO" not in en and "exit_liquidity" not in en
+    assert "Size held at 715 USDT: the live order book" in en
+    assert zh.startswith("建议减仓") and "REDUCE_TO" not in zh

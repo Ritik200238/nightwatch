@@ -535,7 +535,7 @@ FAILURE_ZH = {
 
 # The verdict names in Chinese, for a trader who wrote in Chinese. The numbers are the
 # same numbers, formatted the same way; only the words around them change.
-VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+VERDICT_ZH = {"GO": "可以做", "REDUCE": "建议减仓", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
 CAP_ZH = {"risk_budget": "风险预算", "concentration": "集中度", "regime": "市场状态", "exit_liquidity": "平仓流动性", "stress": "压力测试", "breaker": "熔断", "book_tail": "整体持仓尾部风险"}
 RULE_ZH = {
     "written_plan": "书面计划", "stop": "止损", "position_size": "仓位大小", "market_posture": "市场状态",
@@ -750,7 +750,7 @@ def brief(report: Any, lang: str = "en") -> str:
     if zh:
         head = f"{VERDICT_ZH.get(v.verdict.value, v.verdict.value)}：{t.ticker} {side} {t.notional_quote:,.0f} USDT，{_horizon_phrase(report, lang)}。"
     else:
-        head = f"{v.verdict.value} on {side} {t.notional_quote:,.0f} USDT of {t.ticker}, {_horizon_phrase(report, lang)}."
+        head = f"{v.verdict.value.replace('_', ' ')} on {side} {t.notional_quote:,.0f} USDT of {t.ticker}, {_horizon_phrase(report, lang)}."
     if v.recommended_notional is not None and v.recommended_notional < 1:
         # "Size it at 0 instead" read as a contradiction next to a REVIEW. What it means is
         # that no size clears a limit, so say which one.
