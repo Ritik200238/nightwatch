@@ -56,7 +56,7 @@ _MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmb])?|\b([\d,]+(?:\.\d+)?)\s*
 # "long 20000 TSLA" states a size as plainly as "long 20k TSLA" does. A bare number is
 # read as one only when nothing else has claimed it and it is not a price: "long TSLA at
 # 350" is a level, and nobody sizes a position at fifty dollars.
-_BARE_MONEY = re.compile(r"(?<![$\d.])\b(\d[\d,]{2,})\b(?!\s*(?:%|bps))", re.I)
+_BARE_MONEY = re.compile(r"(?<![$\d.])\b(\d[\d,]{2,})\b(?!\s*(?:%|bps|hours?\b|hrs?\b|days?\b))", re.I)
 _PRICE_WORD = re.compile(r"\b(?:at|@|price|near|around|above|below|under|over)\s*$", re.I)
 BARE_MONEY_FLOOR = 100.0
 _HOURS = re.compile(r"\b([\d.]+)\s*(?:hours?|hrs?|h)\b", re.I)
@@ -174,6 +174,10 @@ class RuleIntent:
     open_positions: list[tuple[str, str, float]] = field(default_factory=list)
     missing_fields: list[str] = field(default_factory=list)
     reply: str = ""
+    # Things the reader changed or ignored, said back to the trader ("a stop at 0 is not a
+    # price, so it was left out"), and whether a negative size was refused.
+    notes: list[str] = field(default_factory=list)
+    negative_size: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -184,7 +188,7 @@ class RuleIntent:
             "target_price": self.target_price,
             "thesis": self.thesis, "invalidation": self.invalidation, "hedge_ratio": self.hedge_ratio,
             "open_positions": [list(p) for p in self.open_positions],
-            "missing_fields": self.missing_fields, "reply": self.reply,
+            "missing_fields": self.missing_fields, "reply": self.reply, "notes": self.notes,
         }
 
 
@@ -289,7 +293,48 @@ def _settle(out: RuleIntent) -> RuleIntent:
         out.reply = f"Running {out.side} {out.notional_quote:,.0f} USDT in {out.ticker}."
         if out.open_positions:
             out.reply = out.reply[:-1] + f", with {describe_book(out.open_positions)} already in the book."
+        if out.notes:
+            out.reply += " " + " ".join(out.notes)
     return out
+
+
+# "-5000": a size cannot be negative. The dash must touch the number, so "TSLA - 5000" (a
+# separator) and "stop -3%" (not a size) are left alone.
+_NEG_SIZE = re.compile(r"(?<![\w.%])[-−]\$?(\d[\d,]*(?:\.\d+)?)\s*([kmb])?(?![\w%])", re.I)
+_LEVEL_WORD = re.compile(r"(?:stop|target|tp|止损|止盈|目标)\W*$", re.I)
+# The longest hold the history can speak to: past it the window runs out of data.
+MAX_HOLD_HOURS = 720.0
+
+NEGATIVE_SIZE_REPLY = {
+    "en": 'A position size cannot be negative. Tell me the size as a positive amount (e.g. "5k") and the side as long or short.',
+    "zh": "仓位大小不能是负数。请用正数告诉我仓位（例如“5千U”），并用“做多”或“做空”说明方向。",
+}
+
+
+def _sanitize(out: RuleIntent, text: str, zh: bool) -> None:
+    """Values that cannot be what the trader meant are dropped or capped, and said so."""
+    if out.stop_price is not None and out.stop_price <= 0:
+        out.stop_price = None
+        out.notes.append("止损价为 0 不是有效价格，已忽略这个止损。" if zh else "A stop at 0 is not a price, so I ignored the stop.")
+    if out.stop_pct is not None and out.stop_pct <= 0:
+        out.stop_pct = out.stop_dir = None
+        out.notes.append("止损距离为 0 无效，已忽略这个止损。" if zh else "A stop 0% away is not a stop, so I ignored it.")
+    lev = _LEVERAGE.search(text)
+    raw = float(lev.group(1) or lev.group(2)) if lev else None
+    if _CJK.search(text):
+        from nightwatch.api import intake_zh
+
+        zlev = intake_zh._LEVERAGE.search(text)
+        if zlev:
+            raw = intake_zh.chinese_number(zlev.group(1)) if zlev.group(1) else float(zlev.group(2))
+    if raw is not None and raw < 1:
+        out.leverage = None
+        out.notes.append(f"杠杆 {raw:g} 倍低于 1 倍，按不加杠杆处理。" if zh else f"Leverage of {raw:g}x is below 1x, so I treated it as no leverage.")
+    if out.horizon_hours is not None and out.horizon_hours > MAX_HOLD_HOURS:
+        was = out.horizon_hours
+        out.horizon_hours = MAX_HOLD_HOURS
+        out.notes.append(f"持有 {was:,.0f} 小时超出历史数据能覆盖的范围，已按 30 天（720 小时）计算。" if zh
+                         else f"A hold of {was:,.0f} hours is longer than the history can speak to, so I capped it at 30 days (720 hours).")
 
 
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
@@ -303,6 +348,10 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         held, text = intake_zh.read_positions(text, {t.upper() for t in known_tickers})
     more, text = read_positions(text, known_tickers)
     out.open_positions = merge_positions(held, more)
+    neg = next((m for m in _NEG_SIZE.finditer(text) if not _LEVEL_WORD.search(text[: m.start()])), None)
+    if neg:
+        out.negative_size = True
+        text = text[: neg.start()] + " " * (neg.end() - neg.start()) + text[neg.end():]
     out.ticker = _find_ticker(text, known_tickers)
 
     short, long_ = _SHORT.search(text), _LONG.search(text)
@@ -401,7 +450,13 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         for key, value in intake_zh.read(text, {t.upper() for t in known_tickers}).items():
             if getattr(out, key) in (None, "") or (key in zh_wins and value not in (None, "")):
                 setattr(out, key, value)
-    return _settle(out)
+    _sanitize(out, text, bool(_CJK.search(text)))
+    if out.negative_size and out.notional_quote:
+        out.negative_size = False  # another amount in the message is the size; the negative one is dropped
+    _settle(out)
+    if out.negative_size and "notional_quote" in out.missing_fields:
+        out.reply = NEGATIVE_SIZE_REPLY["zh" if _CJK.search(text) else "en"]
+    return out
 
 
 def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
@@ -428,9 +483,10 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
             merged.stop_pct = merged.stop_dir = None
         merged.open_positions = merge_positions(merged.open_positions, latest.open_positions)
         for key, value in latest.as_dict().items():
-            if key in ("kind", "reply", "missing_fields", "open_positions") or value in (None, [], ""):
+            if key in ("kind", "reply", "missing_fields", "open_positions", "notes") or value in (None, [], ""):
                 continue
             setattr(merged, key, value)
+        merged.notes, merged.negative_size = latest.notes, latest.negative_size
     if merged.account_equity_quote is None and account_equity:
         merged.account_equity_quote = account_equity
     return _settle(merged)
@@ -672,6 +728,14 @@ def book_line(report: Any, lang: str = "en") -> str | None:  # noqa: ANN401
     return "".join(bits) if zh else " ".join(bits)
 
 
+def _at_rec(m: dict, zh: bool = False) -> str:
+    """The loss at the recommended size, when the report recommends a smaller one."""
+    q = m.get("loss_quote_at_recommended")
+    if q is None:
+        return ""
+    return f"（按建议仓位：约 {abs(q):,.0f} USDT）" if zh else f" (at the recommended size: about {abs(q):,.0f} USDT)"
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -823,12 +887,13 @@ def brief(report: Any, lang: str = "en") -> str:
             if zh:
                 lines.append(f"限制仓位的是{CAP_ZH.get(binding.name, binding.name.replace('_', ' '))}上限：{binding.notional:,.0f} USDT。")
             else:
-                lines.append(f"The cap that binds is {binding.name.replace('_', ' ')}: {binding.detail}.")
+                held = next((r for r in v.reasons if r.startswith("Size held at")), None)
+                lines.append(held if held else f"The cap that binds is {binding.name.replace('_', ' ')}: {binding.detail}.")
 
     # A review that only wants the trader's own words is something they can clear in one
     # message, so say how rather than printing the rule's name at them.
     plan_missing = [r for r in report.gate.rules if r.rule == "written_plan" and r.decision.value != "GO"]
-    reasons = [r for r in v.reasons if not r.startswith("written plan")]
+    reasons = [r for r in v.reasons if not r.startswith("written plan") and not r.startswith("Size held at")]
     if zh:
         # The gate's reasons are written in English; name the checks that did not pass
         # instead, which is the part a reader needs, rather than mix languages.
@@ -845,13 +910,13 @@ def brief(report: Any, lang: str = "en") -> str:
         top = [m for m in modes if m.get("loss_quote") is not None][:2]
         if top:
             lines.append("How this loses money: " + " ".join(
-                f"{m['title']} ({m.get('short') or m['mechanism']}): about {m['loss_quote']:,.0f} USDT; {m['likelihood']}."
+                f"{m['title']} ({m.get('short') or m['mechanism']}): about {m['loss_quote']:,.0f} USDT{_at_rec(m)}; {m['likelihood']}."
                 for m in top
             ))
     elif modes and zh:
         top = [m for m in modes if m.get("loss_quote") is not None][:2]
         if top:
-            lines.append("主要亏损方式：" + "；".join(f"{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT" for m in top) + "。")
+            lines.append("主要亏损方式：" + "；".join(f"{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT{_at_rec(m, True)}" for m in top) + "。")
     if report.second_opinion and report.second_opinion.against:
         against = report.second_opinion.against[0].text
         # Often the case against is the worst stress preset again, already said above; and
@@ -911,9 +976,9 @@ def brief_short(report: Any, lang: str = "en") -> str:
     if modes:
         m = modes[0]
         if zh:
-            out.append(f"最需要注意的亏损方式：{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT。")
+            out.append(f"最需要注意的亏损方式：{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT{_at_rec(m, True)}。")
         else:
-            out.append(f"The one to watch: {m['title']} ({m.get('short') or m['mechanism']}) - about {m['loss_quote']:,.0f} USDT; {m['likelihood']}.")
+            out.append(f"The one to watch: {m['title']} ({m.get('short') or m['mechanism']}) - about {m['loss_quote']:,.0f} USDT{_at_rec(m)}; {m['likelihood']}.")
     for p in (keep[2:] if not zh else keep[1:]):
         if picked.get(p):
             out.append(picked[p])

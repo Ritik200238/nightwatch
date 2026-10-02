@@ -516,3 +516,47 @@ def test_an_english_clarify_says_back_what_it_has():
     out = read_conversation([{"role": "user", "content": "thinking of holding some nvda over the weekend"}], TICKERS)
     assert out.kind == "clarify" and out.missing_fields == ["notional_quote"]
     assert out.reply.startswith("Got NVDA, long.") and "size" in out.reply
+
+
+KNOWN = ["TSLA", "AAPL", "NVDA"]
+
+
+def test_chinese_bare_kong_before_a_stock_is_a_short_with_its_leverage():
+    r = parse_message("空特斯拉5千 杠杆3倍", KNOWN)
+    assert (r.kind, r.side, r.ticker, r.notional_quote, r.leverage) == ("analyze", "short", "TSLA", 5000.0, 3.0)
+    assert parse_message("清空特斯拉", KNOWN).side is None  # clearing a position is not opening a short
+
+
+def test_chinese_bare_number_after_the_name_is_the_size():
+    r = parse_message("拿 苹果 5000 到周三", KNOWN)
+    assert (r.kind, r.side, r.ticker, r.notional_quote) == ("analyze", "long", "AAPL", 5000.0)
+    # With a price context the number is a level, not a size.
+    assert parse_message("拿苹果 止损 190", KNOWN).notional_quote is None
+
+
+def test_a_negative_size_is_asked_about_not_used():
+    for text in ("long tsla -5000", "做多特斯拉 -5000"):
+        r = parse_message(text, KNOWN)
+        assert r.kind == "clarify" and r.notional_quote is None and r.negative_size
+        assert "negative" in r.reply or "负数" in r.reply
+    assert parse_message("long TSLA - 5000", KNOWN).notional_quote == 5000.0  # a separator, not a sign
+    assert parse_message("long tsla 5k stop -3%", KNOWN).notional_quote == 5000.0
+
+
+def test_a_stop_at_zero_is_ignored_and_said():
+    for text, word in (("long tsla 5000 stop 0", "ignored the stop"), ("做多特斯拉5千 止损0", "忽略")):
+        r = parse_message(text, KNOWN)
+        assert r.stop_price is None and r.kind == "analyze" and any(word in n for n in r.notes)
+
+
+def test_leverage_below_one_is_no_leverage_and_said():
+    for text in ("long tsla 5k 0.5x", "做多特斯拉5千 杠杆0.5倍"):
+        r = parse_message(text, KNOWN)
+        assert r.leverage is None and r.notes
+
+
+def test_an_absurd_hold_is_capped_and_said_and_is_not_read_as_a_size():
+    r = parse_message("long tsla 5k for 5000 hours", KNOWN)
+    assert r.horizon_hours == 720.0 and r.notional_quote == 5000.0 and r.notes
+    assert parse_message("long tsla 5000 hours", KNOWN).notional_quote is None
+    assert parse_message("做多特斯拉5千 持有5000小时", KNOWN).horizon_hours == 720.0

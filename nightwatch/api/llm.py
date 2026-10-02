@@ -295,6 +295,13 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     # 10-60 s, so the model is asked only when the rules cannot finish the job: a message
     # they could not complete, one not in English, or a request to narrow the history.
     rules = intake.read_conversation(messages, tickers, account_equity)
+    if rules.negative_size and "notional_quote" in rules.missing_fields:
+        # "long tsla -5000": a negative size is a mistake to ask about, not a 5000 to run.
+        reply = intake.NEGATIVE_SIZE_REPLY["zh" if lang == "zh" else "en"]
+        return {
+            "intent": {**rules.as_dict(), "reply": reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
+            "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": reply, "parsed_by": "rules", "language": lang,
+        }
     fast = rules.kind == "analyze" and (rules.ticker or "").upper() in tickers and not intake.needs_the_model(latest)
     if lang == "zh" and not fast and rules.ticker and rules.missing_fields and not intake.needs_the_model(latest):
         # A Chinese message that named a stock but not the rest: the question to ask is
@@ -376,13 +383,19 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     else:
         narrative, text = intake.brief_short(report, lang), render_text(report)
         wrote = "rules"
+    # What the reader changed or ignored comes first, so it is not missed; it is written by
+    # the rules, so it is added after the numbers in the briefing have been checked.
+    unverified = unverified_numbers(narrative, text) if wrote != "rules" else []
+    if rules.notes:
+        narrative = " ".join(rules.notes) + "\n\n" + narrative
+    said = narrative
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,
         "report_text": text,
         "narrative": narrative,
-        "unverified_numbers": unverified_numbers(narrative, text) if wrote != "rules" else [],
-        "reply": narrative,
+        "unverified_numbers": unverified,
+        "reply": said,
         "parsed_by": parsed_by,
         "written_by": wrote,
         "language": lang,

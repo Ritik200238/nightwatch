@@ -26,6 +26,9 @@ _UNITS = {"十": 10, "百": 100, "千": 1_000, "万": 10_000}
 
 _SHORT = re.compile(r"做空|卖空|沽空|看空|空头|开空|空单|做淡")
 # "拿点特斯拉" is how a trader says "hold some Tesla": 拿 is a long unless it is 拿不准.
+# A bare 空 straight before a stock ("空特斯拉5千") is a short. 清空 and 落空 are not: they
+# close or miss, they do not open.
+_BARE_SHORT = re.compile(r"(?<![清落腾架天])空\s*(?=" + "|".join(sorted(map(re.escape, ALIASES_ZH), key=len, reverse=True)) + r"|[A-Za-z]{2,5})")
 _LONG = re.compile(r"做多|买入|买进|看多|多头|开多|多单|持有|拿(?!不)|入手|上车|抄底|建仓|进场|加仓|囤|买")
 # A one-word answer to "做多还是做空？".
 _BARE_SIDE = {"多": "long", "做多": "long", "多单": "long", "空": "short", "做空": "short", "空单": "short"}
@@ -50,6 +53,12 @@ _INVALID = re.compile(r"(?:如果|若|假如)(.+?)(?:就算错|就错|说明我�
 _ACCOUNT = re.compile(
     r"(?:账户|本金|资金|总资金)\s*(?:余额|规模|有|是|为)?\s*[:：]?\s*"
     r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?"
+)
+
+
+_PRICE_CONTEXT = re.compile(r"止损|止盈|价|跌破|突破|涨到|跌到|目标|%|％")
+_BARE_AFTER_NAME = re.compile(
+    "(?:" + "|".join(sorted(map(re.escape, ALIASES_ZH), key=len, reverse=True)) + r"|(?<![A-Za-z])[A-Za-z]{2,5}(?![A-Za-z]))\s*([0-9][0-9,]*(?:\.[0-9]+)?)(?![0-9.]*\s*(?:天|小时|点|个|号|月|日|倍))"
 )
 
 
@@ -198,7 +207,7 @@ def read(text: str, known: set[str]) -> dict[str, object]:
     bare = _BARE_SIDE.get(text.strip().strip("。.!！~ "))
     if bare:
         out["side"] = bare
-    elif short:
+    elif short or _BARE_SHORT.search(text):
         out["side"] = "short"
     elif long_:
         out["side"] = "long"
@@ -253,6 +262,16 @@ def read(text: str, known: set[str]) -> dict[str, object]:
             value *= 1_000
         out["notional_quote"] = value
         break
+    if "notional_quote" not in out and ticker and not _PRICE_CONTEXT.search(text):
+        # "拿 苹果 5000 到周三": a plain number right after the name, with nothing else to
+        # size the trade, is the size. Under 100 it is more likely a price or a count.
+        for m in _BARE_AFTER_NAME.finditer(text):
+            if any(a <= m.start(1) < b for a, b in spent):
+                continue
+            value = chinese_number(m.group(1))
+            if value is not None and value >= 100:
+                out["notional_quote"] = value
+                break
     day = _WEEKDAY.search(text)
     if day:
         from nightwatch.api.intake import hours_until_weekday
