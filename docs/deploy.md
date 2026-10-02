@@ -139,6 +139,7 @@ build time).
 |---|---|---|
 | `NIGHTWATCH_DATA_DIR` | `./data` | where the SQLite file lives |
 | `NIGHTWATCH_CORS` | `*` | comma-separated allowed origins for the API |
+| `NIGHTWATCH_PROXY_SECRET` | unset | set the same value on the API (compose `.env`) and in Vercel. The API then answers 403 to anything without header `x-nightwatch-proxy-secret`, except `GET /health` and the box's own 127.0.0.1 calls. Unset = check off. Also keys per-client rate limits on the real visitor IP the proxy forwards |
 | `NIGHTWATCH_LIVE_BOOK` | `1` | `0` disables live order-book fetches in the API (offline demo) |
 | `ANTHROPIC_API_KEY` | unset | enables the `/chat` language layer; everything else works without it |
 | `FRED_API_KEY` | unset | optional; FRED works unauthenticated for the CSV endpoints used |
@@ -195,3 +196,25 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
 3. A TSLA ticket on the desk returns a verdict in under 5 s after warm-up.
 4. Calibration page shows matured forecasts and the tail-adjustment table.
 5. Uptime monitor on `/health` with an alert to a phone.
+
+## Database backups and restore
+
+The recorder takes a consistent online copy of the live database every 24 hours (SQLite
+backup API, no downtime), gzips it to `/data/backups/nightwatch-YYYYMMDD.sqlite.gz` and
+keeps the newest 7. The size is logged (`docker compose logs recorder | grep backup`).
+
+Restore (stop the writers first, keep the broken file aside):
+
+```bash
+docker compose stop api recorder
+docker compose run --rm --no-deps --entrypoint sh api -c \
+  'cd /data && mv nightwatch.sqlite nightwatch.sqlite.broken; rm -f nightwatch.sqlite-wal nightwatch.sqlite-shm; gunzip -c backups/nightwatch-YYYYMMDD.sqlite.gz > nightwatch.sqlite'
+docker compose up -d
+```
+
+The backups share the data volume's disk, so copy one off the box now and then
+(`docker cp` or `scp`).
+
+Python dependencies are pinned in `requirements.lock` (pip constraints in the Dockerfile).
+Regenerate it from a known-good container with `pip freeze`, dropping the
+`nightwatch @ file:///app` line.
