@@ -290,7 +290,7 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
 class AgentJobs:
     """Agent runs in the background, one per report and language."""
 
-    def __init__(self, max_workers: int = 2, keep: int = 100):
+    def __init__(self, max_workers: int = 2, keep: int = 300):
         self._pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="agent")
         self._runs: dict[tuple[int, str], Run] = {}
         self._lock = threading.Lock()

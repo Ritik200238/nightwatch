@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from nightwatch import __version__
-from nightwatch.api import followup
+from nightwatch.api import followup, guard
 from nightwatch.api.sources import data_sources
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
@@ -47,22 +47,30 @@ log = logging.getLogger(__name__)
 # How often the idle API re-reads its cached frames so they are not swapped out.
 TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
+PAGE_CACHE_MAX = 200
+CALIBRATION_CACHE_MAX = 100
+# Query params that change what a cached page shows; anything else is not cached, so a
+# caller cannot grow the cache with made-up parameters.
+PAGE_CACHE_PARAMS = frozenset({"core", "ticker", "kind", "limit"})
 PAGE_CACHE_TTL_S = 60.0
 PAGE_CACHE_STALE_S = 6 * 3600.0  # beyond this a saved page is too old to show even while refreshing
 CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
 
 
+MAX_NOTIONAL = 10_000_000
+
+
 class PositionIn(BaseModel):
-    ticker: str
+    ticker: str = Field(max_length=32)
     side: Side = Side.LONG
-    notional_quote: float = Field(gt=0)
+    notional_quote: float = Field(gt=0, le=MAX_NOTIONAL)
 
 
 class TicketIn(BaseModel):
-    ticker: str
+    ticker: str = Field(max_length=32)
     side: Side = Side.LONG
-    notional_quote: float = Field(gt=0)
-    account_equity_quote: float | None = Field(default=None, gt=0)
+    notional_quote: float = Field(gt=0, le=MAX_NOTIONAL)
+    account_equity_quote: float | None = Field(default=None, gt=0, le=MAX_NOTIONAL * 100)
     horizon_kind: HorizonKind = HorizonKind.NEXT_OPEN
     horizon_hours: float | None = None
     entry_price: float | None = None
@@ -76,7 +84,7 @@ class TicketIn(BaseModel):
     leverage: float | None = Field(default=None, ge=1, le=125)
     as_of: datetime | None = None
     record: bool = True
-    open_positions: list[PositionIn] = Field(default_factory=list)
+    open_positions: list[PositionIn] = Field(default_factory=list, max_length=20)
     # Named conditions narrowing which past moments count as comparable. Unknown names
     # are dropped by the engine rather than rejected, so a stale client cannot 422.
     lenses: list[str] = Field(default_factory=list)
@@ -94,18 +102,18 @@ class TicketIn(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: str = Field(max_length=32)
+    content: str = Field(max_length=2000)
 
 
 class TonightIn(BaseModel):
-    positions: list[PositionIn] = Field(default_factory=list)
-    account_equity_quote: float | None = None
+    positions: list[PositionIn] = Field(default_factory=list, max_length=20)
+    account_equity_quote: float | None = Field(default=None, gt=0, le=MAX_NOTIONAL * 100)
 
 
 class ChatIn(BaseModel):
-    messages: list[ChatMessage]
-    account_equity_quote: float | None = None
+    messages: list[ChatMessage] = Field(max_length=30)
+    account_equity_quote: float | None = Field(default=None, gt=0, le=MAX_NOTIONAL * 100)
     # The report the conversation is currently about, so a question can be answered from
     # it. The desk already stores every report it produces; this is the key to one.
     context_forecast_id: int | None = None
@@ -122,6 +130,21 @@ class WatchIn(BaseModel):
     forecast_id: int
     webhook: str | None = Field(default=None, max_length=500)
     lang: str = "en"
+
+
+class _BoundedCache(dict):
+    """A dict that forgets its oldest entry past ``limit``, so a cache keyed on caller
+    input cannot grow without end."""
+
+    def __init__(self, limit: int):
+        super().__init__()
+        self._limit = limit
+
+    def __setitem__(self, key, value):  # noqa: ANN001, ANN204
+        self.pop(key, None)
+        super().__setitem__(key, value)
+        while len(self) > self._limit:
+            del self[next(iter(self))]
 
 
 class AppState:
@@ -158,7 +181,7 @@ class AppState:
         )
         self.lock = threading.Lock()  # serialises analyses that share the frame cache
         # Scoring the whole journal takes seconds; it only changes when forecasts mature.
-        self.calibration_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = {}
+        self.calibration_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = _BoundedCache(CALIBRATION_CACHE_MAX)
         self.warm_thread: threading.Thread | None = None
         self.warm_status: dict[str, Any] = {"state": "idle", "done": 0, "total": 0}
         # A what-if is a report the trader did not ask the desk to stand behind, so it is
@@ -445,6 +468,30 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     app = FastAPI(title="Nightwatch", version=__version__, lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("NIGHTWATCH_CORS", "*").split(","), allow_methods=["*"], allow_headers=["*"])
 
+    limiter = guard.RateLimiter()
+
+    @app.middleware("http")
+    async def protect(request: Request, call_next):  # noqa: ANN001, ANN202
+        """Proxy secret first, then the per-client rate limit (see nightwatch.api.guard)."""
+        method, path = request.method, request.url.path
+        peer = request.client.host if request.client else ""
+        local = guard.is_local(peer)
+        secret = guard.proxy_secret()
+        trusted = bool(secret) and guard.secret_ok(request.headers, secret)
+        if secret and not trusted and not local and not (method in ("GET", "HEAD") and path == "/health"):
+            return JSONResponse({"detail": "forbidden"}, status_code=403)
+        if local or method == "OPTIONS":
+            return await call_next(request)
+        if trusted and request.headers.get("x-nw-internal") == "1":
+            return await call_next(request)  # our own checks; only believed with the secret
+        rule = guard.rule_for(method, path)
+        if rule is not None:
+            client = (request.headers.get(guard.CLIENT_IP_HEADER, "").strip() if trusted else "") or peer
+            wait = limiter.take(rule[0], client[:64], rule[1], rule[2])
+            if wait > 0:
+                return JSONResponse({"detail": "Too many requests. Please wait a moment and try again."}, status_code=429, headers={"Retry-After": str(max(1, int(wait + 0.999)))})
+        return await call_next(request)
+
     # The read-only pages a judge opens first each recompute from the database in 2-7 s on
     # a cold box. They change slowly, so a successful answer is kept for a minute and the
     # warm-up fills them before anyone asks (AppState.warm_pages).
@@ -478,6 +525,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # these pages, and keyed on them every visitor got a cold, uncached page.
         query = "&".join(f"{k}={v}" for k, v in sorted(request.query_params.multi_items()) if not k.startswith("nw_"))
         key = path + "?" + query
+        cacheable = all(k.startswith("nw_") or k in PAGE_CACHE_PARAMS for k in request.query_params)
         hit = page_cache.get(key)
         refreshing = request.headers.get("x-nw-refresh") == "1"
         if hit and not refreshing:
@@ -492,7 +540,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if response.status_code != 200:
             return response
         body = b"".join([chunk async for chunk in response.body_iterator])
-        page_cache[key] = (time.monotonic(), body, response.media_type or "application/json")
+        if cacheable:
+            page_cache.pop(key, None)
+            page_cache[key] = (time.monotonic(), body, response.media_type or "application/json")
+            while len(page_cache) > PAGE_CACHE_MAX:
+                page_cache.pop(next(iter(page_cache)))
         return Response(body, status_code=200, media_type=response.media_type or "application/json", headers={"x-nightwatch-cache": "miss"})
 
     def st() -> AppState:
