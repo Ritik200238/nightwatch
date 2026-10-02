@@ -80,6 +80,11 @@ def _usd(v: float | None) -> str:
     return "n/a" if v is None else f"{v:,.0f}"
 
 
+def _word(v: Any) -> str:  # noqa: ANN401
+    """A verdict or cap code as the words a trader reads: REDUCE_TO -> REDUCE TO."""
+    return str(v).replace("_", " ")
+
+
 def _summarise_report(p: dict[str, Any]) -> str:
     v = p.get("verdict") or {}
     ph = p.get("primary_horizon")
@@ -87,13 +92,22 @@ def _summarise_report(p: dict[str, Any]) -> str:
     p5 = analyst._loss_p5(h)  # noqa: SLF001
     st = p.get("stress") or {}
     rows = [(a, b) for a, b in zip(st.get("presets") or [], st.get("impacts") or [], strict=False) if b.get("total_pnl_quote") is not None]
-    bits = [f"verdict {v.get('verdict')}", f"size {_usd(v.get('recommended_notional') or 0)} USDT"]
+    bits = [f"verdict {_word(v.get('verdict'))}", f"size {_usd(v.get('recommended_notional') or 0)} USDT"]
     if p5 is not None:
-        bits.append(f"loss_p5_pct (one-in-twenty loss) {p5:+.1f}%")
+        bits.append(f"one-in-twenty loss {p5:+.1f}%")
     if rows:
         a, b = min(rows, key=lambda x: x[1]["total_pnl_quote"])
         bits.append(f"worst stress {a['name']} {_usd(b['total_pnl_quote'])} USDT")
     return ", ".join(bits)
+
+
+class NoOpCall(ValueError):
+    """A call that would only re-run the ticket as it stands. Refused, and not counted as a check."""
+
+
+# Refusals that do not use up one of the checks; past this they do, so a model that keeps
+# asking for the same thing still reaches the end.
+MAX_FREE_REFUSALS = 2
 
 
 def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:  # noqa: ANN401
@@ -122,16 +136,19 @@ def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:
     t = report.get("ticket") or {}
     # A weekend ticket is stored as an hours hold with a weekend label.
     weekend_now = "weekend" in str(((t.get("extra") or {}) if isinstance(t.get("extra"), dict) else {}).get("horizon_label") or "")
-    same = ((change.side is None or change.side == t.get("side"))
-            # Hours only matter for an "hours" hold: "next_open, 6 h" is still the next-open hold.
-            and (change.horizon_kind is None or (change.horizon_kind == "through_weekend" and weekend_now)
-                 or (change.horizon_kind == t.get("horizon_kind")
-                                                 and (change.horizon_kind != "hours" or change.horizon_hours in (None, t.get("horizon_hours")))))
-            and (change.notional_quote is None or abs(change.notional_quote - float(t.get("notional_quote") or 0)) < 1)
-            and (change.leverage is None or change.leverage == (t.get("leverage") or 1.0))
-            and not change.lenses)
+    side_eq = change.side is not None and change.side == t.get("side")
+    # Hours only matter for an "hours" hold: "next_open, 6 h" is still the next-open hold.
+    hold_eq = change.horizon_kind is not None and (
+        (change.horizon_kind == "through_weekend" and weekend_now)
+        or (change.horizon_kind == t.get("horizon_kind") and (change.horizon_kind != "hours" or change.horizon_hours in (None, t.get("horizon_hours")))))
+    size_eq = change.notional_quote is not None and abs(change.notional_quote - float(t.get("notional_quote") or 0)) < 1
+    lev_eq = change.leverage is not None and change.leverage == (t.get("leverage") or 1.0)
+    same = ((change.side is None or side_eq) and (change.horizon_kind is None or hold_eq)
+            and (change.notional_quote is None or size_eq) and (change.leverage is None or lev_eq) and not change.lenses)
     if same:
-        raise ValueError("that is the trade as it already stands; change something that is different from the ticket")
+        equal = [name for name, hit in (("side", side_eq), ("hold", hold_eq), ("size", size_eq), ("leverage", lev_eq)) if hit]
+        raise NoOpCall("that is the trade as it already stands" + (f" (the {', '.join(equal)} you gave equal the ticket's)" if equal else "")
+                       + "; change something that is different from the ticket")
     with state.lock:
         payload = analyze(state.ctx, change.apply_to(base, entry=((report.get("snapshot") or {}).get("prices") or {}).get("spot_close")), as_of=whatif.as_of_of(report), record=False).to_dict()
     return f"Change: {change.describe()}. Result: {_summarise_report(payload)}."
@@ -157,7 +174,7 @@ def tool_safest_ways(state: Any, report: dict[str, Any], _args: dict[str, Any]) 
         raise ValueError("could not run the alternatives")
     lines = []
     for x in out.get("ways") or []:
-        bit = f"{x['label']}: {x['verdict']} at {_usd(x['size'])} USDT"
+        bit = f"{x['label']}: {_word(x['verdict'])} at {_usd(x['size'])} USDT"
         if x.get("p5_quote") is not None:
             bit += f", one-in-twenty loss {_usd(x['p5_quote'])} USDT ({x['p5_pct']:+.1f}%)"
         if x.get("worst_quote") is not None:
@@ -232,9 +249,10 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
     system = SYSTEM_ZH if lang == "zh" else SYSTEM_EN
     t0 = time.time()
     bad = 0
+    free_refusals = 0
     try:
         while True:
-            calls = len(run.steps)
+            calls = sum(1 for x in run.steps if not x.get("refused"))
             wrap_up = calls >= max_calls or time.time() - t0 > budget_s
             user = f"{TOOLS_DOC}\nFACT SHEET\n\n{sheet}\n"
             if transcript:
@@ -264,11 +282,17 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             name = obj.get("tool")
             args = obj.get("args") if isinstance(obj.get("args"), dict) else {}
             ts = time.time()
+            refused = False
             if name not in TOOLS:
                 text, ok = f"unknown tool '{name}'; use one of {', '.join(TOOLS)}", False
             else:
                 try:
                     text, ok = TOOLS[name](state, report, args), True
+                except NoOpCall as exc:
+                    text, ok = f"error: {exc}", False
+                    if free_refusals < MAX_FREE_REFUSALS:
+                        free_refusals += 1
+                        refused = True
                 except Exception as exc:  # noqa: BLE001 - a bad call is a result the model can read
                     log.info("agent tool %s failed: %s", name, exc)
                     text, ok = f"error: {exc}", False
@@ -276,11 +300,12 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             run.removed += nrm
             if ok:
                 results.append(f"[{SECTION[name]}] {_compact(text)}")
-                transcript.append(f"{calls + 1}. [thought: {thought}] {name} {json.dumps(args, ensure_ascii=False)} ->\n{results[-1]}")
+                transcript.append(f"{len(run.steps) + 1}. [thought: {thought}] {name} {json.dumps(args, ensure_ascii=False)} ->\n{results[-1]}")
             else:
-                transcript.append(f"{calls + 1}. {name} {json.dumps(args, ensure_ascii=False)} -> {text}")
-            run.steps.append({"n": calls + 1, "thought": thought, "tool": name, "args": args,
-                              "result_summary": _compact(text, 400), "seconds": round(time.time() - ts, 1)})
+                transcript.append(f"{len(run.steps) + 1}. {name} {json.dumps(args, ensure_ascii=False)} -> {text}")
+            run.steps.append({"n": len(run.steps) + 1, "thought": thought, "tool": name, "args": args,
+                              "result_summary": _compact(text, 400), "seconds": round(time.time() - ts, 1),
+                              **({"refused": True} if refused else {})})
     except Exception as exc:  # noqa: BLE001 - a failed agent keeps the steps it completed
         log.exception("stress-test agent failed")
         run.status, run.error = "failed", str(exc)[:200]

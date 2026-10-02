@@ -198,3 +198,38 @@ def test_through_the_weekend_on_a_weekend_ticket_is_the_same_trade():
                          "extra": {"horizon_label": "through the weekend, to the next open after it"}}}
     with _pytest.raises(ValueError, match="as it already stands"):
         agent_mod.tool_rerun(None, report, {"horizon_kind": "through_weekend"})
+
+
+def _noop(s, r, a):  # noqa: ANN001, ANN202
+    raise agent.NoOpCall("that is the trade as it already stands; change something")
+
+
+def test_two_refused_no_ops_do_not_use_up_a_check(monkeypatch):
+    monkeypatch.setitem(agent.TOOLS, "rerun", _noop)
+    monkeypatch.setitem(agent.TOOLS, "explain", lambda s, r, a: "ok")
+    run = _run([_call("rerun", {"side": "long"}), _call("rerun", {"side": "long"})] + [_call("explain", {"kind": "why"})] * 5 + [DONE])
+    assert run.status == "done"
+    assert [s["n"] for s in run.steps] == list(range(1, 8))
+    assert sum(1 for s in run.steps if s.get("refused")) == 2
+    assert sum(1 for s in run.steps if not s.get("refused")) == agent.MAX_CALLS
+
+
+def test_a_third_refusal_counts_so_the_loop_still_ends(monkeypatch):
+    monkeypatch.setitem(agent.TOOLS, "rerun", _noop)
+    run = _run([_call("rerun", {"side": "long"})] * 8)
+    assert sum(1 for s in run.steps if s.get("refused")) == 2
+    assert len(run.steps) == agent.MAX_CALLS + 2
+
+
+def test_the_refusal_names_which_fields_equal_the_ticket():
+    report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 20000.0, "horizon_kind": "next_open", "horizon_hours": None}}
+    with pytest.raises(agent.NoOpCall, match=r"the side, size you gave equal the ticket"):
+        agent.tool_rerun(None, report, {"side": "long", "notional_quote": 20000})
+
+
+def test_a_result_summary_uses_words_not_identifiers():
+    payload = {"verdict": {"verdict": "REDUCE_TO", "recommended_notional": 5000.0}, "primary_horizon": "24h",
+               "analog": {"horizons": {"24h": {"loss_p5_pct": -4.2}}}, "stress": {"presets": [], "impacts": []}}
+    text = agent._summarise_report(payload)
+    assert "REDUCE TO" in text and "REDUCE_TO" not in text
+    assert "loss_p5_pct" not in text and "one-in-twenty loss -4.2%" in text

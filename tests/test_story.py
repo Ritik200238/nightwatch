@@ -118,3 +118,15 @@ def test_failure_mode_loss_is_at_the_requested_size_with_the_recommended_beside_
     m = FailureMode("gap_bad", "t", "x", "y", -1000.0, -10.0, "l", "s")
     assert m.loss_quote_at_recommended is None
     assert replace(m, loss_quote_at_recommended=-200.0).to_dict()["loss_quote_at_recommended"] == -200.0
+
+
+def test_the_report_payload_carries_chinese_names_for_failure_modes_and_presets():
+    from nightwatch.pipeline.analyze import _add_zh_names
+
+    out = {"failure_modes": [{"key": "halt", "title": "Stuck for 24 hours"}, {"key": "nope", "title": "x"}],
+           "stress": {"presets": [{"id": "closed_window_gap_p95", "name": "Closed-window gap, 95th percentile"},
+                                  {"id": "replay_covid_2020", "name": "Replay: COVID crash"}]}}
+    _add_zh_names(out)
+    assert out["failure_modes"][0]["title_zh"] == "24 小时无法平仓" and "title_zh" not in out["failure_modes"][1]
+    assert out["stress"]["presets"][0]["name_zh"].startswith("休市期间跳空")
+    assert "2020" in out["stress"]["presets"][1]["name_zh"]

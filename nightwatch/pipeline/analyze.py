@@ -601,7 +601,25 @@ class AnalysisReport:
     receipt: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return _serialise(self)
+        out = _serialise(self)
+        _add_zh_names(out)
+        return out
+
+
+def _add_zh_names(out: dict[str, Any]) -> None:
+    """Chinese names for failure modes and stress presets, from the maps the chat uses,
+    so the report page shows the same words the briefing does."""
+    try:
+        from nightwatch.api.intake import FAILURE_ZH, preset_zh
+
+        for m in out.get("failure_modes") or []:
+            if isinstance(m, dict) and m.get("key") in FAILURE_ZH:
+                m["title_zh"] = FAILURE_ZH[m["key"]]
+        for p in ((out.get("stress") or {}).get("presets")) or []:
+            if isinstance(p, dict) and p.get("id") and p.get("name"):
+                p["name_zh"] = preset_zh(p["id"], p["name"])
+    except Exception:  # noqa: BLE001 - a translation must never break a report
+        log.exception("zh names failed")
 
 
 # --------------------------------------------------------------------- analyse
