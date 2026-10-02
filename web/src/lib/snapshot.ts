@@ -41,6 +41,38 @@ export function snapshotNotice(iso: string): string {
   return `The live server is unreachable right now; this is a saved example from ${iso}, not an answer to your trade.`;
 }
 
+const ISO_TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?/g;
+
+/** An ISO time as a person reads it, in their locale; the text unchanged if it is not a date. */
+export function readableTime(iso: string, locale?: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** The first ISO time in a sentence, or "" when there is none. */
+export function isoIn(text: string): string {
+  return text.match(ISO_TIME)?.[0] ?? "";
+}
+
+/** Every ISO timestamp in a sentence, rewritten as a readable time in the reader's locale. */
+export function readableTimes(text: string, locale?: string): string {
+  return text.replace(ISO_TIME, (m) => readableTime(m, locale));
+}
+
+/** The notice shown in the chat for a saved answer, in the reader's language. */
+export function snapshotNoticeFor(iso: string, lang: "en" | "zh"): string {
+  const when = readableTime(iso, lang === "zh" ? "zh-CN" : undefined);
+  return lang === "zh"
+    ? `实时服务器暂时无法连接；下面是保存于 ${when} 的示例，不是对你这笔交易的回答。`
+    : `The live server is unreachable right now; the example is a saved one from ${when}, not an answer to your trade.`;
+}
+
+/** True for an answer the proxy served from its saved copy. Such an answer is never a result. */
+export function isSnapshotAnswer(res: { intent?: { kind?: string } | null }, headerIso: string | null): boolean {
+  return res.intent?.kind === "snapshot" || headerIso !== null;
+}
+
 /** Body for a POST /chat or /analyze served from the snapshot, or null if none saved. */
 export function snapshotPost(data: SnapshotData | null, path: string, requestBody: string): unknown | null {
   if (!data) return null;

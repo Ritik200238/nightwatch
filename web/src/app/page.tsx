@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang } from "@/lib/lang";
 import { scrollIntoViewOnSmall } from "@/lib/scroll";
+import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
 import { ApiError, api, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 
@@ -92,7 +93,14 @@ export default function DeskPage() {
     scrollIntoViewOnSmall(resultRef.current);
     try {
       // The book travels with the ticket so the report can judge both.
-      setReport(await api.analyze({ ...ticket, open_positions: positions }));
+      const got = await api.analyze({ ...ticket, open_positions: positions });
+      if (snapshotFlag.get() !== null) {
+        // The proxy answered from its saved copy because the live server is down. That is an
+        // example, not this trade, so it is said in words and the report on screen stays.
+        setError(snapshotNoticeFor(snapshotFlag.get() as string, lang));
+      } else {
+        setReport(got);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : tx("The analysis failed.", "分析失败。"));
     } finally {
@@ -214,7 +222,7 @@ export default function DeskPage() {
               {/* The time is formatted in the reader's locale and zone, which the server cannot know;
                   React is told the difference is expected rather than re-rendering the page. */}
               <p className="text-sm text-muted-foreground" suppressHydrationWarning>
-                {tx(`Example from ${new Date(snapshot!.generated_at).toLocaleString()} — press to run it live now`, `示例，生成于 ${new Date(snapshot!.generated_at).toLocaleString()} — 点击立即实时运行`)}
+                {tx(`Example from ${readableTime(snapshot!.generated_at)} — press to run it live now`, `示例，生成于 ${readableTime(snapshot!.generated_at, "zh-CN")} — 点击立即实时运行`)}
               </p>
               <Button size="sm" disabled={busy || !universe} onClick={() => void run(demoTicket())}>
                 {tx("Run this trade live", "实时运行这笔交易")}
