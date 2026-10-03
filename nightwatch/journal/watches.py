@@ -2,7 +2,8 @@
 
 A visitor asks for it on a stored report; the recorder finds watches whose time has come,
 re-runs the desk on the rebuilt ticket (not journaled, like a what-if: nobody took it) and
-keeps the verdict before and after. A webhook, if given, gets a short JSON POST.
+keeps the verdict before and after. A webhook, if given, gets a short JSON POST; a
+``tg:<chat id>`` target gets the same news as a Telegram message (journal.telegram).
 Email is not implemented.
 
 The re-check runs 15 minutes after the bell, not at it, so the last bars have landed.
@@ -162,7 +163,15 @@ def _moved(b: dict[str, Any], a: dict[str, Any]) -> bool:
     return b.get("verdict") != a.get("verdict") or abs((b.get("recommended_notional") or 0) - (a.get("recommended_notional") or 0)) > 1
 
 
-def _notify(url: str, body: dict[str, Any]) -> str:
+def _notify(url: str, body: dict[str, Any], lang: str = "en") -> str:
+    """Deliver an alert: to a Telegram chat when the target is ``tg:<chat id>``, else a
+    JSON POST to the https webhook."""
+    from nightwatch.journal import telegram
+
+    chat = telegram.chat_id_of(url)
+    if chat is not None:
+        text = telegram.format_tripwire(body, lang) if "tripwire_id" in body else telegram.format_watch(body, lang)
+        return telegram.send_message(chat, text)
     import httpx
 
     try:
@@ -183,8 +192,8 @@ def run_due(
     """Re-check every watch whose time has come. ``rerun(stored_report)`` returns the new
     report dict. Returns how many were finished (done or failed)."""
     now_ms = to_epoch_ms(now or utc_now())
-    due = conn.execute("SELECT id, forecast_id, webhook, before FROM watches WHERE status='pending' AND due_at<=?", (now_ms,)).fetchall()
-    for wid, fid, hook, before_json in due:
+    due = conn.execute("SELECT id, forecast_id, webhook, before, lang FROM watches WHERE status='pending' AND due_at<=?", (now_ms,)).fetchall()
+    for wid, fid, hook, before_json, lang in due:
         after: dict[str, Any] | None = None
         err: str | None = None
         try:
@@ -198,7 +207,7 @@ def run_due(
         hook_status = None
         if hook and after is not None:
             before = json.loads(before_json)
-            hook_status = _notify(hook, {"watch_id": wid, "forecast_id": fid, "before": before, "after": after, "moved": _moved(before, after)})
+            hook_status = _notify(hook, {"watch_id": wid, "forecast_id": fid, "before": before, "after": after, "moved": _moved(before, after)}, lang)
         with conn:
             conn.execute(
                 "UPDATE watches SET status=?, after=?, done_at=?, error=?, webhook_status=? WHERE id=?",
