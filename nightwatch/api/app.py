@@ -478,9 +478,16 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         app.state.nw = state
         if warm:
             state.start_warm()
+        # The Telegram bot lives in this process (it needs the desk); a no-op without
+        # TELEGRAM_BOT_TOKEN. It shares the chat code and the rate limiter with the web.
+        from nightwatch.api import telegram_bot
+
+        app.state.telegram = telegram_bot.start_if_configured(state, _telegram_chat, limiter)
         try:
             yield
         finally:
+            if app.state.telegram is not None:
+                app.state.telegram.stop()
             state.close()
 
     app = FastAPI(title="Nightwatch", version=__version__, lifespan=lifespan)
@@ -1218,6 +1225,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if got is None:
             raise HTTPException(404, "No such tripwire.")
         return got
+
+    def _telegram_chat(messages: list[dict[str, str]], context_id: int | None) -> dict[str, Any]:
+        """The web chat's own turn, for the Telegram bot: same intake, same follow-ups."""
+        return _chat(ChatIn(messages=[ChatMessage(**m) for m in messages], context_forecast_id=context_id))
 
     def _chat(body: ChatIn) -> dict[str, Any]:
         """Talk to the desk in plain language.
