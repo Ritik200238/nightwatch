@@ -100,3 +100,15 @@ def test_the_endpoint_speaks_http(monkeypatch):
         assert r.status_code == 200 and r.json()["result"]["tools"]
         assert c.post("/mcp", json={"jsonrpc": "2.0", "method": "notifications/initialized"}).status_code == 202
         assert c.get("/mcp").status_code == 405
+
+
+def test_holdings_give_the_agent_the_whole_book(state):
+    r = rpc(state, "tools/call", {"name": "stress_test", "arguments": {
+        "ticker": "TSLA", "side": "long", "notional_usdt": 20_000, "account_equity_usdt": 100_000,
+        "holdings": [{"ticker": "TSLA", "side": "long", "notional_usdt": 60_000}, {"ticker": "NVDA", "side": "long", "notional_usdt": 40_000}]}})["result"]
+    assert r["isError"] is False
+    b = r["structuredContent"]["book"]
+    assert b["tail_loss_before"] is not None and b["tail_loss_after"] is not None and b["windows"]
+    assert b["limit"] == 4_000.0 and isinstance(b["crash_replays"], list)
+    bad = rpc(state, "tools/call", {"name": "stress_test", "arguments": {"ticker": "TSLA", "side": "long", "notional_usdt": 1, "holdings": [{"ticker": "X", "side": "up", "notional_usdt": 5}]}})["result"]
+    assert bad["isError"] is True

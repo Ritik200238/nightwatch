@@ -701,6 +701,65 @@ export interface PortfolioReport {
   book_cap_quote: number | null;
   book_cap_pct_of_equity: number | null;
   book_cap_binds: boolean;
+  /** Whole-book crash replays, rebalance plans and reverse stress. Absent when the book could not be measured. */
+  stress?: BookStress | null;
+}
+
+export interface BookScore {
+  tail_quote: number;
+  tail_pct_of_equity: number | null;
+  worst_window_quote: number;
+  worst_crash_quote: number | null;
+  worst_crash_name: string | null;
+  inside_limit: boolean | null;
+}
+
+export interface RebalancePlan {
+  lever: "smaller_trade" | "skip_trade" | "trim_holding" | "hedge_perp";
+  ticker: string;
+  amount_quote: number;
+  fraction: number | null;
+  cost_quote: number;
+  before: BookScore;
+  after: BookScore;
+  achieves_limit: boolean;
+  detail: string;
+  notes: string[];
+}
+
+export interface BookCrash {
+  key: string;
+  name: string;
+  date: string | null;
+  held_quote: number | null;
+  asked_quote: number | null;
+  worst_ticker: string | null;
+  missing: string[];
+}
+
+export interface BookReverseLevel {
+  key: "limit" | "ten_pct";
+  loss_quote: number;
+  loss_pct_of_equity: number;
+  shock_pct_before: number | null;
+  shock_pct_after: number | null;
+  windows_hit_before: number;
+  windows_hit_after: number;
+}
+
+export interface BookStress {
+  limit_quote: number | null;
+  limit_pct_of_equity: number | null;
+  breached: boolean | null;
+  book_alone_over_limit: boolean;
+  windows: number;
+  direction: "down" | "up" | null;
+  asked_score: BookScore | null;
+  crashes: BookCrash[];
+  plans: RebalancePlan[];
+  reverse: BookReverseLevel[];
+  liquidation: { ticker: string; leverage: number; distance_pct: number; windows_hit: number; windows: number; comes_before_limit: boolean | null } | null;
+  notes: string[];
 }
 
 export interface Regime {

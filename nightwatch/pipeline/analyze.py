@@ -859,6 +859,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             book_cap_pct_of_equity=ctx.sizing_policy.max_book_tail_pct_of_equity if cap else None,
             book_cap_binds=bool(cap and sizing.binding_cap == "book_tail"),
         )
+        portfolio = replace(portfolio, stress=_book_stress(ctx, ticket, book_built[0], held, fees, horizon_h, lev_view))
 
     # 10. Sensitivity: what would have to change.
     t0 = time.perf_counter()
@@ -1414,6 +1415,32 @@ def _primary_p5(analog: AnalogSection | None, primary: str) -> float | None:
 
 def _ms(t0: float) -> int:
     return int((time.perf_counter() - t0) * 1000)
+
+
+def _book_stress(ctx: AnalysisContext, ticket: TradeTicket, model: Any, held: list[BookPosition], fees: dict[str, float], horizon_h: float, lev_view: Any) -> Any:  # noqa: ANN401
+    """Crash replays, rebalance plans and reverse stress for the whole book; never breaks a report."""
+    t0 = time.perf_counter()
+    try:
+        from nightwatch.decision import book_plans
+
+        perps: set[str] = set()
+        for name in {p.ticker for p in held} | {ticket.ticker}:
+            try:
+                if ctx.spec(name).perp_symbol:
+                    perps.add(name)
+            except Exception:  # noqa: BLE001 - a name outside the universe simply cannot be hedged
+                continue
+        out = book_plans.build(
+            model, held, BookPosition(ticket.ticker, ticket.side.value, ticket.notional_quote),
+            equity=ticket.account_equity_quote, limit_pct_of_equity=ctx.sizing_policy.max_book_tail_pct_of_equity,
+            horizon_h=horizon_h, perp_names=perps, spot_taker=fees["spot_taker"], perp_taker=fees["perp_taker"],
+            leverage=lev_view.to_dict() if lev_view is not None else None,
+        )
+        log.debug("book stress took %d ms", _ms(t0))
+        return out
+    except Exception:  # noqa: BLE001 - the plans are an extra; the verdict does not wait on them
+        log.exception("book stress failed")
+        return None
 
 
 def _serialise(obj: Any) -> Any:

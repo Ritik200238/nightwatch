@@ -57,6 +57,11 @@ TOOLS: list[dict[str, Any]] = [
                 "account_equity_usdt": {"type": "number", "exclusiveMinimum": 0},
                 "thesis": {"type": "string", "description": "Why the trade; the desk's gate wants a written plan"},
                 "invalidation": {"type": "string", "description": "What would prove the idea wrong"},
+                "holdings": {"type": "array", "maxItems": 12,
+                             "description": "What you already hold. With account_equity_usdt the report measures the whole book (one-in-twenty loss, crash replays, rebalance plans if it breaches its limit, reverse stress)",
+                             "items": {"type": "object", "properties": {"ticker": {"type": "string"}, "side": {"type": "string", "enum": ["long", "short"]},
+                                                                          "notional_usdt": {"type": "number", "exclusiveMinimum": 0}},
+                                       "required": ["ticker", "side", "notional_usdt"], "additionalProperties": False}},
                 "conditions": {"type": "array", "items": {"type": "string"}, "description": "Names from list_conditions"},
             },
             "required": ["ticker", "side", "notional_usdt"],
@@ -129,9 +134,18 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
     hours = args.get("hours")
     if hold == "hours" and not (isinstance(hours, int | float) and hours > 0):
         raise ToolError("hours must be a positive number when hold is 'hours'")
+    held: list[tuple[str, str, float]] = []
+    for h in list(args.get("holdings") or [])[:12]:
+        try:
+            ht, hs, hn = str(h["ticker"]).upper().strip(), str(h["side"]).lower(), float(h["notional_usdt"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ToolError("each holding needs ticker, side and notional_usdt") from exc
+        if hs not in ("long", "short") or hn <= 0:
+            raise ToolError("each holding needs side long or short and a positive notional_usdt")
+        held.append((ht, hs, hn))
     try:
         ticket = TradeTicket(
-            ticker=ticker, side=Side(side), notional_quote=notional,
+            ticker=ticker, side=Side(side), open_positions=tuple(held), notional_quote=notional,
             account_equity_quote=args.get("account_equity_usdt"),
             horizon_kind=HorizonKind(hold), horizon_hours=float(hours) if hold == "hours" else None,
             stop_price=args.get("stop_price"), thesis=str(args.get("thesis") or ""), invalidation=str(args.get("invalidation") or ""),
@@ -157,12 +171,29 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
                     "scope": a.get("scope"), "narrowed_to": ((a.get("lens") or {}).get("description") or None)},
         "exit_cost_bps": ((payload.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"),
         "leverage": {k: (payload.get("leverage") or {}).get(k) for k in ("leverage", "liquidation_price", "liquidation_distance_pct", "analog_hits", "analog_of", "mc_share", "presets_hit")} if payload.get("leverage") else None,
+        "book": _book_summary(payload.get("portfolio")),
         "warnings": payload.get("warnings", []),
         "as_of": payload.get("as_of"),
         "provenance": payload.get("provenance"),
         "report_url": "https://nightwatch-gules.vercel.app",
     }
     return _text_result(brief(report), summary)
+
+
+def _book_summary(port: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The whole-book numbers an agent can act on: tail before/after, crashes, plans, reverse stress."""
+    if not port:
+        return None
+    st = port.get("stress") or {}
+    return {
+        "tail_loss_before": (port.get("before") or {}).get("tail_loss_quote"), "tail_loss_after": (port.get("after") or {}).get("tail_loss_quote"),
+        "windows": port.get("windows"), "limit": st.get("limit_quote"), "breached": st.get("breached"),
+        "crash_replays": [{"name": c["name"], "date": c.get("date"), "held": c.get("held_quote"), "with_trade": c.get("asked_quote"), "worst_ticker": c.get("worst_ticker")} for c in st.get("crashes") or []],
+        "rebalance_plans": [{"lever": p["lever"], "ticker": p["ticker"], "amount": p["amount_quote"], "cost": p["cost_quote"], "achieves_limit": p["achieves_limit"],
+                             "detail": p["detail"], "tail_before": p["before"]["tail_quote"], "tail_after": p["after"]["tail_quote"],
+                             "worst_crash_before": p["before"].get("worst_crash_quote"), "worst_crash_after": p["after"].get("worst_crash_quote")} for p in st.get("plans") or []],
+        "reverse_stress": st.get("reverse"), "liquidation": st.get("liquidation"),
+    }
 
 
 def _list_conditions(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
