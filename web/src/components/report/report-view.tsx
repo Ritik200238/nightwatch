@@ -15,7 +15,7 @@ import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
+import { type AnalystTake, api, type ClosedHoursLine, type Report, type TicketInput } from "@/lib/api";
 import { fmtBps, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
 import { breakerReason, capDetail, plainReason, plainText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
@@ -879,6 +879,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           <p className="text-sm text-muted-foreground">{L("No order book was available, so exit cost is unknown. Start the recorder or allow live book fetches.", "没有可用的盘口数据，所以平仓成本未知。请启动记录器，或允许实时获取盘口。")}</p>
         )}
         <LiquidityByTimeOfWeek report={report} lang={lang} />
+        <ClosedHoursNote report={report} lang={lang} />
       </Section>
 
       {/* Gate + caps */}
@@ -1431,6 +1432,45 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
 }
 
 /** The recorded archive: is the book always this good, or only right now? */
+/** One measured line about the hours the US market is shut, from the committed closed-hours
+ *  study (/studies). Fetched on its own so the report, which is hashed and journaled, is not
+ *  changed by a number that is re-measured; absent if the study has nothing for this token. */
+function ClosedHoursNote({ report, lang }: { report: Report; lang: Lang }) {
+  const L = tr(lang);
+  const [d, setD] = useState<ClosedHoursLine | null>(null);
+  const ticker = report.ticket.ticker;
+  useEffect(() => {
+    let live = true;
+    api
+      .closedHours(ticker)
+      .then((r) => live && setD(r))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [ticker]);
+  const n = d?.numbers;
+  if (!n) return null;
+  const kept = n.weekend_slope_open;
+  const band = n.closed_share_lo != null && n.closed_share_hi != null ? ` (${n.closed_share_lo.toFixed(0)}–${n.closed_share_hi.toFixed(0)}%)` : "";
+  const keptBand = n.weekend_slope_lo != null && n.weekend_slope_hi != null ? ` (${(100 * n.weekend_slope_lo).toFixed(0)}–${(100 * n.weekend_slope_hi).toFixed(0)}%)` : "";
+  return (
+    <p className="mt-4 text-[13px] text-muted-foreground">
+      {L(
+        `This token made ${n.closed_share_pct.toFixed(0)}%${band} of its price movement (by variance) while the US market was shut, which is ${n.time_share_pct.toFixed(0)}% of the clock (n=${n.n_windows.toLocaleString()} windows).${
+          kept != null && n.n_weekends ? ` Across ${n.n_weekends} weekends, Monday's stock open kept ${(100 * kept).toFixed(0)}%${keptBand} of the token's Friday-to-Monday-04:00 move on average; a figure under 100% is partly noise in the token's price.` : ""
+        } `,
+        `该代币在美国市场休市期间完成了其价格波动（按方差）的 ${n.closed_share_pct.toFixed(0)}%${band}，而休市占时间的 ${n.time_share_pct.toFixed(0)}%（n=${n.n_windows.toLocaleString()} 个窗口）。${
+          kept != null && n.n_weekends ? `在 ${n.n_weekends} 个周末里，周一股票开盘平均保留了代币从周五到周一 04:00 涨跌的 ${(100 * kept).toFixed(0)}%${keptBand}；低于 100% 的部分原因是代币价格本身的噪声。` : ""
+        }`,
+      )}
+      <Link href="/studies" className="underline underline-offset-2">
+        {L("How this was measured", "测量方法")}
+      </Link>
+    </p>
+  );
+}
+
 function LiquidityByTimeOfWeek({ report, lang }: { report: Report; lang: Lang }) {
   const L = tr(lang);
   const h = report.execution.liquidity_history;
