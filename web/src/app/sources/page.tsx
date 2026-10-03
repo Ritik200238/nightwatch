@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api, type DataSource } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
+import { LoadingRecord, PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
 
 /** Every feed behind a report: what it is, how often it is pulled, when it last was. */
@@ -20,18 +21,15 @@ export default function SourcesPage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight">{tx("Data sources", "数据来源")}</h1>
-        <p className="text-sm text-muted-foreground">{tx("Every number in a report comes from one of these feeds. Nothing is typed in by hand.", "报告里的每个数字都来自下面这些数据源，没有任何手工填写。")}</p>
-      </div>
+    <div className={`${PROOF_WIDTH} space-y-4`}>
+      <PageHead title={tx("Data sources", "数据来源")} intro={tx("Every number in a report comes from one of these feeds. Nothing is typed in by hand.", "报告里的每个数字都来自下面这些数据源，没有任何手工填写。")} />
       {error ? (
         <p className="text-sm text-destructive">
           {tx("Could not load the sources: ", "无法加载数据源：")}
           {error}
         </p>
       ) : null}
-      {!rows && !error ? <p className="text-sm text-muted-foreground">{tx("Loading…", "加载中…")}</p> : null}
+      {!rows && !error ? <LoadingRecord blocks={[88, 88, 88]} /> : null}
       <ul className="space-y-3">
         {rows?.map((r) => {
           const fresh = isFresh(r);
@@ -44,12 +42,12 @@ export default function SourcesPage() {
                     {r.label}
                   </a>
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[13px] text-muted-foreground">
                   {fresh ? tx("fresh", "正常") : tx("stale", "过期")} · {tx("updated", "更新于")} {fmtAge(sourceAgeIso(r), zh)}
                 </p>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{r.what}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-[13px] text-muted-foreground">
                 {tx("Pulled", "频率")}: {r.cadence} · {r.rows.toLocaleString()} {tx("rows", "行")}
                 {r.latest_label ? ` · ${r.latest_label}` : ""}
               </p>

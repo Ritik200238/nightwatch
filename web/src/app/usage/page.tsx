@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Section, Stat } from "@/components/report/primitives";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingRecord, PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { engagement, type Usage } from "@/lib/engagement";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
@@ -24,20 +24,23 @@ export default function UsagePage() {
     };
   }, [tx]);
 
-  if (error) return <p className="py-10 text-center text-sm text-muted-foreground">{error}</p>;
-  if (!u) return <Skeleton className="h-64 w-full" />;
+  if (error) return <p className={`${PROOF_WIDTH} py-10 text-center text-sm text-muted-foreground`}>{error}</p>;
+  if (!u)
+    return (
+      <div className={PROOF_WIDTH}>
+        <LoadingRecord blocks={[256]} />
+      </div>
+    );
 
   const since = u.counted_since ? fmtTimeL(u.counted_since, lang) : tx("no verdicts yet", "暂无结论");
   const asked = u.feedback.useful + u.feedback.not_useful;
   const kinds = Object.entries(u.follow_ups_by_answer_kind);
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold">{tx("Who uses the desk", "谁在使用交易台")}</h1>
-        <p className="text-sm text-muted-foreground">
-          {tx(`Counted since ${since}; no accounts; only an anonymous random id in your browser.`, `统计自 ${since}；无账户；只使用您浏览器里的匿名随机编号。`)}
-        </p>
-      </div>
+    <div className={`${PROOF_WIDTH} space-y-4`}>
+      <PageHead
+        title={tx("Who uses the desk", "谁在使用交易台")}
+        intro={tx(`Counted since ${since}; no accounts; only an anonymous random id in your browser.`, `统计自 ${since}；无账户；只使用您浏览器里的匿名随机编号。`)}
+      />
       <Section title={tx("Numbers", "数字")}>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label={tx("Live verdicts", "实时结论")} value={String(u.live_verdicts)} hint={tx(`${u.journal_live_verdicts_all_time} in the journal all time`, `日志中累计 ${u.journal_live_verdicts_all_time} 条`)} />
@@ -87,7 +90,7 @@ export default function UsagePage() {
           <p className="text-sm text-muted-foreground">{tx("None yet.", "暂无。")}</p>
         )}
       </Section>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {tx(
           "Requests from the operator's own browser are excluded (header x-nw-internal: 1, or localStorage nightwatch.internal = 1).",
           "运营者自己浏览器的请求不计入（请求头 x-nw-internal: 1，或 localStorage nightwatch.internal = 1）。",
