@@ -229,3 +229,19 @@ export function fmtTimeL(iso: string | null | undefined, lang: Lang): string {
   const d = new Date(iso);
   return d.toLocaleString(lang === "zh" ? "zh-CN" : undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
 }
+
+/** Date and time with the year, in the reader's language (zh-CN when Chinese). */
+export function fmtDateTimeL(iso: string | null | undefined, lang: Lang): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** Calendar date only, in the reader's language (zh-CN when Chinese). */
+export function fmtDateL(iso: string | null | undefined, lang: Lang): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium" });
+}

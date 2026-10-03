@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang";
 import { api, type Health } from "@/lib/api";
-import { fmtTime } from "@/lib/format";
+import { fmtTimeL } from "@/lib/i18n";
 
 /** Backend liveness + data freshness, polled every 30s. */
 export function HealthPill() {
-  const { tx } = useLang();
+  const { tx, lang } = useLang();
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,18 +41,23 @@ export function HealthPill() {
     );
   }
   if (!health) {
-    return <span role="status" className="h-7 w-32 shrink-0 animate-pulse rounded-full bg-muted" aria-label={tx("Checking API", "正在检查 API")} />;
+    return (
+      <span role="status" className="inline-flex h-7 w-28 shrink-0 items-center justify-center gap-2 rounded-full border border-border px-3 text-xs whitespace-nowrap text-muted-foreground sm:w-36">
+        <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-muted-foreground/50" />
+        {tx("checking…", "检查中…")}
+      </span>
+    );
   }
   const warm = health.warm.state === "running" ? tx(` · warming ${health.warm.done}/${health.warm.total}`, ` · 预热中 ${health.warm.done}/${health.warm.total}`) : "";
   return (
-    <span role="status" title={tx(`${health.tickers_with_data} tokens · last order book ${fmtTime(health.last_book_ts)}${warm}`, `${health.tickers_with_data} 个代币 · 最近盘口 ${fmtTime(health.last_book_ts)}${warm}`)} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1 text-xs whitespace-nowrap text-muted-foreground">
+    <span role="status" title={tx(`${health.tickers_with_data} tokens · last order book ${fmtTimeL(health.last_book_ts, lang)}${warm}`, `${health.tickers_with_data} 个代币 · 最近盘口 ${fmtTimeL(health.last_book_ts, lang)}${warm}`)} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1 text-xs whitespace-nowrap text-muted-foreground">
       <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-status-good" />
       {/* Narrow screens keep the signal (live, N tokens) and drop the timestamp. */}
       <span className="tabular">
         {health.tickers_with_data} {tx("tokens", "个代币")}
         <span className="hidden sm:inline">
           {tx(" · book ", " · 盘口 ")}
-          {fmtTime(health.last_book_ts)}
+          {fmtTimeL(health.last_book_ts, lang)}
           {warm}
         </span>
       </span>
