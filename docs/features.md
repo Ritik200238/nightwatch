@@ -80,6 +80,16 @@ On top of that:
   the report with how often history put the trade there; pick hold / cut half / exit / hedge per line in
   advance. Saving arms a tripwire on each line, and the alert repeats "You decided in advance: cut half".
   Own table, own timestamp, outside the receipt chain.
+* **Telegram: @<bot handle, set by the owner>**: the desk in a chat. The message goes through the
+  same conversation code as the web chat (so missing token, side or size is asked for the same way,
+  and "halve it", "short instead", "what about 5x" use the same follow-up and what-if routing), and a
+  finished report comes back as a short plain-text message: verdict and size, one-in-twenty loss,
+  worst stress row, exit cost, liquidation if leveraged, and the `/r/<id>` link, every number copied
+  from the report. `/tripwire <price|stop|liquidation>` arms a tripwire and `/watch` a next-close
+  re-check; the recorder sends the alert to that chat. English or 中文 by what you type. Long polling
+  inside the API, so nothing is exposed; off unless `TELEGRAM_BOT_TOKEN` is set. Per-chat rate
+  limit, chat state kept in memory (1000 chats, 6 hours). The chat id is stored in the alert row to
+  deliver it; everything else keys the chat by a salted hash like web visitors.
 * **Same trade, different book**: one click runs a ticket alone and on a concentrated example
   book, side by side, with the reason the size changed.
 * **English and 中文**: type the trade either way and get the answer in the same language.

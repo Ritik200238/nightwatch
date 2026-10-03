@@ -6,7 +6,8 @@ one-minute bars since the last check (their highs and lows, so a wick between tw
 not missed) and the live ticker. The first time the line is crossed the tripwire fires - once,
 never again - and records when and at what price. It then re-runs the desk on the stored
 ticket, as a re-check does, so the alert carries the verdict *now*, and POSTs a short JSON
-body to the webhook if one was given (the same https-only, public-host-only rule as a watch).
+body to the webhook if one was given (the same https-only, public-host-only rule as a watch). A ``tg:<chat id>`` target is
+delivered as a Telegram message instead (journal.telegram).
 
 Which way "through" means is fixed when it is armed, from where the line sits against the
 price the report was taken at: a line below is crossed on a low at or under it, a line above
@@ -207,9 +208,9 @@ def run_armed(
     now_ms = to_epoch_ms(now)
     fired = 0
     rows = conn.execute(
-        "SELECT id, forecast_id, ticker, level, direction, webhook, before, checked_to, created_at FROM tripwires WHERE status='armed'"
+        "SELECT id, forecast_id, ticker, level, direction, webhook, before, checked_to, created_at, lang FROM tripwires WHERE status='armed'"
     ).fetchall()
-    for tid, fid, ticker, level, direction, hook, before_json, checked_to, created_at in rows:
+    for tid, fid, ticker, level, direction, hook, before_json, checked_to, created_at, lang in rows:
         if now_ms - created_at > EXPIRES.total_seconds() * 1000:
             with conn:
                 conn.execute("UPDATE tripwires SET status='expired' WHERE id=? AND status='armed'", (tid,))
@@ -254,7 +255,7 @@ def run_armed(
             if note:  # the action the trader chose in advance for this line
                 payload["plan"] = note
                 payload["reminder"] = note["reminder"]
-            hook_status = _notify(hook, payload)
+            hook_status = _notify(hook, payload, lang)
         with conn:
             conn.execute("UPDATE tripwires SET after=?, error=?, webhook_status=? WHERE id=?", (json.dumps(after) if after else None, err, hook_status, tid))
     return fired

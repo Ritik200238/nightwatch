@@ -142,6 +142,7 @@ build time).
 | `NIGHTWATCH_PROXY_SECRET` | unset | set the same value on the API (compose `.env`) and in Vercel. The API then answers 403 to anything without header `x-nightwatch-proxy-secret`, except `GET /health` and the box's own 127.0.0.1 calls. Unset = check off. Also keys per-client rate limits on the real visitor IP the proxy forwards |
 | `NIGHTWATCH_LIVE_BOOK` | `1` | `0` disables live order-book fetches in the API (offline demo) |
 | `ANTHROPIC_API_KEY` | unset | enables the `/chat` language layer; everything else works without it |
+| `TELEGRAM_BOT_TOKEN` | unset | optional Telegram bot. Create a bot with @BotFather, put the token in the box's `.env`, then `docker compose up -d api recorder`. The API polls for messages (no webhook, no open port); the recorder uses the same token to send tripwire and watch alerts. Unset = no bot. Treat it as a secret: never commit it, and revoke it in @BotFather if it leaks. Only one process may poll a token, so do not run a second copy against it |
 | `FRED_API_KEY` | unset | optional; FRED works unauthenticated for the CSV endpoints used |
 | `NEXT_PUBLIC_API_URL` | `/api` when the page is not on localhost | where the browser sends API calls; `/api` uses the same-origin proxy |
 | `NIGHTWATCH_API_ORIGIN` | unset | where that proxy forwards to, e.g. `http://12.34.56.78:8000`. Server-side only |

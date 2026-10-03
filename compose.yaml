@@ -48,6 +48,8 @@ services:
       # arenas and a lower trim threshold keep freed memory freed on a 1 GB box.
       MALLOC_ARENA_MAX: "2"
       MALLOC_TRIM_THRESHOLD_: "131072"
+      # Optional Telegram bot (long polling, runs inside the API). Unset = no bot.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     volumes:
       - nightwatch-data:/data
     logging: &logging
@@ -71,6 +73,9 @@ services:
     environment:
       NIGHTWATCH_DATA_DIR: /data
       FRED_API_KEY: ${FRED_API_KEY:-}
+      # The recorder fires tripwires and re-checks, so it sends the Telegram alerts
+      # (send only; the API does the polling).
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     volumes:
       - nightwatch-data:/data
     logging: *logging
