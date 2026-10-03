@@ -587,7 +587,9 @@ def judge_weekend(block: dict[str, Any]) -> str:
 
 
 _BOOK_COLS = ("n", "n_sp", "log_sp", "n_dp", "log_dp", "n_zero")
-_LIQ_CLASSES = ("open", "overnight", "weekend", "holiday")
+# "sunday_3am" overlaps "weekend" on purpose: it is the one hour of the week the question
+# is usually asked about, Sunday 02:00-04:00 ET, when nothing in the US is trading.
+_LIQ_CLASSES = ("open", "overnight", "weekend", "holiday", "sunday_3am")
 
 
 def classify_times(ts_ms: np.ndarray, wins: pd.DataFrame) -> np.ndarray:
@@ -613,8 +615,10 @@ def book_cells(books: dict[str, pd.DataFrame], wins: pd.DataFrame) -> tuple[np.n
             continue
         ts = df["ts"].to_numpy(dtype="int64")
         kind = classify_times(ts, wins)
-        day = pd.to_datetime(ts, unit="ms", utc=True).tz_convert(ET).date
-        prepared[t] = (kind, np.asarray(day), df["spread_bps"].to_numpy(dtype=float), df["depth"].to_numpy(dtype=float))
+        local = pd.to_datetime(ts, unit="ms", utc=True).tz_convert(ET)
+        day = local.date
+        sun3 = (local.weekday == 6) & (local.hour >= 2) & (local.hour < 4)
+        prepared[t] = (kind, np.asarray(day), df["spread_bps"].to_numpy(dtype=float), df["depth"].to_numpy(dtype=float), np.asarray(sun3))
         all_days.update(set(day))
     days = sorted(all_days)
     di = {d: i for i, d in enumerate(days)}
@@ -622,9 +626,9 @@ def book_cells(books: dict[str, pd.DataFrame], wins: pd.DataFrame) -> tuple[np.n
     for ti, t in enumerate(tickers):
         if t not in prepared:
             continue
-        kind, day, sp, dp = prepared[t]
+        kind, day, sp, dp, sun3 = prepared[t]
         for ci, c in enumerate(_LIQ_CLASSES):
-            m = kind == c
+            m = sun3 if c == "sunday_3am" else kind == c
             if not m.any():
                 continue
             d_i = np.array([di[d] for d in day[m]])
@@ -678,11 +682,12 @@ def liquidity(books: dict[str, pd.DataFrame], wins: pd.DataFrame) -> dict[str, A
                 row[f"spread_ratio_{c}"] = float(np.exp(gs[ci] - gs[0]))
                 row[f"depth_ratio_{c}"] = float(np.exp(gd[ci] - gd[0]))
         per_token.append(row)
+    wk_ids = {int(i) for i in window_index(_ns(pd.to_datetime(np.concatenate([b["ts"].to_numpy() for b in books.values()]), unit="ms", utc=True)), wins) if i >= 0 and wins["kind"].iloc[int(i)] == "weekend"}
     weekend_days = sorted({d for d, c in zip(days, cells[:, :, _LIQ_CLASSES.index("weekend"), 0].sum(axis=1), strict=True) if c > 0})
     return {
         "n_snapshots": int(tot[:, :, 0].sum()),
         "n_days": len(days), "first_day": str(days[0]), "last_day": str(days[-1]),
-        "n_weekend_days": len(weekend_days), "tokens": len(tickers),
+        "n_weekend_days": len(weekend_days), "n_weekend_windows": len(wk_ids), "tokens": len(tickers),
         "stats": stats, "per_token": per_token,
     }
 

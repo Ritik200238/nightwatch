@@ -287,3 +287,21 @@ def test_a_thinner_closed_book_is_measured_as_thinner():
 def test_no_book_means_no_claim():
     out = ch.liquidity({}, ch.session_windows(date(2025, 3, 3), date(2025, 3, 14)))
     assert out["n_snapshots"] == 0 and out["stats"] == {}
+
+
+def test_sunday_three_am_is_its_own_cell_and_counts_distinct_weekends():
+    rng = np.random.default_rng(5)
+    wins = ch.session_windows(date(2025, 3, 3), date(2025, 4, 30))
+    rows = []
+    tz = "America/New_York"
+    for day in ("2025-03-23", "2025-03-30", "2025-04-06"):  # three Sundays
+        for ts in pd.date_range(f"{day} 02:05", f"{day} 03:55", periods=70, tz=tz):
+            rows.append((ts.value // 1_000_000, 9.0 * np.exp(rng.normal(0, 0.05)), 10_000.0))
+    for ts in pd.date_range("2025-03-24 10:00", "2025-04-04 15:00", periods=400, tz=tz):
+        if 9 <= ts.hour < 16:
+            rows.append((ts.value // 1_000_000, 3.0 * np.exp(rng.normal(0, 0.05)), 40_000.0))
+    df = pd.DataFrame(rows, columns=["ts", "spread_bps", "depth"]).sort_values("ts")
+    out = ch.liquidity({"A": df, "B": df}, wins)
+    assert out["n_weekend_windows"] == 3
+    assert abs(out["stats"]["spread_ratio_sunday_3am"]["est"] - 3.0) < 0.2
+    assert abs(out["stats"]["depth_ratio_sunday_3am"]["est"] - 0.25) < 0.02
