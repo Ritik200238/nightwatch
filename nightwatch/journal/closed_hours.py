@@ -75,12 +75,15 @@ Limits that cannot be removed by cleverness
 
 from __future__ import annotations
 
+import json
 import math
 import warnings
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -802,3 +805,48 @@ def report_line(result: dict[str, Any], ticker: str) -> str | None:
     if p.get("weekend_slope_open") is not None:
         s += f"; across {p['n_weekends']} weekends, Monday's stock open kept {100 * p['weekend_slope_open']:.0f}% of the token's weekend move on average"
     return s + "."
+
+
+# ----------------------------------------------------------------------------- serving
+
+RESULT_PATH = Path(__file__).with_name("closed_hours.json")
+
+
+@lru_cache(maxsize=1)
+def load_result() -> dict[str, Any] | None:
+    """The committed result of ``research/closed_hours.py``, or None if there is none.
+
+    It is a measurement made on a given day from the stored bars, not something the
+    server recomputes; it carries its own ``ran_at`` so a stale one shows as stale."""
+    try:
+        return json.loads(RESULT_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def slim(result: dict[str, Any]) -> dict[str, Any]:
+    """The result without the per-token detail of every sensitivity run, for the page.
+
+    The headline per-token table (movement, primary) and the order-book table stay."""
+    out = json.loads(json.dumps(result))
+    for blk in (out.get("movement") or {}).values():
+        if isinstance(blk, dict) and blk is not out["movement"].get("primary"):
+            blk.pop("per_token", None)
+    for pop in ("weekend", "overnight"):
+        for blk in (out.get(pop) or {}).values():
+            if isinstance(blk, dict):
+                blk.pop("per_token", None)
+                for sub in blk.values():
+                    if isinstance(sub, dict):
+                        sub.pop("per_token", None)
+    out.pop("per_token", None)
+    return out
+
+
+def for_ticker(ticker: str) -> dict[str, Any]:
+    """The numbers and the one-line summary for one token; ``line`` is None if unmeasured."""
+    res = load_result()
+    if not res:
+        return {"ticker": ticker, "line": None, "numbers": None, "ran_at": None}
+    return {"ticker": ticker, "line": report_line(res, ticker), "numbers": (res.get("per_token") or {}).get(ticker),
+            "ran_at": res.get("ran_at"), "tokens": (res.get("data") or {}).get("tokens")}
