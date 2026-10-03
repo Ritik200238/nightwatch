@@ -10,6 +10,7 @@ import { AgentPanel } from "@/components/report/agent-panel";
 import { ActOnIt } from "@/components/report/act-on-it";
 import { GuardNote } from "@/components/report/guard-note";
 import { Feedback, WatchButton } from "@/components/report/feedback";
+import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, Stat } from "@/components/report/primitives";
@@ -1013,6 +1014,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         <div className="mt-3 space-y-3 border-t border-border pt-3">
           <Feedback forecastId={report.forecast_id} lang={lang} />
           <WatchButton forecastId={report.forecast_id} lang={lang} />
+          <TripwireButton forecastId={report.forecast_id} ticker={report.ticket.ticker} lang={lang} />
         </div>
       ) : null}
       {primary ? null : null}

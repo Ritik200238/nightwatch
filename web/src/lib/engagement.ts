@@ -70,7 +70,38 @@ export interface Watch {
   email: string;
 }
 
+export interface Tripwire {
+  id: string;
+  forecast_id: number;
+  ticker: string;
+  side: string;
+  level: number;
+  direction: "below" | "above";
+  label: "stop" | "invalidation" | "liquidation" | "p5" | "custom";
+  ref_price: number | null;
+  created_at: string;
+  status: "armed" | "fired" | "expired";
+  webhook_host: string | null;
+  before: WatchSummary;
+  after: WatchSummary | null;
+  fired_at: string | null;
+  fired_price: number | null;
+  error: string | null;
+  webhook_status: string | null;
+}
+
+export interface TripwireSuggestion {
+  label: Tripwire["label"];
+  level: number;
+  direction: "below" | "above";
+  note: string;
+}
+
 export const engagement = {
+  tripwireSuggest: (forecastId: number) => call<{ suggestions: TripwireSuggestion[] }>(`/tripwire/suggest/${forecastId}`),
+  tripwiresFor: (forecastId: number) => call<{ tripwires: Tripwire[] }>(`/tripwire/report/${forecastId}`),
+  tripwireArm: (body: { forecast_id: number; level: number; label: string; webhook?: string | null; lang: string }) =>
+    call<Tripwire>("/tripwire", { method: "POST", body: JSON.stringify(body) }),
   feedback: (body: { forecast_id: number; useful: boolean; note: string; lang: string }) =>
     call<{ ok: boolean }>("/feedback", { method: "POST", body: JSON.stringify(body) }),
   usage: () => call<Usage>("/usage"),
