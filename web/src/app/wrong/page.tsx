@@ -4,7 +4,8 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
@@ -88,18 +89,32 @@ export default function WrongPage() {
   const replay = misses?.totals.replay;
 
   return (
-    <div className="space-y-6">
-      <div className="max-w-3xl">
-        <h1 className="text-lg font-semibold tracking-tight">{tx("What we got wrong", "我们错在哪")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {tx("A risk tool that only shows its hits is asking to be trusted. This page shows the other half: every live verdict where the loss went past the line the desk said it would pass only one time in twenty, the mistakes we found in the desk itself, and a check anyone can run that no past verdict was edited afterwards.", "只展示命中的风险工具，是在要求你相信它。这个页面展示另一半：每一个亏损超过交易台所说“二十次才会超过一次”那条线的实时结论、我们在交易台自身发现的错误，以及任何人都能运行的检查，证明过去的结论事后没有被改动。")}
-        </p>
-      </div>
+    <div className={`${PROOF_WIDTH} space-y-4`}>
+      <PageHead
+        tabs
+        title={tx("What we got wrong", "我们错在哪")}
+        intro={tx("A risk tool that only shows its hits is asking to be trusted. This page shows the other half: every live verdict where the loss went past the line, the mistakes we found in the desk itself, and a check anyone can run that no past verdict was edited.", "只展示命中的风险工具，是在要求你相信它。这个页面展示另一半：每一个亏损越过那条线的实时结论、我们在交易台自身发现的错误，以及任何人都能运行的检查，证明过去的结论没有被改动。")}
+      />
+      {live ? (
+        <PlainBox>
+          {tx(`The desk says its bad case (the `, `交易台说它的坏情形（即 `)}
+          <Term k="p5">p5</Term>
+          {tx(` line) should be crossed about 1 time in 20. Of ${live.scored.toLocaleString()} live verdicts scored so far, ${live.missed} crossed it (${fmtPct(live.rate * 100, 1, false)}). `, ` 线）大约二十次会被越过一次。到目前为止已评分的 ${live.scored.toLocaleString()} 个实时结论中，有 ${live.missed} 个越过了它（${fmtPct(live.rate * 100, 1, false)}）。`)}
+          {live.scored < 20
+            ? tx("That is too few to say much yet. ", "样本还太少，现在说明不了太多。")
+            : live.rate > 0.075
+              ? tx("That is more often than it should be, and it is shown below rather than hidden. ", "这比应有的频率高，我们把它们列在下面，而不是藏起来。")
+              : tx("That is close to what an honest line would give. ", "这与诚实的线应有的结果接近。")}
+          {tx("Every miss is listed with its receipt, and the mistakes we found in the desk itself are listed further down. A miss is a ", "每一次突破都附有凭证列出，我们在交易台自身发现的错误列在更下面。一次突破指的是一次 ")}
+          <Term k="coverage">{tx("breach", "突破")}</Term>
+          {tx(", and a few are expected.", "，出现少量是正常的。")}
+        </PlainBox>
+      ) : null}
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">{tx("Couldn't load the misses", "无法加载未达标记录")}</p>
-          <p className="text-xs text-muted-foreground">{error}</p>
+          <p className="text-[13px] text-muted-foreground">{error}</p>
         </div>
       ) : null}
 
@@ -108,7 +123,7 @@ export default function WrongPage() {
         subtitle={tx("Scored the same way as the calibration page: the tail in force when the verdict was given, fitted only on forecasts that had already matured. Live and replayed are counted apart here; the calibration page pools them, so its single rate sits between the two. If the desk is honest, about 5% should miss.", "评分方式与校准页面相同：使用给出结论时生效的尾部，只用已到期的预测拟合。这里把实盘和回放分开统计；校准页面把两者合并，所以它的比例介于两者之间。如果交易台是诚实的，大约 5% 会突破。")}
       >
         {!misses && !error ? (
-          <Skeleton className="h-24 w-full" />
+          <LoadingRecord blocks={[96]} />
         ) : misses ? (
           <>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -123,7 +138,8 @@ export default function WrongPage() {
               <Stat label={tx("Went past the line", "突破了该线")} value={replay ? `${replay.missed} (${fmtPct(replay.rate * 100, 1, false)})` : "—"} hint={tx("target about 5%", "目标约 5%")} />
             </div>
             {misses.misses.length ? (
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-4">
+                <ScrollTable>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -147,7 +163,7 @@ export default function WrongPage() {
                         <TableCell className="tabular text-right">{fmtPct(m.stated_p5_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right font-medium">{fmtPct(m.outcome_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right">{fmtUsd(Math.abs(m.beyond_quote))} USDT</TableCell>
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="font-mono text-[13px]">
                           {m.receipt ? (
                             <a href={`/api/verify/${m.id}`} target="_blank" rel="noreferrer" className="underline underline-offset-2" title={m.receipt}>
                               {m.receipt.slice(0, 10)}…
@@ -160,11 +176,12 @@ export default function WrongPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </ScrollTable>
               </div>
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">{tx("No live verdict has gone past its line yet.", "目前还没有实时结论亏损超过所述的线。")}</p>
             )}
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-[13px] text-muted-foreground">
               {tx("Most live verdicts come from people trying the desk, so many are small test trades. They are scored all the same.", "大多数实时结论来自试用交易台的人，所以很多是小额的测试交易。它们照样计入评分。")}
             </p>
           </>
@@ -172,6 +189,7 @@ export default function WrongPage() {
       </Section>
 
       <Section
+        collapsible
         title={tx("Check that no verdict was changed afterwards", "检查没有结论事后被改动")}
         subtitle={tx("Every live verdict gets a receipt when it is given: a SHA-256 over what was asked and what the desk said, chained to the receipt before it. Change or delete any past verdict and every receipt after it stops matching.", "每个实时结论在给出时都会得到一张凭证：对所问内容和交易台的回答做 SHA-256，并与前一张凭证链接。改动或删除任何过去的结论，其后的所有凭证都会对不上。")}
         action={chain ? <Pill tone={chain.ok ? "good" : "critical"}>{chain.ok ? tx("chain intact", "链完好") : tx("chain broken", "链已断")}</Pill> : undefined}
@@ -184,15 +202,15 @@ export default function WrongPage() {
                 ? tx(`Recomputed just now: all ${chain.checked.toLocaleString()} receipts match the verdicts they cover.`, `刚刚重新计算：全部 ${chain.checked.toLocaleString()} 张凭证都与其对应的结论一致。`)
                 : tx(`Recomputed just now: receipt ${chain.first_break?.seq} breaks - ${chain.first_break?.reason}.`, `刚刚重新计算：第 ${chain.first_break?.seq} 张凭证断开——${chain.first_break?.reason}。`)}
             </p>
-            <p className="break-all font-mono text-xs text-muted-foreground">{tx("Latest receipt: ", "最新凭证：")}{chain.head}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="break-all font-mono text-[13px] text-muted-foreground">{tx("Latest receipt: ", "最新凭证：")}{chain.head}</p>
+            <p className="text-[13px] text-muted-foreground">
               {tx("Run it yourself: ", "自己运行：")}<a href="/api/verify" target="_blank" rel="noreferrer" className="underline underline-offset-2">/api/verify</a>{tx(", or", "，或者")}{" "}
               <code>/api/verify/&lt;id&gt;</code>{" "}
               {tx("for one verdict; every report shows its own receipt. What this proves and what it does not: the chain shows nothing was changed after its receipt was written. It is kept by the same server that writes the verdicts, so it cannot prove the whole chain was never rebuilt, and verdicts given before 29 September were chained that day. Replayed forecasts are not chained - they are rebuilt from the code and stored prices whenever the replay runs, and anyone can rebuild them the same way.", "用于单个结论；每份报告都显示自己的凭证。它能证明什么、不能证明什么：链只表明凭证写下之后没有任何东西被改动。它由写下结论的同一台服务器保管，所以无法证明整条链从未被重建；9 月 29 日之前给出的结论是在当天才串成链的。重演的预测不在链里——每次运行重演时都从代码和存储的价格重新构建，任何人都可以用同样方式重建。")}
             </p>
           </div>
         ) : (
-          <Skeleton className="h-16 w-full" />
+          <LoadingRecord blocks={[64]} />
         )}
       </Section>
 
@@ -202,7 +220,7 @@ export default function WrongPage() {
             const f = lang === "zh" && FOUND_ZH[fi] ? { ...f0, ...FOUND_ZH[fi] } : f0;
             return (
             <li key={f0.what} className="rounded-lg border border-border p-3 text-sm">
-              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 {f.when}
                 {f.open ? <Pill tone="warning">{tx("open", "未解决")}</Pill> : <Pill tone="good">{tx("fixed", "已修复")}</Pill>}
               </p>
@@ -212,7 +230,7 @@ export default function WrongPage() {
             );
           })}
         </ul>
-        <p className="mt-3 text-xs text-muted-foreground">
+        <p className="mt-3 text-[13px] text-muted-foreground">
           {tx("The questions we asked about the method itself, and the five that came back “no”, are on the", "我们对方法本身提出的问题，以及其中五个答案为“否”的问题，都在")}{" "}
           <Link href="/studies" className="underline underline-offset-2">
             {tx("Studies", "研究")}
