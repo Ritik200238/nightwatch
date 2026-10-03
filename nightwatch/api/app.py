@@ -132,6 +132,14 @@ class WatchIn(BaseModel):
     lang: str = "en"
 
 
+class TripwireIn(BaseModel):
+    forecast_id: int
+    level: float = Field(gt=0, lt=1e9)
+    label: str = Field(default="custom", max_length=20)
+    webhook: str | None = Field(default=None, max_length=500)
+    lang: str = "en"
+
+
 class _BoundedCache(dict):
     """A dict that forgets its oldest entry past ``limit``, so a cache keyed on caller
     input cannot grow without end."""
@@ -156,10 +164,11 @@ class AppState:
         )
         self.journal = Journal(self.store)
         # Forecasts written before receipts existed, or by a bulk import, are chained now.
-        from nightwatch.journal import engagement, receipts, watches
+        from nightwatch.journal import engagement, receipts, tripwires, watches
 
         self.store._conn.executescript(engagement.SCHEMA)
         self.store._conn.executescript(watches.SCHEMA)
+        self.store._conn.executescript(tripwires.SCHEMA)
         chained = receipts.chain_pending(self.store._conn)
         if chained:
             log.info("chained %d forecasts that had no receipt", chained)
@@ -1139,6 +1148,55 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         got = watches.get(st().store._conn, watch_id)
         if got is None:
             raise HTTPException(404, "No such re-check.")
+        return got
+
+    @app.get("/tripwire/suggest/{forecast_id}")
+    def tripwire_suggest(forecast_id: int) -> dict[str, Any]:
+        """The lines a report already holds, ready to arm as a tripwire."""
+        from nightwatch.journal import tripwires
+
+        report = st().reports.get(forecast_id)
+        if report is None or forecast_id <= 0:
+            raise HTTPException(404, f"No stored report {forecast_id}.")
+        return {"forecast_id": forecast_id, "suggestions": tripwires.suggest(report)}
+
+    @app.post("/tripwire")
+    def tripwire_create(body: TripwireIn, request: Request) -> dict[str, Any]:
+        """Arm "tell me if <token> trades through <price>" on a stored report. It fires once;
+        the alert carries a fresh verdict and, if given, goes to an https webhook."""
+        from nightwatch.journal import engagement, tripwires
+
+        s = st()
+        report = s.reports.get(body.forecast_id)
+        if report is None or body.forecast_id <= 0:
+            raise HTTPException(404, f"No stored report {body.forecast_id} to watch.")
+        try:
+            hook = tripwires.check_webhook(body.webhook)
+        except tripwires.BadWebhook as exc:
+            raise HTTPException(422, str(exc)) from exc
+        client, _, _ = _who(request)
+        try:
+            return tripwires.create(s.store._conn, forecast_id=body.forecast_id, report=report, level=body.level, label=body.label, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+        except tripwires.BadLevel as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except tripwires.TooMany as exc:
+            raise HTTPException(429, "Too many tripwires from one visitor.") from exc
+
+    @app.get("/tripwire/report/{forecast_id}")
+    def tripwire_for_report(forecast_id: int, request: Request) -> dict[str, Any]:
+        """The tripwires this visitor armed on a report."""
+        from nightwatch.journal import tripwires
+
+        client, _, _ = _who(request)
+        return {"tripwires": tripwires.for_report(st().store._conn, forecast_id, client)}
+
+    @app.get("/tripwire/{tripwire_id}")
+    def tripwire_get(tripwire_id: str) -> dict[str, Any]:
+        from nightwatch.journal import tripwires
+
+        got = tripwires.get(st().store._conn, tripwire_id)
+        if got is None:
+            raise HTTPException(404, "No such tripwire.")
         return got
 
     def _chat(body: ChatIn) -> dict[str, Any]:

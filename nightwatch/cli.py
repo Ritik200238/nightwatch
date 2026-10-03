@@ -151,6 +151,21 @@ def _run_watches(store: Store, settings: Settings, journal: Any) -> int:  # noqa
     return watches.run_due(store._conn, watches.make_rerun(ctx), ReportStore(store).get)
 
 
+def _run_tripwires(store: Store, settings: Settings, journal: Any, spot: Any, perp: Any) -> int:  # noqa: ANN401
+    """Check armed price tripwires; each one that fires re-runs the desk on its ticket."""
+    from nightwatch.data.sync import build_universe
+    from nightwatch.journal import tripwires, watches
+    from nightwatch.journal.reports import ReportStore
+    from nightwatch.pipeline.analyze import AnalysisContext
+
+    store._conn.executescript(tripwires.SCHEMA)
+    if not store._conn.execute("SELECT 1 FROM tripwires WHERE status='armed' LIMIT 1").fetchone():
+        return 0
+    entries = build_universe(store.list_instruments(Venue.BITGET_SPOT), store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers)
+    ctx = AnalysisContext(store=store, entries=entries, journal=journal)
+    return tripwires.run_armed(store._conn, tripwires.make_fetch(spot, perp, entries), watches.make_rerun(ctx), ReportStore(store).get)
+
+
 def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
     spot, perp = _clients(settings)
     with Store(settings.db_path) as store:
@@ -190,6 +205,8 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 PeriodicJob("anchor-receipts", 3600, lambda: anchor.tick(settings.db_path, settings.data_dir / "anchors")),
                 # Re-check the trades visitors asked to watch, once the US market has closed.
                 PeriodicJob("watches", 600, lambda: _run_watches(store, settings, journal), run_at_start=False),
+                # Price tripwires visitors armed from a report: checked against Bitget every minute.
+                PeriodicJob("tripwires", 60, lambda: _run_tripwires(store, settings, journal, spot, perp), run_at_start=False),
                 # A dated, gzipped copy of the live database once a day, newest seven kept.
                 PeriodicJob("db-backup", 24 * 3600, lambda: backup.backup_in_background(settings.db_path, backup_dir), run_at_start=False, age_at_start=backup.newest_age_s(backup_dir)),
             ]

@@ -30,6 +30,7 @@ RULES: tuple[tuple[str | None, str, float, int], ...] = (
     ("POST", "/tonight", 4, 2),
     (None, "/mcp", 20, 10),
     ("POST", "/watch", 10, 5),
+    ("POST", "/tripwire", 10, 5),
     ("POST", "/feedback", 10, 5),
 )
 
