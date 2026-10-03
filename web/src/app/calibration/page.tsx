@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, type CalibrationReport } from "@/lib/api";
 import { useLang } from "@/lib/lang";
@@ -54,34 +55,42 @@ export default function CalibrationPage() {
   const pitData = rep ? PIT_ORDER.map((k) => ({ bucket: k, observed: (rep.pit_histogram[k] ?? 0) / Math.max(1, rep.n_matured), expected: PIT_EXPECTED[k] })) : [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">{tx("Does it tell the truth?", "它说的是真话吗？")}</h1>
-          <p className="max-w-prose text-sm text-muted-foreground">{tx("Every forecast is written down before the outcome is known, then scored once the horizon passes. If the distributions are honest, 5% of outcomes land below p5 and 90% inside the p5–p95 band.", "每个预测都在结果未知时先写下来，持有期结束后再评分。如果分布是诚实的，5% 的结果会低于 p5，90% 落在 p5–p95 区间内。")}</p>
-        </div>
-        <div className="flex gap-1" role="group" aria-label={tx("Forecast kind", "预测类型")}>
-          {(["all", "replay", "ticket"] as const).map((k) => (
-            <Button key={k} size="sm" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
-              {k === "all" ? tx("All", "全部") : k === "replay" ? tx("Replays", "重演") : tx("Live tickets", "实时交易")}
-            </Button>
-          ))}
-        </div>
-      </div>
+    <div className={`${PROOF_WIDTH} space-y-4`}>
+      <PageHead
+        tabs
+        title={tx("Does it tell the truth?", "它说的是真话吗？")}
+        intro={
+          <>
+            {tx("Every forecast is written down before the outcome is known, then scored once the horizon passes. If the forecasts are ", "每个预测都在结果未知时先写下来，持有期结束后再评分。如果预测是")}
+            <Term k="calibrated" />
+            {tx(", 5% of outcomes land below ", "，5% 的结果会低于 ")}
+            <Term k="p5">p5</Term>
+            {tx(" and 90% inside the p5–", "，90% 落在 p5–")}
+            <Term k="p95">p95</Term>
+            {tx(" band.", " 区间内。")}
+          </>
+        }
+        actions={
+          <div className="flex gap-1" role="group" aria-label={tx("Forecast kind", "预测类型")}>
+            {(["all", "replay", "ticket"] as const).map((k) => (
+              <Button key={k} size="sm" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
+                {k === "all" ? tx("All", "全部") : k === "replay" ? tx("Replays", "重演") : tx("Live tickets", "实时交易")}
+              </Button>
+            ))}
+          </div>
+        }
+      />
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">{tx("Couldn't load calibration", "无法加载校准数据")}</p>
-          <p className="text-xs text-muted-foreground">{error}</p>
+          <p className="text-[13px] text-muted-foreground">{error}</p>
           <Button variant="secondary" size="sm" className="mt-2" onClick={() => void load()}>
             {tx("Try again", "重试")}
           </Button>
         </div>
       ) : !rep ? (
-        <div className="space-y-4" aria-hidden>
-          <Skeleton className="h-28 w-full rounded-lg" />
-          <Skeleton className="h-64 w-full rounded-lg" />
-        </div>
+        <LoadingRecord blocks={[112, 256]} />
       ) : rep.n_matured === 0 ? (
         <div className="flex min-h-[240px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
           <p className="text-sm font-medium">{tx("No matured forecasts yet", "还没有到期的预测")}</p>
@@ -103,7 +112,7 @@ export default function CalibrationPage() {
                   hint={tx(`target 5% · ${rep.adjusted.n_evaluated.toLocaleString()} forecasts · raw search ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`, `目标 5% · ${rep.adjusted.n_evaluated.toLocaleString()} 个预测 · 原始搜索 ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`)}
                 />
                 {rep.adjusted.raw_lo_coverage > 0.05 ? (
-                  <p className="col-span-2 text-xs text-muted-foreground sm:col-span-4">
+                  <p className="col-span-2 text-[13px] text-muted-foreground sm:col-span-4">
                     {tx(`Raw history breaches more often than it should (${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)} against a 5% target); that is why every verdict uses the adjusted line, which is on target (${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}).`, `原始历史突破坏情形的频率高于应有水平（${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}，目标 5%）；所以每个结论都用调整后的线，它已达标（${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}）。`)}
                   </p>
                 ) : null}
@@ -124,9 +133,12 @@ export default function CalibrationPage() {
 
           {rep.adjusted ? (
             <Section
+              collapsible
               title={tx("Tail adjustment, scored out of sample", "尾部调整，样本外评分")}
               subtitle={tx(`Each forecast re-scored with tail factors fitted only on forecasts that had matured before it (${rep.adjusted.n_evaluated} evaluated; latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}). The verdict uses the adjusted tails.`, `每个预测都用只在它之前已到期的预测拟合出的尾部系数重新评分（评估了 ${rep.adjusted.n_evaluated} 个；最新 k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `，边际 ${rep.adjusted.c_lo_last.toFixed(1)} 个百分点` : ""}，k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}）。结论使用调整后的尾部。`)}
             >
+              <ScrollTable>
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -173,14 +185,18 @@ export default function CalibrationPage() {
                   </TableRow>
                 </TableBody>
               </Table>
+</ScrollTable>
             </Section>
           ) : null}
 
           {rep.adjusted?.bands?.length ? (
             <Section
+              collapsible
               title={tx("The same, split by how long the position is held", "同样的数据，按持有时间拆开")}
               subtitle={tx("A single factor fitted across every horizon is the average of two different corrections, and the average is nobody's number. An overnight hold and a weekend hold need opposite adjustments, so each gets its own — and the overall reading above is only trustworthy if these are too.", "对所有持有期只拟合一个系数，等于把两种不同的修正取平均，而平均值对谁都不准。隔夜持有和周末持有需要相反方向的调整，所以各用各的——上面的总体读数，只有这些也可信时才可信。")}
             >
+              <ScrollTable>
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -189,8 +205,8 @@ export default function CalibrationPage() {
                     <TableHead className="text-right">{tx("Below p5 (target 5%)", "低于 p5（目标 5%）")}</TableHead>
                     <TableHead className="text-right">{tx("Above p95 (target 5%)", "高于 p95（目标 5%）")}</TableHead>
                     <TableHead className="text-right">{tx("Width, raw → adjusted", "宽度：原始 → 调整后")}</TableHead>
-                    <TableHead className="text-right">k_lo</TableHead>
-                    <TableHead className="text-right">{tx("Margin", "边际")}</TableHead>
+                    <TableHead className="text-right"><Term k="klo">k_lo</Term></TableHead>
+                    <TableHead className="text-right"><Term k="margin">{tx("Margin", "边际")}</Term></TableHead>
                     <TableHead className="text-right">{tx("5% tail", "5% 尾部")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -213,13 +229,14 @@ export default function CalibrationPage() {
                   ))}
                 </TableBody>
               </Table>
-              <p className="mt-3 text-xs text-muted-foreground">
+</ScrollTable>
+              <p className="mt-3 text-[13px] text-muted-foreground">
                 {tx("A k_lo below 1 means the cohort's own p5 was already too pessimistic for that kind of window and gets pulled in, not pushed out. The margin is an absolute floor under narrow forecasts: a multiplicative factor alone left the narrowest third of forecasts breaching 8.2% of the time and the widest third 2.7%, and the margin is solved so the narrower half breaches 5% as well. The “before there was enough” row is every forecast made before its window had 120 matured examples of its own; those used the pooled factor, and they are shown rather than dropped.", "k_lo 小于 1 表示该类窗口里样本自身的 p5 本来就过于悲观，会被往回收，而不是往外推。边际是给窄区间预测加的绝对下限：只用乘法系数时，最窄的三分之一预测有 8.2% 突破，最宽的三分之一只有 2.7%；边际的取值使较窄的一半也刚好是 5% 突破。“样本还不够多的时候”那一行，是指该窗口自己还没有 120 个到期样本之前做出的所有预测；它们用的是合并系数，这里照实展示而不是丢掉。")}
               </p>
             </Section>
           ) : null}
 
-          <Section title={tx(`Before adjustment: the raw search, ${rep.n_matured} matured forecasts`, `调整之前：原始搜索，${rep.n_matured} 个已到期预测`)} subtitle={Object.entries(rep.by_ticker).map(([t, n]) => `${t} ${n}`).join(" · ")} action={<Pill tone={bandTone}>{tx("raw 5% tail: ", "原始 5% 尾部：")}{tb(rep.tail.band)}</Pill>}>
+          <Section collapsible title={tx(`Before adjustment: the raw search, ${rep.n_matured} matured forecasts`, `调整之前：原始搜索，${rep.n_matured} 个已到期预测`)} subtitle={Object.entries(rep.by_ticker).map(([t, n]) => `${t} ${n}`).join(" · ")} action={<Pill tone={bandTone}>{tx("raw 5% tail: ", "原始 5% 尾部：")}{tb(rep.tail.band)}</Pill>}>
             <p className="mb-3 text-sm text-muted-foreground">
               {tx("What the analog search says on its own, before the tail adjustment. The desk does not size on this; it is here because the adjustment above is only as honest as the number it corrects, and hiding the uncorrected one would make that impossible to check.", "相似时刻搜索自己给出的结果，尚未做尾部调整。交易台不按这个定仓位；它放在这里，是因为上面的调整只有与被修正的数字一样诚实才有意义，而藏起未修正的数字就无法检验这一点。")}
             </p>
@@ -233,6 +250,7 @@ export default function CalibrationPage() {
 
           {rep.skill && rep.skill.skill != null ? (
             <Section
+              collapsible
               title={tx("Does it beat guessing?", "它比瞎猜强吗？")}
               subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。弹球损失越低越好。共 ${rep.skill.n} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}。`)}
               action={
@@ -243,11 +261,13 @@ export default function CalibrationPage() {
               }
             >
               <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <ScrollTable>
+
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>{tx("Quantile", "分位数")}</TableHead>
-                      <TableHead className="text-right">{tx("Analog loss", "相似时刻损失")}</TableHead>
+                      <TableHead className="text-right"><Term k="analog">{tx("Analog", "相似时刻")}</Term> {tx("loss", "损失")}</TableHead>
                       <TableHead className="text-right">{tx("Random loss", "随机损失")}</TableHead>
                       <TableHead className="text-right">{tx("Skill", "技能")}</TableHead>
                       <TableHead className="text-right">{tx("95% CI of gain", "增益的 95% 置信区间")}</TableHead>
@@ -272,6 +292,7 @@ export default function CalibrationPage() {
                     ))}
                   </TableBody>
                 </Table>
+</ScrollTable>
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
                     <Stat label={tx("Mean loss, analog", "平均损失：相似时刻")} value={rep.skill.mean_loss_analog?.toFixed(3) ?? "—"} hint={tx("average pinball loss over the five quantiles", "五个分位数的平均弹球损失")} />
@@ -282,12 +303,13 @@ export default function CalibrationPage() {
                   {/* A judge reading only the headline number would conclude the retrieval
                       is useless. It is nearly useless for direction, which is why the
                       verdict never takes one from it; the tail is the part that is used. */}
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] text-muted-foreground">
                     <span className="text-foreground">{tx("How to read this.", "怎么读这个。")}</span>{" "}
+                    {tx("Scored by ", "评分采用")}<Term k="pinball" />{tx(". ", "。")}
                     {tx("Over the whole distribution the analogs are indistinguishable from picking random hours of the same kind, and around the quartiles they are measurably worse — the resemblance narrows the middle where the truth is wide. Where they help is the loss tail: ", "就整个分布而言，相似时刻与随机挑同类小时没有区别，在四分位附近还明显更差——相似性把本该很宽的中间部分收窄了。它真正有用的是亏损尾部：")}{fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} {tx("of outcomes fall below the analog 5th percentile against", "的结果低于相似时刻的第 5 百分位，而随机小时的对应比例是")}{" "}
                     {fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)} {tx("below the random-hours one. That is the number every verdict is sized against, and it is the only claim this product makes about the retrieval.", "。每个结论都是按这个数字定仓位的，这也是本产品对检索能力做出的唯一主张。")}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] text-muted-foreground">
                     {tx("Per token:", "按代币：")}{" "}
                     {Object.entries(rep.skill.by_ticker)
                       .sort(([a], [b]) => a.localeCompare(b))
@@ -301,6 +323,7 @@ export default function CalibrationPage() {
 
           {rep.walk_forward && rep.walk_forward.periods.length > 1 ? (
             <Section
+              collapsible
               title={tx("Is it getting better or worse?", "它在变好还是变差？")}
               subtitle={`${tx("The same out-of-sample scoring, split by month.", "同样的样本外评分，按月拆开。")} ${rep.walk_forward.note || ""}`}
               action={
@@ -309,7 +332,7 @@ export default function CalibrationPage() {
                 )
               }
             >
-              <div className="overflow-x-auto">
+              <ScrollTable>
                 <Table className="min-w-[640px]">
                   <TableHeader>
                     <TableRow>
@@ -327,7 +350,7 @@ export default function CalibrationPage() {
                       <TableRow key={p.label}>
                         <TableCell className="font-medium">
                           {p.label}
-                          {p.thin ? <span className="ml-2 text-xs text-muted-foreground">{tx("thin", "样本少")}</span> : null}
+                          {p.thin ? <span className="ml-2 text-[13px] text-muted-foreground">{tx("thin", "样本少")}</span> : null}
                         </TableCell>
                         <TableCell className="tabular text-right">{p.n}</TableCell>
                         <TableCell className="tabular text-right text-muted-foreground">{fmtPct(p.raw_lo_coverage * 100, 1, false)}</TableCell>
@@ -343,17 +366,19 @@ export default function CalibrationPage() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">{tx("Targets: 5% below p5, 90% inside the band. A month marked thin has too few scored forecasts to read much into.", "目标：5% 低于 p5，90% 落在区间内。标为“样本少”的月份，已评分的预测太少，不宜过度解读。")}</p>
+              </ScrollTable>
+              <p className="mt-2 text-[13px] text-muted-foreground">{tx("Targets: 5% below p5, 90% inside the band. A month marked thin has too few scored forecasts to read much into.", "目标：5% 低于 p5，90% 落在区间内。标为“样本少”的月份，已评分的预测太少，不宜过度解读。")}</p>
             </Section>
           ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section title={tx("Coverage by quantile", "各分位数的覆盖率")} subtitle={tx("Observed share of outcomes below each predicted quantile, with a 95% interval.", "低于各预测分位数的结果所占的实际比例，附 95% 区间。")}>
+            <Section collapsible title={tx("Coverage by quantile", "各分位数的覆盖率")} subtitle={tx("Observed share of outcomes below each predicted quantile, with a 95% interval.", "低于各预测分位数的结果所占的实际比例，附 95% 区间。")}>
+              <ScrollTable>
+
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{tx("Quantile", "分位数")}</TableHead>
+                    <TableHead><Term k="coverage">{tx("Quantile", "分位数")}</Term></TableHead>
                     <TableHead className="text-right">{tx("Nominal", "名义值")}</TableHead>
                     <TableHead className="text-right">{tx("Observed", "实际值")}</TableHead>
                     <TableHead className="text-right">{tx("95% interval", "95% 区间")}</TableHead>
@@ -374,8 +399,9 @@ export default function CalibrationPage() {
                   ))}
                 </TableBody>
               </Table>
+</ScrollTable>
             </Section>
-            <Section title={tx("Where outcomes landed", "结果落在哪里")} subtitle={tx("Share of realised returns per predicted band. A calibrated forecast is flat at the expected heights.", "各预测区间内实际收益所占的比例。校准良好的预测，柱高应与预期持平。")}>
+            <Section collapsible defaultOpen title={tx("Where outcomes landed", "结果落在哪里")} subtitle={tx("Share of realised returns per predicted band. A calibrated forecast is flat at the expected heights.", "各预测区间内实际收益所占的比例。校准良好的预测，柱高应与预期持平。")}>
               <figure aria-label={tx("Probability integral transform histogram", "概率积分变换直方图")}>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={pitData} margin={{ top: 12, right: 8, bottom: 4, left: -18 }} barCategoryGap={8}>
@@ -387,10 +413,11 @@ export default function CalibrationPage() {
                     <Bar dataKey="observed" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} name="observed" />
                   </BarChart>
                 </ResponsiveContainer>
-                <figcaption className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                <figcaption className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <span aria-hidden className="inline-block h-2 w-3 rounded-sm bg-chart-1" /> {tx("observed", "实际")}
                   </span>
+                  <span><Term k="pit" /></span>
                   <span className="inline-flex items-center gap-1">
                     <span aria-hidden className="inline-block h-2 w-3 rounded-sm bg-muted-foreground/40" /> {tx("expected if calibrated", "校准良好时的预期")}
                   </span>
@@ -416,11 +443,10 @@ function PlainWords({ adj }: { adj: NonNullable<CalibrationReport["adjusted"]> }
         ? tx("That is close to target but not on it, so treat the bad-case numbers as slightly optimistic.", "这接近目标但没有完全达到，所以请把坏情形数字视为略偏乐观。")
         : tx("That is off target, so the bad-case numbers have been too optimistic and should be read as such.", "这偏离了目标，说明坏情形数字过于乐观，应当这样理解。");
   return (
-    <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm">
-      <p className="font-medium">{tx("In plain words", "通俗地说")}</p>
-      <p className="mt-1 text-muted-foreground">
-        {tx(`Every verdict comes with a bad case: “1 time in 20, it goes worse than this”. We wrote down ${adj.n_evaluated.toLocaleString()} of those before knowing what would happen, then checked. The real outcome was worse than the bad case ${fmtPct(lo, 1, false)} of the time, against the 5% it should be. ${verdict} Before the correction the raw history was worse than its own bad case ${fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time, which is why the desk corrects it.`, `每个结论都带一个坏情形：“二十次里有一次会比这更糟”。我们在不知道结果之前写下了 ${adj.n_evaluated.toLocaleString()} 个这样的坏情形，然后去核对。实际结果比坏情形更差的比例是 ${fmtPct(lo, 1, false)}，而它本应是 5%。${verdict}修正之前，原始历史比它自己的坏情形更差的比例是 ${fmtPct(adj.raw_lo_coverage * 100, 1, false)}，这就是交易台要做修正的原因。`)}
-      </p>
-    </div>
+    <PlainBox>
+      {tx("Every verdict comes with a bad case: “1 time in 20, it goes worse than this” (the ", "每个结论都带一个坏情形：“二十次里有一次会比这更糟”（即 ")}
+      <Term k="p5">p5</Term>
+      {tx(`). We wrote down ${adj.n_evaluated.toLocaleString()} of those before knowing what would happen, then checked. The real outcome was worse than the bad case ${fmtPct(lo, 1, false)} of the time, against the 5% it should be. ${verdict} Before the correction the raw history was worse than its own bad case ${fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time, which is why the desk corrects it.`, `）。我们在不知道结果之前写下了 ${adj.n_evaluated.toLocaleString()} 个这样的坏情形，然后去核对。实际结果比坏情形更差的比例是 ${fmtPct(lo, 1, false)}，而它本应是 5%。${verdict}修正之前，原始历史比它自己的坏情形更差的比例是 ${fmtPct(adj.raw_lo_coverage * 100, 1, false)}，这就是交易台要做修正的原因。`)}
+    </PlainBox>
   );
 }
