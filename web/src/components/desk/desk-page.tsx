@@ -128,13 +128,11 @@ export default function DeskPage() {
     <ProofStrip stocks={universe?.length ?? null} />
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
       <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
+        {/* While the hero is up it carries the h1, the pitch and the demo trades; the rail
+            repeats none of them, and takes over once the hero is gone. */}
+        {report || heroUsed ? (
         <div>
-          {/* The hero carries the page's h1; once it is gone this heading takes over, so there is exactly one. */}
-          {!report && !heroUsed ? (
-            <h2 className="text-lg font-semibold tracking-tight">{tx("Stress-test a trade", "给交易做压力测试")}</h2>
-          ) : (
-            <h1 className="text-lg font-semibold tracking-tight">{tx("Stress-test a trade", "给交易做压力测试")}</h1>
-          )}
+          <h1 className="text-lg font-semibold tracking-tight">{tx("Stress-test a trade", "给交易做压力测试")}</h1>
           <p className="text-sm text-muted-foreground">{tx("Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.", "代币化美股全天候交易。下单之前，先看看历史上与现在相似的时刻发生了什么、可能出什么问题、以及能不能顺利平仓。")}</p>
           {/* On a phone the explainer on the right sits under this whole form, so a first
               visitor scrolls past twelve fields before learning what the desk does. */}
@@ -147,7 +145,8 @@ export default function DeskPage() {
             </p>
           ) : null}
         </div>
-        <ScenarioChips disabled={busy} onPick={runScenario} />
+        ) : null}
+        {report || heroUsed ? <ScenarioChips disabled={busy} onPick={runScenario} /> : null}
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
           <TabsList className="w-full">
             <TabsTrigger value="form" className="flex-1">

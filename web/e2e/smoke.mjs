@@ -10,14 +10,10 @@ const STARTERS = [
   "Short 5k NVDA for the next 12 hours",
   "Long 10k SPY until Monday open, thesis: strong Friday close",
 ];
-// Prefix of each scenario chip on home (web/src/components/desk/scenarios.tsx).
-const SCENARIOS = [
-  "Long 20k TSLA overnight",
-  "5x long 10k NVDA overnight",
-  "Short 10k AAPL overnight",
-  "周末做多特斯拉",
-  "What's the safest way to hold 20k META",
-];
+// The hero's demo buttons (short labels in web/src/components/desk/desk-page.tsx HERO_CHIPS).
+const SCENARIOS = ["NVDA weekend 15k", "5x TSLA overnight", "周末做多特斯拉"];
+// Left-rail demo buttons appear once the hero has been used (scenarios.tsx short labels).
+const RAIL_AFTER_REPORT = "Safest way to hold META";
 const FREE_TEXT = "I'm bullish on NVDA into the weekend, 15k, stop 215";
 const PAGES = ["/calibration", "/studies", "/wrong", "/status", "/usage"];
 const REPORT_RE = /What history says|历史怎么说/;
@@ -101,6 +97,14 @@ for (const s of SCENARIOS) {
     await waitReport(page, errors);
   });
 }
+
+await flow(`rail after a report: ${RAIL_AFTER_REPORT}`, async (page, errors) => {
+  await openHome(page, errors);
+  await page.getByRole("button", { name: SCENARIOS[0] }).first().click();
+  await waitReport(page, errors);
+  await page.getByRole("button", { name: RAIL_AFTER_REPORT }).first().click();
+  await waitReport(page, errors);
+});
 
 await flow("free-text chat", async (page, errors) => {
   await openHome(page, errors);

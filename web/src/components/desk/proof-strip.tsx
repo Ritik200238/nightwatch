@@ -58,25 +58,11 @@ export function ProofStrip({ stocks }: { stocks: number | null }) {
   ];
 
   return (
-    <section className="space-y-2 rounded-lg border border-border bg-card px-4 py-3" aria-label={tx("Track record and Bitget pieces", "战绩与 Bitget 组件")}>
-      <p className="text-sm">
-        {verify ? (
-          <>
-            <span className="font-semibold tabular-nums">{verify.checked}</span> {tx("live verdicts given and scored in public", "个实盘结论已公开给出并评分")}
-            {scored ? (
-              <>
-                {"; "}
-                <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
-                  <span className="font-semibold tabular-nums">{scored.missed}</span> {tx("went past their line", "超出了自己划的线")}
-                </Link>
-                <span className="text-muted-foreground"> {tx(`(of ${scored.scored} already matured)`, `（已到期的 ${scored.scored} 个中）`)}</span>
-              </>
-            ) : null}
-            {stocks ? <span className="text-muted-foreground"> · {tx(`${stocks} tokenized US stocks`, `${stocks} 只代币化美股`)}</span> : null}
-          </>
-        ) : (
-          <span className="text-muted-foreground">{tx("Loading the public record…", "正在加载公开记录…")}</span>
-        )}
+    <section className="space-y-2 rounded-lg border border-border bg-card px-4 py-3" aria-label={tx("Bitget pieces", "Bitget 组件")}>
+      {/* The live record is shown once, in the hero; here only what it is built on. */}
+      <p className="text-sm font-medium">
+        {tx("Built on Bitget, checked live", "基于 Bitget 构建，实时检查")}
+        {stocks ? <span className="font-normal text-muted-foreground"> · {tx(`${stocks} tokenized US stocks`, `${stocks} 只代币化美股`)}</span> : null}
       </p>
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
         {pieces.map((p) => (
