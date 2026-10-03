@@ -725,6 +725,32 @@ def book_line(report: Any, lang: str = "en") -> str | None:  # noqa: ANN401
     if port.unknown:
         names = ", ".join(port.unknown)
         bits.append(f"{names} 没有足够的历史数据，未计入尾部风险。" if zh else f"No stored history for {names}, so it is left out of the tail (not counted as zero).")
+    extra = _book_stress_line(port, zh)
+    if extra:
+        bits.append(extra)
+    return "".join(bits) if zh else " ".join(bits)
+
+
+_LEVER_ZH = {"smaller_trade": "把新仓缩小到", "skip_trade": "不做这笔", "trim_holding": "减仓", "hedge_perp": "用永续对冲"}
+
+
+def _book_stress_line(port: Any, zh: bool) -> str:  # noqa: ANN401
+    """The book through its worst crash week and, on a breach, the first plan that gets it back inside."""
+    st = getattr(port, "stress", None)
+    if st is None:
+        return ""
+    bits: list[str] = []
+    crash = min((c for c in st.crashes if c.asked_quote is not None), key=lambda c: c.asked_quote, default=None)
+    if crash is not None:
+        bits.append(f"整个持仓在最坏的一次历史冲击（{crash.name}）里会亏 {abs(crash.asked_quote):,.0f} USDT。" if zh
+                    else f"In its worst crash replay ({crash.name}) the whole book would have lost {abs(crash.asked_quote):,.0f} USDT.")
+    plan = next((p for p in st.plans if p.achieves_limit), None)
+    if st.breached and plan is not None:
+        if zh:
+            bits.append(f"超出组合上限。可行的调整：{_LEVER_ZH.get(plan.lever, plan.lever)} {plan.ticker}（{plan.amount_quote:,.0f} USDT），"
+                        f"二十分之一亏损降到 {abs(plan.after.tail_quote):,.0f} USDT。")
+        else:
+            bits.append(f"That is past the book limit. One fix that gets back inside it: {plan.detail}, which takes the one-in-twenty loss from {abs(plan.before.tail_quote):,.0f} to {abs(plan.after.tail_quote):,.0f}.")
     return "".join(bits) if zh else " ".join(bits)
 
 
