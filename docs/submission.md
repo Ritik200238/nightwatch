@@ -59,7 +59,7 @@ moments that looked like this, and can I survive the bad cases?** Given a trade 
    point in the window, excess over the native stock, with bootstrap confidence
    intervals and a permutation test against random hours from the same time-of-week
    bucket.
-5. Runs preset stress tests calibrated from the token's own history: closed-window gap
+5. Runs preset stress tests fitted from the token's own history: closed-window gap
    percentiles, worst and typical earnings gaps, volatility spikes, basis blowouts,
    liquidity drought, cannot-exit-for-24h, funding spike on the hedge leg, plus a
    block-bootstrap Monte Carlo and a reverse stress ("what move loses 5%").
@@ -72,10 +72,10 @@ moments that looked like this, and can I survive the bad cases?** Given a trade 
    much it matters; the number beside it is not the model's, but what this token's own
    bars did after every other filing given that same label.
 8. Passes the ticket through a nine-rule discipline gate and five independent sizing
-   caps, and returns a verdict: go, reduce to a size, hedge a ratio, or do not trade.
+   caps, and returns a verdict: GO, REDUCE TO a size, HEDGE a ratio, REVIEW, or NO GO.
    The gate is built to decide, not to abstain: where a missing input is a caution rather
    than a danger - no stop given, thin weekend trading - it says so in the verdict and
-   sizes against the calibrated 5th percentile instead of refusing.
+   sizes against the fitted one-in-twenty loss (the 5th percentile) instead of refusing.
 9. **Re-runs itself when the trader asks a what-if.** "What if I only held it six
    hours?", "was it worse on earnings nights?" - none of those are a rearrangement of a
    report that has already been computed, so the desk computes another one against the
@@ -124,7 +124,26 @@ orders. Nightwatch never places orders.
 
 ### 3. Validation data and key metrics
 
-All figures **observed** on the build as of 2026-09-22 unless labelled otherwise.
+**Current figures, as of 3 Oct 2026** (live; recomputed from the journal and checked
+against the public endpoints that day):
+
+* Receipts: `/api/verify` recomputes 712 chained verdicts with no break; 4 of 4 daily
+  anchors are confirmed in Bitcoin.
+* Scored out of sample: 2,779 matured forecasts. The raw one-in-twenty loss (the 5th
+  percentile) was breached 7.5% of the time (red band); with tail factors fitted only on
+  earlier forecasts, 4.8% on 2,735 evaluated (green band).
+* Misses, published at `/wrong`: 124 of 2,301 replays and 8 of 433 live tickets went past
+  the line.
+* Studies: 11 questions, 5 no, 3 yes, 3 undecided. After correcting for asking eleven
+  (Benjamini-Hochberg, 5%), 1 of the 3 yes survives (a model reading an SEC filing picks
+  the ones that move the price, q = 0.004). No directional edge.
+* Data: six data feeds plus two Bitget AI services; 24 core tokens.
+* Token counts are per study: the filing-reading study used 2,553,333 tokens over 682
+  filings (see the Qwen section).
+
+The bullets below are frozen at **2026-09-22** unless labelled otherwise, and are the
+numbers behind the write-up; where they differ from the list above, the list above is
+current.
 
 * Data: 24 tokenized stocks with hourly bars from January 2025 (909,890 bars across
   spot, perpetual trade/index/mark and native), 43,691 order-book snapshots recorded
@@ -284,7 +303,7 @@ token tail factors, until each token has enough scored forecasts of its own.
 
 **Stack:** Python 3.11, numpy/pandas, SQLite, FastAPI; Next.js 16, Recharts. Qwen 3.8 Max,
 which produces no number: it reads SEC filings, and parses the messages the rule parser
-cannot (Claude is supported as a second provider). Seven live data sources, all listed
+cannot (Claude is supported as a second provider). Six data feeds plus two Bitget AI services, all listed
 with their freshness on the desk itself and at `/sources`: Bitget public API (spot, USDT
 perps with index and mark candles, order books, funding), **Bitget's US-stock data service
 (`bitget-mcp-server`)**, Yahoo chart API, Nasdaq earnings calendar, FRED, RSS headlines, and
