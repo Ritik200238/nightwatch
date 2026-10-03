@@ -11,6 +11,7 @@ import { ActOnIt } from "@/components/report/act-on-it";
 import { GuardNote } from "@/components/report/guard-note";
 import { Feedback, WatchButton } from "@/components/report/feedback";
 import { BookContrast } from "@/components/report/book-contrast";
+import { BookStressView } from "@/components/report/book-stress";
 import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
@@ -1829,6 +1830,7 @@ function PortfolioSection({ report, openAll, lang }: { report: Report; openAll?:
           </p>
         </div>
       ) : null}
+      {p.stress ? <BookStressView stress={p.stress} lang={lang} /> : null}
       {p.notes.length ? (
         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
           {p.notes.map((n) => (
