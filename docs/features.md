@@ -94,6 +94,7 @@ It also keeps track of the things a single trade cannot see:
 * **What the book looks like at other hours.** The recorder snapshots every order book
   every minute, because nobody publishes how deep a tokenized stock is at 3 a.m. on a
   Sunday.
+* **A source tag on every headline number.** Live (read from Bitget, with the book's age), history (measured, with how many past moments), assumed (a preset or policy rule) or AI (written by the analyst, moves no number); hover or tap a tag for the exact feed and sample. The same `provenance` block is in the report JSON and the MCP result.
 * **Where the numbers came from.** Six live feeds — Bitget, Yahoo, Nasdaq, FRED, RSS and
   SEC EDGAR — each listed on the desk with when it was last pulled and the newest thing in
   it. Filings are timed to the second EDGAR accepted them, because most 8-Ks land after
