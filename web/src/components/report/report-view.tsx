@@ -12,7 +12,7 @@ import { GuardNote } from "@/components/report/guard-note";
 import { Feedback, WatchButton } from "@/components/report/feedback";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
-import { Pill, Section, Stat } from "@/components/report/primitives";
+import { Pill, Section, SourceChip, SourceLegend, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
@@ -114,7 +114,10 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold">{lang === "zh" ? "分析师的看法" : "The analyst's take"}</p>
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          {lang === "zh" ? "分析师的看法" : "The analyst's take"}
+          <SourceChip entry={report.provenance?.items.analyst ?? { kind: "ai" }} lang={lang} />
+        </p>
         <p className="text-[13px] text-muted-foreground">
           {take.status === "done"
             ? `${take.model || "Qwen"} · ${take.seconds ?? "?"}s · ${lang === "zh" ? "数字已与报告核对；推理是模型自己的，可能出错" : "numbers checked against the report; the reasoning is the model's and can be wrong"}`
@@ -251,6 +254,7 @@ function LiquidationNote({ report, lang }: { report: Report; lang: Lang }) {
   return (
     <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${bad ? "border-status-critical/40 bg-status-critical/5" : "border-border bg-muted/30"}`}>
       <span className="font-medium text-foreground">{L("Liquidation: ", "强平：")}</span>
+      <SourceChip entry={report.provenance?.items.liquidation} lang={lang} className="mr-1.5" />
       <span className="text-muted-foreground">
         {line}
         {l.tiers_source === "assumed"
@@ -387,6 +391,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
   if (v.verdict === "GO") sizeText = `${fmtUsd(rec ?? req)} USDT`;
   else if ((v.verdict === "REDUCE_TO" || v.verdict === "REVIEW") && rec != null && smaller) sizeText = L(`${fmtUsd(rec)} of ${fmtUsd(req)} USDT`, `${fmtUsd(rec)} / ${fmtUsd(req)} USDT`);
   else if (v.verdict === "HEDGE") sizeText = L(`hedge ${fmtRatio(v.hedge_ratio)} of ${fmtUsd(req)} USDT`, `对冲 ${fmtRatio(v.hedge_ratio)} · ${fmtUsd(req)} USDT`);
+  const prov = report.provenance?.items;
   const reasonLines = v.reasons.map((r) => plainReason(r, lang));
   const subhead = reasonLines[0] ?? "";
 
@@ -406,6 +411,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       </p>
       {subhead ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{subhead}</p> : null}
       <CredStrip lang={lang} />
+      {prov ? <SourceLegend lang={lang} /> : null}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <StressBars report={report} lang={lang} />
         <AnalogMini report={report} lang={lang} />
@@ -442,23 +448,27 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
           value={report.gate.risk_quote != null ? `−${fmtUsd(report.gate.risk_quote)}` : "—"}
           hint={[riskBasis(lang, report.gate.risk_basis), atRequested].filter(Boolean).join(" · ")}
           tone="warning"
+          chip={<SourceChip entry={prov?.loss_line} lang={lang} />}
         />
         <Stat
           label={L("Worst stress scenario", "最坏的压力情景")}
           value={worst ? fmtUsd(worst.quote) : "—"}
           hint={worst ? `${L(`${worst.name} · ${fmtPct(worst.pct, 1)} of the position`, `${presetName(lang, worst.name, worst.zh)} · 占仓位的 ${fmtPct(worst.pct, 1)}`)}${atRequested ? ` · ${atRequested}` : ""}` : L("no priced scenario", "没有可定价的情景")}
           tone="critical"
+          chip={<SourceChip entry={prov?.worst_stress} lang={lang} />}
         />
         <Stat
           label={L("Getting out costs", "平仓成本")}
           value={exit?.total_cost_quote != null ? `−${fmtUsd(exit.total_cost_quote)}` : "—"}
           hint={exit?.total_cost_bps != null ? L(`${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book`, `按${stateWord(lang, report.execution.book_source)}盘口计 ${fmtBps(exit.total_cost_bps)}`) : L("no order book", "没有盘口数据")}
+          chip={<SourceChip entry={prov?.exit_cost} lang={lang} />}
         />
         <Stat
           label={cap ? L("Size held down by", "仓位被压低的原因") : L("Size", "仓位")}
           value={cap ? fmtUsd(cap.notional as number) : fmtUsd(t.notional_quote)}
           hint={cap ? `${tl(lang, "cap", cap.name)} — ${capDetail(cap.detail, lang)}` : L("inside every cap", "在所有上限之内")}
           tone={cap ? "warning" : "good"}
+          chip={<SourceChip entry={prov?.size} lang={lang} />}
         />
       </div>
 
@@ -1145,6 +1155,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
             <Stat
               label={L(`Typical outcome over ${report.primary_horizon}`, `${report.primary_horizon} 内的典型结果`)}
               value={fmtPct(c.median_pct)}
+              chip={<SourceChip entry={report.provenance?.items.analog} lang={lang} />}
               hint={L(`mean ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`, `均值 ${fmtPct(c.mean_pct)} [${fmtPct(c.ci_mean?.low)}, ${fmtPct(c.ci_mean?.high)}]`)}
             />
             <Stat
@@ -1161,6 +1172,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
                   `加安全边际之前 ${fmtPct(c.p5)} · 放宽 ×${primary.adjustment?.k_lo?.toFixed(2) ?? "—"}${primary.adjustment?.c_lo ? `，并设 ${primary.adjustment.c_lo.toFixed(1)} 个百分点的下限` : ""}，依据 ${primary.adjustment?.n_fit} 次已评分的回放`,
                 )}
                 tone={short ? "good" : "critical"}
+                chip={<SourceChip entry={report.provenance?.items.loss_line} lang={lang} />}
               />
             ) : (
               <Stat
@@ -2040,7 +2052,12 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                     <TableCell>
                       <Pill tone={sevTone(p.severity)}>{lang === "zh" ? (STRINGS.zh.severity[p.severity] ?? p.severity) : p.severity}</Pill>
                     </TableCell>
-                    <TableCell className="tabular text-right">{shock}</TableCell>
+                    <TableCell className="tabular text-right">
+                      {shock}
+                      <span className="mt-0.5 block">
+                        <SourceChip entry={report.provenance?.items.stress?.[p.id]} lang={lang} />
+                      </span>
+                    </TableCell>
                     <TableCell className="tabular text-right">
                       <span className={imp.total_pct_of_notional != null && imp.total_pct_of_notional < -5 ? "text-status-critical" : ""}>{fmtPct(imp.total_pct_of_notional)}</span>
                       <span className="block text-[13px] text-muted-foreground">
@@ -2071,6 +2088,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                   value={fmtPct(mc.p5)}
                   hint={L(`${mc.n_paths.toLocaleString()} paths · block bootstrap of ${mc.source_hours.toLocaleString()} hours`, `${mc.n_paths.toLocaleString()} 条路径 · 对 ${mc.source_hours.toLocaleString()} 小时数据做分块自助抽样`)}
                   tone="critical"
+                  chip={<SourceChip entry={report.provenance?.items.monte_carlo} lang={lang} />}
                 />
                 <Stat
                   label={L("Expected shortfall (5%)", "预期缺口（最差 5%）")}
