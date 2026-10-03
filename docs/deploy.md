@@ -228,3 +228,10 @@ Order matters, because the API refuses callers without it the moment it is set:
    the web app so the proxy and the build-time snapshot start sending the header.
 3. Put the same value in the box's `.env` and recreate the API (`docker compose up -d api`).
 4. Check: `curl http://<box>:8000/calibration` answers 403; the site still works.
+
+### Why the Bitget street-data feed was once silently empty
+
+The `bitget-mcp-server` feed had been silently empty in production: the server refuses new
+sessions over this box's IPv4 ("Too many open sessions") and accepts them over IPv6, and
+the API's container had only IPv4. It now runs on the host network; `/sources` shows how
+many tokens currently have Bitget street data.
