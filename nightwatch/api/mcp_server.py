@@ -159,6 +159,7 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
         "leverage": {k: (payload.get("leverage") or {}).get(k) for k in ("leverage", "liquidation_price", "liquidation_distance_pct", "analog_hits", "analog_of", "mc_share", "presets_hit")} if payload.get("leverage") else None,
         "warnings": payload.get("warnings", []),
         "as_of": payload.get("as_of"),
+        "provenance": payload.get("provenance"),
         "report_url": "https://nightwatch-gules.vercel.app",
     }
     return _text_result(brief(report), summary)

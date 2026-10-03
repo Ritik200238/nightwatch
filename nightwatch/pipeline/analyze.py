@@ -603,7 +603,18 @@ class AnalysisReport:
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
         _add_zh_names(out)
+        _add_provenance(out)
         return out
+
+
+def _add_provenance(out: dict[str, Any]) -> None:
+    """Where each headline number came from (live Bitget, history, assumed, AI)."""
+    try:
+        from nightwatch.pipeline.provenance import build
+
+        out["provenance"] = build(out)
+    except Exception:  # noqa: BLE001 - a label must never break a report
+        log.exception("provenance failed")
 
 
 def _add_zh_names(out: dict[str, Any]) -> None:
