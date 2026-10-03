@@ -78,6 +78,8 @@ export const KIND_MEANING: Record<ProvKind, { en: string; zh: string }> = {
 export function chipText(e: ProvEntry, lang: Lang): string {
   const k = lang === "zh" ? KIND_NAME[e.kind].zh : KIND_NAME[e.kind].en;
   if (e.kind === "live" && e.age_s != null && e.age_s > 0) return `${k} · ${ageText(e.age_s, lang)}${e.stale ? "!" : ""}`;
+  // A crash replay is one real day, not a sample of one: "n=1" would read as thin evidence.
+  if (e.kind === "history" && e.unit === "day") return `${k} · ${lang === "zh" ? "真实一日" : "real day"}`;
   if (e.kind === "history" && e.n != null) return `${k} · n=${e.n.toLocaleString()}`;
   return k;
 }
