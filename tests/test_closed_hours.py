@@ -196,6 +196,48 @@ def test_half_kept_is_measured_as_half():
     assert s["lo"] < 0.5 < s["hi"]
 
 
+def test_a_price_taken_after_the_pre_market_has_started_looks_informative_for_a_reason_that_is_not_the_weekend():
+    """The flaw the first real run exposed. Here the weekend carries NO information, but the
+    stock gaps by whatever the token does between Monday 04:00 and 09:00 ET (the pre-market).
+    The 09:00 cut must look informative and the weekend-only cut must not."""
+    rng = np.random.default_rng(11)
+    wins, idx, kind = hourly_kinds()
+    wk = wins[wins["kind"] == "weekend"].reset_index(drop=True)
+    closes, daily = {}, {}
+    for t in TICKERS:
+        steps = rng.normal(0, 0.0003, len(idx))
+        pre = rng.normal(0, 0.012, len(wk))  # Monday pre-market move, seen by the token and then by the stock
+        for i, r in wk.iterrows():
+            j = idx.searchsorted(r["end"]) - 3  # a bar inside 06:00-07:00 ET, after the 04:00 cut
+            if 0 <= j < len(idx):
+                steps[j] += pre[i]
+        closes[t] = pd.Series(100.0 * np.exp(np.cumsum(steps)), index=idx)
+        o, c = {}, {}
+        pre_by_d1 = {r["d1"]: pre[i] for i, r in wk.iterrows()}
+        level = 100.0
+        for r in wins[wins["kind"] == "open"].itertuples():
+            op = level * np.exp(pre_by_d1.get(r.d0, 0.0) + rng.normal(0, 0.003))
+            cl = op * np.exp(rng.normal(0, 0.004))
+            ts = pd.Timestamp(r.start) + pd.Timedelta(minutes=30)
+            o[ts], c[ts] = op, cl
+            level = cl
+        daily[t] = pd.DataFrame({"open": pd.Series(o), "close": pd.Series(c)})
+    res = ch.run(inputs_from(closes, daily), first=FIRST, last=LAST)["weekend"]["by_anchor"]
+    assert res["to_preopen"]["stats"]["corr_open"]["lo"] > 0.7
+    assert res["weekend_only"]["stats"]["corr_open"]["hi"] < 0.3
+    assert res["weekend_only"]["stats"]["oos_skill"]["hi"] < 0.1
+
+
+def test_the_hourly_tally_and_the_window_measure_can_be_set_side_by_side():
+    rng = np.random.default_rng(2)
+    wins, idx, kind = hourly_kinds()
+    closes = {t: token_close(rng, idx, kind, 0.004, 0.004) for t in TICKERS}
+    h = ch.hourly_movement(closes, wins)
+    # equal volatility per hour: the tally's closed share is the clock's, whichever way it is counted
+    assert abs(h["stats"]["abs_share"]["est"] - h["stats"]["time_share"]["est"]) < 0.03
+    assert abs(h["stats"]["per_hour_abs_ratio"]["est"] - 1.0) < 0.1
+
+
 def test_stale_tokens_are_dropped_from_the_primary_weekend_population():
     res = q2(beta=1.0, seed=2)
     assert res["weekend"]["primary"]["n"] <= res["weekend"]["all_weekends"]["n"]

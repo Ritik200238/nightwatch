@@ -46,6 +46,18 @@ Decisions fixed before looking
 * No p-values and no verdict is entered in the multiple-testing family: this measures,
   it does not add a twelfth test.
 
+Amended after the first run (the run is what showed the flaw)
+-------------------------------------------------------------
+Q2 was first run with the token's move cut Friday 16:00 to Monday 09:00 ET, 30 minutes
+before the open. It returned a correlation of 0.97 with Monday's gap, which is too good
+to be a finding about the weekend: US stocks trade pre-market from 04:00 ET, the token
+follows them, so a price at 09:00 Monday has already seen the stock's pre-market. Two
+stricter cuts were added (to Monday 04:00; and Friday 20:00 to Monday 04:00, when no US
+venue is open at either end) and the verdict is now judged on the strictest. All three
+are published. Q1 was also given a hourly-tally cross-check, because a simple sum of hourly
+absolute moves is how a rival would plausibly reach its number and the two measures
+should be seen side by side.
+
 Limits that cannot be removed by cleverness
 -------------------------------------------
 * The history is about 20 months (Jan 2025 on), so a few hundred weekends in total and
@@ -330,6 +342,60 @@ def movement(rows: pd.DataFrame, *, only_fresh: bool = False, drop_earnings: boo
     return {"n_windows": int(len(x)), "n_weeks": len(weeks), "stats": stats, "per_token": per_token}
 
 
+def window_index(ts_ns: np.ndarray, wins: pd.DataFrame) -> np.ndarray:
+    """Index of the window each timestamp (ns) falls in, -1 if none."""
+    starts, ends = _ns(wins["start"]), _ns(wins["end"])
+    i = np.searchsorted(starts, ts_ns, side="right") - 1
+    ok = (i >= 0) & (ts_ns < ends[np.clip(i, 0, None)])
+    return np.where(ok, i, -1)
+
+
+def hourly_rows(close: pd.Series, wins: pd.DataFrame) -> pd.DataFrame:
+    """Every clock hour's log return, the way a simple tally of hourly moves would do it.
+
+    An hour with no trade has return 0, and the move across a run of empty hours lands in
+    the first hour that trades. That attributes a quiet night's move to the morning, so
+    this is a cross-check on the window measure, not a replacement for it."""
+    grid = pd.date_range(wins["start"].min().ceil("1h"), wins["end"].max().floor("1h"), freq="1h", inclusive="left")
+    p0, _ = price_at(close, grid)
+    p1, _ = price_at(close, grid + HOUR)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r = np.log(p1 / p0)
+    wi = window_index(_ns(grid), wins)
+    ok = np.isfinite(r) & (wi >= 0)
+    k = wins["kind"].to_numpy()[wi[ok]]
+    return pd.DataFrame({"kind": k, "week": wins["week"].to_numpy()[wi[ok]], "hours": 1.0, "r": r[ok], "fresh": True, "earn": False})
+
+
+def hourly_stats(sums: np.ndarray) -> dict[str, np.ndarray]:
+    """Absolute-move and variance shares from hourly rows. Absolute moves are legitimate
+    here because every unit is one hour; they are not on windows of unequal length."""
+    with _quiet():
+        v, a, h, n = sums[..., 0], sums[..., 1], sums[..., 2], sums[..., 3]
+        ac, ao = a[..., 1:].sum(-1), a[..., 0]
+        vc, vo = v[..., 1:].sum(-1), v[..., 0]
+        hc, ho = h[..., 1:].sum(-1), h[..., 0]
+        enough = n.sum(-1) >= 500
+        w = lambda x: np.where(enough, x, np.nan)  # noqa: E731
+        return {
+            "abs_share": np.nanmean(w(ac / (ac + ao)), axis=-1),
+            "var_share": np.nanmean(w(vc / (vc + vo)), axis=-1),
+            "time_share": np.nanmean(w(hc / (hc + ho)), axis=-1),
+            "per_hour_abs_ratio": _geo(w((ac / hc) / (ao / ho))),
+        }
+
+
+def hourly_movement(closes: dict[str, pd.Series], wins: pd.DataFrame) -> dict[str, Any]:
+    frames = []
+    for t, c in closes.items():
+        x = hourly_rows(c, wins)
+        x["ticker"] = t
+        frames.append(x)
+    rows = pd.concat(frames, ignore_index=True)
+    weeks, tickers = sorted(rows["week"].unique()), sorted(closes)
+    return {"n_hours": int(len(rows)), "stats": bootstrap(_tensor(rows, weeks, tickers), hourly_stats)}
+
+
 # ----------------------------------------------------------------------------- Q2: weekends
 
 
@@ -347,20 +413,51 @@ def stock_days(daily: pd.DataFrame) -> pd.DataFrame:
     return out[~out.index.duplicated(keep="last")]
 
 
-def gap_table(win: pd.DataFrame, stock: pd.DataFrame, ticker: str, kind: str) -> pd.DataFrame:
-    """For each closed window of ``kind``: token move W, stock open gap G, stock move to
-    the next close M. Windows missing a stock bar at either end are dropped."""
+# The token's weekend move can be cut three ways, and they answer different questions.
+# Written down here because the first run used only the last, found a correlation of 0.97
+# between it and Monday's gap, and that number is mostly Monday's pre-market: US stocks
+# trade from 04:00 ET, the token follows them, and a token price taken 30 minutes before
+# the open has already seen the stock's pre-market. So the stricter cuts were added and
+# the verdict moved to the strictest. This note is the record of that amendment.
+ANCHORS = {
+    # name: (start, end) as (days_offset_from_last_close, ET time) -> see gap_table
+    "weekend_only": "Friday 20:00 ET to Monday 04:00 ET: no US venue is trading at either end or between",
+    "to_premarket_start": "Friday 16:00 ET (the close) to Monday 04:00 ET: adds Friday's after-hours",
+    "to_preopen": "Friday 16:00 ET to Monday 09:00 ET: adds Monday's whole pre-market",
+}
+_ANCHOR_COL = {"weekend_only": "Wc", "to_premarket_start": "Wb", "to_preopen": "W"}
+_ANCHOR_FRESH = {"weekend_only": "fresh_c", "to_premarket_start": "fresh_b", "to_preopen": "fresh"}
+
+
+def gap_table(win: pd.DataFrame, stock: pd.DataFrame, ticker: str, kind: str, close: pd.Series | None = None) -> pd.DataFrame:
+    """For each closed window of ``kind``: the token's move cut three ways (W to 09:00,
+    Wb to 04:00, Wc from 20:00 to 04:00), the stock's open gap G and its move to the next
+    close M. Windows missing a stock bar at either end are dropped."""
     w = win[win["kind"] == kind]
+    keep = [r for r in w.itertuples() if r.d0 in stock.index and r.d1 in stock.index and min(stock.at[r.d0, "close"], stock.at[r.d1, "open"], stock.at[r.d1, "close"]) > 0]
+    cols = ["ticker", "week", "d0", "W", "Wb", "Wc", "G", "M", "fresh", "fresh_b", "fresh_c", "earn", "hours"]
+    if not keep:
+        return pd.DataFrame(columns=cols)
+    t16 = pd.DatetimeIndex([r.start for r in keep])
+    t09 = pd.DatetimeIndex([r.end for r in keep])
+    t20 = pd.DatetimeIndex([datetime.combine(r.d0, time(20, 0), tzinfo=ET).astimezone(UTC) for r in keep])
+    t04 = pd.DatetimeIndex([datetime.combine(r.d1, time(4, 0), tzinfo=ET).astimezone(UTC) for r in keep])
+    if close is None or close.empty:
+        return pd.DataFrame(columns=cols)
+    (p16, a16), (p20, a20), (p04, a04), (p09, a09) = (price_at(close, t) for t in (t16, t20, t04, t09))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        W, Wb, Wc = np.log(p09 / p16), np.log(p04 / p16), np.log(p04 / p20)
     rows = []
-    for r in w.itertuples():
-        if r.d0 not in stock.index or r.d1 not in stock.index:
-            continue
+    for i, r in enumerate(keep):
         c0, o1, c1 = stock.at[r.d0, "close"], stock.at[r.d1, "open"], stock.at[r.d1, "close"]
-        if min(c0, o1, c1) <= 0:
-            continue
-        rows.append({"ticker": ticker, "week": r.week, "d0": r.d0, "W": r.r, "G": math.log(o1 / c0), "M": math.log(c1 / c0),
-                     "fresh": bool(r.fresh), "earn": bool(getattr(r, "earn", False)), "hours": r.hours})
-    return pd.DataFrame(rows, columns=["ticker", "week", "d0", "W", "G", "M", "fresh", "earn", "hours"])
+        rows.append({
+            "ticker": ticker, "week": r.week, "d0": r.d0, "W": W[i], "Wb": Wb[i], "Wc": Wc[i],
+            "G": math.log(o1 / c0), "M": math.log(c1 / c0),
+            "fresh": bool(max(a16[i], a09[i]) <= STALE_H), "fresh_b": bool(max(a16[i], a04[i]) <= STALE_H),
+            "fresh_c": bool(max(a20[i], a04[i]) <= STALE_H), "earn": bool(getattr(r, "earn", False)), "hours": r.hours,
+        })
+    out = pd.DataFrame(rows, columns=cols)
+    return out[np.isfinite(out[["W", "Wb", "Wc"]]).all(axis=1)].reset_index(drop=True)
 
 
 def _demean_by_date(t: pd.DataFrame) -> pd.DataFrame:
@@ -431,9 +528,10 @@ def weekend_stats(sums: np.ndarray) -> dict[str, np.ndarray]:
         }
 
 
-def weekend_block(table: pd.DataFrame, *, only_fresh: bool = True, drop_earnings: bool = False) -> dict[str, Any]:
-    """Q2 over a gap table: estimates, intervals, and the per-token slopes."""
-    x = table
+def weekend_block(table: pd.DataFrame, *, anchor: str = "weekend_only", only_fresh: bool = True, drop_earnings: bool = False) -> dict[str, Any]:
+    """Q2 over a gap table: estimates, intervals, and the per-token slopes, for one way of
+    cutting the token's weekend move (see ``ANCHORS``)."""
+    x = table.assign(W=table[_ANCHOR_COL[anchor]], fresh=table[_ANCHOR_FRESH[anchor]])
     if only_fresh:
         x = x[x["fresh"]]
     if drop_earnings:
@@ -610,6 +708,9 @@ def run(inp: Inputs, *, first: date | None = None, last: date | None = None) -> 
     first = first or min(starts).date()
     last = last or max(ends).date()
     wins = session_windows(first, last)
+    # Only windows that had finished when the newest bar was written; a half-finished
+    # window would be scored on a price that has not moved yet.
+    wins = wins[wins["end"] <= pd.Timestamp(max(ends)) + HOUR].reset_index(drop=True)
 
     per_token: dict[str, pd.DataFrame] = {}
     gaps_weekend, gaps_night = [], []
@@ -618,8 +719,8 @@ def run(inp: Inputs, *, first: date | None = None, last: date | None = None) -> 
         per_token[t] = w
         stock = stock_days(inp.daily.get(t, pd.DataFrame()))
         if len(stock):
-            gaps_weekend.append(gap_table(w, stock, t, "weekend"))
-            gaps_night.append(gap_table(w, stock, t, "overnight"))
+            gaps_weekend.append(gap_table(w, stock, t, "weekend", close))
+            gaps_night.append(gap_table(w, stock, t, "overnight", close))
     rows = movement_rows(per_token)
     wk = pd.concat(gaps_weekend, ignore_index=True) if gaps_weekend else pd.DataFrame()
     nt = pd.concat(gaps_night, ignore_index=True) if gaps_night else pd.DataFrame()
@@ -639,18 +740,25 @@ def run(inp: Inputs, *, first: date | None = None, last: date | None = None) -> 
             "primary": primary,
             "fresh_only": movement(rows, only_fresh=True),
             "no_earnings": movement(rows, drop_earnings=True),
+            "hourly_tally": hourly_movement(inp.spot_close, wins),
         },
     }
     if len(wk):
+        by_anchor = {a: weekend_block(wk, anchor=a) for a in ANCHORS}
         result["weekend"] = {
-            "primary": weekend_block(wk),
+            "anchors": ANCHORS,
+            "primary": by_anchor["weekend_only"],
+            "by_anchor": by_anchor,
             "all_weekends": weekend_block(wk, only_fresh=False),
             "no_earnings": weekend_block(wk, drop_earnings=True),
-            "dropped_stale": int((~wk["fresh"]).sum()),
+            "dropped_stale": int((~wk["fresh_c"]).sum()),
         }
         result["weekend"]["verdict"] = judge_weekend(result["weekend"]["primary"])
     if len(nt):
-        result["overnight"] = {"primary": weekend_block(nt), "no_earnings": weekend_block(nt, drop_earnings=True)}
+        result["overnight"] = {
+            "by_anchor": {a: weekend_block(nt, anchor=a) for a in ANCHORS},
+            "primary": weekend_block(nt), "no_earnings": weekend_block(nt, drop_earnings=True),
+        }
     result["liquidity"] = liquidity(inp.books, wins) if inp.books else {"n_snapshots": 0, "stats": {}}
     result["per_token"] = token_lines(result)
     return result
@@ -667,7 +775,7 @@ def token_lines(result: dict[str, Any]) -> dict[str, dict[str, float]]:
             "time_share_pct": round(100 * p["time_share"], 1),
             "n_windows": p["n_windows"],
         }
-    wk = (result.get("weekend", {}) or {}).get("primary", {})
+    wk = ((result.get("weekend", {}) or {}).get("by_anchor", {}) or {}).get("to_premarket_start", {})
     for p in wk.get("per_token", []) or []:
         if p["ticker"] in out:
             lo, hi = p.get("slope_open_ci") or (math.nan, math.nan)
