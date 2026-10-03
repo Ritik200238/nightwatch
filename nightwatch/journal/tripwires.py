@@ -138,15 +138,24 @@ def _view(r: tuple[Any, ...]) -> dict[str, Any]:
 _SELECT = "SELECT id, forecast_id, ticker, side, level, direction, label, ref_price, created_at, status, webhook, lang, before, checked_to, fired_at, fired_price, after, error, webhook_status FROM tripwires"
 
 
+def _plan_note(conn: sqlite3.Connection, tid: str) -> dict[str, Any] | None:
+    from nightwatch.journal import plans
+
+    lang = (conn.execute("SELECT lang FROM tripwires WHERE id=?", (tid,)).fetchone() or ("en",))[0]
+    return plans.alert_note(conn, tid, lang)
+
+
 def get(conn: sqlite3.Connection, tid: str) -> dict[str, Any] | None:
     r = conn.execute(f"{_SELECT} WHERE id=?", (tid,)).fetchone()
-    return _view(r) if r else None
+    if not r:
+        return None
+    return {**_view(r), "plan": _plan_note(conn, tid)}
 
 
 def for_report(conn: sqlite3.Connection, forecast_id: int, client: str) -> list[dict[str, Any]]:
     """The tripwires this visitor set on this report, newest first."""
     rows = conn.execute(f"{_SELECT} WHERE forecast_id=? AND client=? ORDER BY created_at DESC LIMIT 20", (forecast_id, client)).fetchall()
-    return [_view(r) for r in rows]
+    return [{**_view(r), "plan": _plan_note(conn, r[0])} for r in rows]
 
 
 def create(
@@ -237,10 +246,15 @@ def run_armed(
             log.warning("tripwire %s fired but the re-run failed: %s", tid, err)
         hook_status = None
         if hook:
-            hook_status = _notify(hook, {
+            payload: dict[str, Any] = {
                 "tripwire_id": tid, "forecast_id": fid, "ticker": ticker, "level": level, "direction": direction,
                 "fired_at": from_epoch_ms(ts).isoformat(), "fired_price": price, "before": json.loads(before_json), "after": after,
-            })
+            }
+            note = _plan_note(conn, tid)
+            if note:  # the action the trader chose in advance for this line
+                payload["plan"] = note
+                payload["reminder"] = note["reminder"]
+            hook_status = _notify(hook, payload)
         with conn:
             conn.execute("UPDATE tripwires SET after=?, error=?, webhook_status=? WHERE id=?", (json.dumps(after) if after else None, err, hook_status, tid))
     return fired

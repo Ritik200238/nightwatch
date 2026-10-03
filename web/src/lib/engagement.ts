@@ -88,6 +88,34 @@ export interface Tripwire {
   fired_price: number | null;
   error: string | null;
   webhook_status: string | null;
+  /** The action chosen in advance for this line, when it came from a plan. */
+  plan?: { key: string; action: PlanAction; detail: string | null; saved_at: string; reminder: string } | null;
+}
+
+export type PlanAction = "hold" | "cut_half" | "exit" | "hedge";
+
+export interface PlanScenario {
+  key: string;
+  title: string;
+  title_zh?: string | null;
+  price: number;
+  ref_price: number;
+  move_pct: number;
+  direction: "below" | "above";
+  loss_quote: number | null;
+  loss_pct: number | null;
+  history: string;
+  chance: number | null;
+  actions: Partial<Record<PlanAction, { size_quote: number; perp_symbol?: string }>>;
+  chosen?: { action: PlanAction; detail: string | null; saved_at: string; tripwire_id: string | null; tripwire_status: string | null; fired_price: number | null };
+}
+
+export interface PlanView {
+  forecast_id: number;
+  receipt: string | null;
+  scenarios: PlanScenario[];
+  saved_at: string | null;
+  arm_error?: string | null;
 }
 
 export interface TripwireSuggestion {
@@ -102,6 +130,9 @@ export const engagement = {
   tripwiresFor: (forecastId: number) => call<{ tripwires: Tripwire[] }>(`/tripwire/report/${forecastId}`),
   tripwireArm: (body: { forecast_id: number; level: number; label: string; webhook?: string | null; lang: string }) =>
     call<Tripwire>("/tripwire", { method: "POST", body: JSON.stringify(body) }),
+  planGet: (forecastId: number) => call<PlanView>(`/plan/${forecastId}`),
+  planSave: (body: { forecast_id: number; choices: Record<string, PlanAction>; arm: boolean; webhook?: string | null; lang: string }) =>
+    call<PlanView>("/plan", { method: "POST", body: JSON.stringify(body) }),
   feedback: (body: { forecast_id: number; useful: boolean; note: string; lang: string }) =>
     call<{ ok: boolean }>("/feedback", { method: "POST", body: JSON.stringify(body) }),
   usage: () => call<Usage>("/usage"),

@@ -159,6 +159,9 @@ def _run_tripwires(store: Store, settings: Settings, journal: Any, spot: Any, pe
     from nightwatch.pipeline.analyze import AnalysisContext
 
     store._conn.executescript(tripwires.SCHEMA)
+    from nightwatch.journal import plans
+
+    store._conn.executescript(plans.SCHEMA)
     if not store._conn.execute("SELECT 1 FROM tripwires WHERE status='armed' LIMIT 1").fetchone():
         return 0
     entries = build_universe(store.list_instruments(Venue.BITGET_SPOT), store.list_instruments(Venue.BITGET_UMCBL), settings.core_tickers)

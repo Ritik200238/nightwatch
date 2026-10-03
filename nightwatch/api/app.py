@@ -149,6 +149,14 @@ class TripwireIn(BaseModel):
     lang: str = "en"
 
 
+class PlanIn(BaseModel):
+    forecast_id: int
+    choices: dict[str, str] = Field(max_length=8)
+    arm: bool = True
+    webhook: str | None = Field(default=None, max_length=500)
+    lang: str = "en"
+
+
 class _BoundedCache(dict):
     """A dict that forgets its oldest entry past ``limit``, so a cache keyed on caller
     input cannot grow without end."""
@@ -173,9 +181,10 @@ class AppState:
         )
         self.journal = Journal(self.store)
         # Forecasts written before receipts existed, or by a bulk import, are chained now.
-        from nightwatch.journal import engagement, receipts, tripwires, watches
+        from nightwatch.journal import engagement, plans, receipts, tripwires, watches
 
         self.store._conn.executescript(engagement.SCHEMA)
+        self.store._conn.executescript(plans.SCHEMA)
         self.store._conn.executescript(watches.SCHEMA)
         self.store._conn.executescript(tripwires.SCHEMA)
         chained = receipts.chain_pending(self.store._conn)
@@ -1209,6 +1218,37 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         client, _, _ = _who(request)
         return {"tripwires": tripwires.for_report(st().store._conn, forecast_id, client)}
+
+    @app.get("/plan/{forecast_id}")
+    def plan_get(forecast_id: int, request: Request) -> dict[str, Any]:
+        """The ways this trade can go wrong that sit at a price, with this visitor's saved choice on each."""
+        from nightwatch.journal import plans
+
+        s = st()
+        report = s.reports.get(forecast_id) if forecast_id > 0 else None
+        if report is None:
+            raise HTTPException(404, f"No stored report {forecast_id}.")
+        client, _, _ = _who(request)
+        return plans.view(s.store._conn, forecast_id, report, client)
+
+    @app.post("/plan")
+    def plan_save(body: PlanIn, request: Request) -> dict[str, Any]:
+        """Save one action per scenario, decided in advance; with ``arm`` set a tripwire on each line."""
+        from nightwatch.journal import engagement, plans, tripwires
+
+        s = st()
+        report = s.reports.get(body.forecast_id) if body.forecast_id > 0 else None
+        if report is None:
+            raise HTTPException(404, f"No stored report {body.forecast_id} to plan for.")
+        try:
+            hook = tripwires.check_webhook(body.webhook)
+        except tripwires.BadWebhook as exc:
+            raise HTTPException(422, str(exc)) from exc
+        client, _, _ = _who(request)
+        try:
+            return plans.save(s.store._conn, forecast_id=body.forecast_id, report=report, choices=body.choices, arm=body.arm, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+        except plans.BadPlan as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @app.get("/tripwire/{tripwire_id}")
     def tripwire_get(tripwire_id: str) -> dict[str, Any]:

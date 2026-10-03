@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { engagement, EngagementError, type Tripwire, type TripwireSuggestion } from "@/lib/engagement";
 import { fmtPrice } from "@/lib/format";
+import { actionName } from "@/components/report/plan-card";
 import { type Lang, fmtTimeL, tr } from "@/lib/i18n";
 
 export function labelWord(lang: Lang, label: string): string {
@@ -35,6 +36,7 @@ export function TripwireLine({ t, lang }: { t: Tripwire; lang: Lang }) {
         {L(`traded at ${fmtPrice(t.fired_price)} on ${fmtTimeL(t.fired_at, lang)}`, `于 ${fmtTimeL(t.fired_at, lang)} 成交于 ${fmtPrice(t.fired_price)}`)}
         {t.after?.verdict ? <> · {L(`verdict then: ${t.after.verdict.replace(/_/g, " ")}`, `当时结论：${t.after.verdict}`)}</> : null}
         {t.webhook_status ? <> · webhook {t.webhook_status}</> : null}
+        {t.plan ? <> · <span className="font-medium">{L(t.plan.reminder, `你事先决定：${actionName(lang, t.plan.action)}。`)}</span></> : null}
       </li>
     );
   }

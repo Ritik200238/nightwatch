@@ -11,6 +11,7 @@ import { ActOnIt } from "@/components/report/act-on-it";
 import { GuardNote } from "@/components/report/guard-note";
 import { Feedback, WatchButton } from "@/components/report/feedback";
 import { BookContrast } from "@/components/report/book-contrast";
+import { PlanCard } from "@/components/report/plan-card";
 import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
@@ -762,6 +763,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <LensNote report={report} lang={lang} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} lang={lang} />
       <FailureModes report={report} openAll={openAll} lang={lang} />
+      {report.forecast_id != null && report.forecast_id > 0 ? <PlanCard forecastId={report.forecast_id} lang={lang} openAll={openAll} /> : null}
       <Assumptions report={report} openAll={openAll} lang={lang} />
       <StreetSection report={report} openAll={openAll} lang={lang} />
       <SignalLine report={report} lang={lang} />
