@@ -243,5 +243,7 @@ export function fmtDateL(iso: string | null | undefined, lang: Lang): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium" });
+  // A bare YYYY-MM-DD is a calendar day, not an instant: read it in UTC so no zone moves it.
+  const dayOnly = /^d{4}-d{2}-d{2}$/.test(iso);
+  return d.toLocaleDateString(lang === "zh" ? "zh-CN" : "en-GB", dayOnly ? { dateStyle: "medium", timeZone: "UTC" } : { dateStyle: "medium" });
 }

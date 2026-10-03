@@ -17,16 +17,17 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type Report, type TicketInput } from "@/lib/api";
 import { fmtBps, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
-import { plainText } from "@/lib/plain";
+import { breakerReason, capDetail, plainReason, plainText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
-import { fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
+import { fmtDateL, fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
-const VERDICT_TONE: Record<Report["verdict"]["verdict"], "good" | "warning" | "critical" | "info" | "muted"> = {
-  GO: "good",
-  REDUCE_TO: "warning",
-  HEDGE: "info",
-  NO_GO: "critical",
-  REVIEW: "muted",
+/** The verdict word's colour in the headline: meaning carried by hue and by the word itself. */
+const VERDICT_TEXT: Record<Report["verdict"]["verdict"], string> = {
+  GO: "text-status-good",
+  REDUCE_TO: "text-status-warning",
+  HEDGE: "text-primary",
+  NO_GO: "text-status-critical",
+  REVIEW: "text-foreground",
 };
 
 /** What each verdict means, for someone seeing the badge for the first time. */
@@ -379,6 +380,16 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
   const atRequested =
     v.recommended_notional != null && v.recommended_notional < t.notional_quote - 1 ? L(`at your ${fmtUsd(t.notional_quote)} USDT`, `按你要求的 ${fmtUsd(t.notional_quote)} USDT 计`) : "";
 
+  const req = t.notional_quote;
+  const rec = v.recommended_notional;
+  const smaller = rec != null && rec < req - 1;
+  let sizeText = "";
+  if (v.verdict === "GO") sizeText = `${fmtUsd(rec ?? req)} USDT`;
+  else if ((v.verdict === "REDUCE_TO" || v.verdict === "REVIEW") && rec != null && smaller) sizeText = L(`${fmtUsd(rec)} of ${fmtUsd(req)} USDT`, `${fmtUsd(rec)} / ${fmtUsd(req)} USDT`);
+  else if (v.verdict === "HEDGE") sizeText = L(`hedge ${fmtRatio(v.hedge_ratio)} of ${fmtUsd(req)} USDT`, `对冲 ${fmtRatio(v.hedge_ratio)} · ${fmtUsd(req)} USDT`);
+  const reasonLines = v.reasons.map((r) => plainReason(r, lang));
+  const subhead = reasonLines[0] ?? "";
+
   return (
     <Section
       title={`${t.ticker} ${lang === "zh" ? tl(lang, "side", t.side) : t.side.toUpperCase()} · ${fmtUsd(t.notional_quote)} USDT`}
@@ -386,16 +397,14 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
         `Held for ${fmtHoursL(report.horizon_h, lang)} · as of ${fmtTimeL(report.as_of, lang)} · market state: ${report.snapshot.labels.regime_label}`,
         `持有 ${fmtHoursL(report.horizon_h, lang)} · 截至 ${fmtTimeL(report.as_of, lang)} · 市场状态：${stateWord(lang, report.snapshot.labels.regime_label)}`,
       )}
-      action={<Pill tone={VERDICT_TONE[v.verdict]}>{verdictLabel(lang, v.verdict)}</Pill>}
     >
-      <p className="text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
-        {tl(lang, "verdictHeadline", v.verdict)}
-        {/* A review can be about the market posture rather than a missing field, so the
-            headline does not say "fill in"; it names the first reason instead. */}
-        {v.verdict === "REVIEW" && lang === "en" && v.reasons[0] ? `: ${plainText(v.reasons[0], lang)}` : null}
-        {v.recommended_notional != null && v.verdict === "REDUCE_TO" ? <span className="text-muted-foreground"> → {fmtUsd(v.recommended_notional)} USDT</span> : null}
-        {v.hedge_ratio ? <span className="text-muted-foreground"> → {L(`hedge ${fmtRatio(v.hedge_ratio)} via perp`, `用永续合约对冲 ${fmtRatio(v.hedge_ratio)}`)}</span> : null}
+      {/* The answer first: the verdict word, coloured, with the size it applies to. The
+          reason is one plain line under it; the rest sit in the list further down. */}
+      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 leading-tight tracking-tight">
+        <span className={`text-4xl font-extrabold sm:text-5xl ${VERDICT_TEXT[v.verdict]}`}>{verdictLabel(lang, v.verdict)}</span>
+        {sizeText ? <span className="tabular text-2xl font-semibold sm:text-3xl">· {sizeText}</span> : null}
       </p>
+      {subhead ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{subhead}</p> : null}
       <CredStrip lang={lang} />
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <StressBars report={report} lang={lang} />
@@ -415,11 +424,11 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
         </ul>
         <p className="mt-1">{L("The desk sizes and warns; it never places the trade. You decide.", "系统只负责给出仓位和风险提示，从不替你下单。决定权在你。")}</p>
       </details>
-      <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-        {v.reasons.map((r) => (
+      <ul className="mt-3 space-y-1 text-sm text-muted-foreground empty:hidden">
+        {reasonLines.slice(1).map((r) => (
           <li key={r} className="flex gap-2">
             <span aria-hidden>–</span>
-            <span>{plainText(r, lang)}</span>
+            <span>{r}</span>
           </li>
         ))}
       </ul>
@@ -448,7 +457,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
         <Stat
           label={cap ? L("Size held down by", "仓位被压低的原因") : L("Size", "仓位")}
           value={cap ? fmtUsd(cap.notional as number) : fmtUsd(t.notional_quote)}
-          hint={cap ? `${tl(lang, "cap", cap.name)} — ${cap.detail}` : L("inside every cap", "在所有上限之内")}
+          hint={cap ? `${tl(lang, "cap", cap.name)} — ${capDetail(cap.detail, lang)}` : L("inside every cap", "在所有上限之内")}
           tone={cap ? "warning" : "good"}
         />
       </div>
@@ -582,7 +591,7 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
         <ul className="mt-3 space-y-1 text-sm">
           {s.recent_changes.map((c) => (
             <li key={`${c.date}-${c.firm}`}>
-              <span className="tabular text-muted-foreground">{c.date}</span> · {c.firm} {c.action} {c.rating}
+              <span className="tabular text-muted-foreground">{fmtDateL(c.date, lang)}</span> · {c.firm} {c.action} {c.rating}
               {c.target != null ? <> · {L("target", "目标价")} {fmtUsd(c.target, 0)}</> : null}
             </li>
           ))}
@@ -594,8 +603,8 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
           {s.insider_latest[0].name}
           {s.insider_latest[0].title ? ` (${s.insider_latest[0].title})` : ""}{" "}
           {L(
-            `${s.insider_latest[0].side === "sell" ? "sold" : "bought"} ${Math.round(s.insider_latest[0].shares).toLocaleString()} shares on ${s.insider_latest[0].date}.`,
-            `于 ${s.insider_latest[0].date} ${s.insider_latest[0].side === "sell" ? "卖出" : "买入"}了 ${Math.round(s.insider_latest[0].shares).toLocaleString()} 股。`,
+            `${s.insider_latest[0].side === "sell" ? "sold" : "bought"} ${Math.round(s.insider_latest[0].shares).toLocaleString()} shares on ${fmtDateL(s.insider_latest[0].date, lang)}.`,
+            `于 ${fmtDateL(s.insider_latest[0].date, lang)} ${s.insider_latest[0].side === "sell" ? "卖出" : "买入"}了 ${Math.round(s.insider_latest[0].shares).toLocaleString()} 股。`,
           )}
         </p>
       ) : null}
@@ -722,12 +731,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
 
   return (
     <div className="space-y-4">
-      {/* The whole page is translated; only the text the server writes (reasons, failure
-          modes, caveats) is sent in English. Say so once, rather than leave it looking like
-          an oversight. */}
+      {/* Everything the page builds itself is translated. The few sentences the server
+          writes (failure-mode titles, some caveats, lens definitions) are shown as sent; one
+          short note says so rather than an apology for the whole page. */}
       {lang === "zh" ? (
-        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-[13px] text-muted-foreground" lang="zh">
-          页面已翻译为中文；由系统按规则生成的理由、失败方式、注意事项等文字可能仍显示为英文，数字与含义不变。
+        <p className="text-[13px] text-muted-foreground" lang="zh">
+          个别由服务器按规则生成的说明（如失败方式、注意事项）仍为英文，数字与含义不变。
         </p>
       ) : null}
       <Hypothetical report={report} lang={lang} />
@@ -750,6 +759,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         <button
           type="button"
           onClick={() => setOpenAll((o) => !o)}
+          aria-pressed={Boolean(openAll)}
           className="rounded text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           {openAll ? L("Collapse all", "全部收起") : L("Expand all", "全部展开")}
@@ -946,7 +956,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
                   <div className="h-1.5 w-full rounded-full bg-muted" aria-hidden>
                     <div className={`h-1.5 rounded-full ${binding ? "bg-status-warning" : "bg-chart-1"}`} style={{ width: `${width}%` }} />
                   </div>
-                  <p className="text-[13px] text-muted-foreground">{c.detail}</p>
+                  <p className="text-[13px] text-muted-foreground">{capDetail(c.detail, lang)}</p>
                 </li>
               );
             })}
@@ -991,10 +1001,10 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
             href={`/api/verify/${report.forecast_id}`}
             target="_blank"
             rel="noreferrer"
-            className="font-mono underline underline-offset-2"
+            className="font-mono text-muted-foreground underline underline-offset-2 hover:text-foreground"
             title={L(`Receipt ${report.receipt}: chained to every verdict before it`, `回执 ${report.receipt}：与此前的每一条结论链接在一起`)}
           >
-            {L("receipt", "回执")} {report.receipt.slice(0, 10)}…
+            {L("Receipt ✓", "回执 ✓")}
           </a>
         ) : null}
         {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
@@ -1830,7 +1840,7 @@ function BreakerStrip({ report, openAll, lang }: { report: Report; openAll?: boo
     >
       <ul className="mb-3 space-y-1 text-sm text-muted-foreground">
         {b.reasons.map((r) => (
-          <li key={r}>– {r}</li>
+          <li key={r}>– {breakerReason(r, lang)}</li>
         ))}
       </ul>
       <div className="grid grid-cols-3 gap-2">
