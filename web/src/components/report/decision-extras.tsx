@@ -8,7 +8,7 @@ import { api, type MissesResponse, type Report, type VerifyResponse } from "@/li
 import { fmtPct, fmtUsd } from "@/lib/format";
 import { presetName } from "@/lib/i18n-terms";
 import { useAgent } from "@/lib/agent-run";
-import { type Lang, tr } from "@/lib/i18n";
+import { fmtTimeL, type Lang, tr } from "@/lib/i18n";
 
 /** Loss per stress test, in USDT, as horizontal bars (worst first). Built from report.stress. */
 export function StressBars({ report, lang }: { report: Report; lang: Lang }) {
@@ -94,7 +94,7 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
   if (report.execution.exit_quote || bookTs) {
     items.push({ key: "book", label: `${L("Bitget order book", "Bitget 订单簿")} (${report.execution.book_source}${age != null ? `, ${age}s ${L("old", "前")}` : ""})${ms(tm.book)}` });
   }
-  items.push({ key: "candles", label: `${L("Bitget candles + features", "Bitget K 线与特征")} (${L("bar", "K 线")} ${(report.snapshot.bar_ts ?? "").slice(0, 16).replace("T", " ")})${ms(tm.snapshot)}` });
+  items.push({ key: "candles", label: `${L("Bitget candles + features", "Bitget K 线与特征")} (${L("bar", "K 线")} ${fmtTimeL(report.snapshot.bar_ts, lang)})${ms(tm.snapshot)}` });
   if (report.street) items.push({ key: "street", label: `${L("Bitget US-stock MCP", "Bitget 美股 MCP")}${ms(tm.street)}` });
   if (report.signal) items.push({ key: "signal", label: `${L("bitget-signal skill", "bitget-signal 技能")} (${L("agrees with our RSI", "与自算 RSI 一致")})` });
   if (a) items.push({ key: "analog", label: `${L("Analog search", "相似时刻检索")} (${a.result.matches.length} ${L("of", "/")} ${(a.result.n_candidates ?? 0).toLocaleString()} ${L("hours", "小时")})${ms(tm.analog)}` });

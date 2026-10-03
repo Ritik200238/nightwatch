@@ -54,7 +54,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
           setW(r);
           if (r.status === "pending") timer = setTimeout(load, 60_000);
         })
-        .catch((e) => !cancelled && setError(e instanceof EngagementError ? e.message : "Could not load that re-check."));
+        .catch((e) => !cancelled && setError(e instanceof EngagementError ? e.message : tx("Could not load that re-check.", "无法加载这次复查。")));
     load();
     return () => {
       cancelled = true;
@@ -100,7 +100,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
       </Section>
       <p className="text-[13px] text-muted-foreground">
         {w.webhook_host ? tx(`Also sent to ${w.webhook_host}${w.webhook_status ? ` (${w.webhook_status})` : ""}. `, `同时发送至 ${w.webhook_host}${w.webhook_status ? `（${w.webhook_status}）` : ""}。`) : ""}
-        {tx("Email is not implemented; keep this link.", "未实现邮件通知；请保存此链接。")}
+        {tx("We don't send email — bookmark this page to check back.", "我们不会发送邮件——请收藏本页，稍后回来查看。")}
       </p>
     </div>
   );

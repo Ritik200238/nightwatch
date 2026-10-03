@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ReportView } from "@/components/report/report-view";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, type Report } from "@/lib/api";
-import { fmtTimeL } from "@/lib/i18n";
+import { fmtDateTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
 /** One stored report, reopened exactly as it was argued.
@@ -24,7 +24,7 @@ export function StoredReport({ id }: { id: string }) {
     void api
       .report(id)
       .then((r) => !cancelled && setReport(r))
-      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : "Could not load that report."));
+      .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : tx("Could not load that report.", "无法加载这份报告。")));
     return () => {
       cancelled = true;
     };
@@ -33,15 +33,15 @@ export function StoredReport({ id }: { id: string }) {
   if (error) {
     return (
       <div className="mx-auto max-w-xl space-y-3 py-10 text-center">
-        <h1 className="text-lg font-semibold">That report is not here</h1>
+        <h1 className="text-lg font-semibold">{tx("That report is not here", "找不到这份报告")}</h1>
         <p className="text-sm text-muted-foreground">{error}</p>
         <p className="text-sm">
           <Link href="/" className="underline underline-offset-2">
-            Run a new one on the desk
+            {tx("Run a new one on the desk", "在交易台运行一份新的")}
           </Link>
           {" · "}
           <Link href="/journal" className="underline underline-offset-2">
-            see every call in the journal
+            {tx("see every call in the journal", "在日志里查看所有结论")}
           </Link>
         </p>
       </div>
@@ -59,14 +59,18 @@ export function StoredReport({ id }: { id: string }) {
 
   return (
     <div className="space-y-4">
+      <h1 className="sr-only">{`${report.ticket.ticker} ${tx("stored report", "已保存的报告")}`}</h1>
       <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
         <p className="font-medium">{tx("A saved report, not a live one", "这是保存的报告，不是实时的")}</p>
         <p className="text-[13px] text-muted-foreground">
-          This is forecast #{id} exactly as the desk argued it at {fmtTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.{" "}
+          {tx(
+            `This is forecast #${id} exactly as the desk argued it on ${fmtDateTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.`,
+            `这是预测 #${id}，与交易台在 ${fmtDateTimeL(report.as_of, lang)} 给出的内容完全一致，此后页面上的任何内容都没有重新计算。`,
+          )}{" "}
           <Link href="/" className="underline underline-offset-2">
-            Run the same trade now
+            {tx("Run the same trade now", "现在重新运行同一笔交易")}
           </Link>
-          .
+          {tx(".", "。")}
         </p>
       </div>
       <ReportView report={report} lang={lang} />
