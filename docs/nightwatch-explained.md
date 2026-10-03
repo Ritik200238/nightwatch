@@ -1,5 +1,8 @@
 # Nightwatch — the whole product, explained simply
 
+> **Written 25 Sep 2026; see the [README](../README.md) for current numbers.** The ideas below
+> still hold; counts and rates have moved since.
+
 > Numbers in this file were checked against the code and the live site on 25 Sep 2026.
 > Anything not proven is marked **NOT VERIFIED**.
 
