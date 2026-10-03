@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DeskPage } from "@/components/desk/desk-page";
+import DeskPage from "@/components/desk/desk-page";
 
 export const metadata: Metadata = {
   title: "Stress-test",
