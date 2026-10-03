@@ -39,6 +39,10 @@ can send): [docs/features.md](docs/features.md).
 
 * **Live desk:** https://nightwatch-gules.vercel.app
 * Demo video: (link added at submission)
+* **Telegram:** @<bot handle, set by the owner>. Say the trade in plain words ("long 20k NVDA
+  over the weekend", "周末做多特斯拉 2万U") and get the same sized verdict the site gives:
+  size, one-in-twenty loss, worst stress, exit cost, liquidation, and the `/r/<id>` link.
+  Follow up with "halve it" or "short instead"; `/tripwire stop` and `/watch` message the chat.
 * **From your AI tool** (read-only MCP server; tools `stress_test`, `list_conditions`,
   `list_tokens`):
 
