@@ -164,7 +164,7 @@ class _Scorer:
         rows: list[CrashRow] = []
         for key, info in self.meta.items():
             held_q = asked_q = None
-            worst_t, worst_v = None, 0.0
+            worst_t = None
             date = None
             missing: list[str] = []
             for way in ("down", "up"):
@@ -307,7 +307,7 @@ def _plans(sc: _Scorer, legs: list[_Leg], as_asked: list[float], held_only: list
     pnl = sc.pnl(as_asked)
     worst_mask = pnl <= np.percentile(pnl, TAIL_PCT)
     comp: list[float] = []
-    for i, leg in enumerate(legs):
+    for i in range(n):
         one = [0.0] * n
         one[i] = 1.0
         comp.append(float(sc.pnl(one)[worst_mask].mean()))
@@ -397,7 +397,7 @@ def _reverse(model: BookModel, existing: list[Position], proposed: Position | No
     pnl_a = model.pnl(proposed.notional_quote, proposed.side) if proposed is not None and has_new else pnl_b
     levels: list[ReverseLevel] = []
     for key, loss in (("limit", budget), ("ten_pct", equity * 0.10)):
-        def shock(net: float) -> float | None:
+        def shock(net: float, loss: float = loss) -> float | None:
             return (loss / abs(net) * 100.0) if abs(net) > 1e-9 else None
 
         levels.append(ReverseLevel(

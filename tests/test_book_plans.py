@@ -1,7 +1,5 @@
 """Rebalance plans, whole-book crash replays and reverse stress, on synthetic history."""
 
-import numpy as np
-import pandas as pd
 import pytest
 
 from nightwatch.decision import book_plans

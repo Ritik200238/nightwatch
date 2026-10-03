@@ -6,7 +6,7 @@ import logging
 import httpx
 import pytest
 
-from nightwatch.journal import telegram, tripwires, watches
+from nightwatch.journal import telegram, watches
 
 TOKEN = "123456:ABC-secret_token"
 
