@@ -5,6 +5,8 @@
  * the fields the UI renders and are intentionally loose where the report carries
  * large or optional structures.
  */
+import type { Provenance } from "./provenance";
+
 import { withIdentity } from "@/lib/identity";
 
 /**
@@ -927,6 +929,8 @@ export interface Report {
   weekend_only?: WeekendOnly | null;
   /** The chained journal receipt for this verdict; see /verify. */
   receipt?: string | null;
+  /** Where each headline number came from: live Bitget, history, assumed or AI. */
+  provenance?: Provenance | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   timings_ms: Record<string, number>;
