@@ -4,7 +4,8 @@ import { CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
-import { Skeleton } from "@/components/ui/skeleton";
+import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { Term } from "@/components/term";
 import { api, type StudiesResponse, type Study } from "@/lib/api";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
@@ -151,8 +152,9 @@ function ConditionTable({ stats, labels }: { stats: Record<string, number>; labe
   const pct = (v: number | undefined) => (v == null ? "—" : `${(v * 100).toFixed(1)}%`);
   const num = (v: number | undefined, d = 2) => (v == null || !Number.isFinite(v) ? "—" : v.toFixed(d));
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-xs">
+    <div>
+      <ScrollTable>
+      <table className="w-full min-w-[560px] text-[13px]">
         <thead>
           <tr className="border-b border-border text-left text-muted-foreground">
             <th className="py-1 pr-3 font-medium">{tx("condition", "条件")}</th>
@@ -160,7 +162,7 @@ function ConditionTable({ stats, labels }: { stats: Record<string, number>; labe
             <th className="py-1 pr-3 text-right font-medium">{tx("below p5, all hours", "低于 p5，全部小时")}</th>
             <th className="py-1 pr-3 text-right font-medium">{tx("below p5, narrowed", "低于 p5，收窄后")}</th>
             <th className="py-1 pr-3 text-right font-medium">{tx("typical p5, all → narrowed", "典型 p5：全部 → 收窄后")}</th>
-            <th className="py-1 text-right font-medium">{tx("t, by token", "t 值，按代币")}</th>
+            <th className="py-1 text-right font-medium"><Term k="clustered">{tx("t, by token", "t 值，按代币")}</Term></th>
           </tr>
         </thead>
         <tbody className="tabular">
@@ -181,6 +183,7 @@ function ConditionTable({ stats, labels }: { stats: Record<string, number>; labe
           ))}
         </tbody>
       </table>
+      </ScrollTable>
       <p className="mt-1 text-muted-foreground">{tx("Target for both breach columns is 5%. A positive t means the narrowed tail scored better.", "两列突破率的目标都是 5%。t 为正表示收窄后的尾部评分更好。")}</p>
     </div>
   );
@@ -228,7 +231,7 @@ function Significance({ s, m }: { s: Study; m: number | undefined }) {
   const { tx } = useLang();
   if (s.p_value == null) {
     return (
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
         <span title={s.p_method}>{tx("No p-value: this is not a hypothesis test, so it is not part of the correction.", "没有 p 值：这不是假设检验，因此不参与多重检验校正。")}</span>
         {s.small_sample ? <Pill tone="warning">{tx("small sample", "样本量小")}</Pill> : null}
         {s.small_sample && s.small_sample_note ? <span>{s.small_sample_note}</span> : null}
@@ -237,7 +240,7 @@ function Significance({ s, m }: { s: Study; m: number | undefined }) {
   }
   const survives = s.survives_fdr === true;
   return (
-    <div className="space-y-1 text-xs">
+    <div className="space-y-1 text-[13px]">
       <div className="flex flex-wrap items-center gap-2">
         <span className="tabular">
           p = {fmtP(s.p_value)}
@@ -278,30 +281,41 @@ export default function StudiesPage() {
   const unclear = rep?.studies.filter((s) => s.verdict === "unclear").length ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div className="max-w-3xl">
-        <h1 className="text-lg font-semibold tracking-tight">{tx("What we tested about our own retrieval", "我们对自己的检索做了哪些检验")}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {tx("The desk is built to find past moments like the one in front of you and report what followed. Anyone can describe doing that. These are the claims underneath it, written so they could fail, each one tested against this database and reported whichever way it came out.", "交易台的设计是找出与眼前相似的历史时刻，并报告后来发生了什么。谁都能这样描述。这些是它背后的主张，每一条都写成可能被证伪的形式，用这个数据库逐一检验，无论结果如何都如实报告。")}
-        </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {tx("Most of them came out against us. The obvious improvement — count the closest matches for more — turns out to make the forecast measurably worse, and the study below is why. One test found something worth fixing, and it is fixed.", "多数结果对我们不利。看似显而易见的改进——给最接近的匹配更大权重——实际上会让预测明显变差，下面的研究说明了原因。有一项检验发现了值得修复的问题，现已修复。")}
-        </p>
-      </div>
+    <div className={`${PROOF_WIDTH} space-y-4`}>
+      <PageHead
+        tabs
+        title={tx("What we tested about our own retrieval", "我们对自己的检索做了哪些检验")}
+        intro={
+          <>
+            {tx("The desk finds past moments (", "交易台会找出与眼前相似的历史时刻（")}
+            <Term k="analog">{tx("analogs", "相似时刻")}</Term>
+            {tx(") like the one in front of you and reports what followed. These are the claims underneath it, written so they could fail, each tested against this database and reported whichever way it came out.", "），并报告后来发生了什么。这些是它背后的主张，每一条都写成可能被证伪的形式，用这个数据库逐一检验，无论结果如何都如实报告。")}
+          </>
+        }
+      />
+      {rep?.studies.length ? (
+        <PlainBox>
+          {tx(`We asked ${rep.studies.length} questions, each written so the answer could be no. ${yes} came back yes, ${no} came back no, and ${unclear} cannot be told yet. `, `我们提出了 ${rep.studies.length} 个问题，每个都写成可能得到“否”的形式。${yes} 个回答为是，${no} 个回答为否，${unclear} 个暂时无法判断。`)}
+          {rep.fdr
+            ? tx(`Because so many questions were asked at once, a lucky “yes” is likely, so the results are corrected for that (`, `因为同时问了这么多问题，很容易碰巧得到“是”，所以结果做了校正（`)
+            : null}
+          {rep.fdr ? <Term k="fdr" /> : null}
+          {rep.fdr ? tx(`): ${rep.fdr.yes_survive} of ${rep.fdr.yes_tested} “yes” answers survive. `, `）：${rep.fdr.yes_tested} 个“是”的回答中有 ${rep.fdr.yes_survive} 个经得起校正。`) : null}
+          {tx("The answers that came back no matter as much as the yeses: they show where the obvious improvement makes the forecast worse, and where a market ", "回答为否的问题和回答为是的一样重要：它们说明了哪些看似显而易见的改进反而让预测变差，以及哪种市场")}
+          <Term k="regime" />
+          {tx(" needs its own treatment.", "需要单独处理。")}
+        </PlainBox>
+      ) : null}
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">{tx("Couldn't load the studies", "无法加载研究")}</p>
-          <p className="text-xs text-muted-foreground">{error}</p>
+          <p className="text-[13px] text-muted-foreground">{error}</p>
         </div>
       ) : null}
 
       {!rep && !error ? (
-        <>
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-48 w-full" />
-        </>
+        <LoadingRecord blocks={[96, 192, 192]} />
       ) : null}
 
       {rep && !rep.studies.length ? (
@@ -323,11 +337,11 @@ export default function StudiesPage() {
               <Stat label={tx("Cannot tell yet", "暂时无法判断")} value={String(unclear)} hint={tx("not enough matured history", "已到期的历史不够多")} />
             </div>
             {rep.fdr ? (
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-3 text-[13px] text-muted-foreground">
                 {tx(`Asking ${rep.fdr.m_tests} testable questions at once makes a lucky “yes” likely, so the p-values are corrected together (Benjamini–Hochberg, a ${Math.round(rep.fdr.alpha * 100)}% false-discovery rate). ${rep.fdr.yes_survive} of ${rep.fdr.yes_tested} “yes” answers survive the correction${rep.fdr.yes_fail.length ? `. The other ${rep.fdr.yes_fail.length} should be read as leads, not settled findings` : ""}. The remaining ${rep.fdr.m_studies - rep.fdr.m_tests} ${rep.fdr.m_studies - rep.fdr.m_tests === 1 ? "study is" : "studies are"} not hypothesis tests and carry no p-value.`, `同时提出 ${rep.fdr.m_tests} 个可检验的问题，很容易碰巧得到“是”，所以对 p 值统一做了校正（Benjamini–Hochberg，假发现率 ${Math.round(rep.fdr.alpha * 100)}%）。${rep.fdr.yes_tested} 个回答为“是”的问题中有 ${rep.fdr.yes_survive} 个经得起校正${rep.fdr.yes_fail.length ? `；其余 ${rep.fdr.yes_fail.length} 个应当视为线索，而不是定论` : ""}。剩下的 ${rep.fdr.m_studies - rep.fdr.m_tests} 项研究不是假设检验，没有 p 值。`)}
               </p>
             ) : null}
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-[13px] text-muted-foreground">
               {tx("A study that nobody acted on is decoration, so each one below ends with what changed because of it — including “nothing, and here is why that is the right answer”. The calibration behind two of these is on the", "没人据此行动的研究只是摆设，所以下面每一项都以“因此改变了什么”结尾——包括“什么都没改，以及为什么这是正确答案”。其中两项背后的校准在")}{" "}
               <Link href="/calibration" className="underline underline-offset-2">
                 {tx("calibration page", "校准页面")}
@@ -342,10 +356,13 @@ export default function StudiesPage() {
               <Section
                 key={s.key}
                 collapsible
-                defaultOpen
-                summary={firstSentence(s.finding)}
+                summary={
+                  <>
+                    <span className="block text-[13px]">{s.question}</span>
+                    <span className="mt-1 block text-[13px] font-medium text-foreground">{firstSentence(s.finding)}</span>
+                  </>
+                }
                 title={s.title}
-                subtitle={s.question}
                 action={
                   <Pill tone={v.tone}>
                     <v.Icon className="mr-1 h-3 w-3" aria-hidden />
@@ -355,23 +372,23 @@ export default function StudiesPage() {
               >
                 <div className="space-y-3 text-sm">
                   <div>
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{tx("How it was tested", "怎么检验的")}</p>
+                    <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("How it was tested", "怎么检验的")}</p>
                     <p className="mt-1 text-muted-foreground">{s.method}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{tx("What came back", "结果如何")}</p>
+                    <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("What came back", "结果如何")}</p>
                     <p className="mt-1 leading-relaxed">{s.finding}</p>
                   </div>
                   <Significance s={s} m={rep.fdr?.m_tests} />
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{tx("What changed because of it", "因此改变了什么")}</p>
+                    <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("What changed because of it", "因此改变了什么")}</p>
                     <p className="mt-1 leading-relaxed">{s.consequence}</p>
                   </div>
                   {Object.keys(s.stats).length ? (
                     <div>
-                      <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{tx(`The numbers (${s.n.toLocaleString()} observations)`, `数字（${s.n.toLocaleString()} 个观测）`)}</p>
+                      <p className="mb-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx(`The numbers (${s.n.toLocaleString()} observations)`, `数字（${s.n.toLocaleString()} 个观测）`)}</p>
                       <ConditionTable stats={s.stats} labels={lensLabels} />
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs lg:grid-cols-3">
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] lg:grid-cols-3">
                         {Object.entries(s.stats).filter(([k]) => !k.includes(".")).map(([k, val]) => (
                           <div key={k} className="flex items-baseline justify-between gap-2 border-b border-border/50 py-1">
                             <span className="min-w-0 text-muted-foreground">{statLabel(k)}</span>
