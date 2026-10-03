@@ -75,6 +75,11 @@ On top of that:
   checks Bitget's one-minute highs and lows every minute, fires once, records the price and time,
   re-runs the desk for the verdict then, and can POST to an https webhook. Not part of the receipt
   chain (that would change every anchored digest); the report it points at is.
+* **Plan for each way it can go wrong** ("decide now, not at 3 a.m."): the top failure modes that sit at a
+  price (bad reopen gap, liquidation, your invalidation, the 1-in-20 line) are shown as concrete prices from
+  the report with how often history put the trade there; pick hold / cut half / exit / hedge per line in
+  advance. Saving arms a tripwire on each line, and the alert repeats "You decided in advance: cut half".
+  Own table, own timestamp, outside the receipt chain.
 * **Same trade, different book**: one click runs a ticket alone and on a concentrated example
   book, side by side, with the reason the size changed.
 * **English and 中文**: type the trade either way and get the answer in the same language.
