@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
+import { TripwireList } from "@/components/report/tripwire";
 import { Skeleton } from "@/components/ui/skeleton";
 import { engagement, EngagementError, type Watch, type WatchSummary } from "@/lib/engagement";
 import { fmtPct, fmtUsd } from "@/lib/format";
@@ -97,6 +98,10 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
           <Column title={tx("When you asked", "提问时")} s={w.before} empty="" />
           <Column title={tx("At the close", "收盘时")} s={w.after} empty={tx("Not yet.", "尚未。")} />
         </div>
+      </Section>
+      <Section title={tx("Price tripwires on this report", "本报告的价格警报")}>
+        <TripwireList forecastId={w.forecast_id} lang={lang} />
+        <p className="text-[13px] text-muted-foreground">{tx("Set one from the report page. Armed ones are checked every minute.", "可在报告页设置。已布防的每分钟检查一次。")}</p>
       </Section>
       <p className="text-[13px] text-muted-foreground">
         {w.webhook_host ? tx(`Also sent to ${w.webhook_host}${w.webhook_status ? ` (${w.webhook_status})` : ""}. `, `同时发送至 ${w.webhook_host}${w.webhook_status ? `（${w.webhook_status}）` : ""}。`) : ""}

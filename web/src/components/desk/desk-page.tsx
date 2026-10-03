@@ -9,6 +9,7 @@ import { ScenarioChips } from "@/components/desk/scenarios";
 import { Sources } from "@/components/desk/sources";
 import { TicketForm } from "@/components/desk/ticket-form";
 import { Working } from "@/components/desk/working";
+import { BookContrast } from "@/components/report/book-contrast";
 import { ReportView } from "@/components/report/report-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,7 +55,19 @@ export default function DeskPage() {
     void loadUniverse();
   }, []);
 
+  // The one-click "same trade, different book" demo: a canned ticket run alone and on an example book.
+  const [contrast, setContrast] = useState<{ id: number } | null>(null);
+  function runContrastDemo() {
+    setHeroUsed(true);
+    setHeroDraft("");
+    setReport(null);
+    setError(null);
+    setContrast({ id: Date.now() });
+    scrollIntoViewOnSmall(resultRef.current);
+  }
+
   function runScenario(steps: string[]) {
+    setContrast(null);
     setTab("chat");
     setHeroDraft("");
     setScript({ id: Date.now(), steps });
@@ -100,6 +113,7 @@ export default function DeskPage() {
         // example, not this trade, so it is said in words and the report on screen stays.
         setError(snapshotNoticeFor(snapshotFlag.get() as string, lang));
       } else {
+        setContrast(null);
         setReport(got);
       }
     } catch (e) {
@@ -123,6 +137,7 @@ export default function DeskPage() {
           setHeroUsed(true);
           runScenario([text]);
         }}
+        onContrast={runContrastDemo}
       />
     ) : null}
     <ProofStrip stocks={universe?.length ?? null} />
@@ -146,7 +161,7 @@ export default function DeskPage() {
           ) : null}
         </div>
         ) : null}
-        {report || heroUsed ? <ScenarioChips disabled={busy} onPick={runScenario} /> : null}
+        {report || heroUsed ? <ScenarioChips disabled={busy} onPick={runScenario} onContrast={runContrastDemo} /> : null}
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
           <TabsList className="w-full">
             <TabsTrigger value="form" className="flex-1">
@@ -185,6 +200,7 @@ export default function DeskPage() {
           </TabsContent>
           <TabsContent value="chat" className="pt-3">
             <Chat accountEquity={equity} busy={busy} setBusy={setBusy} script={script} onReport={(r) => {
+                setContrast(null);
                 setReport(r);
                 setFromChat(true);
                 scrollIntoViewOnSmall(resultRef.current);
@@ -207,6 +223,15 @@ export default function DeskPage() {
             ) : null}
           </div>
         ) : null}
+        {contrast && !report ? (
+          <div className="space-y-3 rounded-lg border border-border p-4">
+            <h2 className="text-base font-semibold">{tx("Same trade, different book", "同一笔交易，不同的组合")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {tx("Long 20k TSLA overnight, once on its own and once on top of 60k TSLA + 40k NVDA. Same moment, same data; only the book differs.", "做多 2 万美元 TSLA 过夜：一次单独做，一次叠加在 6 万 TSLA + 4 万 NVDA 之上。同一时刻、同样的数据，只有组合不同。")}
+            </p>
+            <BookContrast key={contrast.id} ticket={demoTicket()} lang={lang} auto />
+          </div>
+        ) : null}
         {report ? (
           <div className={busy ? "opacity-60 transition-opacity" : ""}>
             <ReportView
@@ -221,7 +246,7 @@ export default function DeskPage() {
               }}
             />
           </div>
-        ) : !busy && !error && exampleReport ? (
+        ) : !busy && !error && !contrast && exampleReport ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2">
               {/* The time is formatted in the reader's locale and zone, which the server cannot know;
@@ -235,7 +260,7 @@ export default function DeskPage() {
             </div>
             <ReportView report={exampleReport} lang={lang} hideTake />
           </div>
-        ) : !busy && !error ? (
+        ) : !busy && !error && !contrast ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
             <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
             <ol className="max-w-prose space-y-1 text-left text-sm text-muted-foreground">
@@ -320,7 +345,7 @@ function HeroProof() {
   );
 }
 
-function Hero({ draft, setDraft, busy, onSend }: { draft: string; setDraft: (s: string) => void; busy: boolean; onSend: (t: string) => void }) {
+function Hero({ draft, setDraft, busy, onSend, onContrast }: { draft: string; setDraft: (s: string) => void; busy: boolean; onSend: (t: string) => void; onContrast: () => void }) {
   const { lang, tx } = useLang();
   const text = draft.trim();
   return (
@@ -377,6 +402,11 @@ function Hero({ draft, setDraft, busy, onSend }: { draft: string; setDraft: (s: 
             </button>
           </li>
         ))}
+        <li className="shrink-0">
+          <button type="button" disabled={busy} onClick={onContrast} title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")} className={`${CHIP} whitespace-nowrap text-muted-foreground disabled:opacity-50`}>
+            {tx("Same trade, different book", "同一笔交易，不同组合")}
+          </button>
+        </li>
       </ul>
       <p className="mt-3 text-[13px] text-muted-foreground">{tx("Prefer fields? Use the Ticket tab on the left — one click away.", "更喜欢填表？点左侧的“表单”标签即可。")}</p>
     </section>

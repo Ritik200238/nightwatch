@@ -70,6 +70,13 @@ On top of that:
   `/api/verify` recomputes the chain. **What we got wrong** (`/wrong`) lists every live
   verdict that went past its one-in-twenty line and the mistakes found in the desk
   itself, the open one included.
+* **Price tripwires**: from a report, one click arms "tell me if TSLA trades through 300" (prefilled
+  from your stop, written invalidation, liquidation price or the 1-in-20 loss price). The recorder
+  checks Bitget's one-minute highs and lows every minute, fires once, records the price and time,
+  re-runs the desk for the verdict then, and can POST to an https webhook. Not part of the receipt
+  chain (that would change every anchored digest); the report it points at is.
+* **Same trade, different book**: one click runs a ticket alone and on a concentrated example
+  book, side by side, with the reason the size changed.
 * **English and 中文**: type the trade either way and get the answer in the same language.
 
 Then it argues against its own answer, using the same numbers, and tells you what would

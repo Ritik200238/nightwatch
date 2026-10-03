@@ -25,7 +25,7 @@ function chip(label: string, labelZh: string, short: string, shortZh: string): S
 }
 
 /** One-click starts. Each runs through the chat, so what you see is what typing it would give. */
-export function ScenarioChips({ disabled, onPick }: { disabled: boolean; onPick: (steps: string[]) => void }) {
+export function ScenarioChips({ disabled, onPick, onContrast }: { disabled: boolean; onPick: (steps: string[]) => void; onContrast?: () => void }) {
   const { lang, tx } = useLang();
   return (
     <div>
@@ -43,6 +43,17 @@ export function ScenarioChips({ disabled, onPick }: { disabled: boolean; onPick:
             {lang === "zh" ? s.shortZh : s.short}
           </button>
         ))}
+        {onContrast ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onContrast}
+            title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")}
+            className="shrink-0 whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-left text-[13px] hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+          >
+            {tx("Same trade, different book", "同一笔交易，不同组合")}
+          </button>
+        ) : null}
       </div>
     </div>
   );
