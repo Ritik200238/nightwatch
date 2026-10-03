@@ -59,7 +59,7 @@ size, the fifth percentile, and the "vs random hours" column.
 
 **Screen:** scroll to "What could go wrong". Hover a couple of rows.
 
-> These are not invented scenarios. Every one is calibrated from this token's own history.
+> These are not invented scenarios. Every one is fitted from this token's own history.
 > The fifth-percentile weekend gap is the fifth percentile of its actual closed windows.
 > The earnings gap is the worst of its own past earnings reactions. The liquidity drought
 > is today's book divided by five. Each row shows the loss on my position, including what
@@ -85,7 +85,7 @@ size, the fifth percentile, and the "vs random hours" column.
 
 > Nine discipline checks, five independent size caps, and the smallest one binds. The gate
 > is built to decide, not to abstain: if I had left the stop out, it would not refuse — it
-> would tell me it is sizing against the calibrated fifth percentile instead.
+> would tell me it is sizing against the one-in-twenty loss instead.
 >
 > And this is the part I use most. The same gate, the same caps, the same verdict, re-run
 > at every other size and stop distance. Not an estimate of the verdict — the verdict.
@@ -125,15 +125,19 @@ submission form as the worked example — it reopens this exact verdict for anyo
 >
 > This is the one I would lead with. Everyone assumes the closest matches are the most
 > informative — so we checked, and the near half of a retrieval has *wider* outcomes than
-> the far half, on every one of twenty-four tokens. Which means the obvious improvement,
+> the far half, on 23 of twenty-four tokens. Which means the obvious improvement,
 > weight the close ones more, makes the forecast measurably worse. We had those weights
 > already computed. They are still wired to nothing, and now that is a measurement rather
 > than an oversight.
 >
-> One of the seven found something. A single tail factor read on target overall while
+> And one of the five that came back no was the most useful. A single tail factor read on target overall while
 > being wrong in both directions underneath — too tight overnight, twice too wide at the
 > weekend. Fixing it changed what the desk allows on a weekend hold by seventy-six per
 > cent.
+>
+> Asking eleven questions makes a lucky yes likely, so the page corrects for it. Of the three
+> yes answers, one survives: a model reading an SEC filing does pick the ones that move the
+> price. There is no directional edge, and the page says so.
 
 ---
 
@@ -147,7 +151,7 @@ Open the **Chat** tab and type "hold 20k of TSLA through the weekend, stop at 35
 
 Or open the **Data sources** panel.
 
-> Six live feeds, when each was last pulled, and the newest thing in each. Including SEC
+> Six data feeds, plus two Bitget AI services, when each was last pulled, and the newest thing in each. Including SEC
 > filings timed to the second they were accepted, because most 8-Ks land after the US close
 > — when the stock cannot react and the token can.
 
