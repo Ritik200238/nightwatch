@@ -1,6 +1,8 @@
 # Submission drafts
 
 Form: Bitget AI Base Camp Hackathon S2. Track: AI Trading Desk.
+Project name: **Nightwatch: decision stress test**. Never "Nightwatch AI": that is a
+different Track 3 entry (drained69/nightwatchai), and the full name keeps the two apart.
 Sub-theme: **Decision Stress Testing** — one winner, so this is the only box that matters.
 
 Track 3 is judged 100% subjectively, and parts 1-3 of the Project Description carry the
@@ -17,8 +19,11 @@ labelled **observed** (measured on this build), **estimated**, or **targeted**.
 ### 1. Thesis
 
 Tokenized US stocks on Bitget trade 24/7. The underlying stocks trade 6.5 hours a day.
-So for roughly 70% of every week, a position in RTSLAUSDT can move while the market that
-sets its fair value is shut. Overnight and weekend news, earnings after the close, a
+So for about 80% of every week, a position in RTSLAUSDT can move while the market that
+sets its fair value is shut. Measured on 24 Bitget rTokens since January 2025, those
+shut hours carry 38.6% [34.4, 43.3] of all price movement (observed; `/studies`), and the
+token's weekend move is a real signal for Monday's gap, not noise (correlation 0.66
+[0.51, 0.80] over 1,262 weekend-token pairs, observed). Overnight and weekend news, earnings after the close, a
 Sunday-night macro shock: the token prices all of it alone, on a thin book, with no way
 to hedge in the real stock.
 
