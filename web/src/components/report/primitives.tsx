@@ -46,7 +46,7 @@ export function Section({
         <CardHeader className="flex flex-row items-start justify-between gap-4 px-5">
           <div className="space-y-1">
             <CardTitle className="text-sm font-semibold">{title}</CardTitle>
-            {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+            {subtitle ? <p className="text-[13px] text-muted-foreground">{subtitle}</p> : null}
           </div>
           {action}
         </CardHeader>
@@ -68,13 +68,13 @@ export function Section({
             <CardTitle className="text-sm font-semibold">{title}</CardTitle>
             {action}
           </span>
-          {summary ? <span className="block text-xs text-muted-foreground">{summary}</span> : subtitle ? <span className="block truncate text-xs text-muted-foreground">{subtitle}</span> : null}
+          {summary ? <span className="block text-[13px] text-muted-foreground">{summary}</span> : subtitle ? <span className="block text-[13px] text-muted-foreground">{subtitle}</span> : null}
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open ? (
         <CardContent className="px-5 pb-5">
-          {summary && subtitle ? <p className="mb-3 text-xs text-muted-foreground">{subtitle}</p> : null}
+          {summary && subtitle ? <p className="mb-3 text-[13px] text-muted-foreground">{subtitle}</p> : null}
           {children}
         </CardContent>
       ) : null}
@@ -87,9 +87,9 @@ export function Stat({ label, value, hint, tone }: { label: string; value: strin
   const color = tone === "good" ? "text-status-good" : tone === "warning" ? "text-status-warning" : tone === "critical" ? "text-status-critical" : "";
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-background/40 px-3 py-2">
-      <span className="truncate text-xs text-muted-foreground">{label}</span>
+      <span className="text-[13px] leading-snug text-muted-foreground">{label}</span>
       <span className={`text-base font-semibold leading-tight ${color}`}>{value}</span>
-      {hint ? <span className="truncate text-xs text-muted-foreground">{hint}</span> : null}
+      {hint ? <span className="text-[13px] leading-snug text-muted-foreground">{hint}</span> : null}
     </div>
   );
 }

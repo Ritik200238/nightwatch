@@ -114,13 +114,13 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm font-semibold">{lang === "zh" ? "分析师的看法" : "The analyst's take"}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {take.status === "done"
             ? `${take.model || "Qwen"} · ${take.seconds ?? "?"}s · ${lang === "zh" ? "数字已与报告核对；推理是模型自己的，可能出错" : "numbers checked against the report; the reasoning is the model's and can be wrong"}`
             : null}
         </p>
       </div>
-      {take.status === "done" && take.removed ? <GuardNote n={take.removed} lang={lang} className="mt-1 text-xs text-muted-foreground" /> : null}
+      {take.status === "done" && take.removed ? <GuardNote n={take.removed} lang={lang} className="mt-1 text-[13px] text-muted-foreground" /> : null}
       {take.status === "pending" ? (
         <p className="mt-2 animate-pulse text-sm text-muted-foreground">
           {lang === "zh" ? "分析师撰写中…（约 10 秒）。上面的结论已经完整。" : "Analyst writing… (about 10 s). The verdict above is already complete."}
@@ -145,7 +145,7 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
                   </div>
                 ) : null}
               </div>
-              {take.reconcile ? <p className="text-xs text-muted-foreground">{withSourceTags(take.reconcile, lang)}</p> : null}
+              {take.reconcile ? <p className="text-[13px] text-muted-foreground">{withSourceTags(take.reconcile, lang)}</p> : null}
             </div>
           ) : null}
           {take.text
@@ -333,7 +333,7 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
               {m.trigger}. <span className="text-foreground">{L("Then: ", "那么：")}</span>
               {m.mechanism}.
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${m.likelihood} · 来源：${sourceName(lang, m.source)}`)}</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${m.likelihood} · 来源：${sourceName(lang, m.source)}`)}</p>
           </li>
         ))}
       </ol>
@@ -402,7 +402,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
         <AnalogMini report={report} lang={lang} />
       </div>
       <BuildTrace report={report} lang={lang} />
-      <details className="mt-3 text-xs text-muted-foreground">
+      <details className="mt-3 text-[13px] text-muted-foreground">
         <summary className="cursor-pointer select-none hover:text-foreground">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
         <ul className="mt-1 space-y-0.5">
           {VERDICT_ORDER.map((k) => (
@@ -507,7 +507,7 @@ function SignalLine({ report, lang }: { report: Report; lang: Lang }) {
   if (!g) return null;
   const word = g.reading === "oversold" ? L("oversold", "超卖") : g.reading === "overbought" ? L("overbought", "超买") : L("neutral", "中性");
   return (
-    <p className="px-1 text-xs text-muted-foreground">
+    <p className="px-1 text-[13px] text-muted-foreground">
       {L(
         `Bitget signal skill: RSI ${g.rsi.toFixed(1)} on ${g.timeframe} (${word}); our own from Bitget candles ${g.own_rsi.toFixed(1)}, which agrees.`,
         `Bitget 信号技能：${g.timeframe} RSI ${g.rsi.toFixed(1)}（${word}）；我们用 Bitget K 线自算 ${g.own_rsi.toFixed(1)}，一致。`,
@@ -589,7 +589,7 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
         </ul>
       ) : null}
       {s.insider_latest.length ? (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="mt-2 text-[13px] text-muted-foreground">
           {L("Latest insider trade: ", "最近一笔内部人士交易：")}
           {s.insider_latest[0].name}
           {s.insider_latest[0].title ? ` (${s.insider_latest[0].title})` : ""}{" "}
@@ -599,7 +599,7 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
           )}
         </p>
       ) : null}
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-[13px] text-muted-foreground">
         {L(
           "Nothing in this section moved the size: none of it has been tested against what the token did overnight. The live price does change what the basis means, and a disagreement between the two sources over the last close is raised as a caveat above.",
           "这一节的内容都没有影响仓位：其中没有任何一项经过代币隔夜实际表现的检验。不过实时价格确实会改变基差的含义；如果两个数据源对上一次收盘价有分歧，会在上方作为注意事项提出。",
@@ -645,7 +645,7 @@ function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
               <p className="text-sm font-medium">{n.headline}</p>
               <Pill tone={MOVING_TONE[n.market_moving] ?? "muted"}>{impactOf(n.market_moving)}</Pill>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-[13px] text-muted-foreground">
               {n.form}
               {n.items ? L(` item ${n.items}`, ` 第 ${n.items} 项`) : ""} · {titleCase(n.category)} ·{" "}
               {L(`filed ${fmtHoursL(n.hours_ago, lang)} ago`, `${fmtHoursL(n.hours_ago, lang)}前披露`)}
@@ -670,14 +670,14 @@ function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
                 )}
               </p>
             ) : n.market_moving === "unread" ? (
-              <p className="mt-2 text-xs text-muted-foreground">{L("The model has not read this filing yet, so its impact is unknown and no history is quoted.", "模型还没有解读这份文件，所以影响未知，也不引用历史数据。")}</p>
+              <p className="mt-2 text-[13px] text-muted-foreground">{L("The model has not read this filing yet, so its impact is unknown and no history is quoted.", "模型还没有解读这份文件，所以影响未知，也不引用历史数据。")}</p>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">{L("Too few scored filings carry this label to quote a distribution, so none is shown.", "带这个标签且已评分的文件太少，无法给出分布，所以不显示。")}</p>
+              <p className="mt-2 text-[13px] text-muted-foreground">{L("Too few scored filings carry this label to quote a distribution, so none is shown.", "带这个标签且已评分的文件太少，无法给出分布，所以不显示。")}</p>
             )}
           </div>
         ))}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-[13px] text-muted-foreground">
         {L(
           "The model reads the text and nothing else — no price, and no knowledge of what happened next. It also offers a direction, which measured 49.5% against a coin, so it is not shown and reaches nothing. None of this moved the verdict above.",
           "模型只读文本，别的什么都不看——没有价格，也不知道之后发生了什么。它还会给出一个方向判断，但实测准确率只有 49.5%，和抛硬币没有区别，所以不显示，也不参与任何计算。以上内容都没有影响上面的结论。",
@@ -726,7 +726,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           modes, caveats) is sent in English. Say so once, rather than leave it looking like
           an oversight. */}
       {lang === "zh" ? (
-        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground" lang="zh">
+        <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-[13px] text-muted-foreground" lang="zh">
           页面已翻译为中文；由系统按规则生成的理由、失败方式、注意事项等文字可能仍显示为英文，数字与含义不变。
         </p>
       ) : null}
@@ -746,11 +746,11 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <SignalLine report={report} lang={lang} />
 
       <div className="flex items-center justify-between gap-3 px-1">
-        <p className="text-xs text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
+        <p className="text-[13px] text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
         <button
           type="button"
           onClick={() => setOpenAll((o) => !o)}
-          className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="rounded text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           {openAll ? L("Collapse all", "全部收起") : L("Expand all", "全部展开")}
         </button>
@@ -802,7 +802,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
             tone={report.snapshot.features.filings_72h ? "warning" : undefined}
           />
         </div>
-        {flags ? <p className="mt-3 text-xs text-muted-foreground">{L("Flags: ", "数据标记：")}{report.snapshot.quality_flags.join(", ")}</p> : null}
+        {flags ? <p className="mt-3 text-[13px] text-muted-foreground">{L("Flags: ", "数据标记：")}{report.snapshot.quality_flags.join(", ")}</p> : null}
       </Section>
 
       {/* Analogs */}
@@ -886,7 +886,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           }
         >
           {report.gate.decision === "GO" && (report.verdict.verdict === "REDUCE_TO" || report.verdict.verdict === "HEDGE") ? (
-            <p className="mb-2 text-xs text-muted-foreground">
+            <p className="mb-2 text-[13px] text-muted-foreground">
               {L("The gate passed every check; the size cap, not the gate, is what reduced the answer.", "闸门的每项检查都通过了；改变结论的是仓位上限，而不是闸门。")}
             </p>
           ) : null}
@@ -946,7 +946,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
                   <div className="h-1.5 w-full rounded-full bg-muted" aria-hidden>
                     <div className={`h-1.5 rounded-full ${binding ? "bg-status-warning" : "bg-chart-1"}`} style={{ width: `${width}%` }} />
                   </div>
-                  <p className="text-xs text-muted-foreground">{c.detail}</p>
+                  <p className="text-[13px] text-muted-foreground">{c.detail}</p>
                 </li>
               );
             })}
@@ -972,7 +972,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       {/* What would change it */}
       <SensitivitySection report={report} openAll={openAll} lang={lang} />
 
-      <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+      <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
         <span>
           {L(`Computed in ${report.timings_ms.total} ms · sources: `, `计算耗时 ${report.timings_ms.total} 毫秒 · 数据来源：`)}
           {report.sources
@@ -1029,7 +1029,7 @@ function LensNote({ report, onUnfiltered, lang }: { report: Report; onUnfiltered
         {l.auto ? <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-normal">{L("automatic", "自动")}</span> : null}
       </p>
       {l.auto ? (
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-[13px] text-muted-foreground">
           {L(`The desk ${l.auto.replace(/^narrowed/, "narrowed this")}. The evidence is on the`, `系统自动缩小了检索范围：${l.auto}。证据见`)}{" "}
           <Link href="/studies" className="underline underline-offset-2 hover:text-foreground">
             {L("studies page", "研究页面")}
@@ -1050,16 +1050,16 @@ function LensNote({ report, onUnfiltered, lang }: { report: Report; onUnfiltered
         </p>
       ) : null}
       {l.applied ? (
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-[13px] text-muted-foreground">
           {L(
             `${l.n_after.toLocaleString()} of ${l.n_before.toLocaleString()} past hours qualify (${(share * 100).toFixed(1)}%). Everything below is that cohort, not the general one — the distance ranking happened inside it.`,
             `${l.n_before.toLocaleString()} 个历史小时中有 ${l.n_after.toLocaleString()} 个符合条件（${(share * 100).toFixed(1)}%）。下面的一切都基于这个子集，而不是全部历史——相似度排序也是在这个子集内部进行的。`,
           )}
         </p>
       ) : (
-        <p className="mt-1 text-xs text-muted-foreground">{l.refused || L("the filter left too little history to search", "筛选之后剩下的历史太少，无法检索")}</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">{l.refused || L("the filter left too little history to search", "筛选之后剩下的历史太少，无法检索")}</p>
       )}
-      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+      <ul className="mt-2 space-y-0.5 text-[13px] text-muted-foreground">
         {l.lenses.map((x) => (
           <li key={x.name}>
             <span className="text-foreground">{x.label}</span> — {x.definition}
@@ -1201,7 +1201,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
         <div className="mt-6">
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <p className="text-sm font-medium">{L("The scenarios themselves", "情景本身")}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {a.paths.stop_pct != null ? (
                 <>
                   <span className={a.paths.stopped ? "text-status-warning" : "text-status-good"}>
@@ -1215,7 +1215,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
             </p>
           </div>
           <Scenarios paths={a.paths} horizonLabel={report.primary_horizon} lang={lang} />
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-[13px] text-muted-foreground">
             {L(
               `Each line is one of the retrieved moments, replayed from its own entry over the same ${H(report.horizon_h)} you are holding for. The histogram above is where these lines end up; this is how they got there — which is the difference between a slow bleed and a round trip that takes out a stop on the way to an unremarkable close.`,
               `每条线是检索到的一个历史时刻，从它自己的入场点开始，按你计划持有的同样 ${H(report.horizon_h)} 重放。上面的直方图是这些线最终落在哪里；这张图则是它们怎么走到那里的——这正是缓慢阴跌，与中途打掉止损、最后却收在平平无奇位置的一去一回之间的区别。`,
@@ -1258,7 +1258,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
                     "—"
                   )}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="text-[13px] text-muted-foreground">
                   {Object.entries(h.cohort.tag_counts)
                     .sort((x, y) => y[1] - x[1])
                     .map(([k, n]) => `${titleCase(k.toLowerCase())} ${n}`)
@@ -1317,7 +1317,7 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
             {a.result.query ? (
               <TableRow className="bg-muted/40">
                 <TableCell className="font-medium">{L("Now", "现在")}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{tl(lang, "bucket", report.snapshot.labels.bucket)}</TableCell>
+                <TableCell className="text-[13px] text-muted-foreground">{tl(lang, "bucket", report.snapshot.labels.bucket)}</TableCell>
                 <TableCell className="tabular text-right text-muted-foreground">—</TableCell>
                 <TableCell className="tabular text-right font-medium">{f(a.result.query.vol_pctl_90d, 0)}</TableCell>
                 <TableCell className="tabular text-right font-medium">{f(a.result.query.basis_index_z)}</TableCell>
@@ -1325,7 +1325,7 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
                 <TableCell className="tabular text-right font-medium">
                   {a.result.query.hours_to_earnings == null ? "—" : a.result.query.hours_to_earnings >= 720 ? L("none in 30 d", "30 天内无") : `${a.result.query.hours_to_earnings.toFixed(0)} ${L("h", "小时")}`}
                 </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground">{L("what we're asking about", "我们正在询问的这一刻")}</TableCell>
+                <TableCell className="text-right text-[13px] text-muted-foreground">{L("what we're asking about", "我们正在询问的这一刻")}</TableCell>
               </TableRow>
             ) : null}
             {shown.map((m) => {
@@ -1335,11 +1335,11 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
                 <TableRow key={`${m.ticker}-${m.ts}`}>
                   <TableCell className="whitespace-nowrap">
                     {fmtTimeL(m.ts, lang)}
-                    {m.ticker !== report.ticket.ticker ? <span className="block text-xs text-muted-foreground">{m.ticker}</span> : null}
-                    {m.alike_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-muted-foreground">{L("alike on ", "相似之处：")}{words(lang, m.alike_on)}</span> : null}
+                    {m.ticker !== report.ticket.ticker ? <span className="block text-[13px] text-muted-foreground">{m.ticker}</span> : null}
+                    {m.alike_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-[13px] text-muted-foreground">{L("alike on ", "相似之处：")}{words(lang, m.alike_on)}</span> : null}
                     {m.differs_on?.length ? <span className="block max-w-[14rem] whitespace-normal text-xs text-status-warning">{L("differs on ", "不同之处：")}{words(lang, m.differs_on)}</span> : null}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{tl(lang, "bucket", m.bucket)}</TableCell>
+                  <TableCell className="text-[13px] text-muted-foreground">{tl(lang, "bucket", m.bucket)}</TableCell>
                   <TableCell className="tabular text-right">{fmtRatio(m.similarity)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.vol_pctl_90d, 0)}</TableCell>
                   <TableCell className="tabular text-right">{f(m.features.basis_index_z)}</TableCell>
@@ -1349,7 +1349,7 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
                     {o?.status === "MATURED" ? (
                       <>
                         <span className={o.ret_pct != null && o.ret_pct < 0 ? "text-status-critical" : "text-status-good"}>{fmtPct(o.ret_pct)}</span>
-                        <span className="block text-xs text-muted-foreground">{L("worst", "最差")} {fmtPct(o.mae_pct)}</span>
+                        <span className="block text-[13px] text-muted-foreground">{L("worst", "最差")} {fmtPct(o.mae_pct)}</span>
                       </>
                     ) : (
                       <span className="text-muted-foreground">{L("still open", "尚未结束")}</span>
@@ -1397,7 +1397,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-hidden />
             <span>
-              {c.text} <span className="text-xs text-muted-foreground">{sourceName(lang, c.source)}</span>
+              {c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}
@@ -1405,12 +1405,12 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-hidden />
             <span>
-              {c.text} <span className="text-xs text-muted-foreground">{sourceName(lang, c.source)}</span>
+              {c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-muted-foreground">
+      <p className="mt-3 text-[13px] text-muted-foreground">
         {L(
           "Every point quotes a number from this report. Ranked by what it is worth in money, with one point from each source before any source repeats.",
           "每一条都引用了本报告里的数字。按折算成金额的大小排序，每个来源先各取一条，然后才轮到重复的来源。",
@@ -1428,7 +1428,7 @@ function LiquidityByTimeOfWeek({ report, lang }: { report: Report; lang: Lang })
   const usable = h.buckets.filter((b) => !b.thin);
   if (usable.length === 0) {
     return (
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-4 text-[13px] text-muted-foreground">
         {L(
           `The book archive has ${h.n_snapshots.toLocaleString()} snapshots so far, not yet enough in any one part of the week to compare. It fills in as the recorder runs.`,
           `盘口存档目前有 ${h.n_snapshots.toLocaleString()} 份快照，在一周中的任何一段时间内都还不够用来比较。记录器运行之后会逐渐补齐。`,
@@ -1460,7 +1460,7 @@ function LiquidityByTimeOfWeek({ report, lang }: { report: Report; lang: Lang })
               <TableRow key={b.bucket}>
                 <TableCell>
                   {tl(lang, "bucket", b.bucket)}
-                  {b.thin ? <span className="ml-2 text-xs text-muted-foreground">{L("thin", "偏薄")}</span> : null}
+                  {b.thin ? <span className="ml-2 text-[13px] text-muted-foreground">{L("thin", "偏薄")}</span> : null}
                 </TableCell>
                 <TableCell className="tabular text-right">{fmtBps(b.spread_median_bps, 1)}</TableCell>
                 <TableCell className="tabular text-right">{fmtUsd(b.depth_25bps_median)}</TableCell>
@@ -1473,7 +1473,7 @@ function LiquidityByTimeOfWeek({ report, lang }: { report: Report; lang: Lang })
           </TableBody>
         </Table>
       </div>
-      {h.note ? <p className="mt-1 text-xs text-muted-foreground">{h.note}</p> : null}
+      {h.note ? <p className="mt-1 text-[13px] text-muted-foreground">{h.note}</p> : null}
     </div>
   );
 }
@@ -1521,7 +1521,7 @@ function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: bo
               <TableRow key={r.id} className={r.id === m.current ? "bg-accent/40" : ""}>
                 <TableCell>
                   <span className={r.id === m.current ? "font-semibold" : ""}>{regimeDescription(lang, r.description)}</span>
-                  {r.id === m.current ? <span className="ml-2 text-xs text-muted-foreground">{L("now", "当前")}</span> : null}
+                  {r.id === m.current ? <span className="ml-2 text-[13px] text-muted-foreground">{L("now", "当前")}</span> : null}
                 </TableCell>
                 <TableCell className="tabular text-right">{fmtPct(r.share * 100, 0, false)}</TableCell>
                 <TableCell className="tabular text-right text-muted-foreground">{r.persistence == null ? "—" : fmtPct(r.persistence * 100, 0, false)}</TableCell>
@@ -1548,7 +1548,7 @@ function RegimeSection({ report, openAll, lang }: { report: Report; openAll?: bo
           {L(".", "。")}
         </p>
       ) : null}
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-[13px] text-muted-foreground">
         {lang === "zh"
           ? "中位数接近零，是因为这些代币并不是每个小时都有成交：在“从未变动”占比的那些窗口里，价格结束时停在的，仍是它开始时的最后一笔成交价。仓位计算用的是 p5 这一列。"
           : <>The medians sit on zero because these tokens do not trade every hour: in the &ldquo;never moved&rdquo; share of windows the price ends on the same
@@ -1737,7 +1737,7 @@ function PortfolioSection({ report, openAll, lang }: { report: Report; openAll?:
                 <TableRow key={`${c.ticker}-${c.side}-${c.notional_quote}`}>
                   <TableCell>
                     <span className="font-medium">{c.ticker}</span> <span className="text-muted-foreground">{lang === "zh" ? tl(lang, "side", c.side) : c.side}</span>
-                    <span className="block text-xs text-muted-foreground">{fmtUsd(c.notional_quote)}</span>
+                    <span className="block text-[13px] text-muted-foreground">{fmtUsd(c.notional_quote)}</span>
                   </TableCell>
                   <TableCell className="tabular text-right text-muted-foreground">{fmtPct(c.share_of_gross * 100, 0, false)}</TableCell>
                   <TableCell className={`tabular text-right ${c.component_share != null && c.component_share > c.share_of_gross * 1.25 ? "text-status-warning" : ""}`}>
@@ -1755,7 +1755,7 @@ function PortfolioSection({ report, openAll, lang }: { report: Report; openAll?:
               ))}
             </TableBody>
           </Table>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-[13px] text-muted-foreground">
             {L(
               "A share of the loss well above the weight means that position is doing more damage than its size suggests.",
               "亏损占比远高于权重，说明这个持仓造成的伤害，比它的仓位大小所显示的更大。",
@@ -1798,7 +1798,7 @@ function TakenButton({ forecastId, lang, noGo }: { forecastId: number; lang: Lan
       >
         {noGo ? L("I took it anyway", "我还是做了") : L("I took this trade", "我做了这笔交易")}
       </Button>
-      <span className="text-xs text-muted-foreground">
+      <span className="text-[13px] text-muted-foreground">
         {state === "error" ? L("Could not save that. Try again.", "保存失败，请重试。") : L("Only trades you mark are counted by the circuit breaker.", "熔断机制只统计你标记过的交易。")}
       </span>
     </div>
@@ -2025,7 +2025,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                   <TableRow key={p.id}>
                     <TableCell>
                       <span className="font-medium">{presetName(lang, p.name, p.name_zh)}</span>
-                      <span className="block text-xs text-muted-foreground">{p.probability_note}</span>
+                      <span className="block text-[13px] text-muted-foreground">{p.probability_note}</span>
                     </TableCell>
                     <TableCell>
                       <Pill tone={sevTone(p.severity)}>{lang === "zh" ? (STRINGS.zh.severity[p.severity] ?? p.severity) : p.severity}</Pill>
@@ -2033,7 +2033,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                     <TableCell className="tabular text-right">{shock}</TableCell>
                     <TableCell className="tabular text-right">
                       <span className={imp.total_pct_of_notional != null && imp.total_pct_of_notional < -5 ? "text-status-critical" : ""}>{fmtPct(imp.total_pct_of_notional)}</span>
-                      <span className="block text-xs text-muted-foreground">
+                      <span className="block text-[13px] text-muted-foreground">
                         {fmtUsd(imp.total_pnl_quote)} {breach.length ? `· ${breach.join(", ")}` : ""}
                       </span>
                     </TableCell>

@@ -78,7 +78,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
         <h2 id="book-heading" className="text-sm font-medium">
           {tx("What you already hold", "你已有的持仓")}
         </h2>
-        <p className="text-xs text-muted-foreground">{tx("Optional. Stays in this browser; sent with an analysis so the report can judge the whole book.", "可选。只保存在本浏览器里；分析时一并发送，报告才能评估整个持仓组合。")}</p>
+        <p className="text-[13px] text-muted-foreground">{tx("Optional. Stays in this browser; sent with an analysis so the report can judge the whole book.", "可选。只保存在本浏览器里；分析时一并发送，报告才能评估整个持仓组合。")}</p>
       </div>
 
       {positions.length ? (
@@ -93,7 +93,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
               </Button>
             </li>
           ))}
-          <li className="px-2 pt-1 text-xs text-muted-foreground">{tx(`Gross ${gross.toLocaleString()} USDT across ${positions.length} position${positions.length === 1 ? "" : "s"}`, `合计 ${gross.toLocaleString()} USDT，共 ${positions.length} 个持仓`)}</li>
+          <li className="px-2 pt-1 text-[13px] text-muted-foreground">{tx(`Gross ${gross.toLocaleString()} USDT across ${positions.length} position${positions.length === 1 ? "" : "s"}`, `合计 ${gross.toLocaleString()} USDT，共 ${positions.length} 个持仓`)}</li>
         </ul>
       ) : null}
 

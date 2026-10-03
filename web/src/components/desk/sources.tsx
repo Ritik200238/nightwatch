@@ -62,7 +62,7 @@ export function Sources() {
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between rounded-md text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
         <span>
           <span className="text-sm font-medium">{tx("Data sources", "数据来源")}</span>{" "}
-          <span className="ml-2 text-xs text-muted-foreground">{rows ? tx(`${rows.length} live feeds${stale ? ` · ${stale} behind` : ""}`, `${rows.length} 个实时数据源${stale ? ` · ${stale} 个滞后` : ""}`) : error ? tx("unavailable", "不可用") : tx("checking…", "检查中…")}</span>
+          <span className="ml-2 text-[13px] text-muted-foreground">{rows ? tx(`${rows.length} live feeds${stale ? ` · ${stale} behind` : ""}`, `${rows.length} 个实时数据源${stale ? ` · ${stale} 个滞后` : ""}`) : error ? tx("unavailable", "不可用") : tx("checking…", "检查中…")}</span>
         </span>
         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
@@ -94,7 +94,7 @@ export function Sources() {
           })}
         </ul>
       ) : open && error ? (
-        <p className="mt-2 text-xs text-muted-foreground">{tx("Could not load the source list: ", "无法加载数据源列表：")}{error}</p>
+        <p className="mt-2 text-[13px] text-muted-foreground">{tx("Could not load the source list: ", "无法加载数据源列表：")}{error}</p>
       ) : null}
     </div>
   );

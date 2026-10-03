@@ -3,7 +3,7 @@ export function guardText(n: number, lang: "en" | "zh"): string {
   return lang === "zh" ? `护栏删除了 ${n} 句无依据的话` : `Guard removed ${n} unsupported sentence${n === 1 ? "" : "s"}`;
 }
 
-export function GuardNote({ n, lang, className = "mt-2 text-xs text-muted-foreground" }: { n: number; lang: "en" | "zh"; className?: string }) {
+export function GuardNote({ n, lang, className = "mt-2 text-[13px] text-muted-foreground" }: { n: number; lang: "en" | "zh"; className?: string }) {
   const why =
     lang === "zh"
       ? "分析师写完后，护栏逐句检查：引用了报告里没有的数字的句子会被删掉，只保留有依据的部分。"

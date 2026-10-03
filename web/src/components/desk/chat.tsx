@@ -219,7 +219,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         {ready === false ? (
           <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-sm">
             <p className="font-medium">{tx("Reading your words with rules, not a model", "用规则而不是模型来理解你的话")}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[13px] text-muted-foreground">
               {tx("This server has no Anthropic API key, so a parser handles the sentence instead. It understands the usual shape — “long 25k TSLA overnight, stop 340” — and every number in the answer is copied from the report. With a key the same conversation gets more range.", "这台服务器没有 Anthropic API 密钥，所以由解析器处理你的句子。它能理解常见的写法——“做多 2.5 万 TSLA 过夜，止损 340”——回答里的每个数字都取自报告。有密钥时，同样的对话能覆盖更多情况。")}
             </p>
           </div>
@@ -241,8 +241,8 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}>
             <p className="whitespace-pre-wrap">{m.role === "assistant" ? plainText(m.content, lang) : m.content}</p>
-            {m.readFrom ? <p className="mt-2 text-xs text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}
-            {m.byline ? <p className="mt-2 text-xs text-muted-foreground">{m.byline}</p> : null}
+            {m.readFrom ? <p className="mt-2 text-[13px] text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}
+            {m.byline ? <p className="mt-2 text-[13px] text-muted-foreground">{m.byline}</p> : null}
             {m.removed ? <GuardNote n={m.removed} lang={lang} /> : null}
             {m.unverified && m.unverified.length ? <p className="mt-2 text-xs text-status-warning">{tx("Numbers not found in the report: ", "报告中找不到这些数字：")}{m.unverified.join(", ")}</p> : null}
           </div>
@@ -261,7 +261,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
               </button>
             ) : null}
             {agent.started && agent.run?.status === "running" ? (
-              <span className="px-1 py-1 text-xs text-muted-foreground" role="status">
+              <span className="px-1 py-1 text-[13px] text-muted-foreground" role="status">
                 {tx(`Agent running… ${agent.run.steps?.length ?? 0} checks done`, `代理运行中… 已完成 ${agent.run.steps?.length ?? 0} 项检查`)}
               </span>
             ) : null}
@@ -270,7 +270,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
                 key={q}
                 type="button"
                 onClick={() => void send(q)}
-                className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="rounded-full border border-border px-2.5 py-1 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 {q}
               </button>
@@ -294,8 +294,8 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         {error ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
             <p className="font-medium">{tx("Couldn't get an answer", "没能得到回答")}</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{tx("You can still use the ticket form on the other tab.", "你仍然可以使用另一个标签页里的表单。")}</p>
+            <p className="text-[13px] text-muted-foreground">{error}</p>
+            <p className="mt-2 text-[13px] text-muted-foreground">{tx("You can still use the ticket form on the other tab.", "你仍然可以使用另一个标签页里的表单。")}</p>
           </div>
         ) : null}
         <div ref={endRef} />

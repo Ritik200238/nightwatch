@@ -78,7 +78,7 @@ export function ProofStrip({ stocks }: { stocks: number | null }) {
           <span className="text-muted-foreground">{tx("Loading the public record…", "正在加载公开记录…")}</span>
         )}
       </p>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
         {pieces.map((p) => (
           <li key={p.key} className="inline-flex items-center gap-1.5">
             <span aria-hidden className={`h-2 w-2 rounded-full ${p.ok === true ? "bg-emerald-500" : p.ok === false ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
@@ -93,7 +93,7 @@ export function ProofStrip({ stocks }: { stocks: number | null }) {
           </li>
         ))}
       </ul>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         <Link href="/status" className="underline underline-offset-2 hover:text-foreground">
           {tx("Live status and receipts", "实时状态与凭证")}
         </Link>

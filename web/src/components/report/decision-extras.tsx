@@ -47,7 +47,7 @@ export function AnalogMini({ report, lang }: { report: Report; lang: Lang }) {
   const h = a?.horizons?.[report.primary_horizon];
   const c = h?.cohort;
   if (!a || !h || !c || c.insufficient) {
-    return <p className="text-xs text-muted-foreground">{L("Not enough distinct past moments to draw how they ended.", "互不相同的历史时刻太少，无法绘制结果分布。")}</p>;
+    return <p className="text-[13px] text-muted-foreground">{L("Not enough distinct past moments to draw how they ended.", "互不相同的历史时刻太少，无法绘制结果分布。")}</p>;
   }
   const values = (a.matches_outcomes ?? []).map((m) => m.outcomes[report.primary_horizon]?.ret_pct).filter((x): x is number => typeof x === "number");
   if (!values.length) return null;
@@ -68,7 +68,7 @@ export function AnalogMini({ report, lang }: { report: Report; lang: Lang }) {
         lang={lang}
         ariaLabel={L("Outcome distribution of similar past moments with the one-in-twenty line", "相似历史时刻的结果分布及二十分之一线")}
       />
-      <p className="text-xs text-muted-foreground">{L(`One in twenty ended worse than ${fmtPct(loss, 1)}.`, `二十次里有一次比 ${fmtPct(loss, 1)} 更差。`)}</p>
+      <p className="text-[13px] text-muted-foreground">{L(`One in twenty ended worse than ${fmtPct(loss, 1)}.`, `二十次里有一次比 ${fmtPct(loss, 1)} 更差。`)}</p>
     </figure>
   );
 }
@@ -112,7 +112,7 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
         <QwenItem report={report} lang={lang} />
         <AgentItem report={report} lang={lang} />
       </ul>
-      <p className="mt-1 text-[11px] text-muted-foreground">
+      <p className="mt-1 text-[13px] text-muted-foreground">
         {L("Built from this report's own fields", "依据本报告自身的字段生成")}
         {tm.total != null ? L(` · ${tm.total} ms in total`, ` · 总计 ${tm.total} 毫秒`) : ""}
       </p>
@@ -191,7 +191,7 @@ export function CredStrip({ lang }: { lang: Lang }) {
   const target = rec?.misses?.target_rate ?? 0.05;
   const rate = (tk.rate ?? 0) * 100;
   return (
-    <p className="mt-2 text-xs text-muted-foreground">
+    <p className="mt-2 text-[13px] text-muted-foreground">
       <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
         {L(
           `Live record: ${tk.scored.toLocaleString()} verdicts scored, ${rate.toFixed(0)}% went past their 1-in-20 line (target ${(target * 100).toFixed(0)}%)`,

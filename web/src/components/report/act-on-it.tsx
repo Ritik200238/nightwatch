@@ -78,7 +78,7 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
         {L(`Open ${symbol} on Bitget`, `在 Bitget 打开 ${symbol}`)}
       </a>
       {refused ? (
-        <span className="text-xs text-muted-foreground">{L("The desk says no to this one, so it will not hand you the ticket.", "系统对这一笔的结论是不建议做，所以不会给你下单单据。")}</span>
+        <span className="text-[13px] text-muted-foreground">{L("The desk says no to this one, so it will not hand you the ticket.", "系统对这一笔的结论是不建议做，所以不会给你下单单据。")}</span>
       ) : (
         <button
           type="button"
@@ -89,7 +89,7 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
           {copied ? L("Ticket copied", "单据已复制") : L("Copy the sized ticket", "复制按建议仓位生成的单据")}
         </button>
       )}
-      <span className="text-xs text-muted-foreground">{L("Nightwatch never places an order.", "Nightwatch 从不替你下单。")}</span>
+      <span className="text-[13px] text-muted-foreground">{L("Nightwatch never places an order.", "Nightwatch 从不替你下单。")}</span>
       {!refused ? <EntryPlanNote report={report} symbol={symbol} lang={lang} /> : null}
     </div>
   );

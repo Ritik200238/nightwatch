@@ -22,7 +22,7 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold">{L("AI stress-test agent", "AI 压力测试代理")}</p>
-          <p className="text-xs text-muted-foreground">{L("Qwen picks up to five checks and runs each on our engine.", "Qwen 最多挑选五项检查，并在我们的引擎上逐项运行。")}</p>
+          <p className="text-[13px] text-muted-foreground">{L("Qwen picks up to five checks and runs each on our engine.", "Qwen 最多挑选五项检查，并在我们的引擎上逐项运行。")}</p>
         </div>
         {!st.started || failed ? (
           <Button
@@ -37,7 +37,7 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
             {failed ? L("Try again", "重试") : L("Let the AI stress-test it deeper", "让 AI 深入压力测试")}
           </Button>
         ) : (
-          <p className="text-xs text-muted-foreground tabular-nums">{Math.round(st.elapsed)} s</p>
+          <p className="text-[13px] text-muted-foreground tabular-nums">{Math.round(st.elapsed)} s</p>
         )}
       </div>
       {st.started ? (
@@ -49,7 +49,7 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
                 {s.n}. {toolVerb(s.tool, s.args, lang === "zh")}
                 {typeof s.seconds === "number" ? <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">{s.seconds.toFixed(1)} s</span> : null}
               </p>
-              {s.thought ? <p className="text-xs text-muted-foreground">{s.thought}</p> : null}
+              {s.thought ? <p className="text-[13px] text-muted-foreground">{s.thought}</p> : null}
               {s.result_summary ? <p className="mt-0.5">{s.result_summary}</p> : null}
             </li>
           ))}
@@ -83,8 +83,8 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
               {final.verdict_restated}
             </p>
           ) : null}
-          {run?.removed ? <GuardNote n={run.removed} lang={lang} className="text-xs text-muted-foreground" /> : null}
-          <p className="text-xs text-muted-foreground">
+          {run?.removed ? <GuardNote n={run.removed} lang={lang} className="text-[13px] text-muted-foreground" /> : null}
+          <p className="text-[13px] text-muted-foreground">
             {L(`${steps.length} checks run on the engine in ${Math.round(st.elapsed)} s`, `在引擎上运行了 ${steps.length} 项检查，用时 ${Math.round(st.elapsed)} 秒`)}
           </p>
         </div>

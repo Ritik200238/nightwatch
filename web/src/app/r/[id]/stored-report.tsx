@@ -61,7 +61,7 @@ export function StoredReport({ id }: { id: string }) {
     <div className="space-y-4">
       <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
         <p className="font-medium">{tx("A saved report, not a live one", "这是保存的报告，不是实时的")}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           This is forecast #{id} exactly as the desk argued it at {fmtTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.{" "}
           <Link href="/" className="underline underline-offset-2">
             Run the same trade now

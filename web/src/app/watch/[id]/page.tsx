@@ -98,7 +98,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
           <Column title={tx("At the close", "收盘时")} s={w.after} empty={tx("Not yet.", "尚未。")} />
         </div>
       </Section>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {w.webhook_host ? tx(`Also sent to ${w.webhook_host}${w.webhook_status ? ` (${w.webhook_status})` : ""}. `, `同时发送至 ${w.webhook_host}${w.webhook_status ? `（${w.webhook_status}）` : ""}。`) : ""}
         {tx("Email is not implemented; keep this link.", "未实现邮件通知；请保存此链接。")}
       </p>

@@ -31,7 +31,7 @@ export function Working({ lang: langProp, compact = false }: { lang?: "en" | "zh
     <div className={compact ? "space-y-1.5" : "space-y-2 rounded-lg border border-border p-4"} role="status" aria-live="polite">
       <p className="flex items-center justify-between text-sm font-medium">
         <span>{zh ? "正在计算" : "Running the desk"}</span>
-        <span className="tabular-nums text-xs text-muted-foreground">{Math.floor(elapsed)}s</span>
+        <span className="tabular-nums text-[13px] text-muted-foreground">{Math.floor(elapsed)}s</span>
       </p>
       <ol className="space-y-1 text-sm">
         {STEPS.map((s, j) => (
@@ -42,7 +42,7 @@ export function Working({ lang: langProp, compact = false }: { lang?: "en" | "zh
         ))}
       </ol>
       {elapsed > SLOW_AFTER ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {zh ? "比平常慢：长时间没人用之后，第一次计算要先加载历史数据。" : "Slower than usual: the first run after a quiet spell loads the history first."}
         </p>
       ) : null}

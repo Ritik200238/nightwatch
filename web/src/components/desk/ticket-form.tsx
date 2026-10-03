@@ -82,7 +82,7 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
         <Label>{tx("Compare against", "对比的历史条件")}</Label>
         <button
           type="button"
-          className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="rounded text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           onClick={() => setShowAll((v) => !v)}
         >
           {showAll ? tx("Fewer", "收起") : tx(`All ${menu.lenses.length}`, `全部 ${menu.lenses.length} 个`)}
@@ -123,7 +123,7 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {chosen.length === 0 ? (
           <>{tx("All past hours ranked by how much they resemble now. Pick a condition to rank inside it instead.", "所有历史小时按与现在的相似度排序。选一个条件，则只在该条件内排序。")}</>
         ) : thin.length > 0 ? (
@@ -281,7 +281,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
           {!thesis && !invalidation ? (
             <button
               type="button"
-              className="rounded text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="rounded text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               onClick={() => {
                 setThesis(side === "long" ? tx("Strength into the US open carries through the overnight session.", "美股开盘前的强势会延续到夜盘。") : tx("Weakness into the US open carries through the overnight session.", "美股开盘前的弱势会延续到夜盘。"));
                 setInvalidation(side === "long" ? tx("A close back below the 30-day average.", "收盘重新跌回 30 日均线下方。") : tx("A close back above the 30-day average.", "收盘重新涨回 30 日均线上方。"));
@@ -301,7 +301,7 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
       <Button type="submit" disabled={busy || available.length === 0} className="w-full">
         {busy ? tx("Stress-testing…", "压力测试中…") : tx("Stress-test this trade", "对这笔交易做压力测试")}
       </Button>
-      {available.length === 0 ? <p className="text-xs text-muted-foreground">{tx("No tokens have stored data yet. Run the sync first.", "还没有任何代币有存储的数据，请先运行同步。")}</p> : null}
+      {available.length === 0 ? <p className="text-[13px] text-muted-foreground">{tx("No tokens have stored data yet. Run the sync first.", "还没有任何代币有存储的数据，请先运行同步。")}</p> : null}
     </form>
   );
 }

@@ -165,7 +165,7 @@ export default function DeskPage() {
             ) : universeError ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
                 <p className="font-medium">{tx("Couldn't load the token list", "无法加载代币列表")}</p>
-                <p className="text-xs text-muted-foreground">{universeError}</p>
+                <p className="text-[13px] text-muted-foreground">{universeError}</p>
                 <Button variant="secondary" size="sm" className="mt-2" onClick={() => void loadUniverse()}>
                   {tx("Try again", "重试")}
                 </Button>
@@ -194,7 +194,7 @@ export default function DeskPage() {
         {error ? (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
+            <p className="text-[13px] text-muted-foreground">{error}</p>
             {lastTicket ? (
               <Button variant="secondary" size="sm" className="mt-2" onClick={() => void run(lastTicket)} disabled={busy}>
                 {tx("Try again", "重试")}
@@ -312,7 +312,7 @@ function Hero({ draft, setDraft, busy, onSend }: { draft: string; setDraft: (s: 
           </li>
         ))}
       </ul>
-      <p className="mt-3 text-xs text-muted-foreground">{tx("Prefer fields? Use the Ticket tab on the left — one click away.", "更喜欢填表？点左侧的“表单”标签即可。")}</p>
+      <p className="mt-3 text-[13px] text-muted-foreground">{tx("Prefer fields? Use the Ticket tab on the left — one click away.", "更喜欢填表？点左侧的“表单”标签即可。")}</p>
     </section>
   );
 }

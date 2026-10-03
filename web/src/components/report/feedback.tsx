@@ -59,7 +59,7 @@ export function Feedback({ forecastId, lang = "en" }: { forecastId: number; lang
     }
   }
 
-  if (done) return <p className="text-xs text-muted-foreground">{L("Thanks - that helps us fix what is wrong.", "谢谢，这能帮我们改进。")}</p>;
+  if (done) return <p className="text-[13px] text-muted-foreground">{L("Thanks - that helps us fix what is wrong.", "谢谢，这能帮我们改进。")}</p>;
 
   return (
     <div className="space-y-2 text-sm">
@@ -124,7 +124,7 @@ export function WatchButton({ forecastId, lang = "en" }: { forecastId: number; l
           <BellRing aria-hidden /> {L("Re-check at the next US close", "在下一个美股收盘时复查")}
         </Button>
         {!showHook ? (
-          <button type="button" onClick={() => setShowHook(true)} className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          <button type="button" onClick={() => setShowHook(true)} className="text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
             {L("or send it to a webhook", "或发送到 webhook")}
           </button>
         ) : null}
@@ -139,7 +139,7 @@ export function WatchButton({ forecastId, lang = "en" }: { forecastId: number; l
           className="w-full max-w-md rounded-lg border border-border bg-background p-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
       ) : null}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {L("No email: open the link it gives you, or use a webhook.", "不发邮件：打开它给你的链接，或使用 webhook。")}{" "}
         <Link href="/usage" className="underline underline-offset-2">
           {L("what we count", "我们统计什么")}

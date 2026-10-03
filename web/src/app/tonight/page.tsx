@@ -97,7 +97,7 @@ export default function TonightPage() {
         <Button onClick={() => void run()} disabled={busy || !positions.length} className="w-full">
           {busy ? tx("Reading the book…", "正在读取持仓…") : positions.length ? tx(`Watch these ${positions.length}`, `盯住这 ${positions.length} 个`) : tx("Add what you hold", "添加你的持仓")}
         </Button>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           {tx("Every position gets the same full analysis the desk would give if you asked about it directly — the analogs over tonight's window, the presets at the size you hold, and the live book walked for that size. That takes a couple of seconds each.", "每个持仓都会得到与你直接询问时相同的完整分析——今晚这个时间窗口内的相似时刻、按你持有仓位计算的压力预设，以及按该仓位在实时盘口上的成交推演。每个大约需要几秒钟。")}
         </p>
       </aside>
@@ -106,7 +106,7 @@ export default function TonightPage() {
         {error ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't read the book", "无法读取持仓")}</p>
-            <p className="text-xs text-muted-foreground">{error}</p>
+            <p className="text-[13px] text-muted-foreground">{error}</p>
           </div>
         ) : null}
 
@@ -228,7 +228,7 @@ export default function TonightPage() {
                     </ul>
                   </div>
                 ) : null}
-                <p className="mt-3 text-xs text-muted-foreground">
+                <p className="mt-3 text-[13px] text-muted-foreground">
                   {tx("Regime: ", "市场状态：")}{stateWord(lang, item.regime_label ?? "unknown")}.{" "}
                   <Link href="/" className="underline underline-offset-2">
                     {tx("Stress-test a change to this position", "测试对这个持仓的改动")}

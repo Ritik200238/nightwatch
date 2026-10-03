@@ -62,7 +62,7 @@ export function SiteHeader() {
 export function SiteFooter() {
   const { tx } = useLang();
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-1 px-4 py-4 text-xs text-muted-foreground md:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-7xl space-y-1 px-4 py-4 text-[13px] text-muted-foreground md:px-6 lg:px-8">
       <p>
       {tx(
         "Research tool. Nightwatch never places orders; the human decides. Every number is computed from stored market data and labelled with its source.",
