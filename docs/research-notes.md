@@ -448,8 +448,8 @@ while shut: a shut hour carries 0.155× [0.128, 0.188] the variance of an open h
 out windows that touch a known earnings date: 35.2% [31.4, 40.2] (the earnings table only
 starts in September 2025, so this removes only the earnings it has). A simple tally of
 hourly absolute moves, which is how a rival's number could plausibly be reached, gives
-49.7% [47.6, 51.5] (331,416 token-hours). Neither measure reaches "most", and both are far
-under the clock's 80%. By kind: weeknights 29.3% of all movement at 0.24× an open hour's
+49.7% [47.6, 51.5] (331,416 token-hours). Neither measure reaches 56%: the variance share is clearly under half
+and the absolute tally is about half, both far under the clock's 80%. By kind: weeknights 29.3% of all movement at 0.24× an open hour's
 variance per hour, weekends 9.0% at 0.07×, weekday holidays 0.2%.
 Window returns, not hourly sums, are the primary measure because variance adds across
 windows of unequal length and absolute returns do not.

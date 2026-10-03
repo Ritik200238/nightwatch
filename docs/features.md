@@ -194,8 +194,9 @@ two claims you hear about rTokens with the arithmetic (24 tokens, bars from Janu
 
 * **Closed hours are 80% of the week but carry 39% of the movement** (variance, [34, 43]),
   so a shut hour is about a sixth as busy as an open one (0.16×). A simple tally of
-  absolute hourly moves gives 50% [48, 52]. Neither supports "most of the movement happens
-  in closed hours".
+  absolute hourly moves gives 50% [48, 52]. Neither reproduces a figure like 56%: the
+  variance share is clearly under half and the absolute tally is about half, with a shut
+  hour quieter than an open one on both.
 * **The weekend move does say something about Monday's open, much less than it first
   looked.** Taken to 09:00 Monday ET it correlated 0.97 with the gap, because the token had
   already seen the stock's pre-market. Cut to Friday 20:00 → Monday 04:00, when no US venue
