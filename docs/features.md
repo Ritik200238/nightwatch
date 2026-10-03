@@ -94,6 +94,7 @@ It also keeps track of the things a single trade cannot see:
 * **Your book.** Given what you already hold, it measures the correlation from the tokens'
   own history and says which position actually carries the bad case, rather than assuming
   three names are three bets.
+* **When the book is over its limit, what to do about it.** The whole book is replayed through the five crash weeks on one market day, and if the book with the new trade breaches its one-in-twenty limit, the desk lays out two or three fixes (take the trade smaller, trim the holding that carries the bad case, hedge it with its Bitget perp), each solved for the smallest change that gets back inside and then re-scored on the same past windows and crashes. A reverse stress says what common move costs the limit, how often history lost that much, and where a leveraged leg is liquidated against it. Plain code, no model; MCP agents can pass `holdings` and get the same back.
 * **Your record.** Trades you mark as taken feed daily, weekly and monthly loss limits.
   Past them, the gate refuses the next ticket whatever it looks like.
 * **What happened last time.** Every matured forecast gets a plain sentence and comes back
