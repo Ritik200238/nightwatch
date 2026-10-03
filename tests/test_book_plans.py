@@ -6,6 +6,7 @@ import pytest
 
 from nightwatch.decision import book_plans
 from nightwatch.decision.portfolio import Position, build_book_model
+from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
 from tests.test_portfolio import frame, market  # noqa: F401 - fixture
 
 EQUITY = 100_000.0
@@ -87,3 +88,28 @@ def test_holdings_with_no_history_still_get_a_crash_line(frames):
 
 def test_no_book_no_stress(frames):
     assert book_plans.build(None, [], None, equity=EQUITY, limit_pct_of_equity=4.0, horizon_h=24.0, perp_names=set(), spot_taker=0, perp_taker=0) is None
+
+
+def test_pipeline_report_carries_the_stress_and_it_is_cheap(seeded_store):  # noqa: F811
+    import time
+
+    from nightwatch.decision.sizing import SizingPolicy
+    from nightwatch.decision.ticket import TradeTicket
+    from nightwatch.pipeline.analyze import analyze
+    from nightwatch.stress.scenarios import Side
+    from tests.test_book_sizing import EQUITY, _entry
+    from tests.test_pipeline import AS_OF, _ctx
+
+    ctx = _ctx(seeded_store)
+    ctx.sizing_policy = SizingPolicy(max_book_tail_pct_of_equity=1.0)
+    t = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=20_000.0, account_equity_quote=EQUITY, stop_price=_entry(ctx, "TSLA") * 0.96,
+                    thesis="t", invalidation="i", open_positions=(("TSLA", "long", 60_000.0), ("NVDA", "long", 40_000.0)))
+    t0 = time.perf_counter()
+    r = analyze(ctx, t, as_of=AS_OF, record=False)
+    took = time.perf_counter() - t0
+    st = r.portfolio.stress
+    assert st is not None and st.breached and st.plans
+    d = r.to_dict()["portfolio"]["stress"]
+    assert d["plans"][0]["after"]["tail_quote"] >= d["plans"][0]["before"]["tail_quote"]
+    assert r.timings_ms["portfolio"] < 5000 and took < 60
+    ctx.store.close()
