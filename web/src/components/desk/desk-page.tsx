@@ -291,8 +291,9 @@ function HeroProof() {
     };
   }, []);
   const tk = misses?.totals?.ticket;
-  const has = tk != null && tk.scored > 0;
-  const rate = has ? Math.round((tk.rate ?? 0) * 100) : null;
+  const scored = tk?.scored ?? 0;
+  const has = scored > 0;
+  const rate = Math.round((tk?.rate ?? 0) * 100);
   const target = Math.round((misses?.target_rate ?? 0.05) * 100);
   return (
     <ul className="mt-3 flex min-h-8 flex-wrap gap-2" aria-label={tx("Proof", "证据")}>
@@ -300,7 +301,7 @@ function HeroProof() {
         <>
           <li>
             <Link href="/calibration" className={CHIP}>
-              <span className="tabular mr-1 font-semibold">{tk.scored.toLocaleString()}</span> {tx("verdicts scored in public", "个结论已公开评分")}
+              <span className="tabular mr-1 font-semibold">{scored.toLocaleString()}</span> {tx("verdicts scored in public", "个结论已公开评分")}
             </Link>
           </li>
           <li>
