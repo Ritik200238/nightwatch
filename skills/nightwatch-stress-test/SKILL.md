@@ -6,7 +6,7 @@ description: >
   on Bitget: "should I hold TSLA over the weekend", "long 20k NVDA overnight", "is 5x on
   AAPL safe", "what if it gaps 10%", "how much can I lose", "what size is safe", "hedge
   it?", "stress test", "worst case", "liquidation". Chinese triggers: 周末拿特斯拉, 做多英伟达,
-  5倍杠杆, 最坏会亏多少, 仓位多大合适, 压力测试, 爆仓, 要不要对冲. Read-only: it never places an order.
+  5倍杠杆, 最坏会亏多少, 仓位多大合适, 压力测试, 爆仓, 要不要对冲. Read-only, never places an order.
 ---
 
 # Nightwatch: decision stress test
@@ -45,8 +45,8 @@ claude mcp add nightwatch --transport http https://nightwatch-gules.vercel.app/a
 
 ## How to present it
 
-- **Verdict first, in one line:** GO, REDUCE_TO (with the size it allows), HEDGE (with the
-  ratio), REVIEW (what is missing), or NO_GO (the rule that refused it).
+- **Verdict first, in one line.** The tool returns the enums `REDUCE_TO` and `NO_GO`; show them as "REDUCE TO" and "NO GO". The words are GO, REDUCE TO (with the size it allows), HEDGE (with the
+  ratio), REVIEW (what is missing), or NO GO (the rule that refused it).
 - **Then the loss that matters:** the history's 5th-percentile outcome over the hold, the
   worst stress test, and, with leverage, the liquidation price and how often history
   reached it.
@@ -59,7 +59,7 @@ claude mcp add nightwatch --transport http https://nightwatch-gules.vercel.app/a
 
 ## With the rest of Bitget Agent Hub
 
-- **Before an order:** run this first. If the verdict is REDUCE_TO or HEDGE, any order you
+- **Before an order:** run this first. If the verdict is REDUCE TO or HEDGE, any order you
   draft through Agent Hub uses the size or hedge the verdict allows, and is a `dryRun`
   preview until the user confirms.
 - **With research skills:** news, sentiment or technical readings are context for the
