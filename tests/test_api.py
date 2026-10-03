@@ -270,3 +270,20 @@ def test_the_page_cache_ignores_the_anonymous_visitor_id(client):
     first = client.get("/studies?nw_client=aaa")
     other = client.get("/studies?nw_client=bbb&nw_lang=zh")
     assert first.headers["x-nightwatch-cache"] == "miss" and other.headers["x-nightwatch-cache"] == "hit"
+
+
+def test_the_closed_hours_measurement_rides_on_studies_without_joining_the_correction(client):
+    """It is a measurement, not a test: the count of questions the correction covers must
+    not move when it is added."""
+    r = client.get("/studies").json()
+    ch = r["closed_hours"]
+    assert ch and ch["key"] == "closed_hours" and ch["movement"]["primary"]["stats"]["var_share"]["est"] > 0
+    assert "per_token" not in ch and "per_token" in ch["movement"]["primary"]
+
+
+def test_closed_hours_for_one_token_quotes_only_what_was_measured(client):
+    r = client.get("/closed-hours/tsla").json()
+    assert r["ticker"] == "TSLA" and r["line"] and "while the US market was shut" in r["line"]
+    assert r["numbers"]["n_windows"] > 100
+    none = client.get("/closed-hours/ZZZZ").json()
+    assert none["line"] is None and none["numbers"] is None

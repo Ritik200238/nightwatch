@@ -1,0 +1,5546 @@
+{
+ "key": "closed_hours",
+ "ok": true,
+ "title": "What happens to a token while the US market is shut?",
+ "questions": [
+  "Of a token's movement, how much happens while the US market is shut, and is a closed hour busier or quieter than an open one?",
+  "Does the token's Friday-to-Monday move predict the stock's Monday open gap, and how much of it does Monday keep or reverse?",
+  "How thin is the token's order book while the market is shut, against the US session?"
+ ],
+ "ran_at": "2026-10-03T14:15:16.480567+00:00",
+ "settings": {
+  "open_window_et": "09:00-16:00",
+  "stale_hours": 3.0,
+  "big_move": 0.01,
+  "block_weeks": 4,
+  "bootstrap_draws": 2000
+ },
+ "data": {
+  "tokens": 24,
+  "first_day": "2025-01-01",
+  "last_day": "2026-10-03",
+  "windows": 18930,
+  "closed_windows": 9454,
+  "stale_boundary_share": 0.000106,
+  "stale_boundary_share_closed": 0.000106
+ },
+ "movement": {
+  "primary": {
+   "n_windows": 18930,
+   "n_weeks": 92,
+   "stats": {
+    "var_share": {
+     "est": 0.386029,
+     "lo": 0.344393,
+     "hi": 0.433182
+    },
+    "var_share_median": {
+     "est": 0.388621,
+     "lo": 0.323971,
+     "hi": 0.456964
+    },
+    "time_share": {
+     "est": 0.799955,
+     "lo": 0.796106,
+     "hi": 0.803539
+    },
+    "per_hour_var_ratio": {
+     "est": 0.154965,
+     "lo": 0.128018,
+     "hi": 0.188359
+    },
+    "tokens": {
+     "est": 24.0,
+     "lo": 24.0,
+     "hi": 24.0
+    },
+    "var_share_open": {
+     "est": 0.613971,
+     "lo": 0.566818,
+     "hi": 0.655607
+    },
+    "var_share_overnight": {
+     "est": 0.293134,
+     "lo": 0.25704,
+     "hi": 0.332473
+    },
+    "per_hour_var_ratio_overnight": {
+     "est": 0.24425,
+     "lo": 0.200189,
+     "hi": 0.296058
+    },
+    "var_share_weekend": {
+     "est": 0.090428,
+     "lo": 0.068964,
+     "hi": 0.11937
+    },
+    "per_hour_var_ratio_weekend": {
+     "est": 0.068358,
+     "lo": 0.050101,
+     "hi": 0.092229
+    },
+    "var_share_holiday": {
+     "est": 0.002467,
+     "lo": 0.000273,
+     "hi": 0.005134
+    },
+    "per_hour_var_ratio_holiday": {
+     "est": 0.041709,
+     "lo": 0.009964,
+     "hi": 0.067202
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.301583,
+      "lo": 0.203647,
+      "hi": 0.393234
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.10797,
+      "lo": 0.063254,
+      "hi": 0.162536
+     }
+    },
+    {
+     "ticker": "AMD",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.471803,
+      "lo": 0.354695,
+      "hi": 0.59021
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.223345,
+      "lo": 0.136772,
+      "hi": 0.359823
+     }
+    },
+    {
+     "ticker": "AMZN",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.483273,
+      "lo": 0.363389,
+      "hi": 0.589718
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.233853,
+      "lo": 0.142496,
+      "hi": 0.361738
+     }
+    },
+    {
+     "ticker": "AVGO",
+     "n_windows": 441,
+     "n_closed": 220,
+     "var_share": {
+      "est": 0.451949,
+      "lo": 0.31499,
+      "hi": 0.587133
+     },
+     "time_share": 0.80075,
+     "per_hour_var_ratio": {
+      "est": 0.205196,
+      "lo": 0.113104,
+      "hi": 0.35476
+     }
+    },
+    {
+     "ticker": "BABA",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.596291,
+      "lo": 0.538321,
+      "hi": 0.652795
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.369318,
+      "lo": 0.291504,
+      "hi": 0.473488
+     }
+    },
+    {
+     "ticker": "COIN",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.298508,
+      "lo": 0.256626,
+      "hi": 0.347424
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.1064,
+      "lo": 0.086243,
+      "hi": 0.133532
+     }
+    },
+    {
+     "ticker": "CRCL",
+     "n_windows": 666,
+     "n_closed": 333,
+     "var_share": {
+      "est": 0.228444,
+      "lo": 0.174388,
+      "hi": 0.2883
+     },
+     "time_share": 0.800103,
+     "per_hour_var_ratio": {
+      "est": 0.073973,
+      "lo": 0.052724,
+      "hi": 0.1005
+     }
+    },
+    {
+     "ticker": "GOOGL",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.394664,
+      "lo": 0.323529,
+      "hi": 0.470943
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.16302,
+      "lo": 0.120392,
+      "hi": 0.221545
+     }
+    },
+    {
+     "ticker": "HOOD",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.305505,
+      "lo": 0.253557,
+      "hi": 0.360159
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.109992,
+      "lo": 0.084993,
+      "hi": 0.141433
+     }
+    },
+    {
+     "ticker": "INTC",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.424612,
+      "lo": 0.319382,
+      "hi": 0.523087
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.18452,
+      "lo": 0.117364,
+      "hi": 0.273749
+     }
+    },
+    {
+     "ticker": "META",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.426927,
+      "lo": 0.322369,
+      "hi": 0.538425
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.186275,
+      "lo": 0.118059,
+      "hi": 0.293788
+     }
+    },
+    {
+     "ticker": "MSFT",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.410885,
+      "lo": 0.30864,
+      "hi": 0.50163
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.174394,
+      "lo": 0.111293,
+      "hi": 0.252283
+     }
+    },
+    {
+     "ticker": "MSTR",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.29174,
+      "lo": 0.254294,
+      "hi": 0.337044
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.102995,
+      "lo": 0.085037,
+      "hi": 0.12685
+     }
+    },
+    {
+     "ticker": "MU",
+     "n_windows": 287,
+     "n_closed": 143,
+     "var_share": {
+      "est": 0.47402,
+      "lo": 0.364721,
+      "hi": 0.601309
+     },
+     "time_share": 0.796405,
+     "per_hour_var_ratio": {
+      "est": 0.230389,
+      "lo": 0.149781,
+      "hi": 0.372278
+     }
+    },
+    {
+     "ticker": "NFLX",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.375358,
+      "lo": 0.239451,
+      "hi": 0.498399
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.150254,
+      "lo": 0.078635,
+      "hi": 0.247634
+     }
+    },
+    {
+     "ticker": "NVDA",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.346201,
+      "lo": 0.28661,
+      "hi": 0.41913
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.132402,
+      "lo": 0.100805,
+      "hi": 0.179642
+     }
+    },
+    {
+     "ticker": "PLTR",
+     "n_windows": 441,
+     "n_closed": 220,
+     "var_share": {
+      "est": 0.295589,
+      "lo": 0.195473,
+      "hi": 0.37184
+     },
+     "time_share": 0.80075,
+     "per_hour_var_ratio": {
+      "est": 0.104415,
+      "lo": 0.060178,
+      "hi": 0.149678
+     }
+    },
+    {
+     "ticker": "QQQ",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.382579,
+      "lo": 0.299666,
+      "hi": 0.503922
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.154935,
+      "lo": 0.106553,
+      "hi": 0.252247
+     }
+    },
+    {
+     "ticker": "SMCI",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.409192,
+      "lo": 0.324684,
+      "hi": 0.504703
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.173178,
+      "lo": 0.120142,
+      "hi": 0.255075
+     }
+    },
+    {
+     "ticker": "SPY",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.352261,
+      "lo": 0.269386,
+      "hi": 0.490526
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.13598,
+      "lo": 0.092081,
+      "hi": 0.240371
+     }
+    },
+    {
+     "ticker": "SQQQ",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.352656,
+      "lo": 0.249047,
+      "hi": 0.51007
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.136216,
+      "lo": 0.082538,
+      "hi": 0.260131
+     }
+    },
+    {
+     "ticker": "TQQQ",
+     "n_windows": 432,
+     "n_closed": 216,
+     "var_share": {
+      "est": 0.458025,
+      "lo": 0.382973,
+      "hi": 0.532503
+     },
+     "time_share": 0.801398,
+     "per_hour_var_ratio": {
+      "est": 0.209433,
+      "lo": 0.153507,
+      "hi": 0.282151
+     }
+    },
+    {
+     "ticker": "TSLA",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.266373,
+      "lo": 0.22227,
+      "hi": 0.32565
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.090788,
+      "lo": 0.071331,
+      "hi": 0.120741
+     }
+    },
+    {
+     "ticker": "TSM",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.466252,
+      "lo": 0.405026,
+      "hi": 0.540032
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.218422,
+      "lo": 0.170178,
+      "hi": 0.293191
+     }
+    }
+   ]
+  },
+  "fresh_only": {
+   "n_windows": 18928,
+   "n_weeks": 92,
+   "stats": {
+    "var_share": {
+     "est": 0.386157,
+     "lo": 0.344448,
+     "hi": 0.433512
+    },
+    "var_share_median": {
+     "est": 0.388621,
+     "lo": 0.323971,
+     "hi": 0.456964
+    },
+    "time_share": {
+     "est": 0.799961,
+     "lo": 0.796112,
+     "hi": 0.803539
+    },
+    "per_hour_var_ratio": {
+     "est": 0.155046,
+     "lo": 0.128033,
+     "hi": 0.188551
+    },
+    "tokens": {
+     "est": 24.0,
+     "lo": 24.0,
+     "hi": 24.0
+    },
+    "var_share_open": {
+     "est": 0.613843,
+     "lo": 0.566488,
+     "hi": 0.655552
+    },
+    "var_share_overnight": {
+     "est": 0.293165,
+     "lo": 0.25702,
+     "hi": 0.332533
+    },
+    "per_hour_var_ratio_overnight": {
+     "est": 0.244337,
+     "lo": 0.200189,
+     "hi": 0.296575
+    },
+    "var_share_weekend": {
+     "est": 0.090524,
+     "lo": 0.069023,
+     "hi": 0.11937
+    },
+    "per_hour_var_ratio_weekend": {
+     "est": 0.068424,
+     "lo": 0.050307,
+     "hi": 0.092354
+    },
+    "var_share_holiday": {
+     "est": 0.002469,
+     "lo": 0.000274,
+     "hi": 0.00515
+    },
+    "per_hour_var_ratio_holiday": {
+     "est": 0.04175,
+     "lo": 0.009964,
+     "hi": 0.067261
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.301583,
+      "lo": 0.203647,
+      "hi": 0.393234
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.10797,
+      "lo": 0.063254,
+      "hi": 0.162536
+     }
+    },
+    {
+     "ticker": "AMD",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.471803,
+      "lo": 0.354695,
+      "hi": 0.59021
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.223345,
+      "lo": 0.136772,
+      "hi": 0.359823
+     }
+    },
+    {
+     "ticker": "AMZN",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.483273,
+      "lo": 0.363389,
+      "hi": 0.589718
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.233853,
+      "lo": 0.142496,
+      "hi": 0.361738
+     }
+    },
+    {
+     "ticker": "AVGO",
+     "n_windows": 441,
+     "n_closed": 220,
+     "var_share": {
+      "est": 0.451949,
+      "lo": 0.31499,
+      "hi": 0.587133
+     },
+     "time_share": 0.80075,
+     "per_hour_var_ratio": {
+      "est": 0.205196,
+      "lo": 0.113104,
+      "hi": 0.35476
+     }
+    },
+    {
+     "ticker": "BABA",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.596291,
+      "lo": 0.538321,
+      "hi": 0.652795
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.369318,
+      "lo": 0.291504,
+      "hi": 0.473488
+     }
+    },
+    {
+     "ticker": "COIN",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.298508,
+      "lo": 0.256626,
+      "hi": 0.347424
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.1064,
+      "lo": 0.086243,
+      "hi": 0.133532
+     }
+    },
+    {
+     "ticker": "CRCL",
+     "n_windows": 666,
+     "n_closed": 333,
+     "var_share": {
+      "est": 0.228444,
+      "lo": 0.174388,
+      "hi": 0.2883
+     },
+     "time_share": 0.800103,
+     "per_hour_var_ratio": {
+      "est": 0.073973,
+      "lo": 0.052724,
+      "hi": 0.1005
+     }
+    },
+    {
+     "ticker": "GOOGL",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.394664,
+      "lo": 0.323529,
+      "hi": 0.470943
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.16302,
+      "lo": 0.120392,
+      "hi": 0.221545
+     }
+    },
+    {
+     "ticker": "HOOD",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.305505,
+      "lo": 0.253557,
+      "hi": 0.360159
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.109992,
+      "lo": 0.084993,
+      "hi": 0.141433
+     }
+    },
+    {
+     "ticker": "INTC",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.424612,
+      "lo": 0.319382,
+      "hi": 0.523087
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.18452,
+      "lo": 0.117364,
+      "hi": 0.273749
+     }
+    },
+    {
+     "ticker": "META",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.426927,
+      "lo": 0.322369,
+      "hi": 0.538425
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.186275,
+      "lo": 0.118059,
+      "hi": 0.293788
+     }
+    },
+    {
+     "ticker": "MSFT",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.410885,
+      "lo": 0.30864,
+      "hi": 0.50163
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.174394,
+      "lo": 0.111293,
+      "hi": 0.252283
+     }
+    },
+    {
+     "ticker": "MSTR",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.29174,
+      "lo": 0.254294,
+      "hi": 0.337044
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.102995,
+      "lo": 0.085037,
+      "hi": 0.12685
+     }
+    },
+    {
+     "ticker": "MU",
+     "n_windows": 287,
+     "n_closed": 143,
+     "var_share": {
+      "est": 0.47402,
+      "lo": 0.364721,
+      "hi": 0.601309
+     },
+     "time_share": 0.796405,
+     "per_hour_var_ratio": {
+      "est": 0.230389,
+      "lo": 0.149781,
+      "hi": 0.372278
+     }
+    },
+    {
+     "ticker": "NFLX",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.375358,
+      "lo": 0.239451,
+      "hi": 0.498399
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.150254,
+      "lo": 0.078635,
+      "hi": 0.247634
+     }
+    },
+    {
+     "ticker": "NVDA",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.346201,
+      "lo": 0.28661,
+      "hi": 0.41913
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.132402,
+      "lo": 0.100805,
+      "hi": 0.179642
+     }
+    },
+    {
+     "ticker": "PLTR",
+     "n_windows": 441,
+     "n_closed": 220,
+     "var_share": {
+      "est": 0.295589,
+      "lo": 0.195473,
+      "hi": 0.37184
+     },
+     "time_share": 0.80075,
+     "per_hour_var_ratio": {
+      "est": 0.104415,
+      "lo": 0.060178,
+      "hi": 0.149678
+     }
+    },
+    {
+     "ticker": "QQQ",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.382579,
+      "lo": 0.299666,
+      "hi": 0.503922
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.154935,
+      "lo": 0.106553,
+      "hi": 0.252247
+     }
+    },
+    {
+     "ticker": "SMCI",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.409192,
+      "lo": 0.324684,
+      "hi": 0.504703
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.173178,
+      "lo": 0.120142,
+      "hi": 0.255075
+     }
+    },
+    {
+     "ticker": "SPY",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.352261,
+      "lo": 0.269386,
+      "hi": 0.490526
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.13598,
+      "lo": 0.092081,
+      "hi": 0.240371
+     }
+    },
+    {
+     "ticker": "SQQQ",
+     "n_windows": 875,
+     "n_closed": 437,
+     "var_share": {
+      "est": 0.355743,
+      "lo": 0.249207,
+      "hi": 0.517819
+     },
+     "time_share": 0.800118,
+     "per_hour_var_ratio": {
+      "est": 0.137943,
+      "lo": 0.082539,
+      "hi": 0.267292
+     }
+    },
+    {
+     "ticker": "TQQQ",
+     "n_windows": 432,
+     "n_closed": 216,
+     "var_share": {
+      "est": 0.458025,
+      "lo": 0.382973,
+      "hi": 0.532503
+     },
+     "time_share": 0.801398,
+     "per_hour_var_ratio": {
+      "est": 0.209433,
+      "lo": 0.153507,
+      "hi": 0.282151
+     }
+    },
+    {
+     "ticker": "TSLA",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.266373,
+      "lo": 0.22227,
+      "hi": 0.32565
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.090788,
+      "lo": 0.071331,
+      "hi": 0.120741
+     }
+    },
+    {
+     "ticker": "TSM",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.466252,
+      "lo": 0.405026,
+      "hi": 0.540032
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.218422,
+      "lo": 0.170178,
+      "hi": 0.293191
+     }
+    }
+   ]
+  },
+  "no_earnings": {
+   "n_windows": 18708,
+   "n_weeks": 92,
+   "stats": {
+    "var_share": {
+     "est": 0.351683,
+     "lo": 0.314092,
+     "hi": 0.401744
+    },
+    "var_share_median": {
+     "est": 0.350725,
+     "lo": 0.293298,
+     "hi": 0.413082
+    },
+    "time_share": {
+     "est": 0.799463,
+     "lo": 0.795493,
+     "hi": 0.803214
+    },
+    "per_hour_var_ratio": {
+     "est": 0.133403,
+     "lo": 0.111582,
+     "hi": 0.165156
+    },
+    "tokens": {
+     "est": 24.0,
+     "lo": 24.0,
+     "hi": 24.0
+    },
+    "var_share_open": {
+     "est": 0.648317,
+     "lo": 0.598256,
+     "hi": 0.685908
+    },
+    "var_share_overnight": {
+     "est": 0.253728,
+     "lo": 0.225489,
+     "hi": 0.287517
+    },
+    "per_hour_var_ratio_overnight": {
+     "est": 0.203006,
+     "lo": 0.170845,
+     "hi": 0.245183
+    },
+    "var_share_weekend": {
+     "est": 0.095391,
+     "lo": 0.072859,
+     "hi": 0.125173
+    },
+    "per_hour_var_ratio_weekend": {
+     "est": 0.068225,
+     "lo": 0.049922,
+     "hi": 0.092173
+    },
+    "var_share_holiday": {
+     "est": 0.002564,
+     "lo": 0.000287,
+     "hi": 0.005364
+    },
+    "per_hour_var_ratio_holiday": {
+     "est": 0.041819,
+     "lo": 0.009978,
+     "hi": 0.06735
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.268009,
+      "lo": 0.172815,
+      "hi": 0.350117
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.09173,
+      "lo": 0.05247,
+      "hi": 0.135477
+     }
+    },
+    {
+     "ticker": "AMD",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.440942,
+      "lo": 0.318537,
+      "hi": 0.573166
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.197604,
+      "lo": 0.116594,
+      "hi": 0.338013
+     }
+    },
+    {
+     "ticker": "AMZN",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.383975,
+      "lo": 0.297542,
+      "hi": 0.485428
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.156162,
+      "lo": 0.104965,
+      "hi": 0.237955
+     }
+    },
+    {
+     "ticker": "AVGO",
+     "n_windows": 429,
+     "n_closed": 212,
+     "var_share": {
+      "est": 0.348348,
+      "lo": 0.271528,
+      "hi": 0.42981
+     },
+     "time_share": 0.800132,
+     "per_hour_var_ratio": {
+      "est": 0.13353,
+      "lo": 0.092227,
+      "hi": 0.189597
+     }
+    },
+    {
+     "ticker": "BABA",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.613,
+      "lo": 0.562396,
+      "hi": 0.662093
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.396844,
+      "lo": 0.321295,
+      "hi": 0.491666
+     }
+    },
+    {
+     "ticker": "COIN",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.289883,
+      "lo": 0.250195,
+      "hi": 0.338684
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.102273,
+      "lo": 0.083483,
+      "hi": 0.128469
+     }
+    },
+    {
+     "ticker": "CRCL",
+     "n_windows": 666,
+     "n_closed": 333,
+     "var_share": {
+      "est": 0.228444,
+      "lo": 0.174388,
+      "hi": 0.2883
+     },
+     "time_share": 0.800103,
+     "per_hour_var_ratio": {
+      "est": 0.073973,
+      "lo": 0.052724,
+      "hi": 0.1005
+     }
+    },
+    {
+     "ticker": "GOOGL",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.349189,
+      "lo": 0.281605,
+      "hi": 0.426213
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.134424,
+      "lo": 0.098872,
+      "hi": 0.184544
+     }
+    },
+    {
+     "ticker": "HOOD",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.289522,
+      "lo": 0.242402,
+      "hi": 0.337234
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.102094,
+      "lo": 0.079887,
+      "hi": 0.127257
+     }
+    },
+    {
+     "ticker": "INTC",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.376464,
+      "lo": 0.275831,
+      "hi": 0.491202
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.151263,
+      "lo": 0.095565,
+      "hi": 0.242959
+     }
+    },
+    {
+     "ticker": "META",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.337815,
+      "lo": 0.253257,
+      "hi": 0.437301
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.127811,
+      "lo": 0.085239,
+      "hi": 0.195649
+     }
+    },
+    {
+     "ticker": "MSFT",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.354011,
+      "lo": 0.257388,
+      "hi": 0.46452
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.137297,
+      "lo": 0.087166,
+      "hi": 0.217684
+     }
+    },
+    {
+     "ticker": "MSTR",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.282968,
+      "lo": 0.245513,
+      "hi": 0.32967
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.098871,
+      "lo": 0.081363,
+      "hi": 0.123258
+     }
+    },
+    {
+     "ticker": "MU",
+     "n_windows": 278,
+     "n_closed": 137,
+     "var_share": {
+      "est": 0.429432,
+      "lo": 0.350926,
+      "hi": 0.511399
+     },
+     "time_share": 0.795568,
+     "per_hour_var_ratio": {
+      "est": 0.193401,
+      "lo": 0.141943,
+      "hi": 0.265376
+     }
+    },
+    {
+     "ticker": "NFLX",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.264572,
+      "lo": 0.151424,
+      "hi": 0.394225
+     },
+     "time_share": 0.7987,
+     "per_hour_var_ratio": {
+      "est": 0.09067,
+      "lo": 0.044806,
+      "hi": 0.162354
+     }
+    },
+    {
+     "ticker": "NVDA",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.33519,
+      "lo": 0.273026,
+      "hi": 0.409466
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.126318,
+      "lo": 0.094454,
+      "hi": 0.172642
+     }
+    },
+    {
+     "ticker": "PLTR",
+     "n_windows": 432,
+     "n_closed": 214,
+     "var_share": {
+      "est": 0.199677,
+      "lo": 0.160728,
+      "hi": 0.246524
+     },
+     "time_share": 0.796438,
+     "per_hour_var_ratio": {
+      "est": 0.063769,
+      "lo": 0.049349,
+      "hi": 0.083329
+     }
+    },
+    {
+     "ticker": "QQQ",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.382579,
+      "lo": 0.299666,
+      "hi": 0.503922
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.154935,
+      "lo": 0.106553,
+      "hi": 0.252247
+     }
+    },
+    {
+     "ticker": "SMCI",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.39341,
+      "lo": 0.304316,
+      "hi": 0.491324
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.162488,
+      "lo": 0.108819,
+      "hi": 0.240871
+     }
+    },
+    {
+     "ticker": "SPY",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.352261,
+      "lo": 0.269386,
+      "hi": 0.490526
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.13598,
+      "lo": 0.092081,
+      "hi": 0.240371
+     }
+    },
+    {
+     "ticker": "SQQQ",
+     "n_windows": 877,
+     "n_closed": 438,
+     "var_share": {
+      "est": 0.352656,
+      "lo": 0.249047,
+      "hi": 0.51007
+     },
+     "time_share": 0.799974,
+     "per_hour_var_ratio": {
+      "est": 0.136216,
+      "lo": 0.082538,
+      "hi": 0.260131
+     }
+    },
+    {
+     "ticker": "TQQQ",
+     "n_windows": 432,
+     "n_closed": 216,
+     "var_share": {
+      "est": 0.458025,
+      "lo": 0.382973,
+      "hi": 0.532503
+     },
+     "time_share": 0.801398,
+     "per_hour_var_ratio": {
+      "est": 0.209433,
+      "lo": 0.153507,
+      "hi": 0.282151
+     }
+    },
+    {
+     "ticker": "TSLA",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.253326,
+      "lo": 0.206754,
+      "hi": 0.313792
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.085,
+      "lo": 0.065266,
+      "hi": 0.114361
+     }
+    },
+    {
+     "ticker": "TSM",
+     "n_windows": 865,
+     "n_closed": 430,
+     "var_share": {
+      "est": 0.456692,
+      "lo": 0.395798,
+      "hi": 0.534907
+     },
+     "time_share": 0.799657,
+     "per_hour_var_ratio": {
+      "est": 0.210595,
+      "lo": 0.163594,
+      "hi": 0.286652
+     }
+    }
+   ]
+  },
+  "hourly_tally": {
+   "n_hours": 331416,
+   "stats": {
+    "abs_share": {
+     "est": 0.496549,
+     "lo": 0.476018,
+     "hi": 0.515426
+    },
+    "var_share": {
+     "est": 0.40917,
+     "lo": 0.38271,
+     "hi": 0.437588
+    },
+    "time_share": {
+     "est": 0.800369,
+     "lo": 0.796672,
+     "hi": 0.803857
+    },
+    "per_hour_abs_ratio": {
+     "est": 0.246068,
+     "lo": 0.224883,
+     "hi": 0.26788
+    }
+   }
+  }
+ },
+ "weekend": {
+  "anchors": {
+   "weekend_only": "Friday 20:00 ET to Monday 04:00 ET: no US venue is trading at either end or between",
+   "to_premarket_start": "Friday 16:00 ET (the close) to Monday 04:00 ET: adds Friday's after-hours",
+   "to_preopen": "Friday 16:00 ET to Monday 09:00 ET: adds Monday's whole pre-market"
+  },
+  "primary": {
+   "n": 1262,
+   "n_weeks": 61,
+   "tokens": 24,
+   "mean_abs_move_pct": 1.304095,
+   "mean_abs_gap_pct": 1.489516,
+   "stats": {
+    "n": {
+     "est": 1262.0,
+     "lo": 1066.0,
+     "hi": 1408.0
+    },
+    "slope_open": {
+     "est": 0.829416,
+     "lo": 0.600746,
+     "hi": 1.041705
+    },
+    "slope_close": {
+     "est": 0.805614,
+     "lo": 0.386746,
+     "hi": 1.206004
+    },
+    "slope_own_open": {
+     "est": 0.907512,
+     "lo": 0.705412,
+     "hi": 1.099696
+    },
+    "corr_open": {
+     "est": 0.657256,
+     "lo": 0.50608,
+     "hi": 0.800438
+    },
+    "corr_close": {
+     "est": 0.43109,
+     "lo": 0.227675,
+     "hi": 0.600249
+    },
+    "gap_after_up_minus_down": {
+     "est": 0.02318,
+     "lo": 0.018141,
+     "hi": 0.028201
+    },
+    "hit_rate_big": {
+     "est": 0.888704,
+     "lo": 0.81919,
+     "hi": 0.949369
+    },
+    "n_big": {
+     "est": 602.0,
+     "lo": 466.975,
+     "hi": 743.05
+    },
+    "oos_skill": {
+     "est": 0.40718,
+     "lo": 0.151432,
+     "hi": 0.629214
+    },
+    "n_oos": {
+     "est": 1190.0,
+     "lo": 929.0,
+     "hi": 1398.0
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n": 55,
+     "slope_open": 0.54988,
+     "slope_close": 0.360903,
+     "slope_open_ci": [
+      0.05912,
+      0.973226
+     ]
+    },
+    {
+     "ticker": "AMD",
+     "n": 55,
+     "slope_open": 0.945497,
+     "slope_close": 0.704778,
+     "slope_open_ci": [
+      0.583827,
+      1.351149
+     ]
+    },
+    {
+     "ticker": "AMZN",
+     "n": 55,
+     "slope_open": 0.670655,
+     "slope_close": 0.68439,
+     "slope_open_ci": [
+      0.3431,
+      1.089458
+     ]
+    },
+    {
+     "ticker": "AVGO",
+     "n": 43,
+     "slope_open": 0.687796,
+     "slope_close": 0.50138,
+     "slope_open_ci": [
+      0.322736,
+      1.017545
+     ]
+    },
+    {
+     "ticker": "BABA",
+     "n": 55,
+     "slope_open": 0.846939,
+     "slope_close": 0.933926,
+     "slope_open_ci": [
+      0.739986,
+      0.951904
+     ]
+    },
+    {
+     "ticker": "COIN",
+     "n": 55,
+     "slope_open": 0.777115,
+     "slope_close": 0.838408,
+     "slope_open_ci": [
+      0.622161,
+      0.937498
+     ]
+    },
+    {
+     "ticker": "CRCL",
+     "n": 55,
+     "slope_open": 0.958744,
+     "slope_close": 1.054906,
+     "slope_open_ci": [
+      0.750404,
+      1.188077
+     ]
+    },
+    {
+     "ticker": "GOOGL",
+     "n": 55,
+     "slope_open": 1.069516,
+     "slope_close": 1.200786,
+     "slope_open_ci": [
+      0.70179,
+      1.495169
+     ]
+    },
+    {
+     "ticker": "HOOD",
+     "n": 55,
+     "slope_open": 0.875175,
+     "slope_close": 0.94175,
+     "slope_open_ci": [
+      0.587377,
+      1.158429
+     ]
+    },
+    {
+     "ticker": "INTC",
+     "n": 55,
+     "slope_open": 0.861123,
+     "slope_close": 0.755976,
+     "slope_open_ci": [
+      0.409342,
+      1.353099
+     ]
+    },
+    {
+     "ticker": "META",
+     "n": 55,
+     "slope_open": 0.733913,
+     "slope_close": 0.967383,
+     "slope_open_ci": [
+      0.506254,
+      1.011448
+     ]
+    },
+    {
+     "ticker": "MSFT",
+     "n": 55,
+     "slope_open": 0.884404,
+     "slope_close": 0.859558,
+     "slope_open_ci": [
+      0.57609,
+      1.214865
+     ]
+    },
+    {
+     "ticker": "MSTR",
+     "n": 55,
+     "slope_open": 0.873393,
+     "slope_close": 0.857281,
+     "slope_open_ci": [
+      0.651057,
+      1.055481
+     ]
+    },
+    {
+     "ticker": "MU",
+     "n": 26,
+     "slope_open": 0.987844,
+     "slope_close": 1.20834,
+     "slope_open_ci": [
+      0.521692,
+      1.42726
+     ]
+    },
+    {
+     "ticker": "NFLX",
+     "n": 54,
+     "slope_open": 0.563028,
+     "slope_close": 0.100467,
+     "slope_open_ci": [
+      0.36844,
+      0.866127
+     ]
+    },
+    {
+     "ticker": "NVDA",
+     "n": 58,
+     "slope_open": 0.714887,
+     "slope_close": 0.788835,
+     "slope_open_ci": [
+      0.349926,
+      1.052321
+     ]
+    },
+    {
+     "ticker": "PLTR",
+     "n": 43,
+     "slope_open": 0.774595,
+     "slope_close": 0.832317,
+     "slope_open_ci": [
+      0.45397,
+      1.184255
+     ]
+    },
+    {
+     "ticker": "QQQ",
+     "n": 55,
+     "slope_open": 0.756258,
+     "slope_close": 0.712529,
+     "slope_open_ci": [
+      0.433504,
+      1.035479
+     ]
+    },
+    {
+     "ticker": "SMCI",
+     "n": 55,
+     "slope_open": 0.661402,
+     "slope_close": 0.191546,
+     "slope_open_ci": [
+      0.397372,
+      1.043126
+     ]
+    },
+    {
+     "ticker": "SPY",
+     "n": 55,
+     "slope_open": 0.661533,
+     "slope_close": 0.565741,
+     "slope_open_ci": [
+      0.306044,
+      0.997539
+     ]
+    },
+    {
+     "ticker": "SQQQ",
+     "n": 55,
+     "slope_open": 0.789466,
+     "slope_close": 0.745171,
+     "slope_open_ci": [
+      0.469445,
+      1.056703
+     ]
+    },
+    {
+     "ticker": "TQQQ",
+     "n": 42,
+     "slope_open": 0.713965,
+     "slope_close": 0.597672,
+     "slope_open_ci": [
+      0.349565,
+      0.99982
+     ]
+    },
+    {
+     "ticker": "TSLA",
+     "n": 61,
+     "slope_open": 0.856608,
+     "slope_close": 1.175402,
+     "slope_open_ci": [
+      0.521979,
+      1.273662
+     ]
+    },
+    {
+     "ticker": "TSM",
+     "n": 55,
+     "slope_open": 0.934367,
+     "slope_close": 0.809038,
+     "slope_open_ci": [
+      0.62535,
+      1.201848
+     ]
+    }
+   ],
+   "tokens_with_positive_slope": 24,
+   "tokens_scored": 24
+  },
+  "by_anchor": {
+   "weekend_only": {
+    "n": 1262,
+    "n_weeks": 61,
+    "tokens": 24,
+    "mean_abs_move_pct": 1.304095,
+    "mean_abs_gap_pct": 1.489516,
+    "stats": {
+     "n": {
+      "est": 1262.0,
+      "lo": 1066.0,
+      "hi": 1408.0
+     },
+     "slope_open": {
+      "est": 0.829416,
+      "lo": 0.600746,
+      "hi": 1.041705
+     },
+     "slope_close": {
+      "est": 0.805614,
+      "lo": 0.386746,
+      "hi": 1.206004
+     },
+     "slope_own_open": {
+      "est": 0.907512,
+      "lo": 0.705412,
+      "hi": 1.099696
+     },
+     "corr_open": {
+      "est": 0.657256,
+      "lo": 0.50608,
+      "hi": 0.800438
+     },
+     "corr_close": {
+      "est": 0.43109,
+      "lo": 0.227675,
+      "hi": 0.600249
+     },
+     "gap_after_up_minus_down": {
+      "est": 0.02318,
+      "lo": 0.018141,
+      "hi": 0.028201
+     },
+     "hit_rate_big": {
+      "est": 0.888704,
+      "lo": 0.81919,
+      "hi": 0.949369
+     },
+     "n_big": {
+      "est": 602.0,
+      "lo": 466.975,
+      "hi": 743.05
+     },
+     "oos_skill": {
+      "est": 0.40718,
+      "lo": 0.151432,
+      "hi": 0.629214
+     },
+     "n_oos": {
+      "est": 1190.0,
+      "lo": 929.0,
+      "hi": 1398.0
+     }
+    },
+    "per_token": [
+     {
+      "ticker": "AAPL",
+      "n": 55,
+      "slope_open": 0.54988,
+      "slope_close": 0.360903,
+      "slope_open_ci": [
+       0.05912,
+       0.973226
+      ]
+     },
+     {
+      "ticker": "AMD",
+      "n": 55,
+      "slope_open": 0.945497,
+      "slope_close": 0.704778,
+      "slope_open_ci": [
+       0.583827,
+       1.351149
+      ]
+     },
+     {
+      "ticker": "AMZN",
+      "n": 55,
+      "slope_open": 0.670655,
+      "slope_close": 0.68439,
+      "slope_open_ci": [
+       0.3431,
+       1.089458
+      ]
+     },
+     {
+      "ticker": "AVGO",
+      "n": 43,
+      "slope_open": 0.687796,
+      "slope_close": 0.50138,
+      "slope_open_ci": [
+       0.322736,
+       1.017545
+      ]
+     },
+     {
+      "ticker": "BABA",
+      "n": 55,
+      "slope_open": 0.846939,
+      "slope_close": 0.933926,
+      "slope_open_ci": [
+       0.739986,
+       0.951904
+      ]
+     },
+     {
+      "ticker": "COIN",
+      "n": 55,
+      "slope_open": 0.777115,
+      "slope_close": 0.838408,
+      "slope_open_ci": [
+       0.622161,
+       0.937498
+      ]
+     },
+     {
+      "ticker": "CRCL",
+      "n": 55,
+      "slope_open": 0.958744,
+      "slope_close": 1.054906,
+      "slope_open_ci": [
+       0.750404,
+       1.188077
+      ]
+     },
+     {
+      "ticker": "GOOGL",
+      "n": 55,
+      "slope_open": 1.069516,
+      "slope_close": 1.200786,
+      "slope_open_ci": [
+       0.70179,
+       1.495169
+      ]
+     },
+     {
+      "ticker": "HOOD",
+      "n": 55,
+      "slope_open": 0.875175,
+      "slope_close": 0.94175,
+      "slope_open_ci": [
+       0.587377,
+       1.158429
+      ]
+     },
+     {
+      "ticker": "INTC",
+      "n": 55,
+      "slope_open": 0.861123,
+      "slope_close": 0.755976,
+      "slope_open_ci": [
+       0.409342,
+       1.353099
+      ]
+     },
+     {
+      "ticker": "META",
+      "n": 55,
+      "slope_open": 0.733913,
+      "slope_close": 0.967383,
+      "slope_open_ci": [
+       0.506254,
+       1.011448
+      ]
+     },
+     {
+      "ticker": "MSFT",
+      "n": 55,
+      "slope_open": 0.884404,
+      "slope_close": 0.859558,
+      "slope_open_ci": [
+       0.57609,
+       1.214865
+      ]
+     },
+     {
+      "ticker": "MSTR",
+      "n": 55,
+      "slope_open": 0.873393,
+      "slope_close": 0.857281,
+      "slope_open_ci": [
+       0.651057,
+       1.055481
+      ]
+     },
+     {
+      "ticker": "MU",
+      "n": 26,
+      "slope_open": 0.987844,
+      "slope_close": 1.20834,
+      "slope_open_ci": [
+       0.521692,
+       1.42726
+      ]
+     },
+     {
+      "ticker": "NFLX",
+      "n": 54,
+      "slope_open": 0.563028,
+      "slope_close": 0.100467,
+      "slope_open_ci": [
+       0.36844,
+       0.866127
+      ]
+     },
+     {
+      "ticker": "NVDA",
+      "n": 58,
+      "slope_open": 0.714887,
+      "slope_close": 0.788835,
+      "slope_open_ci": [
+       0.349926,
+       1.052321
+      ]
+     },
+     {
+      "ticker": "PLTR",
+      "n": 43,
+      "slope_open": 0.774595,
+      "slope_close": 0.832317,
+      "slope_open_ci": [
+       0.45397,
+       1.184255
+      ]
+     },
+     {
+      "ticker": "QQQ",
+      "n": 55,
+      "slope_open": 0.756258,
+      "slope_close": 0.712529,
+      "slope_open_ci": [
+       0.433504,
+       1.035479
+      ]
+     },
+     {
+      "ticker": "SMCI",
+      "n": 55,
+      "slope_open": 0.661402,
+      "slope_close": 0.191546,
+      "slope_open_ci": [
+       0.397372,
+       1.043126
+      ]
+     },
+     {
+      "ticker": "SPY",
+      "n": 55,
+      "slope_open": 0.661533,
+      "slope_close": 0.565741,
+      "slope_open_ci": [
+       0.306044,
+       0.997539
+      ]
+     },
+     {
+      "ticker": "SQQQ",
+      "n": 55,
+      "slope_open": 0.789466,
+      "slope_close": 0.745171,
+      "slope_open_ci": [
+       0.469445,
+       1.056703
+      ]
+     },
+     {
+      "ticker": "TQQQ",
+      "n": 42,
+      "slope_open": 0.713965,
+      "slope_close": 0.597672,
+      "slope_open_ci": [
+       0.349565,
+       0.99982
+      ]
+     },
+     {
+      "ticker": "TSLA",
+      "n": 61,
+      "slope_open": 0.856608,
+      "slope_close": 1.175402,
+      "slope_open_ci": [
+       0.521979,
+       1.273662
+      ]
+     },
+     {
+      "ticker": "TSM",
+      "n": 55,
+      "slope_open": 0.934367,
+      "slope_close": 0.809038,
+      "slope_open_ci": [
+       0.62535,
+       1.201848
+      ]
+     }
+    ],
+    "tokens_with_positive_slope": 24,
+    "tokens_scored": 24
+   },
+   "to_premarket_start": {
+    "n": 1262,
+    "n_weeks": 61,
+    "tokens": 24,
+    "mean_abs_move_pct": 1.30683,
+    "mean_abs_gap_pct": 1.489516,
+    "stats": {
+     "n": {
+      "est": 1262.0,
+      "lo": 1066.0,
+      "hi": 1408.0
+     },
+     "slope_open": {
+      "est": 0.868565,
+      "lo": 0.707642,
+      "hi": 1.017017
+     },
+     "slope_close": {
+      "est": 0.878027,
+      "lo": 0.502025,
+      "hi": 1.22587
+     },
+     "slope_own_open": {
+      "est": 0.94403,
+      "lo": 0.809951,
+      "hi": 1.077753
+     },
+     "corr_open": {
+      "est": 0.6924,
+      "lo": 0.565557,
+      "hi": 0.815827
+     },
+     "corr_close": {
+      "est": 0.474584,
+      "lo": 0.287345,
+      "hi": 0.624947
+     },
+     "gap_after_up_minus_down": {
+      "est": 0.023518,
+      "lo": 0.018572,
+      "hi": 0.028434
+     },
+     "hit_rate_big": {
+      "est": 0.883607,
+      "lo": 0.824273,
+      "hi": 0.936954
+     },
+     "n_big": {
+      "est": 610.0,
+      "lo": 470.975,
+      "hi": 740.0
+     },
+     "oos_skill": {
+      "est": 0.460282,
+      "lo": 0.279552,
+      "hi": 0.64865
+     },
+     "n_oos": {
+      "est": 1190.0,
+      "lo": 929.0,
+      "hi": 1398.0
+     }
+    },
+    "per_token": [
+     {
+      "ticker": "AAPL",
+      "n": 55,
+      "slope_open": 0.677698,
+      "slope_close": 0.558596,
+      "slope_open_ci": [
+       0.299204,
+       1.002546
+      ]
+     },
+     {
+      "ticker": "AMD",
+      "n": 55,
+      "slope_open": 0.929672,
+      "slope_close": 0.665867,
+      "slope_open_ci": [
+       0.649313,
+       1.255466
+      ]
+     },
+     {
+      "ticker": "AMZN",
+      "n": 55,
+      "slope_open": 0.737562,
+      "slope_close": 0.792913,
+      "slope_open_ci": [
+       0.486403,
+       1.051318
+      ]
+     },
+     {
+      "ticker": "AVGO",
+      "n": 43,
+      "slope_open": 0.798966,
+      "slope_close": 0.693483,
+      "slope_open_ci": [
+       0.485183,
+       1.077549
+      ]
+     },
+     {
+      "ticker": "BABA",
+      "n": 55,
+      "slope_open": 0.874022,
+      "slope_close": 0.98089,
+      "slope_open_ci": [
+       0.746982,
+       0.987866
+      ]
+     },
+     {
+      "ticker": "COIN",
+      "n": 55,
+      "slope_open": 0.831588,
+      "slope_close": 0.906648,
+      "slope_open_ci": [
+       0.681565,
+       0.976614
+      ]
+     },
+     {
+      "ticker": "CRCL",
+      "n": 55,
+      "slope_open": 0.975698,
+      "slope_close": 1.081593,
+      "slope_open_ci": [
+       0.809635,
+       1.128352
+      ]
+     },
+     {
+      "ticker": "GOOGL",
+      "n": 55,
+      "slope_open": 0.894706,
+      "slope_close": 1.001285,
+      "slope_open_ci": [
+       0.736343,
+       1.234034
+      ]
+     },
+     {
+      "ticker": "HOOD",
+      "n": 55,
+      "slope_open": 0.891607,
+      "slope_close": 1.075481,
+      "slope_open_ci": [
+       0.664699,
+       1.052722
+      ]
+     },
+     {
+      "ticker": "INTC",
+      "n": 55,
+      "slope_open": 0.858957,
+      "slope_close": 0.737292,
+      "slope_open_ci": [
+       0.553039,
+       1.159762
+      ]
+     },
+     {
+      "ticker": "META",
+      "n": 55,
+      "slope_open": 0.792555,
+      "slope_close": 1.028474,
+      "slope_open_ci": [
+       0.605216,
+       0.991021
+      ]
+     },
+     {
+      "ticker": "MSFT",
+      "n": 55,
+      "slope_open": 0.950334,
+      "slope_close": 0.934076,
+      "slope_open_ci": [
+       0.6851,
+       1.251723
+      ]
+     },
+     {
+      "ticker": "MSTR",
+      "n": 55,
+      "slope_open": 0.872448,
+      "slope_close": 0.903094,
+      "slope_open_ci": [
+       0.619861,
+       1.071491
+      ]
+     },
+     {
+      "ticker": "MU",
+      "n": 26,
+      "slope_open": 1.086804,
+      "slope_close": 1.405691,
+      "slope_open_ci": [
+       0.636064,
+       1.47993
+      ]
+     },
+     {
+      "ticker": "NFLX",
+      "n": 54,
+      "slope_open": 0.597162,
+      "slope_close": 0.029218,
+      "slope_open_ci": [
+       0.426989,
+       1.006305
+      ]
+     },
+     {
+      "ticker": "NVDA",
+      "n": 58,
+      "slope_open": 0.806015,
+      "slope_close": 0.927848,
+      "slope_open_ci": [
+       0.587114,
+       0.99115
+      ]
+     },
+     {
+      "ticker": "PLTR",
+      "n": 43,
+      "slope_open": 0.836861,
+      "slope_close": 1.053394,
+      "slope_open_ci": [
+       0.585635,
+       1.165408
+      ]
+     },
+     {
+      "ticker": "QQQ",
+      "n": 55,
+      "slope_open": 0.818347,
+      "slope_close": 0.778136,
+      "slope_open_ci": [
+       0.607245,
+       1.017221
+      ]
+     },
+     {
+      "ticker": "SMCI",
+      "n": 55,
+      "slope_open": 0.713159,
+      "slope_close": 0.183335,
+      "slope_open_ci": [
+       0.460702,
+       1.027559
+      ]
+     },
+     {
+      "ticker": "SPY",
+      "n": 55,
+      "slope_open": 0.770593,
+      "slope_close": 0.650447,
+      "slope_open_ci": [
+       0.549432,
+       0.98731
+      ]
+     },
+     {
+      "ticker": "SQQQ",
+      "n": 55,
+      "slope_open": 0.833093,
+      "slope_close": 0.808247,
+      "slope_open_ci": [
+       0.625955,
+       1.029829
+      ]
+     },
+     {
+      "ticker": "TQQQ",
+      "n": 42,
+      "slope_open": 0.782488,
+      "slope_close": 0.66293,
+      "slope_open_ci": [
+       0.510061,
+       1.005572
+      ]
+     },
+     {
+      "ticker": "TSLA",
+      "n": 61,
+      "slope_open": 0.943388,
+      "slope_close": 1.347203,
+      "slope_open_ci": [
+       0.675054,
+       1.274817
+      ]
+     },
+     {
+      "ticker": "TSM",
+      "n": 55,
+      "slope_open": 0.928938,
+      "slope_close": 0.863468,
+      "slope_open_ci": [
+       0.680524,
+       1.095457
+      ]
+     }
+    ],
+    "tokens_with_positive_slope": 24,
+    "tokens_scored": 24
+   },
+   "to_preopen": {
+    "n": 1892,
+    "n_weeks": 88,
+    "tokens": 24,
+    "mean_abs_move_pct": 1.618147,
+    "mean_abs_gap_pct": 1.641081,
+    "stats": {
+     "n": {
+      "est": 1892.0,
+      "lo": 1818.0,
+      "hi": 1969.025
+     },
+     "slope_open": {
+      "est": 1.026336,
+      "lo": 0.987609,
+      "hi": 1.064588
+     },
+     "slope_close": {
+      "est": 0.8596,
+      "lo": 0.698959,
+      "hi": 1.008818
+     },
+     "slope_own_open": {
+      "est": 1.027248,
+      "lo": 0.993012,
+      "hi": 1.057965
+     },
+     "corr_open": {
+      "est": 0.970738,
+      "lo": 0.960825,
+      "hi": 0.979124
+     },
+     "corr_close": {
+      "est": 0.58414,
+      "lo": 0.476006,
+      "hi": 0.678941
+     },
+     "gap_after_up_minus_down": {
+      "est": 0.032115,
+      "lo": 0.0269,
+      "hi": 0.037574
+     },
+     "hit_rate_big": {
+      "est": 0.998075,
+      "lo": 0.995117,
+      "hi": 1.0
+     },
+     "n_big": {
+      "est": 1039.0,
+      "lo": 931.975,
+      "hi": 1150.025
+     },
+     "oos_skill": {
+      "est": 0.937036,
+      "lo": 0.916884,
+      "hi": 0.954956
+     },
+     "n_oos": {
+      "est": 1816.0,
+      "lo": 1640.0,
+      "hi": 1947.025
+     }
+    },
+    "per_token": [
+     {
+      "ticker": "AAPL",
+      "n": 88,
+      "slope_open": 1.083624,
+      "slope_close": 0.931614,
+      "slope_open_ci": [
+       0.980646,
+       1.223652
+      ]
+     },
+     {
+      "ticker": "AMD",
+      "n": 88,
+      "slope_open": 1.035731,
+      "slope_close": 0.763055,
+      "slope_open_ci": [
+       0.940085,
+       1.055891
+      ]
+     },
+     {
+      "ticker": "AMZN",
+      "n": 88,
+      "slope_open": 1.05624,
+      "slope_close": 0.861884,
+      "slope_open_ci": [
+       0.96052,
+       1.186069
+      ]
+     },
+     {
+      "ticker": "AVGO",
+      "n": 43,
+      "slope_open": 0.943407,
+      "slope_close": 0.832033,
+      "slope_open_ci": [
+       0.865497,
+       1.01804
+      ]
+     },
+     {
+      "ticker": "BABA",
+      "n": 88,
+      "slope_open": 1.01582,
+      "slope_close": 1.115737,
+      "slope_open_ci": [
+       0.942834,
+       1.074525
+      ]
+     },
+     {
+      "ticker": "COIN",
+      "n": 88,
+      "slope_open": 0.998744,
+      "slope_close": 0.754367,
+      "slope_open_ci": [
+       0.920887,
+       1.083806
+      ]
+     },
+     {
+      "ticker": "CRCL",
+      "n": 66,
+      "slope_open": 1.129148,
+      "slope_close": 0.879323,
+      "slope_open_ci": [
+       0.961944,
+       1.222003
+      ]
+     },
+     {
+      "ticker": "GOOGL",
+      "n": 88,
+      "slope_open": 1.010221,
+      "slope_close": 1.094023,
+      "slope_open_ci": [
+       0.941028,
+       1.087869
+      ]
+     },
+     {
+      "ticker": "HOOD",
+      "n": 88,
+      "slope_open": 1.018105,
+      "slope_close": 0.703156,
+      "slope_open_ci": [
+       0.975058,
+       1.049187
+      ]
+     },
+     {
+      "ticker": "INTC",
+      "n": 88,
+      "slope_open": 1.02455,
+      "slope_close": 0.798991,
+      "slope_open_ci": [
+       0.902202,
+       1.158134
+      ]
+     },
+     {
+      "ticker": "META",
+      "n": 88,
+      "slope_open": 1.041231,
+      "slope_close": 0.869516,
+      "slope_open_ci": [
+       0.953197,
+       1.131952
+      ]
+     },
+     {
+      "ticker": "MSFT",
+      "n": 88,
+      "slope_open": 1.029724,
+      "slope_close": 0.810063,
+      "slope_open_ci": [
+       0.927704,
+       1.115111
+      ]
+     },
+     {
+      "ticker": "MSTR",
+      "n": 88,
+      "slope_open": 1.029828,
+      "slope_close": 0.736221,
+      "slope_open_ci": [
+       0.974503,
+       1.075893
+      ]
+     },
+     {
+      "ticker": "MU",
+      "n": 26,
+      "slope_open": 1.026654,
+      "slope_close": 1.055301,
+      "slope_open_ci": [
+       0.91947,
+       1.073412
+      ]
+     },
+     {
+      "ticker": "NFLX",
+      "n": 88,
+      "slope_open": 0.91085,
+      "slope_close": 0.591165,
+      "slope_open_ci": [
+       0.791965,
+       1.114031
+      ]
+     },
+     {
+      "ticker": "NVDA",
+      "n": 88,
+      "slope_open": 1.085529,
+      "slope_close": 1.009861,
+      "slope_open_ci": [
+       0.953043,
+       1.148326
+      ]
+     },
+     {
+      "ticker": "PLTR",
+      "n": 43,
+      "slope_open": 0.935785,
+      "slope_close": 1.043005,
+      "slope_open_ci": [
+       0.852613,
+       1.02327
+      ]
+     },
+     {
+      "ticker": "QQQ",
+      "n": 88,
+      "slope_open": 1.014838,
+      "slope_close": 0.844534,
+      "slope_open_ci": [
+       0.947765,
+       1.088827
+      ]
+     },
+     {
+      "ticker": "SMCI",
+      "n": 88,
+      "slope_open": 0.990111,
+      "slope_close": 1.04672,
+      "slope_open_ci": [
+       0.929703,
+       1.046348
+      ]
+     },
+     {
+      "ticker": "SPY",
+      "n": 88,
+      "slope_open": 1.044283,
+      "slope_close": 0.835865,
+      "slope_open_ci": [
+       0.96479,
+       1.149986
+      ]
+     },
+     {
+      "ticker": "SQQQ",
+      "n": 88,
+      "slope_open": 1.010101,
+      "slope_close": 0.857849,
+      "slope_open_ci": [
+       0.941982,
+       1.08097
+      ]
+     },
+     {
+      "ticker": "TQQQ",
+      "n": 42,
+      "slope_open": 0.935055,
+      "slope_close": 0.745812,
+      "slope_open_ci": [
+       0.873807,
+       0.996794
+      ]
+     },
+     {
+      "ticker": "TSLA",
+      "n": 88,
+      "slope_open": 1.005298,
+      "slope_close": 0.965618,
+      "slope_open_ci": [
+       0.929755,
+       1.07597
+      ]
+     },
+     {
+      "ticker": "TSM",
+      "n": 88,
+      "slope_open": 1.054298,
+      "slope_close": 0.928247,
+      "slope_open_ci": [
+       0.927932,
+       1.124781
+      ]
+     }
+    ],
+    "tokens_with_positive_slope": 24,
+    "tokens_scored": 24
+   }
+  },
+  "all_weekends": {
+   "n": 1892,
+   "n_weeks": 88,
+   "tokens": 24,
+   "mean_abs_move_pct": 0.869859,
+   "mean_abs_gap_pct": 1.641081,
+   "stats": {
+    "n": {
+     "est": 1892.0,
+     "lo": 1818.0,
+     "hi": 1969.025
+    },
+    "slope_open": {
+     "est": 0.829415,
+     "lo": 0.601057,
+     "hi": 1.051423
+    },
+    "slope_close": {
+     "est": 0.805613,
+     "lo": 0.383785,
+     "hi": 1.2123
+    },
+    "slope_own_open": {
+     "est": 0.904854,
+     "lo": 0.69615,
+     "hi": 1.108853
+    },
+    "corr_open": {
+     "est": 0.475984,
+     "lo": 0.336052,
+     "hi": 0.6207
+    },
+    "corr_close": {
+     "est": 0.330617,
+     "lo": 0.160937,
+     "hi": 0.482848
+    },
+    "gap_after_up_minus_down": {
+     "est": 0.023149,
+     "lo": 0.018227,
+     "hi": 0.028214
+    },
+    "hit_rate_big": {
+     "est": 0.888704,
+     "lo": 0.820737,
+     "hi": 0.952067
+    },
+    "n_big": {
+     "est": 602.0,
+     "lo": 392.925,
+     "hi": 824.0
+    },
+    "oos_skill": {
+     "est": 0.401231,
+     "lo": 0.171774,
+     "hi": 0.606708
+    },
+    "n_oos": {
+     "est": 1354.0,
+     "lo": 976.875,
+     "hi": 1710.0
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n": 88,
+     "slope_open": 0.54988,
+     "slope_close": 0.360903,
+     "slope_open_ci": [
+      0.037666,
+      0.966454
+     ]
+    },
+    {
+     "ticker": "AMD",
+     "n": 88,
+     "slope_open": 0.945497,
+     "slope_close": 0.704778,
+     "slope_open_ci": [
+      0.58164,
+      1.378007
+     ]
+    },
+    {
+     "ticker": "AMZN",
+     "n": 88,
+     "slope_open": 0.670655,
+     "slope_close": 0.68439,
+     "slope_open_ci": [
+      0.331265,
+      1.05929
+     ]
+    },
+    {
+     "ticker": "AVGO",
+     "n": 43,
+     "slope_open": 0.687796,
+     "slope_close": 0.50138,
+     "slope_open_ci": [
+      0.322736,
+      1.017545
+     ]
+    },
+    {
+     "ticker": "BABA",
+     "n": 88,
+     "slope_open": 0.846939,
+     "slope_close": 0.933926,
+     "slope_open_ci": [
+      0.744461,
+      0.947359
+     ]
+    },
+    {
+     "ticker": "COIN",
+     "n": 88,
+     "slope_open": 0.777115,
+     "slope_close": 0.838408,
+     "slope_open_ci": [
+      0.621575,
+      0.947608
+     ]
+    },
+    {
+     "ticker": "CRCL",
+     "n": 66,
+     "slope_open": 0.958744,
+     "slope_close": 1.054906,
+     "slope_open_ci": [
+      0.748538,
+      1.183012
+     ]
+    },
+    {
+     "ticker": "GOOGL",
+     "n": 88,
+     "slope_open": 1.069516,
+     "slope_close": 1.200786,
+     "slope_open_ci": [
+      0.702396,
+      1.513183
+     ]
+    },
+    {
+     "ticker": "HOOD",
+     "n": 88,
+     "slope_open": 0.875175,
+     "slope_close": 0.94175,
+     "slope_open_ci": [
+      0.59166,
+      1.185739
+     ]
+    },
+    {
+     "ticker": "INTC",
+     "n": 88,
+     "slope_open": 0.861123,
+     "slope_close": 0.755976,
+     "slope_open_ci": [
+      0.401263,
+      1.355083
+     ]
+    },
+    {
+     "ticker": "META",
+     "n": 88,
+     "slope_open": 0.733913,
+     "slope_close": 0.967383,
+     "slope_open_ci": [
+      0.505339,
+      1.007806
+     ]
+    },
+    {
+     "ticker": "MSFT",
+     "n": 88,
+     "slope_open": 0.884404,
+     "slope_close": 0.859558,
+     "slope_open_ci": [
+      0.551328,
+      1.226505
+     ]
+    },
+    {
+     "ticker": "MSTR",
+     "n": 88,
+     "slope_open": 0.873393,
+     "slope_close": 0.857281,
+     "slope_open_ci": [
+      0.667636,
+      1.062301
+     ]
+    },
+    {
+     "ticker": "MU",
+     "n": 26,
+     "slope_open": 0.987844,
+     "slope_close": 1.20834,
+     "slope_open_ci": [
+      0.521692,
+      1.42726
+     ]
+    },
+    {
+     "ticker": "NFLX",
+     "n": 88,
+     "slope_open": 0.563028,
+     "slope_close": 0.100467,
+     "slope_open_ci": [
+      0.364087,
+      0.886179
+     ]
+    },
+    {
+     "ticker": "NVDA",
+     "n": 88,
+     "slope_open": 0.714846,
+     "slope_close": 0.788833,
+     "slope_open_ci": [
+      0.335407,
+      1.043588
+     ]
+    },
+    {
+     "ticker": "PLTR",
+     "n": 43,
+     "slope_open": 0.774595,
+     "slope_close": 0.832317,
+     "slope_open_ci": [
+      0.45397,
+      1.184255
+     ]
+    },
+    {
+     "ticker": "QQQ",
+     "n": 88,
+     "slope_open": 0.756258,
+     "slope_close": 0.712529,
+     "slope_open_ci": [
+      0.433485,
+      1.039967
+     ]
+    },
+    {
+     "ticker": "SMCI",
+     "n": 88,
+     "slope_open": 0.661402,
+     "slope_close": 0.191546,
+     "slope_open_ci": [
+      0.401205,
+      1.048907
+     ]
+    },
+    {
+     "ticker": "SPY",
+     "n": 88,
+     "slope_open": 0.661533,
+     "slope_close": 0.565741,
+     "slope_open_ci": [
+      0.300886,
+      0.9842
+     ]
+    },
+    {
+     "ticker": "SQQQ",
+     "n": 88,
+     "slope_open": 0.789466,
+     "slope_close": 0.745171,
+     "slope_open_ci": [
+      0.469692,
+      1.060823
+     ]
+    },
+    {
+     "ticker": "TQQQ",
+     "n": 42,
+     "slope_open": 0.713965,
+     "slope_close": 0.597672,
+     "slope_open_ci": [
+      0.349565,
+      0.99982
+     ]
+    },
+    {
+     "ticker": "TSLA",
+     "n": 88,
+     "slope_open": 0.856608,
+     "slope_close": 1.175402,
+     "slope_open_ci": [
+      0.497628,
+      1.274777
+     ]
+    },
+    {
+     "ticker": "TSM",
+     "n": 88,
+     "slope_open": 0.934367,
+     "slope_close": 0.809038,
+     "slope_open_ci": [
+      0.619116,
+      1.218407
+     ]
+    }
+   ],
+   "tokens_with_positive_slope": 24,
+   "tokens_scored": 24
+  },
+  "no_earnings": {
+   "n": 1258,
+   "n_weeks": 61,
+   "tokens": 24,
+   "mean_abs_move_pct": 1.304295,
+   "mean_abs_gap_pct": 1.486734,
+   "stats": {
+    "n": {
+     "est": 1258.0,
+     "lo": 1063.975,
+     "hi": 1401.0
+    },
+    "slope_open": {
+     "est": 0.829863,
+     "lo": 0.600209,
+     "hi": 1.04115
+    },
+    "slope_close": {
+     "est": 0.805806,
+     "lo": 0.387254,
+     "hi": 1.206479
+    },
+    "slope_own_open": {
+     "est": 0.904866,
+     "lo": 0.70282,
+     "hi": 1.097383
+    },
+    "corr_open": {
+     "est": 0.658469,
+     "lo": 0.50643,
+     "hi": 0.801295
+    },
+    "corr_close": {
+     "est": 0.430982,
+     "lo": 0.226959,
+     "hi": 0.600168
+    },
+    "gap_after_up_minus_down": {
+     "est": 0.023259,
+     "lo": 0.018146,
+     "hi": 0.028333
+    },
+    "hit_rate_big": {
+     "est": 0.889816,
+     "lo": 0.819351,
+     "hi": 0.951565
+    },
+    "n_big": {
+     "est": 599.0,
+     "lo": 463.0,
+     "hi": 741.0
+    },
+    "oos_skill": {
+     "est": 0.408501,
+     "lo": 0.150038,
+     "hi": 0.634134
+    },
+    "n_oos": {
+     "est": 1186.0,
+     "lo": 927.0,
+     "hi": 1391.0
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n": 55,
+     "slope_open": 0.54988,
+     "slope_close": 0.360903,
+     "slope_open_ci": [
+      0.05912,
+      0.973226
+     ]
+    },
+    {
+     "ticker": "AMD",
+     "n": 55,
+     "slope_open": 0.945497,
+     "slope_close": 0.704778,
+     "slope_open_ci": [
+      0.583827,
+      1.351149
+     ]
+    },
+    {
+     "ticker": "AMZN",
+     "n": 55,
+     "slope_open": 0.670655,
+     "slope_close": 0.68439,
+     "slope_open_ci": [
+      0.3431,
+      1.089458
+     ]
+    },
+    {
+     "ticker": "AVGO",
+     "n": 43,
+     "slope_open": 0.687796,
+     "slope_close": 0.50138,
+     "slope_open_ci": [
+      0.322736,
+      1.017545
+     ]
+    },
+    {
+     "ticker": "BABA",
+     "n": 55,
+     "slope_open": 0.846939,
+     "slope_close": 0.933926,
+     "slope_open_ci": [
+      0.739986,
+      0.951904
+     ]
+    },
+    {
+     "ticker": "COIN",
+     "n": 55,
+     "slope_open": 0.777115,
+     "slope_close": 0.838408,
+     "slope_open_ci": [
+      0.622161,
+      0.937498
+     ]
+    },
+    {
+     "ticker": "CRCL",
+     "n": 55,
+     "slope_open": 0.958744,
+     "slope_close": 1.054906,
+     "slope_open_ci": [
+      0.750404,
+      1.188077
+     ]
+    },
+    {
+     "ticker": "GOOGL",
+     "n": 55,
+     "slope_open": 1.069516,
+     "slope_close": 1.200786,
+     "slope_open_ci": [
+      0.70179,
+      1.495169
+     ]
+    },
+    {
+     "ticker": "HOOD",
+     "n": 55,
+     "slope_open": 0.875175,
+     "slope_close": 0.94175,
+     "slope_open_ci": [
+      0.587377,
+      1.158429
+     ]
+    },
+    {
+     "ticker": "INTC",
+     "n": 55,
+     "slope_open": 0.861123,
+     "slope_close": 0.755976,
+     "slope_open_ci": [
+      0.409342,
+      1.353099
+     ]
+    },
+    {
+     "ticker": "META",
+     "n": 55,
+     "slope_open": 0.733913,
+     "slope_close": 0.967383,
+     "slope_open_ci": [
+      0.506254,
+      1.011448
+     ]
+    },
+    {
+     "ticker": "MSFT",
+     "n": 55,
+     "slope_open": 0.884404,
+     "slope_close": 0.859558,
+     "slope_open_ci": [
+      0.57609,
+      1.214865
+     ]
+    },
+    {
+     "ticker": "MSTR",
+     "n": 55,
+     "slope_open": 0.873393,
+     "slope_close": 0.857281,
+     "slope_open_ci": [
+      0.651057,
+      1.055481
+     ]
+    },
+    {
+     "ticker": "MU",
+     "n": 26,
+     "slope_open": 0.987844,
+     "slope_close": 1.20834,
+     "slope_open_ci": [
+      0.521692,
+      1.42726
+     ]
+    },
+    {
+     "ticker": "NFLX",
+     "n": 53,
+     "slope_open": 0.592663,
+     "slope_close": 0.083576,
+     "slope_open_ci": [
+      0.398673,
+      0.918756
+     ]
+    },
+    {
+     "ticker": "NVDA",
+     "n": 58,
+     "slope_open": 0.714887,
+     "slope_close": 0.788835,
+     "slope_open_ci": [
+      0.349926,
+      1.052321
+     ]
+    },
+    {
+     "ticker": "PLTR",
+     "n": 40,
+     "slope_open": 0.781931,
+     "slope_close": 0.846732,
+     "slope_open_ci": [
+      0.470399,
+      1.166668
+     ]
+    },
+    {
+     "ticker": "QQQ",
+     "n": 55,
+     "slope_open": 0.756258,
+     "slope_close": 0.712529,
+     "slope_open_ci": [
+      0.433504,
+      1.035479
+     ]
+    },
+    {
+     "ticker": "SMCI",
+     "n": 55,
+     "slope_open": 0.661402,
+     "slope_close": 0.191546,
+     "slope_open_ci": [
+      0.397372,
+      1.043126
+     ]
+    },
+    {
+     "ticker": "SPY",
+     "n": 55,
+     "slope_open": 0.661533,
+     "slope_close": 0.565741,
+     "slope_open_ci": [
+      0.306044,
+      0.997539
+     ]
+    },
+    {
+     "ticker": "SQQQ",
+     "n": 55,
+     "slope_open": 0.789466,
+     "slope_close": 0.745171,
+     "slope_open_ci": [
+      0.469445,
+      1.056703
+     ]
+    },
+    {
+     "ticker": "TQQQ",
+     "n": 42,
+     "slope_open": 0.713965,
+     "slope_close": 0.597672,
+     "slope_open_ci": [
+      0.349565,
+      0.99982
+     ]
+    },
+    {
+     "ticker": "TSLA",
+     "n": 61,
+     "slope_open": 0.856608,
+     "slope_close": 1.175402,
+     "slope_open_ci": [
+      0.521979,
+      1.273662
+     ]
+    },
+    {
+     "ticker": "TSM",
+     "n": 55,
+     "slope_open": 0.934367,
+     "slope_close": 0.809038,
+     "slope_open_ci": [
+      0.62535,
+      1.201848
+     ]
+    }
+   ],
+   "tokens_with_positive_slope": 24,
+   "tokens_scored": 24
+  },
+  "dropped_stale": 630,
+  "verdict": "yes"
+ },
+ "overnight": {
+  "by_anchor": {
+   "weekend_only": {
+    "n": 4777,
+    "n_weeks": 62,
+    "tokens": 24,
+    "mean_abs_move_pct": 0.698394,
+    "mean_abs_gap_pct": 1.386215,
+    "stats": {
+     "n": {
+      "est": 4777.0,
+      "lo": 3998.925,
+      "hi": 5367.05
+     },
+     "slope_open": {
+      "est": 1.0261,
+      "lo": 0.918302,
+      "hi": 1.125599
+     },
+     "slope_close": {
+      "est": 1.163437,
+      "lo": 0.984493,
+      "hi": 1.317059
+     },
+     "slope_own_open": {
+      "est": 1.044401,
+      "lo": 0.930771,
+      "hi": 1.154557
+     },
+     "corr_open": {
+      "est": 0.506891,
+      "lo": 0.446944,
+      "hi": 0.562879
+     },
+     "corr_close": {
+      "est": 0.354494,
+      "lo": 0.29569,
+      "hi": 0.404045
+     },
+     "gap_after_up_minus_down": {
+      "est": 0.013677,
+      "lo": 0.011105,
+      "hi": 0.016325
+     },
+     "hit_rate_big": {
+      "est": 0.842718,
+      "lo": 0.806944,
+      "hi": 0.878946
+     },
+     "n_big": {
+      "est": 1030.0,
+      "lo": 771.95,
+      "hi": 1294.025
+     },
+     "oos_skill": {
+      "est": 0.254658,
+      "lo": 0.196612,
+      "hi": 0.313352
+     },
+     "n_oos": {
+      "est": 4682.0,
+      "lo": 3796.925,
+      "hi": 5359.025
+     }
+    },
+    "per_token": [
+     {
+      "ticker": "AAPL",
+      "n": 209,
+      "slope_open": 0.628103,
+      "slope_close": 0.61356,
+      "slope_open_ci": [
+       0.150562,
+       1.241651
+      ]
+     },
+     {
+      "ticker": "AMD",
+      "n": 208,
+      "slope_open": 1.090829,
+      "slope_close": 1.172943,
+      "slope_open_ci": [
+       0.779224,
+       1.331021
+      ]
+     },
+     {
+      "ticker": "AMZN",
+      "n": 209,
+      "slope_open": 0.333137,
+      "slope_close": 0.390657,
+      "slope_open_ci": [
+       -0.591415,
+       1.297723
+      ]
+     },
+     {
+      "ticker": "AVGO",
+      "n": 159,
+      "slope_open": 0.687439,
+      "slope_close": 0.797825,
+      "slope_open_ci": [
+       -0.085737,
+       1.293932
+      ]
+     },
+     {
+      "ticker": "BABA",
+      "n": 208,
+      "slope_open": 0.858002,
+      "slope_close": 0.882497,
+      "slope_open_ci": [
+       0.812979,
+       0.911606
+      ]
+     },
+     {
+      "ticker": "COIN",
+      "n": 208,
+      "slope_open": 1.09957,
+      "slope_close": 1.352469,
+      "slope_open_ci": [
+       0.941879,
+       1.253137
+      ]
+     },
+     {
+      "ticker": "CRCL",
+      "n": 209,
+      "slope_open": 0.81749,
+      "slope_close": 1.182796,
+      "slope_open_ci": [
+       0.649538,
+       1.041228
+      ]
+     },
+     {
+      "ticker": "GOOGL",
+      "n": 209,
+      "slope_open": 0.668857,
+      "slope_close": 0.47755,
+      "slope_open_ci": [
+       0.105097,
+       1.016031
+      ]
+     },
+     {
+      "ticker": "HOOD",
+      "n": 209,
+      "slope_open": 0.962446,
+      "slope_close": 1.154461,
+      "slope_open_ci": [
+       0.767855,
+       1.150782
+      ]
+     },
+     {
+      "ticker": "INTC",
+      "n": 209,
+      "slope_open": 1.247876,
+      "slope_close": 1.375569,
+      "slope_open_ci": [
+       1.073604,
+       1.444034
+      ]
+     },
+     {
+      "ticker": "META",
+      "n": 209,
+      "slope_open": 1.036988,
+      "slope_close": 0.925674,
+      "slope_open_ci": [
+       0.328471,
+       1.755576
+      ]
+     },
+     {
+      "ticker": "MSFT",
+      "n": 209,
+      "slope_open": 0.098725,
+      "slope_close": -0.704586,
+      "slope_open_ci": [
+       -1.011594,
+       1.084944
+      ]
+     },
+     {
+      "ticker": "MSTR",
+      "n": 208,
+      "slope_open": 0.943719,
+      "slope_close": 1.224484,
+      "slope_open_ci": [
+       0.788013,
+       1.109739
+      ]
+     },
+     {
+      "ticker": "MU",
+      "n": 102,
+      "slope_open": 1.236162,
+      "slope_close": 1.466662,
+      "slope_open_ci": [
+       0.95732,
+       1.423609
+      ]
+     },
+     {
+      "ticker": "NFLX",
+      "n": 208,
+      "slope_open": 0.829357,
+      "slope_close": 0.443518,
+      "slope_open_ci": [
+       0.074529,
+       1.575282
+      ]
+     },
+     {
+      "ticker": "NVDA",
+      "n": 217,
+      "slope_open": 1.135201,
+      "slope_close": 1.082467,
+      "slope_open_ci": [
+       0.936607,
+       1.390265
+      ]
+     },
+     {
+      "ticker": "PLTR",
+      "n": 159,
+      "slope_open": 1.054653,
+      "slope_close": 0.692686,
+      "slope_open_ci": [
+       0.424167,
+       1.534028
+      ]
+     },
+     {
+      "ticker": "QQQ",
+      "n": 209,
+      "slope_open": 1.049823,
+      "slope_close": 1.125712,
+      "slope_open_ci": [
+       0.846155,
+       1.225473
+      ]
+     },
+     {
+      "ticker": "SMCI",
+      "n": 207,
+      "slope_open": 1.236541,
+      "slope_close": 1.646682,
+      "slope_open_ci": [
+       0.529539,
+       2.012632
+      ]
+     },
+     {
+      "ticker": "SPY",
+      "n": 209,
+      "slope_open": 0.905148,
+      "slope_close": 0.839172,
+      "slope_open_ci": [
+       0.737058,
+       1.082087
+      ]
+     },
+     {
+      "ticker": "SQQQ",
+      "n": 207,
+      "slope_open": 1.062815,
+      "slope_close": 1.137358,
+      "slope_open_ci": [
+       0.861608,
+       1.229573
+      ]
+     },
+     {
+      "ticker": "TQQQ",
+      "n": 156,
+      "slope_open": 1.068751,
+      "slope_close": 1.23277,
+      "slope_open_ci": [
+       0.824071,
+       1.274595
+      ]
+     },
+     {
+      "ticker": "TSLA",
+      "n": 231,
+      "slope_open": 1.170825,
+      "slope_close": 1.304852,
+      "slope_open_ci": [
+       0.904459,
+       1.450752
+      ]
+     },
+     {
+      "ticker": "TSM",
+      "n": 209,
+      "slope_open": 1.201526,
+      "slope_close": 1.147778,
+      "slope_open_ci": [
+       1.078691,
+       1.32961
+      ]
+     }
+    ],
+    "tokens_with_positive_slope": 24,
+    "tokens_scored": 24
+   },
+   "to_premarket_start": {
+    "n": 4777,
+    "n_weeks": 62,
+    "tokens": 24,
+    "mean_abs_move_pct": 0.953586,
+    "mean_abs_gap_pct": 1.386215,
+    "stats": {
+     "n": {
+      "est": 4777.0,
+      "lo": 3998.925,
+      "hi": 5367.05
+     },
+     "slope_open": {
+      "est": 1.065125,
+      "lo": 1.008158,
+      "hi": 1.114365
+     },
+     "slope_close": {
+      "est": 1.128835,
+      "lo": 0.955827,
+      "hi": 1.269683
+     },
+     "slope_own_open": {
+      "est": 1.082323,
+      "lo": 1.027182,
+      "hi": 1.129403
+     },
+     "corr_open": {
+      "est": 0.796972,
+      "lo": 0.744411,
+      "hi": 0.83389
+     },
+     "corr_close": {
+      "est": 0.520961,
+      "lo": 0.438425,
+      "hi": 0.578593
+     },
+     "gap_after_up_minus_down": {
+      "est": 0.020015,
+      "lo": 0.016602,
+      "hi": 0.023386
+     },
+     "hit_rate_big": {
+      "est": 0.927233,
+      "lo": 0.909659,
+      "hi": 0.943658
+     },
+     "n_big": {
+      "est": 1388.0,
+      "lo": 1056.975,
+      "hi": 1697.0
+     },
+     "oos_skill": {
+      "est": 0.632385,
+      "lo": 0.550197,
+      "hi": 0.692676
+     },
+     "n_oos": {
+      "est": 4682.0,
+      "lo": 3796.925,
+      "hi": 5359.025
+     }
+    },
+    "per_token": [
+     {
+      "ticker": "AAPL",
+      "n": 209,
+      "slope_open": 1.030668,
+      "slope_close": 0.995107,
+      "slope_open_ci": [
+       0.636946,
+       1.191209
+      ]
+     },
+     {
+      "ticker": "AMD",
+      "n": 208,
+      "slope_open": 1.099923,
+      "slope_close": 1.135275,
+      "slope_open_ci": [
+       0.983549,
+       1.270807
+      ]
+     },
+     {
+      "ticker": "AMZN",
+      "n": 209,
+      "slope_open": 1.049595,
+      "slope_close": 0.888214,
+      "slope_open_ci": [
+       0.956966,
+       1.17188
+      ]
+     },
+     {
+      "ticker": "AVGO",
+      "n": 159,
+      "slope_open": 1.169724,
+      "slope_close": 1.107224,
+      "slope_open_ci": [
+       0.885373,
+       1.343863
+      ]
+     },
+     {
+      "ticker": "BABA",
+      "n": 208,
+      "slope_open": 0.862206,
+      "slope_close": 0.866616,
+      "slope_open_ci": [
+       0.82301,
+       0.904088
+      ]
+     },
+     {
+      "ticker": "COIN",
+      "n": 208,
+      "slope_open": 1.107133,
+      "slope_close": 1.258553,
+      "slope_open_ci": [
+       0.946888,
+       1.257186
+      ]
+     },
+     {
+      "ticker": "CRCL",
+      "n": 209,
+      "slope_open": 1.024801,
+      "slope_close": 1.211419,
+      "slope_open_ci": [
+       0.848285,
+       1.198796
+      ]
+     },
+     {
+      "ticker": "GOOGL",
+      "n": 209,
+      "slope_open": 1.079119,
+      "slope_close": 0.986775,
+      "slope_open_ci": [
+       0.969241,
+       1.221168
+      ]
+     },
+     {
+      "ticker": "HOOD",
+      "n": 209,
+      "slope_open": 1.134914,
+      "slope_close": 1.13699,
+      "slope_open_ci": [
+       0.98094,
+       1.232492
+      ]
+     },
+     {
+      "ticker": "INTC",
+      "n": 209,
+      "slope_open": 1.0349,
+      "slope_close": 1.079618,
+      "slope_open_ci": [
+       0.930363,
+       1.125892
+      ]
+     },
+     {
+      "ticker": "META",
+      "n": 209,
+      "slope_open": 1.242833,
+      "slope_close": 1.23921,
+      "slope_open_ci": [
+       1.098712,
+       1.397673
+      ]
+     },
+     {
+      "ticker": "MSFT",
+      "n": 209,
+      "slope_open": 1.309746,
+      "slope_close": 1.427422,
+      "slope_open_ci": [
+       0.920278,
+       1.465608
+      ]
+     },
+     {
+      "ticker": "MSTR",
+      "n": 208,
+      "slope_open": 1.052301,
+      "slope_close": 1.10323,
+      "slope_open_ci": [
+       0.926764,
+       1.174626
+      ]
+     },
+     {
+      "ticker": "MU",
+      "n": 102,
+      "slope_open": 1.145842,
+      "slope_close": 1.13185,
+      "slope_open_ci": [
+       1.094943,
+       1.26633
+      ]
+     },
+     {
+      "ticker": "NFLX",
+      "n": 208,
+      "slope_open": 1.157112,
+      "slope_close": 1.038624,
+      "slope_open_ci": [
+       1.003397,
+       1.285754
+      ]
+     },
+     {
+      "ticker": "NVDA",
+      "n": 217,
+      "slope_open": 1.006224,
+      "slope_close": 0.814071,
+      "slope_open_ci": [
+       0.923947,
+       1.072182
+      ]
+     },
+     {
+      "ticker": "PLTR",
+      "n": 159,
+      "slope_open": 1.001868,
+      "slope_close": 1.123208,
+      "slope_open_ci": [
+       0.903961,
+       1.120938
+      ]
+     },
+     {
+      "ticker": "QQQ",
+      "n": 209,
+      "slope_open": 1.063797,
+      "slope_close": 0.972362,
+      "slope_open_ci": [
+       0.944088,
+       1.15387
+      ]
+     },
+     {
+      "ticker": "SMCI",
+      "n": 207,
+      "slope_open": 1.018935,
+      "slope_close": 1.424876,
+      "slope_open_ci": [
+       0.80622,
+       1.244172
+      ]
+     },
+     {
+      "ticker": "SPY",
+      "n": 209,
+      "slope_open": 0.965765,
+      "slope_close": 0.760992,
+      "slope_open_ci": [
+       0.836306,
+       1.067724
+      ]
+     },
+     {
+      "ticker": "SQQQ",
+      "n": 207,
+      "slope_open": 1.064696,
+      "slope_close": 1.056818,
+      "slope_open_ci": [
+       0.94582,
+       1.15694
+      ]
+     },
+     {
+      "ticker": "TQQQ",
+      "n": 156,
+      "slope_open": 1.092239,
+      "slope_close": 1.157247,
+      "slope_open_ci": [
+       0.952556,
+       1.188076
+      ]
+     },
+     {
+      "ticker": "TSLA",
+      "n": 231,
+      "slope_open": 1.069051,
+      "slope_close": 0.997923,
+      "slope_open_ci": [
+       0.933797,
+       1.198509
+      ]
+     },
+     {
+      "ticker": "TSM",
+      "n": 209,
+      "slope_open": 1.196543,
+      "slope_close": 0.996002,
+      "slope_open_ci": [
+       1.099552,
+       1.272364
+      ]
+     }
+    ],
+    "tokens_with_positive_slope": 24,
+    "tokens_scored": 24
+   },
+   "to_preopen": {
+    "n": 7093,
+    "n_weeks": 89,
+    "tokens": 24,
+    "mean_abs_move_pct": 1.336774,
+    "mean_abs_gap_pct": 1.380609,
+    "stats": {
+     "n": {
+      "est": 7093.0,
+      "lo": 6711.975,
+      "hi": 7470.025
+     },
+     "slope_open": {
+      "est": 1.001773,
+      "lo": 0.98417,
+      "hi": 1.017244
+     },
+     "slope_close": {
+      "est": 1.043145,
+      "lo": 0.948394,
+      "hi": 1.13126
+     },
+     "slope_own_open": {
+      "est": 1.006862,
+      "lo": 0.990671,
+      "hi": 1.021989
+     },
+     "corr_open": {
+      "est": 0.967793,
+      "lo": 0.961897,
+      "hi": 0.97213
+     },
+     "corr_close": {
+      "est": 0.608473,
+      "lo": 0.545034,
+      "hi": 0.664938
+     },
+     "gap_after_up_minus_down": {
+      "est": 0.026518,
+      "lo": 0.023444,
+      "hi": 0.029569
+     },
+     "hit_rate_big": {
+      "est": 0.991447,
+      "lo": 0.986774,
+      "hi": 0.995506
+     },
+     "n_big": {
+      "est": 3040.0,
+      "lo": 2671.975,
+      "hi": 3423.025
+     },
+     "oos_skill": {
+      "est": 0.936258,
+      "lo": 0.924791,
+      "hi": 0.94472
+     },
+     "n_oos": {
+      "est": 6960.0,
+      "lo": 6343.975,
+      "hi": 7453.025
+     }
+    },
+    "per_token": [
+     {
+      "ticker": "AAPL",
+      "n": 330,
+      "slope_open": 1.036586,
+      "slope_close": 0.864247,
+      "slope_open_ci": [
+       0.912867,
+       1.090269
+      ]
+     },
+     {
+      "ticker": "AMD",
+      "n": 330,
+      "slope_open": 1.008473,
+      "slope_close": 1.04968,
+      "slope_open_ci": [
+       0.963852,
+       1.058263
+      ]
+     },
+     {
+      "ticker": "AMZN",
+      "n": 330,
+      "slope_open": 1.016612,
+      "slope_close": 0.927724,
+      "slope_open_ci": [
+       0.95558,
+       1.072188
+      ]
+     },
+     {
+      "ticker": "AVGO",
+      "n": 159,
+      "slope_open": 0.98927,
+      "slope_close": 0.945341,
+      "slope_open_ci": [
+       0.93354,
+       1.032984
+      ]
+     },
+     {
+      "ticker": "BABA",
+      "n": 330,
+      "slope_open": 1.002,
+      "slope_close": 0.981507,
+      "slope_open_ci": [
+       0.972218,
+       1.03
+      ]
+     },
+     {
+      "ticker": "COIN",
+      "n": 330,
+      "slope_open": 1.012154,
+      "slope_close": 1.202043,
+      "slope_open_ci": [
+       0.981759,
+       1.04232
+      ]
+     },
+     {
+      "ticker": "CRCL",
+      "n": 248,
+      "slope_open": 1.014313,
+      "slope_close": 1.260406,
+      "slope_open_ci": [
+       0.964865,
+       1.073239
+      ]
+     },
+     {
+      "ticker": "GOOGL",
+      "n": 330,
+      "slope_open": 0.955466,
+      "slope_close": 0.795892,
+      "slope_open_ci": [
+       0.905688,
+       1.006675
+      ]
+     },
+     {
+      "ticker": "HOOD",
+      "n": 330,
+      "slope_open": 0.998288,
+      "slope_close": 0.959364,
+      "slope_open_ci": [
+       0.964977,
+       1.033348
+      ]
+     },
+     {
+      "ticker": "INTC",
+      "n": 330,
+      "slope_open": 0.97519,
+      "slope_close": 0.987515,
+      "slope_open_ci": [
+       0.939838,
+       1.028618
+      ]
+     },
+     {
+      "ticker": "META",
+      "n": 330,
+      "slope_open": 1.03615,
+      "slope_close": 0.988359,
+      "slope_open_ci": [
+       1.002983,
+       1.072158
+      ]
+     },
+     {
+      "ticker": "MSFT",
+      "n": 330,
+      "slope_open": 1.043325,
+      "slope_close": 1.018915,
+      "slope_open_ci": [
+       0.960016,
+       1.121497
+      ]
+     },
+     {
+      "ticker": "MSTR",
+      "n": 330,
+      "slope_open": 0.993534,
+      "slope_close": 1.225673,
+      "slope_open_ci": [
+       0.959959,
+       1.027382
+      ]
+     },
+     {
+      "ticker": "MU",
+      "n": 102,
+      "slope_open": 1.055127,
+      "slope_close": 1.085534,
+      "slope_open_ci": [
+       1.022897,
+       1.115724
+      ]
+     },
+     {
+      "ticker": "NFLX",
+      "n": 330,
+      "slope_open": 1.051765,
+      "slope_close": 0.884527,
+      "slope_open_ci": [
+       0.977853,
+       1.121378
+      ]
+     },
+     {
+      "ticker": "NVDA",
+      "n": 330,
+      "slope_open": 1.004512,
+      "slope_close": 0.908102,
+      "slope_open_ci": [
+       0.960975,
+       1.045435
+      ]
+     },
+     {
+      "ticker": "PLTR",
+      "n": 159,
+      "slope_open": 0.95044,
+      "slope_close": 1.119617,
+      "slope_open_ci": [
+       0.87604,
+       0.984054
+      ]
+     },
+     {
+      "ticker": "QQQ",
+      "n": 330,
+      "slope_open": 0.990905,
+      "slope_close": 0.935324,
+      "slope_open_ci": [
+       0.958073,
+       1.017308
+      ]
+     },
+     {
+      "ticker": "SMCI",
+      "n": 330,
+      "slope_open": 0.983301,
+      "slope_close": 1.086315,
+      "slope_open_ci": [
+       0.945794,
+       1.014748
+      ]
+     },
+     {
+      "ticker": "SPY",
+      "n": 330,
+      "slope_open": 1.001827,
+      "slope_close": 0.889992,
+      "slope_open_ci": [
+       0.952528,
+       1.046998
+      ]
+     },
+     {
+      "ticker": "SQQQ",
+      "n": 329,
+      "slope_open": 0.993234,
+      "slope_close": 0.938326,
+      "slope_open_ci": [
+       0.96067,
+       1.018838
+      ]
+     },
+     {
+      "ticker": "TQQQ",
+      "n": 156,
+      "slope_open": 0.980699,
+      "slope_close": 1.070833,
+      "slope_open_ci": [
+       0.944118,
+       1.014866
+      ]
+     },
+     {
+      "ticker": "TSLA",
+      "n": 330,
+      "slope_open": 1.03981,
+      "slope_close": 1.156472,
+      "slope_open_ci": [
+       1.003472,
+       1.071107
+      ]
+     },
+     {
+      "ticker": "TSM",
+      "n": 330,
+      "slope_open": 1.017764,
+      "slope_close": 0.906913,
+      "slope_open_ci": [
+       0.99018,
+       1.045224
+      ]
+     }
+    ],
+    "tokens_with_positive_slope": 24,
+    "tokens_scored": 24
+   }
+  },
+  "primary": {
+   "n": 4777,
+   "n_weeks": 62,
+   "tokens": 24,
+   "mean_abs_move_pct": 0.698394,
+   "mean_abs_gap_pct": 1.386215,
+   "stats": {
+    "n": {
+     "est": 4777.0,
+     "lo": 3998.925,
+     "hi": 5367.05
+    },
+    "slope_open": {
+     "est": 1.0261,
+     "lo": 0.918302,
+     "hi": 1.125599
+    },
+    "slope_close": {
+     "est": 1.163437,
+     "lo": 0.984493,
+     "hi": 1.317059
+    },
+    "slope_own_open": {
+     "est": 1.044401,
+     "lo": 0.930771,
+     "hi": 1.154557
+    },
+    "corr_open": {
+     "est": 0.506891,
+     "lo": 0.446944,
+     "hi": 0.562879
+    },
+    "corr_close": {
+     "est": 0.354494,
+     "lo": 0.29569,
+     "hi": 0.404045
+    },
+    "gap_after_up_minus_down": {
+     "est": 0.013677,
+     "lo": 0.011105,
+     "hi": 0.016325
+    },
+    "hit_rate_big": {
+     "est": 0.842718,
+     "lo": 0.806944,
+     "hi": 0.878946
+    },
+    "n_big": {
+     "est": 1030.0,
+     "lo": 771.95,
+     "hi": 1294.025
+    },
+    "oos_skill": {
+     "est": 0.254658,
+     "lo": 0.196612,
+     "hi": 0.313352
+    },
+    "n_oos": {
+     "est": 4682.0,
+     "lo": 3796.925,
+     "hi": 5359.025
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n": 209,
+     "slope_open": 0.628103,
+     "slope_close": 0.61356,
+     "slope_open_ci": [
+      0.150562,
+      1.241651
+     ]
+    },
+    {
+     "ticker": "AMD",
+     "n": 208,
+     "slope_open": 1.090829,
+     "slope_close": 1.172943,
+     "slope_open_ci": [
+      0.779224,
+      1.331021
+     ]
+    },
+    {
+     "ticker": "AMZN",
+     "n": 209,
+     "slope_open": 0.333137,
+     "slope_close": 0.390657,
+     "slope_open_ci": [
+      -0.591415,
+      1.297723
+     ]
+    },
+    {
+     "ticker": "AVGO",
+     "n": 159,
+     "slope_open": 0.687439,
+     "slope_close": 0.797825,
+     "slope_open_ci": [
+      -0.085737,
+      1.293932
+     ]
+    },
+    {
+     "ticker": "BABA",
+     "n": 208,
+     "slope_open": 0.858002,
+     "slope_close": 0.882497,
+     "slope_open_ci": [
+      0.812979,
+      0.911606
+     ]
+    },
+    {
+     "ticker": "COIN",
+     "n": 208,
+     "slope_open": 1.09957,
+     "slope_close": 1.352469,
+     "slope_open_ci": [
+      0.941879,
+      1.253137
+     ]
+    },
+    {
+     "ticker": "CRCL",
+     "n": 209,
+     "slope_open": 0.81749,
+     "slope_close": 1.182796,
+     "slope_open_ci": [
+      0.649538,
+      1.041228
+     ]
+    },
+    {
+     "ticker": "GOOGL",
+     "n": 209,
+     "slope_open": 0.668857,
+     "slope_close": 0.47755,
+     "slope_open_ci": [
+      0.105097,
+      1.016031
+     ]
+    },
+    {
+     "ticker": "HOOD",
+     "n": 209,
+     "slope_open": 0.962446,
+     "slope_close": 1.154461,
+     "slope_open_ci": [
+      0.767855,
+      1.150782
+     ]
+    },
+    {
+     "ticker": "INTC",
+     "n": 209,
+     "slope_open": 1.247876,
+     "slope_close": 1.375569,
+     "slope_open_ci": [
+      1.073604,
+      1.444034
+     ]
+    },
+    {
+     "ticker": "META",
+     "n": 209,
+     "slope_open": 1.036988,
+     "slope_close": 0.925674,
+     "slope_open_ci": [
+      0.328471,
+      1.755576
+     ]
+    },
+    {
+     "ticker": "MSFT",
+     "n": 209,
+     "slope_open": 0.098725,
+     "slope_close": -0.704586,
+     "slope_open_ci": [
+      -1.011594,
+      1.084944
+     ]
+    },
+    {
+     "ticker": "MSTR",
+     "n": 208,
+     "slope_open": 0.943719,
+     "slope_close": 1.224484,
+     "slope_open_ci": [
+      0.788013,
+      1.109739
+     ]
+    },
+    {
+     "ticker": "MU",
+     "n": 102,
+     "slope_open": 1.236162,
+     "slope_close": 1.466662,
+     "slope_open_ci": [
+      0.95732,
+      1.423609
+     ]
+    },
+    {
+     "ticker": "NFLX",
+     "n": 208,
+     "slope_open": 0.829357,
+     "slope_close": 0.443518,
+     "slope_open_ci": [
+      0.074529,
+      1.575282
+     ]
+    },
+    {
+     "ticker": "NVDA",
+     "n": 217,
+     "slope_open": 1.135201,
+     "slope_close": 1.082467,
+     "slope_open_ci": [
+      0.936607,
+      1.390265
+     ]
+    },
+    {
+     "ticker": "PLTR",
+     "n": 159,
+     "slope_open": 1.054653,
+     "slope_close": 0.692686,
+     "slope_open_ci": [
+      0.424167,
+      1.534028
+     ]
+    },
+    {
+     "ticker": "QQQ",
+     "n": 209,
+     "slope_open": 1.049823,
+     "slope_close": 1.125712,
+     "slope_open_ci": [
+      0.846155,
+      1.225473
+     ]
+    },
+    {
+     "ticker": "SMCI",
+     "n": 207,
+     "slope_open": 1.236541,
+     "slope_close": 1.646682,
+     "slope_open_ci": [
+      0.529539,
+      2.012632
+     ]
+    },
+    {
+     "ticker": "SPY",
+     "n": 209,
+     "slope_open": 0.905148,
+     "slope_close": 0.839172,
+     "slope_open_ci": [
+      0.737058,
+      1.082087
+     ]
+    },
+    {
+     "ticker": "SQQQ",
+     "n": 207,
+     "slope_open": 1.062815,
+     "slope_close": 1.137358,
+     "slope_open_ci": [
+      0.861608,
+      1.229573
+     ]
+    },
+    {
+     "ticker": "TQQQ",
+     "n": 156,
+     "slope_open": 1.068751,
+     "slope_close": 1.23277,
+     "slope_open_ci": [
+      0.824071,
+      1.274595
+     ]
+    },
+    {
+     "ticker": "TSLA",
+     "n": 231,
+     "slope_open": 1.170825,
+     "slope_close": 1.304852,
+     "slope_open_ci": [
+      0.904459,
+      1.450752
+     ]
+    },
+    {
+     "ticker": "TSM",
+     "n": 209,
+     "slope_open": 1.201526,
+     "slope_close": 1.147778,
+     "slope_open_ci": [
+      1.078691,
+      1.32961
+     ]
+    }
+   ],
+   "tokens_with_positive_slope": 24,
+   "tokens_scored": 24
+  },
+  "no_earnings": {
+   "n": 4635,
+   "n_weeks": 62,
+   "tokens": 24,
+   "mean_abs_move_pct": 0.692635,
+   "mean_abs_gap_pct": 1.298701,
+   "stats": {
+    "n": {
+     "est": 4635.0,
+     "lo": 3901.975,
+     "hi": 5198.0
+    },
+    "slope_open": {
+     "est": 1.014411,
+     "lo": 0.917879,
+     "hi": 1.110358
+    },
+    "slope_close": {
+     "est": 1.140462,
+     "lo": 0.974911,
+     "hi": 1.263728
+    },
+    "slope_own_open": {
+     "est": 1.024568,
+     "lo": 0.911574,
+     "hi": 1.126088
+    },
+    "corr_open": {
+     "est": 0.554737,
+     "lo": 0.492113,
+     "hi": 0.607094
+    },
+    "corr_close": {
+     "est": 0.365493,
+     "lo": 0.306532,
+     "hi": 0.414785
+    },
+    "gap_after_up_minus_down": {
+     "est": 0.013766,
+     "lo": 0.011044,
+     "hi": 0.016411
+    },
+    "hit_rate_big": {
+     "est": 0.846309,
+     "lo": 0.810017,
+     "hi": 0.882521
+    },
+    "n_big": {
+     "est": 989.0,
+     "lo": 746.975,
+     "hi": 1240.025
+    },
+    "oos_skill": {
+     "est": 0.305668,
+     "lo": 0.241988,
+     "hi": 0.364441
+    },
+    "n_oos": {
+     "est": 4540.0,
+     "lo": 3696.975,
+     "hi": 5183.05
+    }
+   },
+   "per_token": [
+    {
+     "ticker": "AAPL",
+     "n": 201,
+     "slope_open": 0.218477,
+     "slope_close": 0.349659,
+     "slope_open_ci": [
+      -0.033169,
+      0.430981
+     ]
+    },
+    {
+     "ticker": "AMD",
+     "n": 200,
+     "slope_open": 1.175649,
+     "slope_close": 1.28014,
+     "slope_open_ci": [
+      0.891089,
+      1.413684
+     ]
+    },
+    {
+     "ticker": "AMZN",
+     "n": 201,
+     "slope_open": 0.754205,
+     "slope_close": 0.507237,
+     "slope_open_ci": [
+      0.494842,
+      1.005891
+     ]
+    },
+    {
+     "ticker": "AVGO",
+     "n": 151,
+     "slope_open": 1.145546,
+     "slope_close": 1.240428,
+     "slope_open_ci": [
+      0.818621,
+      1.38593
+     ]
+    },
+    {
+     "ticker": "BABA",
+     "n": 200,
+     "slope_open": 0.858661,
+     "slope_close": 0.865714,
+     "slope_open_ci": [
+      0.808551,
+      0.916625
+     ]
+    },
+    {
+     "ticker": "COIN",
+     "n": 200,
+     "slope_open": 1.087907,
+     "slope_close": 1.310456,
+     "slope_open_ci": [
+      0.954177,
+      1.210785
+     ]
+    },
+    {
+     "ticker": "CRCL",
+     "n": 209,
+     "slope_open": 0.81749,
+     "slope_close": 1.182796,
+     "slope_open_ci": [
+      0.649538,
+      1.041228
+     ]
+    },
+    {
+     "ticker": "GOOGL",
+     "n": 201,
+     "slope_open": 0.63074,
+     "slope_close": 0.538631,
+     "slope_open_ci": [
+      0.052361,
+      1.007044
+     ]
+    },
+    {
+     "ticker": "HOOD",
+     "n": 201,
+     "slope_open": 0.947559,
+     "slope_close": 1.109874,
+     "slope_open_ci": [
+      0.750375,
+      1.148717
+     ]
+    },
+    {
+     "ticker": "INTC",
+     "n": 201,
+     "slope_open": 1.13966,
+     "slope_close": 1.26254,
+     "slope_open_ci": [
+      1.002074,
+      1.265232
+     ]
+    },
+    {
+     "ticker": "META",
+     "n": 201,
+     "slope_open": 0.927538,
+     "slope_close": 0.89152,
+     "slope_open_ci": [
+      0.552418,
+      1.258904
+     ]
+    },
+    {
+     "ticker": "MSFT",
+     "n": 201,
+     "slope_open": 0.865804,
+     "slope_close": 0.097804,
+     "slope_open_ci": [
+      0.473224,
+      1.20086
+     ]
+    },
+    {
+     "ticker": "MSTR",
+     "n": 200,
+     "slope_open": 0.903331,
+     "slope_close": 1.014079,
+     "slope_open_ci": [
+      0.712199,
+      1.087082
+     ]
+    },
+    {
+     "ticker": "MU",
+     "n": 98,
+     "slope_open": 1.190817,
+     "slope_close": 1.445587,
+     "slope_open_ci": [
+      0.999981,
+      1.340412
+     ]
+    },
+    {
+     "ticker": "NFLX",
+     "n": 201,
+     "slope_open": 0.986144,
+     "slope_close": 0.656577,
+     "slope_open_ci": [
+      0.255023,
+      1.655691
+     ]
+    },
+    {
+     "ticker": "NVDA",
+     "n": 209,
+     "slope_open": 1.080166,
+     "slope_close": 1.077358,
+     "slope_open_ci": [
+      0.934326,
+      1.247088
+     ]
+    },
+    {
+     "ticker": "PLTR",
+     "n": 156,
+     "slope_open": 0.745943,
+     "slope_close": 0.597971,
+     "slope_open_ci": [
+      0.507776,
+      1.006338
+     ]
+    },
+    {
+     "ticker": "QQQ",
+     "n": 209,
+     "slope_open": 1.049823,
+     "slope_close": 1.125712,
+     "slope_open_ci": [
+      0.846155,
+      1.225473
+     ]
+    },
+    {
+     "ticker": "SMCI",
+     "n": 199,
+     "slope_open": 1.114452,
+     "slope_close": 1.46591,
+     "slope_open_ci": [
+      0.364881,
+      1.943559
+     ]
+    },
+    {
+     "ticker": "SPY",
+     "n": 209,
+     "slope_open": 0.905148,
+     "slope_close": 0.839172,
+     "slope_open_ci": [
+      0.737058,
+      1.082087
+     ]
+    },
+    {
+     "ticker": "SQQQ",
+     "n": 207,
+     "slope_open": 1.062815,
+     "slope_close": 1.137358,
+     "slope_open_ci": [
+      0.861608,
+      1.229573
+     ]
+    },
+    {
+     "ticker": "TQQQ",
+     "n": 156,
+     "slope_open": 1.068751,
+     "slope_close": 1.23277,
+     "slope_open_ci": [
+      0.824071,
+      1.274595
+     ]
+    },
+    {
+     "ticker": "TSLA",
+     "n": 223,
+     "slope_open": 1.113456,
+     "slope_close": 1.24931,
+     "slope_open_ci": [
+      0.840806,
+      1.413354
+     ]
+    },
+    {
+     "ticker": "TSM",
+     "n": 201,
+     "slope_open": 1.198484,
+     "slope_close": 1.193515,
+     "slope_open_ci": [
+      1.069463,
+      1.330362
+     ]
+    }
+   ],
+   "tokens_with_positive_slope": 24,
+   "tokens_scored": 24
+  }
+ },
+ "liquidity": {
+  "n_snapshots": 707498,
+  "n_days": 22,
+  "first_day": "2026-09-12",
+  "last_day": "2026-10-03",
+  "n_weekend_days": 11,
+  "n_weekend_windows": 3,
+  "tokens": 24,
+  "stats": {
+   "spread_ratio_overnight": {
+    "est": 1.419473,
+    "lo": 1.345533,
+    "hi": 1.520274
+   },
+   "depth_ratio_overnight": {
+    "est": 0.842246,
+    "lo": 0.809,
+    "hi": 0.870709
+   },
+   "empty_share_overnight": {
+    "est": 0.022915,
+    "lo": 0.010404,
+    "hi": 0.039336
+   },
+   "spread_ratio_weekend": {
+    "est": 1.238436,
+    "lo": 0.970926,
+    "hi": 1.850296
+   },
+   "depth_ratio_weekend": {
+    "est": 0.823013,
+    "lo": 0.695445,
+    "hi": 0.911894
+   },
+   "empty_share_weekend": {
+    "est": 0.057867,
+    "lo": 0.032178,
+    "hi": 0.081489
+   },
+   "spread_ratio_holiday": {
+    "est": null,
+    "lo": null,
+    "hi": null
+   },
+   "depth_ratio_holiday": {
+    "est": null,
+    "lo": null,
+    "hi": null
+   },
+   "empty_share_holiday": {
+    "est": null,
+    "lo": null,
+    "hi": null
+   },
+   "spread_ratio_sunday_3am": {
+    "est": 1.144526,
+    "lo": 0.516043,
+    "hi": 1.947967
+   },
+   "depth_ratio_sunday_3am": {
+    "est": 0.600107,
+    "lo": 0.559533,
+    "hi": 1.172707
+   },
+   "empty_share_sunday_3am": {
+    "est": 0.080056,
+    "lo": 0.043388,
+    "hi": 0.100347
+   },
+   "empty_share_open": {
+    "est": 0.000248,
+    "lo": 0.000156,
+    "hi": 0.000354
+   }
+  },
+  "per_token": [
+   {
+    "ticker": "AAPL",
+    "n_open": 6208,
+    "spread_open_bps": 5.378233,
+    "depth_open": 5539.977729,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.474983,
+    "depth_ratio_overnight": 0.987127,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 2.346735,
+    "depth_ratio_weekend": 0.710852,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 2.933411,
+    "depth_ratio_sunday_3am": 0.964975
+   },
+   {
+    "ticker": "AMD",
+    "n_open": 6208,
+    "spread_open_bps": 6.731571,
+    "depth_open": 5312.302566,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.22913,
+    "depth_ratio_overnight": 0.909026,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 0.803877,
+    "depth_ratio_weekend": 0.778286,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.813887,
+    "depth_ratio_sunday_3am": 0.479465
+   },
+   {
+    "ticker": "AMZN",
+    "n_open": 6208,
+    "spread_open_bps": 6.014063,
+    "depth_open": 5138.319758,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.306489,
+    "depth_ratio_overnight": 0.812612,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 2.043024,
+    "depth_ratio_weekend": 0.537917,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 2.957755,
+    "depth_ratio_sunday_3am": 0.494891
+   },
+   {
+    "ticker": "AVGO",
+    "n_open": 6208,
+    "spread_open_bps": 5.913941,
+    "depth_open": 4436.267242,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.656622,
+    "depth_ratio_overnight": 0.786226,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 1.219472,
+    "depth_ratio_weekend": 0.865887,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.414555,
+    "depth_ratio_sunday_3am": 0.853627
+   },
+   {
+    "ticker": "BABA",
+    "n_open": 6208,
+    "spread_open_bps": 8.008333,
+    "depth_open": 4706.031272,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.992239,
+    "depth_ratio_overnight": 0.65835,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 3.156497,
+    "depth_ratio_weekend": 0.508541,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 6.471261,
+    "depth_ratio_sunday_3am": 0.4487
+   },
+   {
+    "ticker": "COIN",
+    "n_open": 6208,
+    "spread_open_bps": 12.47236,
+    "depth_open": 124588.820233,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.633086,
+    "depth_ratio_overnight": 0.740645,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 1.239185,
+    "depth_ratio_weekend": 0.2732,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.859618,
+    "depth_ratio_sunday_3am": 0.092298
+   },
+   {
+    "ticker": "CRCL",
+    "n_open": 6208,
+    "spread_open_bps": 5.61021,
+    "depth_open": 353210.413404,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.728555,
+    "depth_ratio_overnight": 0.852112,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 0.815841,
+    "depth_ratio_weekend": 0.268894,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.769568,
+    "depth_ratio_sunday_3am": 0.30465
+   },
+   {
+    "ticker": "GOOGL",
+    "n_open": 6208,
+    "spread_open_bps": 5.978238,
+    "depth_open": 208189.472233,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.20991,
+    "depth_ratio_overnight": 0.857717,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 0.871002,
+    "depth_ratio_weekend": 0.66228,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.141754,
+    "depth_ratio_sunday_3am": 0.427089
+   },
+   {
+    "ticker": "HOOD",
+    "n_open": 6208,
+    "spread_open_bps": 9.925912,
+    "depth_open": 4081.939553,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 2.131748,
+    "depth_ratio_overnight": 0.708625,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 1.82324,
+    "depth_ratio_weekend": 1.010765,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.147298,
+    "depth_ratio_sunday_3am": 1.040684
+   },
+   {
+    "ticker": "INTC",
+    "n_open": 6208,
+    "spread_open_bps": 18.380335,
+    "depth_open": 2631.224314,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 0.988048,
+    "depth_ratio_overnight": 1.035739,
+    "n_weekend": 10835,
+    "spread_ratio_weekend": 0.683491,
+    "depth_ratio_weekend": 1.349952,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.576646,
+    "depth_ratio_sunday_3am": 1.239327
+   },
+   {
+    "ticker": "META",
+    "n_open": 6208,
+    "spread_open_bps": 6.672775,
+    "depth_open": 146020.210096,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.397729,
+    "depth_ratio_overnight": 0.763895,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 0.992018,
+    "depth_ratio_weekend": 0.44903,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.264236,
+    "depth_ratio_sunday_3am": 0.324812
+   },
+   {
+    "ticker": "MSFT",
+    "n_open": 6208,
+    "spread_open_bps": 6.836491,
+    "depth_open": 150730.591202,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.661089,
+    "depth_ratio_overnight": 0.805197,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 0.84013,
+    "depth_ratio_weekend": 1.012764,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.350925,
+    "depth_ratio_sunday_3am": 1.143394
+   },
+   {
+    "ticker": "MSTR",
+    "n_open": 6208,
+    "spread_open_bps": 8.214162,
+    "depth_open": 5797.514355,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.741253,
+    "depth_ratio_overnight": 0.879555,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.426883,
+    "depth_ratio_weekend": 0.829103,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.461838,
+    "depth_ratio_sunday_3am": 0.706864
+   },
+   {
+    "ticker": "MU",
+    "n_open": 6208,
+    "spread_open_bps": 1.090602,
+    "depth_open": 241109.161962,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 1.319539,
+    "depth_ratio_overnight": 1.352372,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.631235,
+    "depth_ratio_weekend": 0.962697,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.39162,
+    "depth_ratio_sunday_3am": 0.424152
+   },
+   {
+    "ticker": "NFLX",
+    "n_open": 6208,
+    "spread_open_bps": null,
+    "depth_open": null,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": null,
+    "depth_ratio_overnight": null,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": null,
+    "depth_ratio_weekend": null,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": null,
+    "depth_ratio_sunday_3am": null
+   },
+   {
+    "ticker": "NVDA",
+    "n_open": 6208,
+    "spread_open_bps": 2.250454,
+    "depth_open": 186720.19966,
+    "n_overnight": 12081,
+    "spread_ratio_overnight": 0.70809,
+    "depth_ratio_overnight": 1.648133,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.237687,
+    "depth_ratio_weekend": 1.126939,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.079514,
+    "depth_ratio_sunday_3am": 0.715938
+   },
+   {
+    "ticker": "PLTR",
+    "n_open": 6208,
+    "spread_open_bps": 8.275507,
+    "depth_open": 153688.116095,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 1.78835,
+    "depth_ratio_overnight": 0.690184,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.787178,
+    "depth_ratio_weekend": 0.483499,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 2.730175,
+    "depth_ratio_sunday_3am": 0.469252
+   },
+   {
+    "ticker": "QQQ",
+    "n_open": 6208,
+    "spread_open_bps": 5.312738,
+    "depth_open": 262750.115201,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 1.196804,
+    "depth_ratio_overnight": 0.82591,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 0.702709,
+    "depth_ratio_weekend": 0.948821,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.255987,
+    "depth_ratio_sunday_3am": 1.023528
+   },
+   {
+    "ticker": "SMCI",
+    "n_open": 6208,
+    "spread_open_bps": null,
+    "depth_open": null,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": null,
+    "depth_ratio_overnight": null,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": null,
+    "depth_ratio_weekend": null,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": null,
+    "depth_ratio_sunday_3am": null
+   },
+   {
+    "ticker": "SPY",
+    "n_open": 6208,
+    "spread_open_bps": 5.315484,
+    "depth_open": 259028.087166,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 1.125132,
+    "depth_ratio_overnight": 0.881266,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.015559,
+    "depth_ratio_weekend": 0.624901,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.671541,
+    "depth_ratio_sunday_3am": 0.705323
+   },
+   {
+    "ticker": "SQQQ",
+    "n_open": 6208,
+    "spread_open_bps": 11.691417,
+    "depth_open": 3177.884167,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 1.441217,
+    "depth_ratio_overnight": 0.849757,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 2.683353,
+    "depth_ratio_weekend": 0.910121,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 3.622448,
+    "depth_ratio_sunday_3am": 1.025131
+   },
+   {
+    "ticker": "TQQQ",
+    "n_open": 6208,
+    "spread_open_bps": 8.570184,
+    "depth_open": 3705.421787,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 1.270278,
+    "depth_ratio_overnight": 0.834735,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.488212,
+    "depth_ratio_weekend": 0.985441,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 1.033579,
+    "depth_ratio_sunday_3am": 0.91247
+   },
+   {
+    "ticker": "TSLA",
+    "n_open": 6208,
+    "spread_open_bps": 1.331188,
+    "depth_open": 122015.058874,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 1.115026,
+    "depth_ratio_overnight": 1.545172,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 2.57327,
+    "depth_ratio_weekend": 1.156222,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 2.278529,
+    "depth_ratio_sunday_3am": 0.323089
+   },
+   {
+    "ticker": "TSM",
+    "n_open": 6208,
+    "spread_open_bps": 6.606989,
+    "depth_open": 4997.587976,
+    "n_overnight": 12080,
+    "spread_ratio_overnight": 2.197698,
+    "depth_ratio_overnight": 0.70361,
+    "n_weekend": 10834,
+    "spread_ratio_weekend": 1.149842,
+    "depth_ratio_weekend": 0.816922,
+    "n_sunday_3am": 356,
+    "spread_ratio_sunday_3am": 0.713868,
+    "depth_ratio_sunday_3am": 0.455977
+   }
+  ]
+ },
+ "per_token": {
+  "AAPL": {
+   "closed_share_pct": 30.2,
+   "closed_share_lo": 20.4,
+   "closed_share_hi": 39.3,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.678,
+   "weekend_slope_close": 0.559,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.299,
+   "weekend_slope_hi": 1.003
+  },
+  "AMD": {
+   "closed_share_pct": 47.2,
+   "closed_share_lo": 35.5,
+   "closed_share_hi": 59.0,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.93,
+   "weekend_slope_close": 0.666,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.649,
+   "weekend_slope_hi": 1.255
+  },
+  "AMZN": {
+   "closed_share_pct": 48.3,
+   "closed_share_lo": 36.3,
+   "closed_share_hi": 59.0,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.738,
+   "weekend_slope_close": 0.793,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.486,
+   "weekend_slope_hi": 1.051
+  },
+  "AVGO": {
+   "closed_share_pct": 45.2,
+   "closed_share_lo": 31.5,
+   "closed_share_hi": 58.7,
+   "time_share_pct": 80.1,
+   "n_windows": 441,
+   "weekend_slope_open": 0.799,
+   "weekend_slope_close": 0.693,
+   "n_weekends": 43,
+   "weekend_slope_lo": 0.485,
+   "weekend_slope_hi": 1.078
+  },
+  "BABA": {
+   "closed_share_pct": 59.6,
+   "closed_share_lo": 53.8,
+   "closed_share_hi": 65.3,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.874,
+   "weekend_slope_close": 0.981,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.747,
+   "weekend_slope_hi": 0.988
+  },
+  "COIN": {
+   "closed_share_pct": 29.9,
+   "closed_share_lo": 25.7,
+   "closed_share_hi": 34.7,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.832,
+   "weekend_slope_close": 0.907,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.682,
+   "weekend_slope_hi": 0.977
+  },
+  "CRCL": {
+   "closed_share_pct": 22.8,
+   "closed_share_lo": 17.4,
+   "closed_share_hi": 28.8,
+   "time_share_pct": 80.0,
+   "n_windows": 666,
+   "weekend_slope_open": 0.976,
+   "weekend_slope_close": 1.082,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.81,
+   "weekend_slope_hi": 1.128
+  },
+  "GOOGL": {
+   "closed_share_pct": 39.5,
+   "closed_share_lo": 32.4,
+   "closed_share_hi": 47.1,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.895,
+   "weekend_slope_close": 1.001,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.736,
+   "weekend_slope_hi": 1.234
+  },
+  "HOOD": {
+   "closed_share_pct": 30.6,
+   "closed_share_lo": 25.4,
+   "closed_share_hi": 36.0,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.892,
+   "weekend_slope_close": 1.075,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.665,
+   "weekend_slope_hi": 1.053
+  },
+  "INTC": {
+   "closed_share_pct": 42.5,
+   "closed_share_lo": 31.9,
+   "closed_share_hi": 52.3,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.859,
+   "weekend_slope_close": 0.737,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.553,
+   "weekend_slope_hi": 1.16
+  },
+  "META": {
+   "closed_share_pct": 42.7,
+   "closed_share_lo": 32.2,
+   "closed_share_hi": 53.8,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.793,
+   "weekend_slope_close": 1.028,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.605,
+   "weekend_slope_hi": 0.991
+  },
+  "MSFT": {
+   "closed_share_pct": 41.1,
+   "closed_share_lo": 30.9,
+   "closed_share_hi": 50.2,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.95,
+   "weekend_slope_close": 0.934,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.685,
+   "weekend_slope_hi": 1.252
+  },
+  "MSTR": {
+   "closed_share_pct": 29.2,
+   "closed_share_lo": 25.4,
+   "closed_share_hi": 33.7,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.872,
+   "weekend_slope_close": 0.903,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.62,
+   "weekend_slope_hi": 1.071
+  },
+  "MU": {
+   "closed_share_pct": 47.4,
+   "closed_share_lo": 36.5,
+   "closed_share_hi": 60.1,
+   "time_share_pct": 79.6,
+   "n_windows": 287,
+   "weekend_slope_open": 1.087,
+   "weekend_slope_close": 1.406,
+   "n_weekends": 26,
+   "weekend_slope_lo": 0.636,
+   "weekend_slope_hi": 1.48
+  },
+  "NFLX": {
+   "closed_share_pct": 37.5,
+   "closed_share_lo": 23.9,
+   "closed_share_hi": 49.8,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.597,
+   "weekend_slope_close": 0.029,
+   "n_weekends": 54,
+   "weekend_slope_lo": 0.427,
+   "weekend_slope_hi": 1.006
+  },
+  "NVDA": {
+   "closed_share_pct": 34.6,
+   "closed_share_lo": 28.7,
+   "closed_share_hi": 41.9,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.806,
+   "weekend_slope_close": 0.928,
+   "n_weekends": 58,
+   "weekend_slope_lo": 0.587,
+   "weekend_slope_hi": 0.991
+  },
+  "PLTR": {
+   "closed_share_pct": 29.6,
+   "closed_share_lo": 19.5,
+   "closed_share_hi": 37.2,
+   "time_share_pct": 80.1,
+   "n_windows": 441,
+   "weekend_slope_open": 0.837,
+   "weekend_slope_close": 1.053,
+   "n_weekends": 43,
+   "weekend_slope_lo": 0.586,
+   "weekend_slope_hi": 1.165
+  },
+  "QQQ": {
+   "closed_share_pct": 38.3,
+   "closed_share_lo": 30.0,
+   "closed_share_hi": 50.4,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.818,
+   "weekend_slope_close": 0.778,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.607,
+   "weekend_slope_hi": 1.017
+  },
+  "SMCI": {
+   "closed_share_pct": 40.9,
+   "closed_share_lo": 32.5,
+   "closed_share_hi": 50.5,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.713,
+   "weekend_slope_close": 0.183,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.461,
+   "weekend_slope_hi": 1.028
+  },
+  "SPY": {
+   "closed_share_pct": 35.2,
+   "closed_share_lo": 26.9,
+   "closed_share_hi": 49.1,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.771,
+   "weekend_slope_close": 0.65,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.549,
+   "weekend_slope_hi": 0.987
+  },
+  "SQQQ": {
+   "closed_share_pct": 35.3,
+   "closed_share_lo": 24.9,
+   "closed_share_hi": 51.0,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.833,
+   "weekend_slope_close": 0.808,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.626,
+   "weekend_slope_hi": 1.03
+  },
+  "TQQQ": {
+   "closed_share_pct": 45.8,
+   "closed_share_lo": 38.3,
+   "closed_share_hi": 53.3,
+   "time_share_pct": 80.1,
+   "n_windows": 432,
+   "weekend_slope_open": 0.782,
+   "weekend_slope_close": 0.663,
+   "n_weekends": 42,
+   "weekend_slope_lo": 0.51,
+   "weekend_slope_hi": 1.006
+  },
+  "TSLA": {
+   "closed_share_pct": 26.6,
+   "closed_share_lo": 22.2,
+   "closed_share_hi": 32.6,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.943,
+   "weekend_slope_close": 1.347,
+   "n_weekends": 61,
+   "weekend_slope_lo": 0.675,
+   "weekend_slope_hi": 1.275
+  },
+  "TSM": {
+   "closed_share_pct": 46.6,
+   "closed_share_lo": 40.5,
+   "closed_share_hi": 54.0,
+   "time_share_pct": 80.0,
+   "n_windows": 877,
+   "weekend_slope_open": 0.929,
+   "weekend_slope_close": 0.863,
+   "n_weekends": 55,
+   "weekend_slope_lo": 0.681,
+   "weekend_slope_hi": 1.095
+  }
+ },
+ "source": {
+  "db": "nightwatch.sqlite",
+  "bar_venue": "bitget_spot",
+  "reference": "yahoo daily"
+ }
+}

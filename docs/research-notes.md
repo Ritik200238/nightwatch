@@ -429,6 +429,73 @@ the finding — this is noise, not a signal either way. The search
 stays pooled, with the token's own history competing on distance like everything else —
 about 12% of retrieved matches come from the token being asked about.
 
+## 14. What the tokens do while the US market is shut (3 Oct 2026)
+
+Two claims circulate about rTokens: that most of their movement happens in closed hours,
+and that Monday lands closer to the weekend than to Friday. Both are easy to say, so this
+measures them. It is a measurement, not one of the eleven tests, and it is outside the
+false-discovery correction; it is served as `closed_hours` on `/studies`, computed by
+`research/closed_hours.py` (read-only against the live database) into
+`nightwatch/journal/closed_hours.json`. The module docstring in
+`nightwatch/journal/closed_hours.py` holds the three questions and the choices made before
+the first run. Intervals are 95%, from a block bootstrap over calendar weeks with all
+tokens resampled together (blocks of four weeks, 2,000 draws). 24 tokens, bars from
+January 2025.
+
+**Q1. Share of movement while shut.** 18,930 session windows over 92 weeks. The US market is
+shut for 80% of the week. By variance, 38.6% [34.4, 43.3] of a token's movement happened
+while shut: a shut hour carries 0.155× [0.128, 0.188] the variance of an open hour. Leaving
+out windows that touch a known earnings date: 35.2% [31.4, 40.2] (the earnings table only
+starts in September 2025, so this removes only the earnings it has). A simple tally of
+hourly absolute moves, which is how a rival's number could plausibly be reached, gives
+49.7% [47.6, 51.5] (331,416 token-hours). Neither measure reaches 56%: the variance share is clearly under half
+and the absolute tally is about half, both far under the clock's 80%. By kind: weeknights 29.3% of all movement at 0.24× an open hour's
+variance per hour, weekends 9.0% at 0.07×, weekday holidays 0.2%.
+Window returns, not hourly sums, are the primary measure because variance adds across
+windows of unequal length and absolute returns do not.
+
+**Q2. Is the weekend move informative about Monday's open?** First run, and a mistake worth
+keeping: the token's move from Friday's close to Monday 09:00 ET correlated 0.97 with
+Monday's gap, with 99.8% direction hits on moves over 1%. That is too good to be about
+the weekend. US stocks trade pre-market from 04:00 ET and the token follows them, so a
+price taken 30 minutes before the open has already seen the stock's pre-market. Two
+stricter cuts were added after seeing it (and the docstring records the amendment), and
+the verdict is judged on the strictest, Friday 20:00 to Monday 04:00 ET, when no US venue is
+open at either end:
+
+| token move cut | n weekend-token pairs | slope on Monday's gap | correlation | out-of-sample gain on "no gap" |
+|---|---|---|---|---|
+| Fri 20:00 → Mon 04:00 | 1,262 (61 weeks) | 0.83 [0.60, 1.04] | 0.66 [0.51, 0.80] | 41% [15, 63] |
+| Fri close → Mon 04:00 | 1,262 | 0.87 [0.71, 1.02] | 0.69 [0.57, 0.82] | 46% [28, 65] |
+| Fri close → Mon 09:00 | 1,892 (88 weeks) | 1.03 [0.99, 1.07] | 0.97 [0.96, 0.98] | 94% [92, 96] |
+
+Verdict on the strictest cut: yes, the weekend move is informative (slope, up-versus-down gap
+difference of 2.3% [1.8, 2.8], and out-of-sample gain all clear zero), though far less than
+the 09:00 figure suggests. On moves of 1% or more, the stock's gap had the token's sign 89%
+[82, 95] of the time. Whether Monday keeps or reverses the move by its close is not decided:
+the slope on Monday's close is 0.81 [0.39, 1.21]. A slope under 1 is not read as reversal,
+because noise in a token's thin overnight price pulls any slope toward zero (a synthetic
+test pins this). The strict cut keeps 61 of 88 weeks because the token had often not traded
+within three hours of Friday 20:00 or Monday 04:00 (630 pairs dropped).
+
+**Q3. Order books.** 707,498 spot snapshots, 12 Sep to 3 Oct 2026, which contain **three
+weekends**. Against the open session (median across 24 tokens of each token's ratio):
+weeknights spread 1.42× [1.35, 1.52], depth inside 25 bps 0.84× [0.81, 0.87]; weekends spread
+1.24× [0.97, 1.85], depth 0.82× [0.70, 0.91], 5.8% of snapshots with no bids against
+0.02% when open; Sunday 02:00–04:00 ET spread 1.15× [0.52, 1.95], depth 0.60× [0.56, 1.17].
+The weekend and Sunday intervals include 1.0 on spread, and with three weekends they describe
+those weeks, not a long-run average.
+
+What this does **not** show: that a position taken on a weekend move makes money; anything
+about holiday weekends beyond them being in the sample; or a long history of liquidity.
+The 09:00 ET window start (the bars are hourly) puts the half hour before the cash open
+inside "open", which can only lower the closed share.
+
+Reproduce: `python research/closed_hours.py --db data/nightwatch.sqlite --out
+nightwatch/journal/closed_hours.json`; tests in `tests/test_closed_hours.py` build worlds
+with a known answer, including one where the weekend carries no information and the
+pre-market does.
+
 ## 10. Things that did not work, and what was done instead
 
 * **Shorts were sized on the wrong tail (found and fixed 29 Sep).** Every consumer read the

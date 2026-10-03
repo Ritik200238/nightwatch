@@ -278,11 +278,77 @@ export interface StudiesFdr {
   yes_fail: string[];
 }
 
+/** A point estimate with a 95% interval; null where it could not be computed. */
+export interface Est {
+  est: number | null;
+  lo: number | null;
+  hi: number | null;
+}
+
+export interface MovementBlock {
+  n_windows: number;
+  n_weeks?: number;
+  stats: Record<string, Est>;
+  per_token?: { ticker: string; n_windows: number; n_closed: number; var_share: Est; time_share: number; per_hour_var_ratio: Est }[];
+}
+
+export interface WeekendBlock {
+  n: number;
+  n_weeks?: number;
+  tokens?: number;
+  mean_abs_move_pct?: number;
+  mean_abs_gap_pct?: number;
+  stats: Record<string, Est>;
+  tokens_with_positive_slope?: number;
+  tokens_scored?: number;
+}
+
+/** The measured study of what happens while the US market is shut. A measurement, not a
+ *  hypothesis test: it is served beside the studies and is not part of their correction. */
+export interface ClosedHours {
+  key: string;
+  ran_at: string;
+  questions: string[];
+  settings: { stale_hours: number; big_move: number; block_weeks: number; bootstrap_draws: number };
+  data: { tokens: number; first_day: string; last_day: string; windows: number; closed_windows: number };
+  movement: { primary: MovementBlock; fresh_only: MovementBlock; no_earnings: MovementBlock; hourly_tally?: { n_hours: number; stats: Record<string, Est> } };
+  weekend?: { verdict: "yes" | "no" | "unclear"; dropped_stale: number; primary: WeekendBlock; by_anchor: Record<string, WeekendBlock> };
+  overnight?: { by_anchor: Record<string, WeekendBlock> };
+  liquidity: {
+    n_snapshots: number;
+    n_days?: number;
+    first_day?: string;
+    last_day?: string;
+    n_weekend_windows?: number;
+    tokens?: number;
+    stats: Record<string, Est>;
+  };
+}
+
+/** What the report quotes for one token from that measurement. */
+export interface ClosedHoursLine {
+  ticker: string;
+  line: string | null;
+  ran_at: string | null;
+  numbers: {
+    closed_share_pct: number;
+    closed_share_lo: number | null;
+    closed_share_hi: number | null;
+    time_share_pct: number;
+    n_windows: number;
+    weekend_slope_open?: number;
+    weekend_slope_lo?: number | null;
+    weekend_slope_hi?: number | null;
+    n_weekends?: number;
+  } | null;
+}
+
 export interface StudiesResponse {
   studies: Study[];
   fdr?: StudiesFdr;
   last_run: string | null;
   note: string;
+  closed_hours?: ClosedHours | null;
 }
 
 /** One window length, scored on its own.
@@ -1046,6 +1112,7 @@ export const api = {
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
   studies: () => request<StudiesResponse>("/studies"),
+  closedHours: (ticker: string) => request<ClosedHoursLine>(`/closed-hours/${encodeURIComponent(ticker)}`),
   verify: () => request<VerifyResponse>("/verify"),
   anchors: () => request<{ anchors: Anchor[] }>("/anchors"),
   misses: () => request<MissesResponse>("/misses"),

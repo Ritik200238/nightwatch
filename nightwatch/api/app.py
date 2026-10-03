@@ -54,6 +54,15 @@ CALIBRATION_CACHE_MAX = 100
 PAGE_CACHE_PARAMS = frozenset({"core", "ticker", "kind", "limit"})
 PAGE_CACHE_TTL_S = 60.0
 PAGE_CACHE_STALE_S = 6 * 3600.0  # beyond this a saved page is too old to show even while refreshing
+
+
+def _closed_hours_slim() -> dict[str, Any] | None:
+    from nightwatch.journal import closed_hours
+
+    res = closed_hours.load_result()
+    return closed_hours.slim(res) if res else None
+
+
 CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
 
 
@@ -713,7 +722,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             "fdr": fdr,
             "last_run": last.isoformat() if last else None,
             "note": "" if last else "No studies have been run against this database yet; run `nightwatch studies`.",
+            # A measurement, not a test: kept out of the correction above so that the
+            # count of questions asked stays the count of questions that were tests.
+            "closed_hours": _closed_hours_slim(),
         }
+
+    @app.get("/closed-hours/{ticker}")
+    def closed_hours_for(ticker: str) -> dict[str, Any]:
+        """How much of this token's movement happens while the US market is shut, and how
+        much of its weekend moves Monday kept. From the committed measurement."""
+        from nightwatch.journal import closed_hours
+
+        return closed_hours.for_ticker(ticker.upper())
 
     @app.post("/mcp")
     async def mcp(request: Request) -> Response:

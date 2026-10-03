@@ -193,6 +193,29 @@ A "we have never seen anything like this" warning looked significant at t=+3.6 a
 at t=−0.07 once tokens were clustered: it was measuring which tokens are volatile, not
 which moments are strange. It is not shipped.
 
+### What the tokens do while the US market is shut
+
+A measurement on the same page, outside the eleven tests and their correction. It answers
+two claims you hear about rTokens with the arithmetic (24 tokens, bars from January 2025,
+95% intervals from a week-block bootstrap, 3 Oct run; the page and
+`nightwatch/journal/closed_hours.json` are current):
+
+* **Closed hours are 80% of the week but carry 39% of the movement** (variance, [34, 43]),
+  so a shut hour is about a sixth as busy as an open one (0.16×). A simple tally of
+  absolute hourly moves gives 50% [48, 52]. Neither reproduces a figure like 56%: the
+  variance share is clearly under half and the absolute tally is about half, with a shut
+  hour quieter than an open one on both.
+* **The weekend move does say something about Monday's open, much less than it first
+  looked.** Taken to 09:00 Monday ET it correlated 0.97 with the gap, because the token had
+  already seen the stock's pre-market. Cut to Friday 20:00 → Monday 04:00, when no US venue
+  is open, the correlation is 0.66 [0.51, 0.80] and the stock's gap had the token's sign on
+  89% of moves over 1% (n = 1,262 weekend-token pairs). Whether Monday keeps or reverses
+  the move by the close is not decided by this data.
+* **Books are thinner when shut**: weeknights 1.4× the spread and 0.84× the depth. The
+  weekend figures rest on three weekends of snapshots and their intervals say so.
+
+Each report quotes one line from it for its token.
+
 ![Calibration page](docs/img/calibration.png)
 
 Every call it has made, and how each one turned out:
