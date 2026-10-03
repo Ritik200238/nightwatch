@@ -90,6 +90,9 @@ class PortfolioReport:
     book_cap_quote: float | None = None
     book_cap_pct_of_equity: float | None = None
     book_cap_binds: bool = False
+    # Crash replays of the whole book, rebalance plans and the book-level reverse stress
+    # (nightwatch.decision.book_plans). Filled by the pipeline once the policy is known.
+    stress: Any = None
 
     @property
     def adds_tail_quote(self) -> float | None:
