@@ -54,14 +54,16 @@ export function LoadingRecord({ blocks = [96, 256] }: { blocks?: number[] }) {
  *  scroll to, so a clipped column is never mistaken for the end of the table. */
 export function ScrollTable({ children }: { children: ReactNode }) {
   const wrap = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState(false);
 
   useEffect(() => {
     const root = wrap.current;
-    if (!root) return;
+    const own = scroller.current;
+    if (!root || !own) return;
     // The shared Table renders its own scroll container; fall back to our own box.
     const inner = root.querySelector<HTMLElement>('[data-slot="table-container"]');
-    const box: HTMLElement = inner ?? root;
+    const box: HTMLElement = inner ?? own;
     const update = () => setMore(box.scrollWidth - box.clientWidth - box.scrollLeft > 4);
     update();
     box.addEventListener("scroll", update, { passive: true });
@@ -74,7 +76,9 @@ export function ScrollTable({ children }: { children: ReactNode }) {
 
   return (
     <div ref={wrap} className="relative">
-      {children}
+      <div ref={scroller} className="overflow-x-auto">
+        {children}
+      </div>
       <div
         aria-hidden
         className={`pointer-events-none absolute inset-y-0 right-0 w-8 transition-opacity ${more ? "opacity-100" : "opacity-0"}`}
