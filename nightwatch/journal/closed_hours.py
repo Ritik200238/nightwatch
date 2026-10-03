@@ -65,10 +65,10 @@ from __future__ import annotations
 
 import math
 import warnings
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from collections.abc import Callable, Iterator
 from typing import Any
 
 import numpy as np
