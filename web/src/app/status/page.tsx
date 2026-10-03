@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, type Anchor, type CalibrationReport, type DataSource, type Health, type VerifyResponse } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
+import { PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
 
 type Load<T> = { data: T | null; error: boolean };
@@ -59,11 +60,8 @@ export default function StatusPage() {
   const NA = tx("unavailable", "不可用");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight">{tx("Status", "状态")}</h1>
-        <p className="text-sm text-muted-foreground">{tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")}</p>
-      </div>
+    <div className={`${PROOF_WIDTH} space-y-4`}>
+      <PageHead title={tx("Status", "状态")} intro={tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <Card title="API" ok={health.error ? false : health.data ? health.data.ok : null}>
         {health.data ? (
@@ -85,7 +83,7 @@ export default function StatusPage() {
                   <Dot ok={isFresh(r)} />
                   {r.label}
                 </span>
-                <span className="text-xs">
+                <span className="text-[13px]">
                   {fmtAge(sourceAgeIso(r), zh)} · {isFresh(r) ? tx("ok", "正常") : tx("stale", "过期")}
                 </span>
               </li>
@@ -94,7 +92,7 @@ export default function StatusPage() {
         ) : (
           <p>{sources.error ? NA : tx("Checking…", "检查中…")}</p>
         )}
-        <p className="pt-1 text-xs">
+        <p className="pt-1 text-[13px]">
           <Link href="/sources" className="underline underline-offset-2 hover:text-foreground">
             {tx("What each feed is", "每个数据源是什么")}
           </Link>
@@ -112,7 +110,7 @@ export default function StatusPage() {
                 {tx("First break at seq", "首个断点序号")} {verify.data.first_break.seq}: {verify.data.first_break.reason}
               </p>
             ) : null}
-            <p className="font-mono text-xs break-all">
+            <p className="font-mono text-[13px] break-all">
               {tx("head", "链头")} {short(verify.data.head)}
             </p>
           </>
@@ -128,11 +126,11 @@ export default function StatusPage() {
               {latestAnchor.state === "bitcoin" ? tx("Confirmed in Bitcoin", "已写入比特币") : tx("Waiting for a Bitcoin block", "等待比特币区块")}
               {latestAnchor.block ? ` · ${tx("block", "区块")} ${latestAnchor.block.toLocaleString()}` : ""} · {tx("covers receipts up to", "覆盖到序号")} {latestAnchor.seq}
             </p>
-            <p className="font-mono text-xs break-all">
+            <p className="font-mono text-[13px] break-all">
               {tx("head", "链头")} {short(latestAnchor.head)}
             </p>
             {latestAnchor.verified ? (
-              <p className="text-xs">
+              <p className="text-[13px]">
                 {tx("Stamped", "盖章于")} {fmtAge(latestAnchor.verified, zh)}
               </p>
             ) : null}
