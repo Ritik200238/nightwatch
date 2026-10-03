@@ -68,7 +68,8 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
-from typing import Any, Callable, Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -195,7 +196,7 @@ def window_returns(close: pd.Series, wins: pd.DataFrame) -> pd.DataFrame:
 def flag_earnings(win: pd.DataFrame, earnings: set[date]) -> pd.DataFrame:
     """A window touches earnings if the report date is the day it starts or ends on."""
     out = win.copy()
-    out["earn"] = [(a in earnings) or (b in earnings) for a, b in zip(out["d0"], out["d1"])]
+    out["earn"] = [(a in earnings) or (b in earnings) for a, b in zip(out["d0"], out["d1"], strict=True)]
     return out
 
 
@@ -579,7 +580,7 @@ def liquidity(books: dict[str, pd.DataFrame], wins: pd.DataFrame) -> dict[str, A
                 row[f"spread_ratio_{c}"] = float(np.exp(gs[ci] - gs[0]))
                 row[f"depth_ratio_{c}"] = float(np.exp(gd[ci] - gd[0]))
         per_token.append(row)
-    weekend_days = sorted({d for d, c in zip(days, cells[:, :, _LIQ_CLASSES.index("weekend"), 0].sum(axis=1)) if c > 0})
+    weekend_days = sorted({d for d, c in zip(days, cells[:, :, _LIQ_CLASSES.index("weekend"), 0].sum(axis=1), strict=True) if c > 0})
     return {
         "n_snapshots": int(tot[:, :, 0].sum()),
         "n_days": len(days), "first_day": str(days[0]), "last_day": str(days[-1]),

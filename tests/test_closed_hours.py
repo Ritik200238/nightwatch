@@ -134,7 +134,6 @@ def q2(beta, seed=0, noise=0.004, sd_token=0.0003, weekend_sd=0.02):
     for t in TICKERS:
         c = pd.Series(100.0 * np.exp(np.cumsum(rng.normal(0, sd_token, len(idx)))), index=idx)
         stock_open, stock_close = {}, {}
-        price = 100.0
         W = market + rng.normal(0, weekend_sd / 2, len(wk))
         # splice the weekend move into the token path as one hourly step 20 hours into the weekend
         adj = np.zeros(len(idx))
