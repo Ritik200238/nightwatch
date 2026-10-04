@@ -1,6 +1,8 @@
 "use client";
 
 import { AccountLadder } from "@/components/report/account-ladder";
+import { BookVisuals } from "@/components/report/book-visuals";
+import { MarketClock } from "@/components/report/market-clock";
 import { Group } from "@/components/report/group";
 import { ThesisCheckCard } from "@/components/report/thesis-check";
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
@@ -775,6 +777,8 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <Hypothetical report={report} lang={lang} />
       <DecisionCard report={report} lang={lang} />
       <AccountLadder report={report} lang={lang} onRerun={onRerun} />
+      <MarketClock report={report} lang={lang} />
+      <BookVisuals report={report} lang={lang} />
       {/* A report that came out of the chat already has the take in the conversation. */}
       {hideTake ? null : <AnalystTakeCard report={report} langHint={lang} />}
       {report.forecast_id != null && report.forecast_id > 0 ? <AgentPanel forecastId={report.forecast_id} lang={lang} /> : null}
