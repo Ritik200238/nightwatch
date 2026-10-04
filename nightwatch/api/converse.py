@@ -44,12 +44,14 @@ def is_ack(text: str) -> bool:
 
 def ack_reply(context: dict[str, Any] | None, lang: str) -> dict[str, Any]:
     """A short acknowledgement that keeps the trade on screen in play."""
-    ticker = ((context or {}).get("ticket") or {}).get("ticker")
+    ticket = (context or {}).get("ticket") or {}
+    ticker = ticket.get("ticker")
+    short = ticket.get("side") == "short"  # a short is hurt by a rise
     if lang == "zh":
-        text = (f"不客气。还可以继续问这笔 {ticker} 交易：为什么？· 如果跌 10% 呢？· 仓位减半 · 最安全的持有方式是什么？或者直接描述一笔新交易。" if ticker
+        text = (f"不客气。还可以继续问这笔 {ticker} 交易：为什么？· 如果{'涨' if short else '跌'} 10% 呢？· 仓位减半 · 最安全的持有方式是什么？或者直接描述一笔新交易。" if ticker
                 else "不客气。准备好了就描述一笔交易，比如“周末做多特斯拉 2万U”。")
     else:
-        text = (f"Glad it helped. Still here for this {ticker} trade: why? · what if it gaps down 10%? · halve it · what's the safest way to hold it? "
+        text = (f"Glad it helped. Still here for this {ticker} trade: why? · what if it gaps {'up' if short else 'down'} 10%? · halve it · what's the safest way to hold it? "
                 "Or describe a new one." if ticker else 'Any time. Describe a trade when you are ready, e.g. "long 20k TSLA over the weekend".')
     return {
         "intent": {"kind": "followup", "question": "ack", "missing_fields": [], "reply": text},

@@ -1057,10 +1057,14 @@ def brief_short(report: Any, lang: str = "en") -> str:
             out.append(picked[p])
     t = report.ticket
     lev_ask = ("不加杠杆呢？" if zh else "what about no leverage?") if t.leveraged else ("5 倍杠杆呢？" if zh else "what about 5x?")
+    # A short is hurt by a rise, so its shock and its odds question point up.
+    short = t.side == Side.SHORT
     if zh:
-        out.append(f"可以接着问我：为什么？· 如果跌 10% 呢？· 仓位减半 · {lev_ask} · {t.ticker} 周末跌 5% 的概率是多少？")
+        move, odds = ("涨", "涨") if short else ("跌", "跌")
+        out.append(f"可以接着问我：为什么？· 如果{move} 10% 呢？· 仓位减半 · {lev_ask} · {t.ticker} 周末{odds} 5% 的概率是多少？")
     else:
-        out.append(f"Ask me: why? · what if it gaps down 10%? · halve it · {lev_ask} · how often does {t.ticker} fall 5% over a weekend?")
+        gap, odds = ("up", "rise") if short else ("down", "fall")
+        out.append(f"Ask me: why? · what if it gaps {gap} 10%? · halve it · {lev_ask} · how often does {t.ticker} {odds} 5% over a weekend?")
     return "\n\n".join(out)
 
 
