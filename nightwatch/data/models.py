@@ -183,6 +183,28 @@ class EarningsEvent(_Record):
     observed_at: datetime
 
 
+class CorporateEvent(_Record):
+    """A dividend, split or exchange notice for one ticker.
+
+    ``kind``: ``dividend`` (ex-dividend date), ``split`` (effective date; ``ratio`` is
+    new:old, so ``1:10`` is a reverse split), ``suspension`` (a trading halt notice) or
+    ``notice`` (any other exchange announcement that names the token). ``event_date`` is
+    the ET calendar date at 00:00 ET, stored as a UTC instant, like earnings.
+    """
+
+    ticker: str
+    kind: str
+    event_date: datetime
+    source: str
+    amount: float | None = None  # cash per share, for a dividend
+    ratio: str | None = None
+    currency: str | None = None
+    announced_at: datetime | None = None  # when the issuer / exchange said so, if the source says
+    detail: str | None = None
+    url: str | None = None
+    observed_at: datetime
+
+
 class MacroRelease(_Record):
     series_id: str  # FRED series (e.g. CPIAUCSL) or event code (e.g. FOMC)
     name: str
