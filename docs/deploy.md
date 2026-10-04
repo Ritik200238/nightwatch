@@ -200,8 +200,11 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
     the containers) and json logs capped at 3 x 20 MB.
   * `vm.swappiness=10`. A 2 GB plan removes the problem outright.
 * The recorder logs a heartbeat every 10 ticks and every job run; `docker compose logs -f recorder`.
-* The API warms the feature frames for every token on start (about a minute for 24
-  tokens); until then `/health` reports `warm.state = running` and analyses are slower.
+* The API warms the feature frames for every token on start (about 25 s for 24
+  tokens); until then `/health` reports `warm.state = running`. The warm-up steps aside
+  whenever a request wants the analysis lock (`nightwatch/api/locking.py`), so a chat sent
+  in that window builds only the frame it needs: measured 5.7 s after a restart, against
+  26 s when it had to wait for all 24.
 
 ## Checklist before the judging window (2026-09-22 to 2026-10-07)
 
