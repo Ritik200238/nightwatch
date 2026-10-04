@@ -40,6 +40,7 @@ export default function DeskPage() {
   const [heroUsed, setHeroUsed] = useState(false);
   const [equity, setEquity] = useState<number | null>(200000);
   const { positions, setPositions } = useOpenPositions();
+  const heroUp = !report && !heroUsed;
   const exampleReport = (snapshot?.reports.TSLA as unknown as Report | undefined) ?? null;
 
   async function loadUniverse() {
@@ -67,6 +68,7 @@ export default function DeskPage() {
   }
 
   function runScenario(steps: string[]) {
+    setHeroUsed(true);
     setContrast(null);
     setTab("chat");
     setHeroDraft("");
@@ -127,7 +129,7 @@ export default function DeskPage() {
     // min-w-0 on both columns: a grid track is auto-sized by default, so one wide table
     // in the report stretches the whole column past the viewport and takes the sidebar
     // with it. With it, the tables' own overflow-x-auto wrappers do the scrolling.
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
     {!report && !heroUsed ? (
       <Hero
         draft={heroDraft}
@@ -138,11 +140,27 @@ export default function DeskPage() {
           runScenario([text]);
         }}
         onContrast={runContrastDemo}
+        onExample={() => {
+          setHeroUsed(true);
+          setHeroDraft("");
+          void run(demoTicket());
+        }}
+        exampleDisabled={busy || !universe}
+        onForm={() => {
+          setHeroUsed(true);
+          setTab("form");
+        }}
       />
     ) : null}
-    <ProofStrip stocks={universe?.length ?? null} />
-    <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-      <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
+    {/* On a phone the Bitget list is long and says nothing about the trade, so while the
+        hero is up it goes below the example verdict instead of pushing it off the screen. */}
+    <div className={heroUp ? "max-sm:order-last" : ""}>
+      <ProofStrip stocks={universe?.length ?? null} />
+    </div>
+    {/* While the hero is up there is one input on the page (the hero's); the Chat/Ticket rail
+        appears once a trade has been asked for, or when the reader asks for the form. */}
+    <div className={heroUp ? "mx-auto grid w-full max-w-5xl gap-6" : "grid gap-6 lg:grid-cols-[380px_1fr]"}>
+      <aside className={`min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start ${heroUp ? "hidden" : ""}`}>
         {/* While the hero is up it carries the h1, the pitch and the demo trades; the rail
             repeats none of them, and takes over once the hero is gone. */}
         {report || heroUsed ? (
@@ -345,19 +363,28 @@ function HeroProof() {
   );
 }
 
-function Hero({ draft, setDraft, busy, onSend, onContrast }: { draft: string; setDraft: (s: string) => void; busy: boolean; onSend: (t: string) => void; onContrast: () => void }) {
+const HERO_STEPS: { en: string; zh: string; subEn: string; subZh: string }[] = [
+  { en: "Similar past moments", zh: "相似的历史时刻", subEn: "the nights most like now", subZh: "与现在最像的那些夜晚" },
+  { en: "What happened after", zh: "之后发生了什么", subEn: "real outcomes, best to worst", subZh: "真实结果，从好到坏" },
+  { en: "Stress tests", zh: "压力测试", subEn: "gaps, crashes, thin books", subZh: "跳空、暴跌、盘口变薄" },
+  { en: "Sized verdict", zh: "带仓位的结论", subEn: "GO, REDUCE, HEDGE or NO GO", subZh: "可以做、减仓、对冲或不做" },
+];
+
+function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDisabled, onForm }: { draft: string; setDraft: (s: string) => void; busy: boolean; onSend: (t: string) => void; onContrast: () => void; onExample: () => void; exampleDisabled: boolean; onForm: () => void }) {
   const { lang, tx } = useLang();
   const text = draft.trim();
   return (
     <section className="rounded-xl border border-border bg-card p-4 sm:p-6" aria-label={tx("Describe a trade", "描述一笔交易")}>
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
       <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
-        {tx(
-          "A pre-trade desk for tokenized US stocks (rTokens) on Bitget — history, stress tests, your exit on the live order book, and a sized verdict. Every verdict is scored in public.",
-          "Bitget 上代币化美股（rToken）的交易前工作台——历史对照、压力测试、按实时订单簿计算的平仓成本，以及带仓位的结论。每个结论都会公开评分。",
-        )}
+        {tx("A pre-trade desk for tokenized US stocks on Bitget. ", "Bitget 上代币化美股的交易前工作台。")}
+        <span className="hidden sm:inline">
+          {tx(
+            "It prices your exit on the live order book and sizes the trade in money. Every verdict is scored in public.",
+            "按实时订单簿计算平仓成本，并以金额给出仓位。每个结论都会公开评分。",
+          )}
+        </span>
       </p>
-      <HeroProof />
       <form
         className="mt-4 flex flex-col gap-2 sm:flex-row"
         onSubmit={(e) => {
@@ -403,12 +430,34 @@ function Hero({ draft, setDraft, busy, onSend, onContrast }: { draft: string; se
           </li>
         ))}
         <li className="shrink-0">
+          <button type="button" disabled={exampleDisabled} onClick={onExample} title={tx("Run the example trade below live, right now", "立即实时运行下面的示例交易")} className={`${CHIP} whitespace-nowrap border-foreground/40 font-medium disabled:opacity-50`}>
+            {tx("Run the TSLA example live", "实时运行 TSLA 示例")}
+          </button>
+        </li>
+        <li className="shrink-0">
           <button type="button" disabled={busy} onClick={onContrast} title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")} className={`${CHIP} whitespace-nowrap text-muted-foreground disabled:opacity-50`}>
             {tx("Same trade, different book", "同一笔交易，不同组合")}
           </button>
         </li>
       </ul>
-      <p className="mt-3 text-[13px] text-muted-foreground">{tx("Prefer fields? Use the Ticket tab on the left — one click away.", "更喜欢填表？点左侧的“表单”标签即可。")}</p>
+      <ol className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={tx("How it works", "工作方式")}>
+        {HERO_STEPS.map((st, i) => (
+          <li key={st.en} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <p className="text-[13px] font-medium leading-tight">
+              <span className="tabular mr-1 text-muted-foreground">{i + 1}</span>
+              {lang === "zh" ? st.zh : st.en}
+            </p>
+            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{lang === "zh" ? st.subZh : st.subEn}</p>
+          </li>
+        ))}
+      </ol>
+      <HeroProof />
+      <p className="mt-2 text-[13px] text-muted-foreground">
+        {tx("Prefer fields? ", "更喜欢填表？")}
+        <button type="button" onClick={onForm} className="underline underline-offset-2 hover:text-foreground">
+          {tx("Use the ticket form", "使用表单")}
+        </button>
+      </p>
     </section>
   );
 }
