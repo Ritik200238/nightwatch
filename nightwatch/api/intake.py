@@ -800,12 +800,51 @@ def _needs_account_head(report: Any, head: str, zh: bool) -> str:  # noqa: ANN40
     bad = abs(p5) / 100.0 * t.notional_quote
     book = v.recommended_notional if v.recommended_notional is not None and 1 <= v.recommended_notional < t.notional_quote - 1 else None
     stop = "" if t.stop_price or t.stop_offset_pct else ("（有止损的话也请加上）" if zh else " (and add a stop if you can)")
+    ladder = account_ladder_line(report, zh)
     if zh:
         tail = f"，而当前盘口只能承接 {book:,.0f} USDT" if book is not None else ""
-        return f"需复核（REVIEW）：请告诉系统你的账户规模{stop}，才能完成检查。按 {t.notional_quote:,.0f} USDT 计，二十分之一的坏夜晚约亏 {bad:,.0f} USDT{tail}。"
+        return f"需复核（REVIEW）：请告诉系统你的账户规模{stop}，才能完成检查。按 {t.notional_quote:,.0f} USDT 计，二十分之一的坏夜晚约亏 {bad:,.0f} USDT{tail}。" + (f"\n{ladder}" if ladder else "")
     tail = f", and the live order book supports only {book:,.0f} USDT" if book is not None else ""
     return (f"REVIEW: tell the desk your account size{stop} to finish the checks. At {t.notional_quote:,.0f} USDT a bad night, one in twenty, "
-            f"loses about {bad:,.0f} USDT{tail}.")
+            f"loses about {bad:,.0f} USDT{tail}." + (f"\n{ladder}" if ladder else ""))
+
+
+def _k(x: float) -> str:
+    return f"{x / 1000:,.0f}k" if x >= 1000 and x % 1000 == 0 else f"{x:,.0f}"
+
+
+def account_ladder_line(report: Any, zh: bool = False) -> str:  # noqa: ANN401
+    """The same trade at a few account sizes, and the smallest account that makes it a GO.
+
+    Turns "tell me your account size" into an answer the trader can act on now, without
+    the desk picking an account for them: the verdict stays REVIEW."""
+    sens = getattr(report, "sensitivity", None)
+    ladder = list(getattr(sens, "account_ladder", None) or [])
+    if not ladder:
+        return ""
+    t = report.ticket
+
+    def say(p: Any) -> str:  # noqa: ANN401
+        rec = p.recommended_notional
+        if p.verdict == "REDUCE_TO" and rec is not None:
+            return f"减仓至 {rec:,.0f}" if zh else f"REDUCE TO {rec:,.0f}"
+        if zh:
+            return VERDICT_ZH.get(p.verdict, p.verdict)
+        return p.verdict.replace("_", " ")
+
+    steps = " · ".join(f"{_k(p.equity)} → {say(p)}" for p in ladder)
+    edge = getattr(sens, "min_go_equity", None)
+    if edge is not None:
+        end = (f"账户约 {edge:,.0f} USDT 起，{t.notional_quote:,.0f} USDT 即可通过（GO）。" if zh else
+               f"It becomes a GO at {t.notional_quote:,.0f} from an account of about {edge:,.0f} USDT.")
+    else:
+        top = ladder[-1]
+        if top.binding_cap == "exit_liquidity" and top.recommended_notional is not None:
+            end = (f"任何账户规模都无法让 {t.notional_quote:,.0f} USDT 通过：当前盘口只能承接约 {top.recommended_notional:,.0f} USDT。" if zh else
+                   f"No account size makes {t.notional_quote:,.0f} a GO: the live order book only supports about {top.recommended_notional:,.0f} USDT.")
+        else:
+            end = (f"任何账户规模都无法让 {t.notional_quote:,.0f} USDT 通过。" if zh else f"No account size makes {t.notional_quote:,.0f} a GO.")
+    return (f"按账户规模：{steps}。{end}" if zh else f"By account size: {steps}. {end}")
 
 
 def brief(report: Any, lang: str = "en") -> str:

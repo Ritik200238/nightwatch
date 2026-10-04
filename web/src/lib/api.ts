@@ -634,6 +634,16 @@ export interface Sensitivity {
   widest_stop_pct_for_requested_size: number | null;
   requested_notional: number;
   notes: string[];
+  /** Only when no account size was given: the trade judged at a few account sizes. */
+  account_ladder?: AccountPoint[];
+  min_go_equity?: number | null;
+}
+
+export interface AccountPoint {
+  equity: number;
+  verdict: string;
+  recommended_notional: number | null;
+  binding_cap: string | null;
 }
 
 export interface Lesson {
