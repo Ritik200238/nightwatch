@@ -12,6 +12,7 @@ import pandas as pd
 
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
+from nightwatch.data.corporate import sync_corporate_events
 from nightwatch.data.fred import CORE_SERIES, FredClient
 from nightwatch.data.models import Interval, Venue
 from nightwatch.data.nasdaq import NasdaqEarningsClient
@@ -195,6 +196,8 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
             jobs = [
                 # Earnings dates move and macro releases get scheduled; six-hourly is plenty.
                 PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False, age_at_start=age_of("earnings_calendar")),
+                # Ex-dividend dates, splits and Bitget notices: declared well ahead and rarely revised, so twice a day.
+                PeriodicJob("corporate-events", 12 * 3600, lambda: sync_corporate_events(store, entries), run_at_start=False, age_at_start=age_of("corporate_events")),
                 PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False, age_at_start=age_of("news")),
                 # The native stock's own bars: hourly while the US market is open, and a
                 # no-op the rest of the time because the missing-range check finds nothing.
