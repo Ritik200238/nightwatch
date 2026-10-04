@@ -104,6 +104,14 @@ class ThesisCheck:
 
 # ----------------------------------------------------------------------- retrieval
 
+# The feed ids the recorder stores under, as a reader would name the publisher.
+_SOURCES = {"cnbc": "CNBC", "marketwatch": "MarketWatch", "cointelegraph": "Cointelegraph", "fed": "Federal Reserve", "sec": "SEC"}
+
+
+def source_name(feed: str) -> str:
+    return _SOURCES.get((feed or "").split("_", 1)[0].lower(), feed)
+
+
 
 def candidates(conn: sqlite3.Connection, ticker: str, as_of: datetime, thesis: str = "") -> list[Item]:
     """Headlines and filings for the token in the window before ``as_of``, as known then.
@@ -122,7 +130,7 @@ def candidates(conn: sqlite3.Connection, ticker: str, as_of: datetime, thesis: s
         except ValueError:
             tagged = False
         if tagged:
-            rows.append(("news", title, source, int(published), link))
+            rows.append(("news", title, source_name(source), int(published), link))
     window = (ticker, start_ms, end_ms, end_ms)
     try:
         filings = conn.execute(
