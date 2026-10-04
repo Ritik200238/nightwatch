@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, api, type Report } from "@/lib/api";
+import { ApiError, api, type ChatStep, type Report } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 import { isoIn, isSnapshotAnswer, snapshotFlag, snapshotNoticeFor } from "@/lib/snapshot";
 import { plainText } from "@/lib/plain";
@@ -105,6 +105,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
   const contextRef = useRef<number | null>(null);
   const ranScript = useRef<number | null>(null);
   const [draft, setDraft] = useState("");
+  const [steps, setSteps] = useState<ChatStep[]>([]);
   const [takePending, setTakePending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // null = not checked yet. The desk works without a model; only this tab needs one.
@@ -185,10 +186,12 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
     setError(null);
     setBusy(true);
     try {
-      const res = await api.chat(
+      setSteps([]);
+      const res = await api.chatStream(
         next.map((m) => ({ role: m.role, content: m.content })),
         accountEquity,
         contextRef.current,
+        (s) => setSteps((prev) => (prev.some((p) => p.stage === s.stage) ? prev : [...prev, s])),
       );
       // A saved example served while the live server is down is a chat message only: it
       // must never replace the report on screen, which belongs to the trader's own trade.
@@ -213,6 +216,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
       commit(next);
     } finally {
       setBusy(false);
+      setSteps([]);
     }
   }
 
@@ -295,7 +299,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         ) : null}
         {busy ? (
           <div className="mr-2 rounded-lg bg-muted px-3 py-2" aria-label={tx("Working", "计算中")}>
-            <Working compact lang={lang} />
+            <Working compact lang={lang} steps={steps} />
           </div>
         ) : null}
         {takePending ? (

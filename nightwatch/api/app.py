@@ -18,8 +18,9 @@ from typing import Any
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from nightwatch import __version__
@@ -1218,6 +1219,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         a new live verdict is attributed to an anonymous client, and a follow-up is
         counted by the kind of answer it got (never by what was typed)."""
         out = _chat(body)
+        _count_chat(body, request, out)
+        return out
+
+    def _count_chat(body: ChatIn, request: Request, out: dict[str, Any]) -> None:
         try:
             from nightwatch.journal import engagement
 
@@ -1231,7 +1236,62 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 engagement.count_chat(s.store._conn, kind=str(kind), lang=lang)
         except Exception as exc:  # noqa: BLE001 - counting is never worth a failed answer
             log.warning("chat counters: %s", exc)
-        return out
+
+    @app.post("/chat/stream")
+    async def chat_stream(body: ChatIn, request: Request) -> StreamingResponse:
+        """The same turn as /chat, told as Server-Sent Events: one ``step`` event as each
+        analysis stage finishes, then ``done`` carrying exactly what /chat would have
+        returned (or ``error`` with the detail /chat would have raised). A turn that needs
+        no analysis sends ``done`` alone. One worker thread per request, no buffering."""
+        import asyncio
+        import json
+
+        from nightwatch.pipeline.analyze import progress_to
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+        def put(kind: str, data: Any) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, (kind, data))
+
+        def work() -> None:
+            try:
+                with progress_to(lambda ev: put("step", ev)):
+                    out = _chat(body)
+                _count_chat(body, request, out)
+                put("done", out)
+            except HTTPException as exc:
+                put("error", {"detail": exc.detail, "status": exc.status_code})
+            except Exception as exc:  # noqa: BLE001 - /chat would answer a 500; the stream says so too
+                log.exception("chat stream failed")
+                put("error", {"detail": str(exc) or "Internal Server Error", "status": 500})
+
+        async def events():
+            fut = loop.run_in_executor(None, work)
+            seen: set[str] = set()
+            try:
+                while True:
+                    try:
+                        kind, data = await asyncio.wait_for(queue.get(), timeout=10)
+                    except TimeoutError:
+                        yield ": keepalive\n\n"  # keeps a proxy from closing a quiet connection
+                        continue
+                    if kind == "step":
+                        # A what-if or comparison may run several analyses; show each stage once.
+                        if data.get("stage") in seen:
+                            continue
+                        seen.add(data.get("stage"))
+                    yield f"event: {kind}\ndata: {json.dumps(jsonable_encoder(data))}\n\n"
+                    if kind != "step":
+                        break
+            finally:
+                if not fut.done():
+                    log.info("chat stream closed before the turn finished")
+
+        return StreamingResponse(
+            events(), media_type="text/event-stream",
+            headers={"cache-control": "no-cache, no-transform", "x-accel-buffering": "no", "connection": "keep-alive"},
+        )
 
     @app.post("/feedback")
     def feedback(body: FeedbackIn, request: Request) -> dict[str, Any]:

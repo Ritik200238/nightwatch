@@ -1125,6 +1125,14 @@ export interface Report {
   forecast_id: number | null;
 }
 
+/** One finished stage of an analysis, in both languages, from /chat/stream. */
+export interface ChatStep {
+  stage: string;
+  en: string;
+  zh: string;
+  ms: number;
+}
+
 export interface ChatResponse {
   intent: { kind: string; missing_fields: string[]; reply: string } & Record<string, unknown>;
   ticket: Record<string, unknown> | null;
@@ -1226,6 +1234,64 @@ export const api = {
       // The report already on screen, so "why not bigger" can be answered from it.
       body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null }),
     }),
+  /** The same turn as `chat`, with each finished analysis stage reported to `onStep` while
+   *  it runs. If the stream cannot start, or is cut before the answer, this asks plain
+   *  `/chat` instead, so a proxy that buffers or an old backend only loses the live steps. */
+  chatStream: async (
+    messages: { role: "user" | "assistant"; content: string }[],
+    accountEquity: number | null | undefined,
+    contextForecastId: number | null | undefined,
+    onStep: (s: ChatStep) => void,
+  ): Promise<ChatResponse> => {
+    const again = () =>
+      request<ChatResponse>("/chat", {
+        method: "POST",
+        body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null }),
+      });
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}${withIdentity("/chat/stream")}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "text/event-stream" },
+        body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null }),
+      });
+    } catch {
+      return again();
+    }
+    if (!res.ok || !res.body || !(res.headers.get("content-type") ?? "").startsWith("text/event-stream")) return again();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    // Once a step has arrived the analysis is running on the server, and asking again would
+    // run (and journal) the same trade twice; past that point a cut stream is an error.
+    let started = false;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let cut: number;
+        while ((cut = buf.indexOf("\n\n")) >= 0) {
+          const block = buf.slice(0, cut);
+          buf = buf.slice(cut + 2);
+          const kind = /^event: (.+)$/m.exec(block)?.[1];
+          const data = /^data: (.+)$/m.exec(block)?.[1];
+          if (!kind || !data) continue; // a keep-alive comment
+          const parsed = JSON.parse(data);
+          if (kind === "step") {
+            started = true;
+            onStep(parsed as ChatStep);
+          }
+          else if (kind === "done") return parsed as ChatResponse;
+          else if (kind === "error") throw new ApiError(typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail), Number(parsed.status) || 500);
+        }
+      }
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+    }
+    if (started) throw new ApiError("The connection dropped before the answer arrived. Please send it again.", 503);
+    return again(); // cut before anything ran
+  },
   calibration: (ticker?: string, kind?: string) => {
     const q = new URLSearchParams();
     if (ticker) q.set("ticker", ticker);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ChatStep } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 
 /** The stages one analysis runs through, in order, with roughly when each starts on a warm
@@ -16,7 +17,17 @@ const STEPS: { at: number; en: string; zh: string }[] = [
 ];
 const SLOW_AFTER = 20;
 
-export function Working({ lang: langProp, compact = false }: { lang?: "en" | "zh"; compact?: boolean }) {
+/** What the desk is doing next, per finished stage, shown under the live steps. */
+const NEXT: Record<string, { en: string; zh: string }> = {
+  snapshot: { en: "Searching history for moments like now", zh: "正在搜索相似的历史时刻" },
+  analog: { en: "Reading the live order book", zh: "正在读取实时盘口" },
+  book: { en: "Running the stress presets, crash replays and simulation", zh: "正在运行压力情景、危机重演和模拟" },
+  stress: { en: "Pricing the exit on the book", zh: "正在计算平仓成本" },
+  execution: { en: "Checking the risk rules and sizing the trade", zh: "正在核对风控规则并确定仓位" },
+  decision: { en: "Writing the answer", zh: "正在撰写回答" },
+};
+
+export function Working({ lang: langProp, compact = false, steps }: { lang?: "en" | "zh"; compact?: boolean; steps?: ChatStep[] }) {
   const ctx = useLang();
   const lang = langProp ?? ctx.lang;
   const [elapsed, setElapsed] = useState(0);
@@ -26,6 +37,32 @@ export function Working({ lang: langProp, compact = false }: { lang?: "en" | "zh
     return () => clearInterval(id);
   }, []);
   const zh = lang === "zh";
+  // Steps the server reported as they finished replace the clock-driven guide.
+  if (steps && steps.length > 0) {
+    const next = NEXT[steps[steps.length - 1].stage];
+    return (
+      <div className={compact ? "space-y-1.5" : "space-y-2 rounded-lg border border-border p-4"} role="status" aria-live="polite">
+        <p className="flex items-center justify-between text-sm font-medium">
+          <span>{zh ? "正在计算" : "Running the desk"}</span>
+          <span className="tabular-nums text-[13px] text-muted-foreground">{Math.floor(elapsed)}s</span>
+        </p>
+        <ol className="space-y-1 text-sm">
+          {steps.map((s) => (
+            <li key={s.stage} className="text-muted-foreground">
+              <span aria-hidden className="mr-1.5 inline-block w-3">✓</span>
+              {zh ? s.zh : s.en}
+            </li>
+          ))}
+          {next ? (
+            <li className="font-medium text-foreground">
+              <span aria-hidden className="mr-1.5 inline-block w-3">›</span>
+              {zh ? next.zh : next.en}
+            </li>
+          ) : null}
+        </ol>
+      </div>
+    );
+  }
   const current = STEPS.reduce((i, s, j) => (elapsed >= s.at ? j : i), 0);
   return (
     <div className={compact ? "space-y-1.5" : "space-y-2 rounded-lg border border-border p-4"} role="status" aria-live="polite">
