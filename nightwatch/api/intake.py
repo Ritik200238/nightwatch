@@ -82,6 +82,32 @@ _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bse
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
 # "20k margin", "margin of 4000", "with 5k collateral": the money put up, not the position.
 _MARGIN = re.compile(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?\s*(?:usdt\s*)?(?:of\s+)?(?:margin|collateral)\b|\b(?:margin|collateral)\s*(?:of|is|:|=)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?\b", re.I)
+# Margin added to or taken off a position that is already on: "add 500 more margin", "what
+# if I put in 2k collateral", "withdraw 500 margin", "加 500 保证金", "减 1000 保证金". This
+# is a change of leverage on the same position, never a new size, so it is read before any
+# bare amount can be taken for one.
+def _amount(tag: str) -> str:
+    """A money amount with its own group names, so one pattern can hold it three times."""
+    return rf"\$?\s*(?P<n{tag}>\d[\d,]*(?:\.\d+)?)\s*(?P<s{tag}>[kmbw])?(?![a-z])\s*(?:usdt|usd|u|dollars?)?"
+
+
+_ADD_VERB = r"add(?:ing)?|put(?:ting)?\s+(?:in|up)|deposit(?:ing)?|top(?:ping)?[-\s]?up|increas(?:e|ing)|post(?:ing)?|throw(?:ing)?\s+in"
+_TAKE_VERB = r"withdraw(?:ing)?|remov(?:e|ing)|tak(?:e|ing)\s+out|pull(?:ing)?(?:\s+out)?|reduc(?:e|ing)|cut(?:ting)?|lower(?:ing)?|releas(?:e|ing)|free(?:\s+up)?"
+_MARGIN_MOVE = re.compile(
+    # "add 500 more margin", "put in 2k collateral", "withdraw 500 margin"
+    rf"\b(?:(?P<add1>{_ADD_VERB})|(?P<take1>{_TAKE_VERB}))\s+(?:the\s+|another\s+|an?\s+additional\s+)?{_amount('1')}\s*(?P<dir1>more|extra|additional|less)?\s*(?:of\s+)?(?:margin|collateral)\b"
+    # "with 500 more margin", "500 less collateral"
+    rf"|\b{_amount('2')}\s*(?P<dir2>more|extra|additional|less)\s+(?:margin|collateral)\b"
+    # "add more margin of 500", "withdraw margin: 500"
+    rf"|\b(?:(?P<add3>{_ADD_VERB})|(?P<take3>{_TAKE_VERB}))\s+(?:more\s+|extra\s+)?(?:margin|collateral)\s*(?:of|:|=|worth)?\s*{_amount('3')}",
+    re.I,
+)
+_MARGIN_MOVE_ZH = re.compile(
+    r"(?P<verb>追加|增加|再加|多加|加|补充|补|减少|减掉|减|取出|提取|提走|撤出|撤)\s*(?P<n>\d[\d,]*(?:\.\d+)?)\s*(?P<s>[kKwW万千])?\s*(?:u|U|usdt|USDT|美元|刀)?\s*(?:的)?\s*(?:保证金|抵押品|抵押)"
+    r"|保证金\s*(?P<verb2>追加|增加|再加|加|补充|补|减少|减|取出|提取|撤出)\s*(?P<n2>\d[\d,]*(?:\.\d+)?)\s*(?P<s2>[kKwW万千])?",
+)
+_ZH_SCALE = {"k": 1e3, "w": 1e4, "m": 1e6, "b": 1e9, "万": 1e4, "千": 1e3}
+_ZH_TAKE = ("减", "取", "提", "撤")
 _HEDGE_PCT = re.compile(r"\bhedge\b[^.\d]{0,15}(\d{1,3})\s*%", re.I)
 _HEDGE = re.compile(r"\bhedge\b|\bdelta[-\s]?neutral\b", re.I)
 _THESIS = re.compile(r"\b(?:because|since|thesis\s*:|on the view that|reason\s*:|the idea is)\s+(.+?)(?:[.;!?]|$)", re.I)
@@ -258,6 +284,38 @@ def _money(groups: tuple) -> float | None:
         if value:
             n = float(value.replace(",", ""))
             return n * _SCALE[scale.lower()] if scale else n
+    return None
+
+
+def margin_adjustment(text: str) -> float | None:
+    """Margin the trader says to add (positive) or take off (negative), in USDT; else None.
+
+    "Add 500 more margin" on a leveraged position is a question about leverage - the same
+    size held with a bigger cushion - and read as a size it silently re-ran a 500 USDT
+    trade. Naming the amount alone ("with 2k margin") is not an adjustment: that states
+    the margin of a new ticket, which `_MARGIN` already reads.
+    """
+    if not text:
+        return None
+    m = _MARGIN_MOVE.search(text)
+    if m:
+        for tag in "123":
+            if m.group(f"n{tag}"):
+                break
+        else:
+            return None
+        value = float(m.group(f"n{tag}").replace(",", ""))
+        scale = m.group(f"s{tag}")
+        value *= _SCALE[scale.lower()] if scale else 1.0
+        word = (m.groupdict().get(f"dir{tag}") or "").lower()
+        removing = word == "less" or bool(m.groupdict().get(f"take{tag}"))
+        return -value if removing else value
+    z = _MARGIN_MOVE_ZH.search(text)
+    if z:
+        verb = z.group("verb") or z.group("verb2")
+        raw, scale = (z.group("n"), z.group("s")) if z.group("n") else (z.group("n2"), z.group("s2"))
+        value = float(raw.replace(",", "")) * (_ZH_SCALE[scale.lower()] if scale else 1.0)
+        return -value if verb.startswith(_ZH_TAKE) else value
     return None
 
 
