@@ -399,7 +399,20 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
   else if (v.verdict === "HEDGE") sizeText = L(`hedge ${fmtRatio(v.hedge_ratio)} of ${fmtUsd(req)} USDT`, `对冲 ${fmtRatio(v.hedge_ratio)} · ${fmtUsd(req)} USDT`);
   const prov = report.provenance?.items;
   const reasonLines = v.reasons.map((r) => plainReason(r, lang));
-  const subhead = reasonLines[0] ?? "";
+  // A REVIEW with no account size is the first answer most people see. One sentence: what to do,
+  // and why, with the loss at the size they asked for. The verdict and the size are unchanged.
+  const hz = report.analog?.horizons?.[report.primary_horizon];
+  const badNightPct = hz?.loss_p5_pct ?? (t.side === "short" ? null : (hz?.p5_adjusted ?? hz?.cohort?.p5 ?? null));
+  const badNight = badNightPct != null && badNightPct < 0 ? Math.abs((badNightPct / 100) * req) : null;
+  const needsAccount = v.verdict === "REVIEW" && !t.account_equity_quote;
+  const bookLimit = smaller && rec != null ? rec : null;
+  const topLine = needsAccount
+    ? L(
+        `Tell the desk your account size${t.stop_price ? "" : " (and add a stop if you can)"} to finish the checks. At ${fmtUsd(req)} USDT a bad night, one in twenty, loses about ${badNight != null ? fmtUsd(badNight) : "—"} USDT${bookLimit != null ? `, and the live order book supports only ${fmtUsd(bookLimit)} USDT` : ""}.`,
+        `请告诉系统你的账户规模${t.stop_price ? "" : "（有止损的话也请加上）"}，才能完成检查。按 ${fmtUsd(req)} USDT 计，二十分之一的坏夜晚约亏 ${badNight != null ? fmtUsd(badNight) : "—"} USDT${bookLimit != null ? `，而当前盘口只能承接 ${fmtUsd(bookLimit)} USDT` : ""}。`,
+      )
+    : "";
+  const subhead = topLine || (reasonLines[0] ?? "");
 
   return (
     <Section
