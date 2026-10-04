@@ -1,5 +1,6 @@
 "use client";
 
+import { Group } from "@/components/report/group";
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -764,10 +765,6 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <LensNote report={report} lang={lang} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} lang={lang} />
       <FailureModes report={report} openAll={openAll} lang={lang} />
-      {report.forecast_id != null && report.forecast_id > 0 ? <PlanCard forecastId={report.forecast_id} lang={lang} openAll={openAll} /> : null}
-      <Assumptions report={report} openAll={openAll} lang={lang} />
-      <StreetSection report={report} openAll={openAll} lang={lang} />
-      <SignalLine report={report} lang={lang} />
 
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-[13px] text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
@@ -781,6 +778,16 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         </button>
       </div>
 
+      {/* Key evidence stays open on the page: the similar moments and the stress tests are
+          what the verdict is built from. Everything else is filed under a heading. */}
+      {/* Analogs */}
+      <AnalogSection report={report} openAll={openAll} lang={lang} />
+
+      {/* Stress */}
+      <StressSection report={report} openAll={openAll} lang={lang} />
+
+      <Group title={L("Evidence", "证据")} hint={L("Assumptions, today's inputs, exit cost, discipline gate, size caps, the case against, regime, what would change it", "假设、当前输入、平仓成本、纪律闸门、仓位上限、反面意见、市场状态、什么会改变结论")} openAll={openAll}>
+        <Assumptions report={report} openAll={openAll} lang={lang} />
       {/* Now */}
       <Section
         openAll={openAll}
@@ -829,12 +836,6 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         </div>
         {flags ? <p className="mt-3 text-[13px] text-muted-foreground">{L("Flags: ", "数据标记：")}{report.snapshot.quality_flags.join(", ")}</p> : null}
       </Section>
-
-      {/* Analogs */}
-      <AnalogSection report={report} openAll={openAll} lang={lang} />
-
-      {/* Stress */}
-      <StressSection report={report} openAll={openAll} lang={lang} />
 
       {/* Exit & hedge */}
       <Section
@@ -986,6 +987,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       {/* The coarse map */}
       <RegimeSection report={report} openAll={openAll} lang={lang} />
 
+      {/* What would change it */}
+      <SensitivitySection report={report} openAll={openAll} lang={lang} />
+
+      </Group>
+
+      <Group title={L("Your book", "你的组合")} hint={L("How this trade sits next to what you already hold, your own record, what happened last time", "这笔交易与你已有持仓的关系、你自己的记录、上次发生了什么")} openAll={openAll}>
       {/* The whole book */}
       <PortfolioSection report={report} openAll={openAll} lang={lang} />
 
@@ -995,8 +1002,24 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       {/* What happened last time */}
       <LessonsSection report={report} openAll={openAll} lang={lang} />
 
-      {/* What would change it */}
-      <SensitivitySection report={report} openAll={openAll} lang={lang} />
+      </Group>
+
+      <Group title={L("Alerts & plan", "提醒与计划")} hint={L("The plan to follow, a tripwire, watching this verdict, your feedback", "要遵守的计划、触发提醒、关注这个结论、你的反馈")} openAll={openAll}>
+        {report.forecast_id != null && report.forecast_id > 0 ? <PlanCard forecastId={report.forecast_id} lang={lang} openAll={openAll} /> : null}
+        {report.forecast_id != null && report.forecast_id > 0 ? (
+          <div className="space-y-3">
+            <Feedback forecastId={report.forecast_id} lang={lang} />
+            <WatchButton forecastId={report.forecast_id} lang={lang} />
+            <TripwireButton forecastId={report.forecast_id} ticker={report.ticket.ticker} lang={lang} />
+          </div>
+        ) : null}
+      </Group>
+
+      <Group title={L("Research", "研究")} hint={L("What the street says, Bitget signal, the book contrast", "市场观点、Bitget 信号、组合对比")} openAll={openAll}>
+        <StreetSection report={report} openAll={openAll} lang={lang} />
+        <SignalLine report={report} lang={lang} />
+        <BookContrast ticket={report.ticket} lang={lang} />
+      </Group>
 
       <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
         <span>
@@ -1025,14 +1048,6 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         ) : null}
         {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
       </p>
-      {report.forecast_id != null && report.forecast_id > 0 ? (
-        <div className="mt-3 space-y-3 border-t border-border pt-3">
-          <Feedback forecastId={report.forecast_id} lang={lang} />
-          <WatchButton forecastId={report.forecast_id} lang={lang} />
-          <TripwireButton forecastId={report.forecast_id} ticker={report.ticket.ticker} lang={lang} />
-          <BookContrast ticket={report.ticket} lang={lang} />
-        </div>
-      ) : null}
       {primary ? null : null}
     </div>
   );
