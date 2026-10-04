@@ -252,7 +252,7 @@ export default function CalibrationPage() {
             <Section
               collapsible
               title={tx("Does it beat guessing?", "它比瞎猜强吗？")}
-              subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。弹球损失越低越好。共 ${rep.skill.n} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}。`)}
+              subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them. This averages all five quantiles; the studies page tests only the 5th-percentile tail, where the analogs are narrowly ahead. Different questions, not a contradiction.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。弹球损失越低越好。共 ${rep.skill.n} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}这里对五个分位数取平均；研究页只检验第 5 百分位尾部，相似时刻在那里略占优。两者问的是不同的问题，并不矛盾。`)}
               action={
                 <Pill tone={rep.skill.diff_ci_low != null && rep.skill.diff_ci_low > 0 ? "good" : rep.skill.diff_ci_high != null && rep.skill.diff_ci_high < 0 ? "critical" : "warning"}>
                   {tx("skill ", "技能 ")}{rep.skill.skill >= 0 ? "+" : ""}
