@@ -74,6 +74,9 @@ const FOUND: { when: string; what: string; fix: string; open?: boolean }[] = [
   },
 ];
 
+/** Tickets below this notional are tagged, not removed: dropping them would change the published rate. */
+const TEST_SIZE_USDT = 100;
+
 export default function WrongPage() {
   const { tx, lang } = useLang();
   const [misses, setMisses] = useState<MissesResponse | null>(null);
@@ -127,7 +130,7 @@ export default function WrongPage() {
         ) : misses ? (
           <>
             <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-              <Stat label={tx("Live verdicts scored", "已评分的实时结论")} value={live ? live.scored.toLocaleString() : "0"} hint={tx("given to real users, then scored when the hold ended", "给了真实用户，持有结束后评分")} />
+              <Stat label={tx("Live verdicts scored", "已评分的实时结论")} value={live ? live.scored.toLocaleString() : "0"} hint={tx("given by the live desk (testers and our own checks, no verified real traders), scored when the hold ended", "由线上交易台给出（试用者和我们自己的检查，没有经核实的真实交易者），持有结束后评分")} />
               <Stat
                 label={tx("Went past the line", "突破了该线")}
                 value={live ? `${live.missed} (${fmtPct(live.rate * 100, 1, false)})` : "—"}
@@ -158,6 +161,7 @@ export default function WrongPage() {
                         <TableCell className="whitespace-nowrap">{fmtTimeL(m.as_of, lang)}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
+                          {m.notional < TEST_SIZE_USDT ? <span className="ml-1.5 rounded border border-border px-1 text-[11px] text-muted-foreground">{tx("test size", "测试规模")}</span> : null}
                         </TableCell>
                         <TableCell>{(m.verdict ?? "—").replace("_", " ")}</TableCell>
                         <TableCell className="tabular text-right">{fmtPct(m.stated_p5_pct, 1)}</TableCell>
@@ -182,7 +186,7 @@ export default function WrongPage() {
               <p className="mt-3 text-sm text-muted-foreground">{tx("No live verdict has gone past its line yet.", "目前还没有实时结论亏损超过所述的线。")}</p>
             )}
             <p className="mt-3 text-[13px] text-muted-foreground">
-              {tx("Most live verdicts come from people trying the desk, so many are small test trades. They are scored all the same.", "大多数实时结论来自试用交易台的人，所以很多是小额的测试交易。它们照样计入评分。")}
+              {tx(`Most live verdicts come from people trying the desk and from our own checks, so many are small test trades. We have no verified real-trader users. Nothing is hidden: every miss is listed and every ticket is counted. Rows under ${TEST_SIZE_USDT} USDT are tagged “test size” (${misses.misses.filter((m) => m.notional < TEST_SIZE_USDT).length} of ${misses.misses.length} listed here); they are probes, often run beside a large ticket at the same moment, and they are not dropped from the totals.`, `大多数实时结论来自试用交易台的人和我们自己的检查，所以很多是小额测试交易。我们没有经核实的真实交易者用户。没有任何内容被隐藏：每一次突破都列出，每张单都计入。低于 ${TEST_SIZE_USDT} USDT 的行标为“测试规模”（此处列出的 ${misses.misses.length} 行中有 ${misses.misses.filter((m) => m.notional < TEST_SIZE_USDT).length} 行）；它们是探测单，常与同一时刻的大额单并列，并未从总数中剔除。`)}
             </p>
           </>
         ) : null}
