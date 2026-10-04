@@ -799,7 +799,7 @@ def _needs_account_head(report: Any, head: str, zh: bool) -> str:  # noqa: ANN40
         return head
     bad = abs(p5) / 100.0 * t.notional_quote
     book = v.recommended_notional if v.recommended_notional is not None and 1 <= v.recommended_notional < t.notional_quote - 1 else None
-    stop = "" if t.stop_price or t.stop_offset_pct else (" （有止损的话也请加上）" if zh else " (and add a stop if you can)")
+    stop = "" if t.stop_price or t.stop_offset_pct else ("（有止损的话也请加上）" if zh else " (and add a stop if you can)")
     if zh:
         tail = f"，而当前盘口只能承接 {book:,.0f} USDT" if book is not None else ""
         return f"请告诉系统你的账户规模{stop}，才能完成检查。按 {t.notional_quote:,.0f} USDT 计，二十分之一的坏夜晚约亏 {bad:,.0f} USDT{tail}。"
