@@ -270,3 +270,38 @@ def parser_for(provider: Any) -> Callable[[str, str], _Out | None]:  # noqa: ANN
         return provider.parse([{"role": "user", "content": user}], system=system, schema=_Out, max_tokens=1200)
 
     return parse
+
+
+# ------------------------------------------------------------------------ chat
+
+ASKS = re.compile(
+    r"\b(?:is|was) my (?:reason|thesis|idea|story)\b|\b(?:check|verify|fact[- ]?check) (?:my |the )?(?:reason|thesis|claim|story|news)"
+    r"|\bis (?:the|that|this) news (?:true|real|right)|\bam i right about\b"
+    r"|我的(?:理由|逻辑|判断)(?:对|成立|靠谱)|核实(?:一下)?(?:我的)?(?:理由|逻辑|新闻)|新闻是真的吗",
+    re.I,
+)
+
+_WORD_EN = {"supported": "In the news", "contradicted": "The news says otherwise", "not_found": "Not in our feeds", "related": "Related headlines"}
+_WORD_ZH = {"supported": "新闻中有", "contradicted": "新闻说法相反", "not_found": "数据源中没有", "related": "相关标题"}
+
+
+def reply_text(got: dict[str, Any] | None, lang: str = "en") -> str:
+    """The check as a chat answer. Every quote is a stored headline, as on the report."""
+    zh = lang == "zh"
+    if got is None or got.get("state") == "no_thesis":
+        return ("这笔交易没有写理由。告诉我你为什么做，例如“因为……，如果收盘跌破……就算错”，我会把理由和新闻对照。" if zh else
+                'This trade has no written reason to check. Tell me why you want it - e.g. "because ..., wrong if it closes below ..." - and I will hold it against the news.')
+    if got["state"] == "no_items":
+        return (f"本报告之前 {got['window_days']} 天内，我们的数据源中没有 {got['ticker']} 的新闻或公告，无从对照你的理由。" if zh else
+                f"There are no {got['ticker']} headlines or filings in our feeds in the {got['window_days']} days before this report, so there is nothing to check your reason against.")
+    if not got["claims"]:
+        return "你的理由没有可由新闻证实的事实陈述（更像观点而非报道）。" if zh else "Your reason makes no claim a headline could confirm; it reads as a view, not a report."
+    words = _WORD_ZH if zh else _WORD_EN
+    lines = [f"你的理由与过去 {got['window_days']} 天 {got['ticker']} 新闻和公告的对照：" if zh else
+             f"Your reason against {got['window_days']} days of {got['ticker']} headlines and filings:"]
+    for c in got["claims"]:
+        ev = "; ".join(f"{e['title']} ({e['source']}, {e['published_at'][:10]})" for e in c["evidence"])
+        lines.append(f"- {words[c['status']]}：“{c['claim']}”" + (f" —— {ev}" if ev else "") if zh else
+                     f"- {words[c['status']]}: \"{c['claim']}\"" + (f" - {ev}" if ev else ""))
+    lines.append("“数据源中没有”表示我们没看到，不代表它是假的。" if zh else "\"Not in our feeds\" means we did not see it, not that it is false.")
+    return "\n".join(lines)
