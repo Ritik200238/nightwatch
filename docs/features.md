@@ -80,7 +80,7 @@ On top of that:
   the report with how often history put the trade there; pick hold / cut half / exit / hedge per line in
   advance. Saving arms a tripwire on each line, and the alert repeats "You decided in advance: cut half".
   Own table, own timestamp, outside the receipt chain.
-* **Telegram: @<bot handle, set by the owner>**: the desk in a chat. The message goes through the
+* **Telegram bot** (ships in the repo; no public handle, enabled by setting `TELEGRAM_BOT_TOKEN`): the desk in a chat. The message goes through the
   same conversation code as the web chat (so missing token, side or size is asked for the same way,
   and "halve it", "short instead", "what about 5x" use the same follow-up and what-if routing), and a
   finished report comes back as a short plain-text message: verdict and size, one-in-twenty loss,
@@ -139,7 +139,7 @@ It reads the other way too: every analysis pulls Bitget's own US-stock data (`bi
 
 ## Numbers
 
-The figures in the narrative below were written between 26 Sep and 3 Oct 2026 and some predate the latest run. As of 3 Oct 2026 the live page reads: 2,779 matured forecasts; raw 5th-percentile breach rate 7.5% (red band); with tail factors fitted only on earlier forecasts, 4.8% on 2,735 evaluated (green band, 95% interval 4.1% to 5.7%).
+The figures in the narrative below were written between 26 Sep and 3 Oct 2026 and some predate the latest run. As of 4 Oct 2026 the live page reads: 2,796 matured forecasts; raw 5th-percentile breach rate 7.4% (red band); with tail factors fitted only on earlier forecasts, 4.8% on 2,752 evaluated (green band, 95% interval 4.1% to 5.7%). It recomputes live, so these move.
 
 ## Findings
 
@@ -183,7 +183,7 @@ each recomputed from the stored bars and the journal by `nightwatch studies`. Fi
 back no, three could not be decided (numbers below are the 26 Sep run; the page recomputes
 them, so a last digit can move), and the most useful are the ones that cost us something.
 
-Asking eleven questions makes a lucky "yes" likely, so the page also corrects for it
+Asking nine testable questions at once (of the eleven studies) makes a lucky "yes" likely, so the page also corrects for it
 (Benjamini–Hochberg, 5% false discovery rate, over the nine that are real hypothesis
 tests). **Only one of the three "yes" answers survives**: a model reading an SEC filing
 does pick the ones that move the price (q = 0.004). "The analogs beat random hours" and
@@ -211,7 +211,7 @@ which moments are strange. It is not shipped.
 
 ### What the tokens do while the US market is shut
 
-A measurement on the same page, outside the eleven tests and their correction. It answers
+A measurement on the same page, outside the nine tests and their correction. It answers
 two claims you hear about rTokens with the arithmetic (24 tokens, bars from January 2025,
 95% intervals from a week-block bootstrap, 3 Oct run; the page and
 `nightwatch/journal/closed_hours.json` are current):

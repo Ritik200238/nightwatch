@@ -315,7 +315,7 @@ Reproduce: `nightwatch filings --core`, then `GET /sources`.
 Everything above measures the *forecasts*. This measures the thing that makes them.
 Eleven questions, each written so it could come back no, each recomputed from the stored
 bars and the journal by `nightwatch studies` and served at `/studies`. Five came back no,
-three unclear, three yes - of which one survives correcting for asking eleven questions
+three unclear, three yes - of which one survives correcting for the nine formal tests asked together
 (Benjamini–Hochberg at a 5% false discovery rate, over the nine that are hypothesis
 tests; `nightwatch/journal/fdr.py`): the filing read, q = 0.004. The analogs-beat-random
 and narrowing results fall to q = 0.095. Numbers here are the 26 Sep run; `/studies` recomputes them, so
@@ -417,7 +417,7 @@ matured forecasts: analogs ahead by **+0.0153**. Clustered by token, t = +2.15 o
 tokens. Block-bootstrapped by week over 26 weeks, 95% interval **[+0.0011, +0.0303]** —
 excludes zero, but only just. A real edge at the edge of detectability. The naive t of
 +2.09 across 2,325 overlapping forecasts would have overstated it. And it does not survive
-correcting for the eleven questions asked together (p = 0.042 on its own, q = 0.095):
+correcting for the nine formal tests asked together (p = 0.042 on its own, q = 0.095):
 read it as suggestive.
 
 ### 13.7 A token is not obviously best explained by its own past — verdict: unclear
@@ -433,7 +433,7 @@ about 12% of retrieved matches come from the token being asked about.
 
 Two claims circulate about rTokens: that most of their movement happens in closed hours,
 and that Monday lands closer to the weekend than to Friday. Both are easy to say, so this
-measures them. It is a measurement, not one of the eleven tests, and it is outside the
+measures them. It is a measurement, not one of the nine tests, and it is outside the
 false-discovery correction; it is served as `closed_hours` on `/studies`, computed by
 `research/closed_hours.py` (read-only against the live database) into
 `nightwatch/journal/closed_hours.json`. The module docstring in
