@@ -14,12 +14,10 @@ def test_every_failure_mode_carries_a_cost_a_cause_and_how_often(seeded_store): 
     assert modes, "a report with stress presets should have at least one way to lose"
     for m in modes:
         assert m.trigger and m.mechanism and m.likelihood and m.source and m.short
-    # Ranked by expected loss where the chance was measured, then the rest by size, so the
-    # brief and the panel lead with what is both likely and costly.
-    known = [m.chance * m.loss_quote for m in modes if m.chance is not None and m.loss_quote is not None]
-    assert known == sorted(known)
-    first_unknown = next((i for i, m in enumerate(modes) if m.chance is None), len(modes))
-    assert all(m.chance is None for m in modes[first_unknown:])
+    # Largest loss first: the list is headed "worst first", so the first card is the worst one.
+    losses = [m.loss_quote for m in modes if m.loss_quote is not None]
+    assert losses == sorted(losses)
+    assert modes[0].loss_quote == min(losses)
 
 
 def test_a_stop_a_gap_can_jump_is_named(seeded_store):  # noqa: F811
