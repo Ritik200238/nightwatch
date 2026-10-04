@@ -997,6 +997,27 @@ export interface LeverageView {
   presets_hit: string[];
   mc_share: number | null;
   notes: string[];
+  /** The same position at other leverage levels, lowest first; empty without a perpetual. */
+  ladder?: LadderRung[];
+  /** The highest level the gate calls clear on this evidence, or null when none is. */
+  safest_leverage?: number | null;
+  /** Margin needed to move from the requested level to it; null when already that safe. */
+  safest_extra_margin_quote?: number | null;
+}
+
+export interface LadderRung {
+  leverage: number;
+  requested: boolean;
+  liquidation_price: number | null;
+  distance_pct: number | null;
+  /** Notional / leverage: what holding the same size asks for at this level. */
+  margin_quote: number;
+  analog_hits: number | null;
+  analog_of: number | null;
+  /** Whether the calibrated 1-in-20 loss reaches the liquidation price. */
+  p5_reaches: boolean | null;
+  presets_hit: string[];
+  gate: "GO" | "REVIEW_REQUIRED" | "NO_GO";
 }
 
 export interface Report {
