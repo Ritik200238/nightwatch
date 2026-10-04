@@ -148,6 +148,26 @@ class Store:
     def close(self) -> None:
         self._conn.close()
 
+    def snapshot_lag_seconds(self) -> float:
+        """How far this store's shared connection lags the file on disk.
+
+        The connection runs in autocommit mode, so a read transaction lasts exactly as long
+        as some statement on it is still open. A cursor that is never finished keeps one
+        open, and from then on every query through this connection reads the database as
+        it was at that moment: the API served a frozen order book for four hours this way
+        while the recorder kept writing. A fresh read-only connection sees the real file,
+        so the difference between the two newest order-book times is the lag."""
+        shared = self._conn.execute("SELECT MAX(ts) FROM orderbook_snapshots").fetchone()[0]
+        fresh_conn = sqlite3.connect(f"file:{self.path.as_posix()}?mode=ro", uri=True, timeout=5)
+        try:
+            fresh = fresh_conn.execute("SELECT MAX(ts) FROM orderbook_snapshots").fetchone()[0]
+        finally:
+            fresh_conn.close()
+        if not shared or not fresh:
+            return 0.0
+        return max(0.0, (fresh - shared) / 1000.0)
+
+
     def __enter__(self) -> Store:
         return self
 
@@ -599,3 +619,17 @@ class Store:
     @staticmethod
     def expected_bar_count(start: datetime, end: datetime, interval: Interval) -> int:
         return max(0, int((ensure_utc(end) - ensure_utc(start)) / timedelta(seconds=interval.seconds)))
+
+
+def open_cursor_report(limit: int = 5) -> list[str]:
+    """Which objects hold an unfinished cursor, for the log when the snapshot is stuck."""
+    import gc
+
+    out: list[str] = []
+    for obj in gc.get_objects():
+        if isinstance(obj, sqlite3.Cursor):
+            holders = [type(r).__name__ for r in gc.get_referrers(obj) if r is not out][:4]
+            out.append(f"cursor {obj!r} held by {holders}")
+            if len(out) >= limit:
+                break
+    return out

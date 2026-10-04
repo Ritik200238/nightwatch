@@ -44,6 +44,8 @@ from nightwatch.time_utils import UTC, utc_now
 
 log = logging.getLogger(__name__)
 
+# Past this, the API's read snapshot is stuck behind the recorder (see Store.snapshot_lag_seconds).
+STALE_SNAPSHOT_S = 600.0
 # How often the idle API re-reads its cached frames so they are not swapped out.
 TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
@@ -585,11 +587,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         return app.state.nw
 
     @app.get("/health")
-    def health() -> dict[str, Any]:
+    def health() -> Any:
         from nightwatch.api.providers import describe as describe_llm
 
         s = st()
         c = s.store._conn
+        # A stuck read snapshot answers every request with old data and slows down as the
+        # WAL grows behind it. Unhealthy is the honest answer: Docker marks the container,
+        # and deploy/heal.sh restarts it within minutes instead of hours.
+        lag = s.store.snapshot_lag_seconds()
+        if lag > STALE_SNAPSHOT_S:
+            from nightwatch.data.store import open_cursor_report
+
+            log.error("API read snapshot is %.0f s behind the database; open cursors: %s", lag, open_cursor_report())
+            return JSONResponse({"ok": False, "detail": f"read snapshot {lag:.0f} s behind the database"}, status_code=503)
         bars = c.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
         ob = c.execute("SELECT COUNT(*), MAX(ts) FROM orderbook_snapshots").fetchone()
         last_book = datetime.fromtimestamp(ob[1] / 1000, tz=UTC).isoformat() if ob[1] else None
