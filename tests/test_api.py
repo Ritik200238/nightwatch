@@ -287,3 +287,17 @@ def test_closed_hours_for_one_token_quotes_only_what_was_measured(client):
     assert r["numbers"]["n_windows"] > 100
     none = client.get("/closed-hours/ZZZZ").json()
     assert none["line"] is None and none["numbers"] is None
+
+
+def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
+    monkeypatch.setattr("nightwatch.api.providers.select", lambda *a, **k: None)  # keyword check, no model
+    first = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20000 TSLA overnight because deliveries beat, wrong if it closes below 200"}]}).json()
+    fid = first["report"]["forecast_id"]
+    assert first["report"]["ticket"]["thesis"]
+    got = client.get(f"/thesis-check/{fid}").json()
+    assert got["state"] in ("checked", "no_items") and got["ticker"] == "TSLA"
+    asked = client.post("/chat", json={"messages": [{"role": "user", "content": "is my reason right?"}], "context_forecast_id": fid}).json()
+    assert asked["answer_kind"] == "thesis" and asked["report"] is None
+    assert "TSLA" in asked["reply"]
+    assert client.get("/thesis-check/987654").status_code == 404

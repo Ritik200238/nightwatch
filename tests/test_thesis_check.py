@@ -117,3 +117,25 @@ def test_notes_do_not_show_internal_ids():
     assert tc._plain_note("N2 states Nvidia broke through; both N1 and F3 agree.", False) == "The headline states Nvidia broke through; both the headline and the filing agree."
     assert tc._plain_note("Headline N3 reports record highs", False) == "The headline reports record highs"
     assert tc._plain_note("N8标题明确指出", True) == "该新闻明确指出"
+
+
+def test_the_chat_questions_that_ask_for_it():
+    for q in ("is my reason right?", "Check my thesis", "fact check the news", "is that news true?", "我的理由对吗", "核实一下新闻"):
+        assert tc.ASKS.search(q), q
+    for q in ("what if it gaps down 10%?", "halve it", "why?", "what's the safest way to hold it?"):
+        assert not tc.ASKS.search(q), q
+
+
+def test_the_chat_reply_quotes_stored_headlines_and_says_not_found_is_not_false(tmp_path):
+    store = _store(tmp_path)
+
+    def parse(system, user):
+        return tc._Out(claims=[tc._ClaimOut(claim="Nvidia hit record highs", status="supported", evidence=["N1"]),
+                               tc._ClaimOut(claim="AI demand is strong", status="not_found")])
+
+    got = tc.check(store._conn, ticker="NVDA", thesis="Nvidia hit record highs, AI demand is strong", as_of=AS_OF, parse=parse).to_dict()
+    text = tc.reply_text(got)
+    assert '- In the news: "Nvidia hit record highs" - Nvidia breaks through to new record highs (cnbc_top, 2026-10-02)' in text
+    assert '- Not in our feeds: "AI demand is strong"' in text and "not that it is false" in text
+    assert "no written reason" in tc.reply_text(None)
+    assert "新闻中有" in tc.reply_text(got, "zh")
