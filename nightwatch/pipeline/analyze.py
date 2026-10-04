@@ -620,6 +620,8 @@ class AnalysisReport:
     # "Over the weekend" asked early in the week: holding from now is a trade longer than
     # any scored one, so what past Friday-close-to-Monday weekends did is shown beside it.
     weekend_only: dict | None = None
+    # US regular sessions around the hold, for the market-clock strip (nightwatch.decision.timeline).
+    timeline: dict | None = None
     # The journal receipt for this verdict: chained to every one before it (see journal.receipts).
     receipt: str | None = None
 
@@ -963,6 +965,12 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         log.exception("assumptions / failure modes failed")
 
     report.weekend_only = _weekend_only(ticket, horizon_h, frame, as_of)
+    try:
+        from nightwatch.decision.timeline import build as build_timeline
+
+        report.timeline = build_timeline(as_of, horizon_h)
+    except Exception:  # noqa: BLE001 - a clock strip must never break a verdict
+        log.exception("timeline failed")
 
     if ctx.journal is not None and record:
         try:
