@@ -945,6 +945,42 @@ export interface SignalView {
   macd: { macd: number; signal: number; histogram: number; cross: string | null } | null;
 }
 
+/** One dividend, split or exchange notice, with the source it came from. */
+export interface CorporateEvent {
+  kind: "dividend" | "split" | "suspension" | "notice";
+  /** Ex-date / effective date, US Eastern calendar date (YYYY-MM-DD). */
+  date: string;
+  amount: number | null;
+  currency: string | null;
+  /** new:old, so 1:10 is a reverse split. */
+  ratio: string | null;
+  /** When the issuer or exchange said so, if the source says. */
+  announced: string | null;
+  source: string;
+  source_label: string;
+  detail: string | null;
+  url: string | null;
+  amount_pct_of_price?: number;
+}
+
+/** What the stored calendar knows about dividends, splits and Bitget notices around the
+ *  hold. Point in time; never fetched during an analysis. */
+export interface CorporateEvents {
+  ticker: string;
+  as_of: string;
+  window_end: string;
+  checked_at: string | null;
+  /** False until the calendar has synced once: then "none" would mean "not looked". */
+  covered: boolean;
+  in_hold: CorporateEvent[];
+  next_after: CorporateEvent | null;
+  last_split: CorporateEvent | null;
+  notices: CorporateEvent[];
+  /** Set when something is inside the hold: says rToken handling is not verified. */
+  handling: string | null;
+  sources: string[];
+}
+
 /** Bitget's view of the underlying stock right now. None of it reaches the size. */
 export interface StreetView {
   ticker: string;
@@ -1097,6 +1133,8 @@ export interface Report {
   /** Analysts, insiders, market mood and a live quote for the stock, from Bitget's
    *  US-stock data. Context only; null for past moments and when the service is down. */
   street?: StreetView | null;
+  /** Ex-dividend dates, splits and Bitget notices around the hold, from the stored calendar. */
+  corporate_events?: CorporateEvents | null;
   /** The signal skill's RSI, only when it agrees with our own; null otherwise. Context only. */
   signal?: SignalView | null;
   /** The trader's invalidation read for a testable level and measured; plus a flag when
