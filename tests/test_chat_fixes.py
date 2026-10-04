@@ -299,9 +299,9 @@ def test_shorting_and_buying_are_sides_too(client):
 def test_review_without_an_account_opens_with_what_to_do_and_why(client):
     r = say(client, "long 20000 TSLA overnight")
     first = r["reply"].split("\n")[0]
-    assert first.startswith("Tell the desk your account size") and "At 20,000 USDT a bad night" in first and "Size it at" not in first
+    assert first.startswith("REVIEW: tell the desk your account size") and "At 20,000 USDT a bad night" in first and "Size it at" not in first
     z = say(client, "周末做多特斯拉 2万U")["reply"].split("\n")[0]
-    assert z.startswith("请告诉系统你的账户规模") and "二十分之一的坏夜晚" in z
+    assert z.startswith("需复核（REVIEW）：请告诉系统你的账户规模") and "二十分之一的坏夜晚" in z
     assert say(client, "long 20000 TSLA overnight, account 200k")["reply"].split("\n")[0].startswith(("GO", "REDUCE", "HEDGE", "NO GO", "REVIEW"))
 
 
