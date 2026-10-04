@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -35,13 +36,14 @@ ALIASES: dict[str, str] = {
     "nasdaq": "QQQ", "s&p": "SPY", "sp500": "SPY", "spx": "SPY",
 }
 
-_SCALE = {"k": 1e3, "m": 1e6, "b": 1e9}
+# "2w" is how traders on Chinese-speaking desks write 20,000 (万 = ten thousand).
+_SCALE = {"k": 1e3, "w": 1e4, "m": 1e6, "b": 1e9}
 
 # "short term" is a horizon, not a direction. Same for "shorter" and "short-dated".
-_SHORT = re.compile(r"\bshort(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell\b|\bbearish\b|\bfade\b", re.I)
+_SHORT = re.compile(r"\bshort(?:ing)?(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell(?:ing)?\b|\bbearish\b|\bfade\b", re.I)
 # "hold 20k of TSLA overnight" is a long position; a trader saying it would be surprised
 # to be asked which way round they meant it.
-_LONG = re.compile(r"\blong(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy\b|\bbullish\b|\bhold(?:ing)?\b|\bcarry\b|\bkeep\b", re.I)
+_LONG = re.compile(r"\blong(?:ing)?(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy(?:ing)?\b|\bbullish\b|\bhold(?:ing)?\b|\bcarry\b|\bkeep\b", re.I)
 _STOP = re.compile(r"\bstop(?:[-\s]?loss)?\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 # "stop 3% below", "a 2% stop": a distance, not a price. Read as a price, "stop 1% above"
 # became a stop at 1.00 - 99.9% away, hit by every past moment - on a live test.
@@ -51,8 +53,15 @@ _STOP_PCT = re.compile(
     re.I,
 )
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
-_EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?", re.I)
-_MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmb])?|\b([\d,]+(?:\.\d+)?)\s*([kmb])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
+_EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?", re.I)
+# "I have 100k", "I've got 50k": the money on hand, not a position. Not "I have 20k of TSLA"
+# (a holding) and not "I have 3 ideas" (no scale, under a hundred).
+_HAVE = re.compile(
+    r"\b(?:i|we)(?:\s+(?:only\s+|just\s+)?have|'ve(?:\s+got)?|\s+got)\s+(?:about\s+|around\s+|roughly\s+|like\s+)?\$?([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?"
+    r"(?!\s*%)(?!\s*(?:usdt|usd|u|dollars?)?\s*(?:of|in|worth)\s+(?!my\b|the\b|account\b))",
+    re.I,
+)
+_MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmbw])?|\b([\d,]+(?:\.\d+)?)\s*([kmbw])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
 # "long 20000 TSLA" states a size as plainly as "long 20k TSLA" does. A bare number is
 # read as one only when nothing else has claimed it and it is not a price: "long TSLA at
 # 350" is a level, and nobody sizes a position at fifty dollars.
@@ -72,7 +81,7 @@ _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bse
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
 # "20k margin", "margin of 4000", "with 5k collateral": the money put up, not the position.
-_MARGIN = re.compile(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmb])?\s*(?:usdt\s*)?(?:of\s+)?(?:margin|collateral)\b|\b(?:margin|collateral)\s*(?:of|is|:|=)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmb])?\b", re.I)
+_MARGIN = re.compile(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?\s*(?:usdt\s*)?(?:of\s+)?(?:margin|collateral)\b|\b(?:margin|collateral)\s*(?:of|is|:|=)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?\b", re.I)
 _HEDGE_PCT = re.compile(r"\bhedge\b[^.\d]{0,15}(\d{1,3})\s*%", re.I)
 _HEDGE = re.compile(r"\bhedge\b|\bdelta[-\s]?neutral\b", re.I)
 _THESIS = re.compile(r"\b(?:because|since|thesis\s*:|on the view that|reason\s*:|the idea is)\s+(.+?)(?:[.;!?]|$)", re.I)
@@ -94,7 +103,7 @@ _HOLD_INTRO = re.compile(
 _HELD_SEP = re.compile(r"(?:\s*(?:,|;|&|\band\b|\bplus\b|\balso\b|\bthen\b))*\s*", re.I)
 _HELD_ITEM = re.compile(
     r"(?:(?P<lead>long|short)\s+)?(?:a\s+)?(?:position\s+(?:of|in)\s+)?(?:worth\s+)?"
-    r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmb])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
+    r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmbw])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
     re.I,
 )
 _HELD_NAME = re.compile(r"\$?([A-Za-z][A-Za-z&]{1,11})(?:\s+([A-Za-z]{2,8}))?")
@@ -232,6 +241,17 @@ def hours_until_weekday(weekday: int, which: str = "open", now: datetime | None 
     return None
 
 
+def find_equity(text: str) -> re.Match[str] | None:
+    """The account-size phrase in a message, as a match with number and scale in groups 1 and 2."""
+    got = _EQUITY.search(text)
+    if got:
+        return got
+    for m in _HAVE.finditer(text):
+        if m.group(2) or float(m.group(1).replace(",", "") or 0) >= 100:
+            return m
+    return None
+
+
 def _money(groups: tuple) -> float | None:
     """One match of ``_MONEY`` as a number, applying a k/m/b suffix."""
     for value, scale in ((groups[0], groups[1]), (groups[2], groups[3]), (groups[4], None)):
@@ -300,7 +320,7 @@ def _settle(out: RuleIntent) -> RuleIntent:
 
 # "-5000": a size cannot be negative. The dash must touch the number, so "TSLA - 5000" (a
 # separator) and "stop -3%" (not a size) are left alone.
-_NEG_SIZE = re.compile(r"(?<![\w.%])[-−]\$?(\d[\d,]*(?:\.\d+)?)\s*([kmb])?(?![\w%])", re.I)
+_NEG_SIZE = re.compile(r"(?<![\w.%])[-−]\$?(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?(?![\w%])", re.I)
 _LEVEL_WORD = re.compile(r"(?:stop|target|tp|止损|止盈|目标)\W*$", re.I)
 # The longest hold the history can speak to: past it the window runs out of data.
 MAX_HOLD_HOURS = 720.0
@@ -340,6 +360,8 @@ def _sanitize(out: RuleIntent, text: str, zh: bool) -> None:
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Read one message into a ticket. Nothing is invented; what is absent is asked for."""
     out = RuleIntent()
+    # Full-width digits and letters ("２万Ｕ", "％") read like their ordinary forms.
+    text = unicodedata.normalize("NFKC", text)
     # What is already held is read first and blanked out, so it cannot be mistaken for the trade.
     held: list[tuple[str, str, float]] = []
     if _CJK.search(text):
@@ -362,7 +384,7 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
 
     stop_pct = _STOP_PCT.search(text)
     stop = None if stop_pct else _STOP.search(text)
-    target, equity = _TARGET.search(text), _EQUITY.search(text)
+    target, equity = _TARGET.search(text), find_equity(text)
     out.stop_price = float(stop.group(1).replace(",", "")) if stop else None
     if stop_pct:
         out.stop_pct = float(stop_pct.group(1) or stop_pct.group(3))
@@ -383,6 +405,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     for m in _MONEY.finditer(text):
         if any(s <= m.start() < e for s, e in spent):
             continue
+        if (m.group(4) or "").lower() == "w" and re.search(r"\b(?:for|hold|over|next|in|within)\s*$", text[: m.start()], re.I):
+            continue  # "for 2w" is a duration
         value = _money(m.groups())
         if value is not None and value != out.account_equity_quote:
             out.notional_quote = value
@@ -762,6 +786,28 @@ def _at_rec(m: dict, zh: bool = False) -> str:
     return f"（按建议仓位：约 {abs(q):,.0f} USDT）" if zh else f" (at the recommended size: about {abs(q):,.0f} USDT)"
 
 
+def _needs_account_head(report: Any, head: str, zh: bool) -> str:  # noqa: ANN401
+    """A REVIEW that is only waiting for the account size, as one plain sentence: what to do,
+    and why, with the loss at the size asked and what the live book supports. The verdict and
+    the numbers are the report's; only the wording of the first line changes."""
+    v, t = report.verdict, report.ticket
+    if v.verdict.value != "REVIEW" or t.account_equity_quote:
+        return head
+    horizon = report.analog.horizons.get(report.primary_horizon) if report.analog else None
+    p5 = horizon.loss_p5_pct if horizon is not None else None
+    if p5 is None or p5 >= 0:
+        return head
+    bad = abs(p5) / 100.0 * t.notional_quote
+    book = v.recommended_notional if v.recommended_notional is not None and 1 <= v.recommended_notional < t.notional_quote - 1 else None
+    stop = "" if t.stop_price or t.stop_offset_pct else ("（有止损的话也请加上）" if zh else " (and add a stop if you can)")
+    if zh:
+        tail = f"，而当前盘口只能承接 {book:,.0f} USDT" if book is not None else ""
+        return f"请告诉系统你的账户规模{stop}，才能完成检查。按 {t.notional_quote:,.0f} USDT 计，二十分之一的坏夜晚约亏 {bad:,.0f} USDT{tail}。"
+    tail = f", and the live order book supports only {book:,.0f} USDT" if book is not None else ""
+    return (f"Tell the desk your account size{stop} to finish the checks. At {t.notional_quote:,.0f} USDT a bad night, one in twenty, "
+            f"loses about {bad:,.0f} USDT{tail}.")
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -788,6 +834,7 @@ def brief(report: Any, lang: str = "en") -> str:
             head += " 目前没有任何仓位能通过限制。" if zh else " No size passes the limits right now."
     elif v.recommended_notional is not None and abs(v.recommended_notional - t.notional_quote) > 1:
         head += f" 建议仓位改为 {v.recommended_notional:,.0f}。" if zh else f" Size it at {v.recommended_notional:,.0f} instead."
+    head = _needs_account_head(report, head, zh)
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."
     lines.append(head)
@@ -950,7 +997,7 @@ def brief(report: Any, lang: str = "en") -> str:
         repeats = bool(priced) and against.startswith(name)
         if not repeats and not zh:
             lines.append("Case against: " + against)
-    equity_missing = any(r.rule == "position_size" and r.decision.value != "GO" and "equity" in r.reason for r in report.gate.rules)
+    equity_missing = getattr(report.ticket, "account_equity_quote", None) is None and any(r.rule == "position_size" and r.decision.value != "GO" for r in report.gate.rules)
     if equity_missing:
         if zh:
             lines.append("要给出明确结论，请告诉我你的账户规模——例如“账户 20万U”——我会据此判断仓位是否过大。")
@@ -1040,17 +1087,31 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     """
     import json
 
+    from nightwatch.api import desk_help
     from nightwatch.pipeline.analyze import analyze
     from nightwatch.pipeline.render import render_text
 
     tickers = list(state.ctx.tickers_with_data())
     intent = read_conversation(messages, tickers, account_equity)
+    latest = next((m["content"] for m in reversed(messages) if m.get("role") == "user" and (m.get("content") or "").strip()), "")
+    lang = language_of(latest)
+    # A token, a side and an account but no size: the desk runs the largest size it allows
+    # and says so, rather than sending the trader back to type one.
+    assumed = None
+    got = desk_help.with_assumed_size(state, intent, tickers, account_equity, latest, lang)
+    if got:
+        intent, assumed = got
     result: dict[str, Any] = {
         "intent": intent.as_dict(), "ticket": None, "report": None, "narrative": None,
         "report_text": None, "unverified_numbers": [], "mode": "rules",
     }
+    if assumed:
+        result["size_assumed"] = assumed
     if intent.kind != "analyze":
         result["reply"] = intent.reply
+        if "ticker" in intent.missing_fields and not intent.negative_size:
+            # Not a dead end: say which tokens are covered.
+            result["reply"] = desk_help.no_token_reply(intent, tickers, latest, lang) or f"{intent.reply} {desk_help.covered_list(tickers, lang)}"
         return result
     if (intent.ticker or "").upper() not in {t.upper() for t in tickers}:
         result["intent"]["kind"] = "clarify"
@@ -1067,7 +1128,9 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.prefetch_take(report.forecast_id, payload, language_of(messages[-1].get("content", "") if messages else ""))
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
-    narrative = brief_short(report, language_of(messages[-1].get("content", "") if messages else ""))
+    narrative = brief_short(report, lang)
+    if assumed:
+        narrative = assumed["note"] + "\n\n" + narrative
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,

@@ -1344,7 +1344,15 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 return booked
         # "Compare to SPY", "short it instead": the trade on screen, changed, not a new one.
         carried = bool(context and latest and converse.carries_the_trade(latest, context, tickers_now))
-        if context and latest and (carried or (followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, tickers_now))):
+        # "my account is 100k", said about the trade on screen: the same trade, judged against
+        # that account. It names no token, side or size of its own, so it is not a new idea.
+        said_account = False
+        if context and latest:
+            from nightwatch.api import intake as _intake
+
+            said = _intake.parse_message(latest, tickers_now)
+            said_account = bool(said.account_equity_quote and not said.ticker and not said.notional_quote)
+        if context and latest and (carried or said_account or (followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, tickers_now))):
             # "What if I held it twelve hours", "was it worse on earnings nights". The
             # report on screen cannot answer those - they are a different report - so the
             # desk runs one. The model names what changed and the engine does the rest.

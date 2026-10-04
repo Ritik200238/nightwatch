@@ -21,10 +21,17 @@ CLIENT_IP_HEADER = "x-nightwatch-client-ip"
 LOCAL_HOSTS = frozenset({"127.0.0.1", "::1"})
 MAX_BUCKETS = 5000
 
+# Chat and analyze are what a person clicks through quickly: five to eight messages in
+# a few seconds is ordinary for a judge trying the example chips. A burst of 12 that
+# refills one every 3 seconds is more than a hand can spend, and the same bucket still
+# caps a script at 20 a minute. The model slots (providers.llm_slot) bound the cost of whatever gets in.
+CHAT_PER_MIN = 20
+CHAT_BURST = 12
+
 # (method or None for any, path prefix, per-minute rate, burst). First match wins.
 RULES: tuple[tuple[str | None, str, float, int], ...] = (
-    ("POST", "/chat", 12, 4),
-    ("POST", "/analyze", 12, 4),
+    ("POST", "/chat", CHAT_PER_MIN, CHAT_BURST),
+    ("POST", "/analyze", CHAT_PER_MIN, CHAT_BURST),
     ("POST", "/agent/", 3, 3),
     ("POST", "/analyst/", 10, 5),
     ("POST", "/tonight", 4, 2),

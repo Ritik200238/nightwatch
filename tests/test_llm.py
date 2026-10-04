@@ -75,7 +75,7 @@ def test_missing_fields_ask_instead_of_analysing(state):
 def test_unknown_ticker_is_refused_with_the_available_list(state):
     intent = ParsedIntent(kind="analyze", ticker="DOGE", side="long", notional_quote=1000.0, reply="ok")
     out = chat_turn(state, [{"role": "user", "content": "long 1k DOGE"}], client=FakeClient(intent))
-    assert "not in the tokenized-stock universe" in out["reply"] and out["intent"]["kind"] == "clarify"
+    assert "DOGE isn't a token I cover" in out["reply"] and "I cover: " in out["reply"] and out["intent"]["kind"] == "clarify"
     assert out["report"] is None
 
 

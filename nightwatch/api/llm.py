@@ -276,6 +276,22 @@ def unverified_numbers(narrative: str, report_text: str) -> list[str]:
     return out
 
 
+def _rules_win(intent: ParsedIntent, rules: Any) -> ParsedIntent:  # noqa: ANN401
+    """Where the rules read a field out of a Chinese message, their reading stands.
+
+    The model has read "2万U" as "2 U" and asked which ticker; "万" is ten thousand and
+    the rules know it exactly. Whatever they found overrides the model's reading, and
+    when that completes the ticket the model's "please clarify" is dropped.
+    """
+    update = {k: getattr(rules, k) for k in ("ticker", "side", "notional_quote", "account_equity_quote") if getattr(rules, k)}
+    if update:
+        intent = intent.model_copy(update=update)
+    if rules.ticker and rules.side and rules.notional_quote:
+        intent = intent.model_copy(update={"kind": "analyze", "missing_fields": []})
+    return intent
+
+
+
 def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None, client: Any = None, provider: Provider | None = None) -> dict[str, Any]:  # noqa: ANN401
     """One conversational turn.
 
@@ -302,6 +318,21 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             "intent": {**rules.as_dict(), "reply": reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
             "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": reply, "parsed_by": "rules", "language": lang,
         }
+    # A token, a side and an account but no size: run the largest size the desk allows on
+    # that account and say so, instead of sending the trader back to type one.
+    from nightwatch.api import desk_help
+
+    assumed = None
+    got = desk_help.with_assumed_size(state, rules, tickers, account_equity, latest, lang)
+    if got:
+        rules, assumed = got
+    elif (reply := desk_help.no_token_reply(rules, tickers, latest, lang)):
+        # A token the desk does not cover, or "should I buy?" with nothing named: say what the
+        # desk can do and which tokens it covers, without a model call.
+        return {
+            "intent": {**rules.as_dict(), "reply": reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
+            "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": reply, "parsed_by": "rules", "language": lang,
+        }
     fast = rules.kind == "analyze" and (rules.ticker or "").upper() in tickers and not intake.needs_the_model(latest)
     if lang == "zh" and not fast and rules.ticker and rules.missing_fields and not intake.needs_the_model(latest):
         # A Chinese message that named a stock but not the rest: the question to ask is
@@ -319,6 +350,8 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         result: dict[str, Any] = {"intent": rules.as_dict(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
     else:
         intent = parse_intent(provider, messages, tickers, account_equity)
+        if lang == "zh":
+            intent = _rules_win(intent, rules)
         parsed_by = provider.name
         result = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
         if intent.kind != "analyze" or intent.missing_fields or not intent.ticker or not intent.notional_quote:
@@ -400,4 +433,6 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         "written_by": wrote,
         "language": lang,
     })
+    if assumed:
+        result["size_assumed"] = assumed
     return result

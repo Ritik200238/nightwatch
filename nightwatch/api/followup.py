@@ -628,8 +628,11 @@ def _a_decide(r: dict, _q: str) -> Answer | None:
         return None
     t = _ticket(r)
     p5, loss = _loss_at_size(r)
-    bits = [f"The desk's answer is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}"
+    mine = f"On your {t.get('side')} {_usd(t.get('notional_quote'))} {t.get('ticker')}, " if t.get("ticker") and t.get("notional_quote") else ""
+    bits = [f"{mine}the desk's answer is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}"
             + (f", at {_usd(v.get('recommended_notional'))}" if v.get("recommended_notional") is not None and v["verdict"] == "REDUCE_TO" else "") + "."]
+    if v["verdict"] in ("GO", "HEDGE") and v.get("recommended_notional"):
+        bits.append(f"The most it allows is {_usd(v['recommended_notional'])}.")
     if loss is not None:
         bits.append(f"If you do it at {_usd(t.get('notional_quote'))}, one time in twenty history says it loses more than {_usd(-loss)} ({_pct(p5)}).")
     bits.append("Whether the stock goes up is not something it can tell you: on thousands of scored forecasts it has no edge on direction, "
@@ -655,7 +658,7 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
                     + (f", which on your size is about {_usd(-loss)}." if loss is not None else "."))
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:
-        bits.append(f"The way this most likely hurts: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])}.")
+        bits.append(f"The way this costs the most: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])}.")
     q = (r.get("execution") or {}).get("exit_quote") or {}
     if q.get("total_cost_bps") is not None:
         bits.append(f"Selling it again right now would cost about {_bps(q['total_cost_bps'])} ({_usd(q.get('total_cost_quote'))}) on Bitget's live order book.")
