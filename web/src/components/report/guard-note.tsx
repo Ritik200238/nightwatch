@@ -1,6 +1,7 @@
 /** Says how many sentences the number guard dropped from a model's take, and why. */
 export function guardText(n: number, lang: "en" | "zh"): string {
-  return lang === "zh" ? `护栏删除了 ${n} 句无依据的话` : `Guard removed ${n} unsupported sentence${n === 1 ? "" : "s"}`;
+  // Calm wording: this is the check doing its job, not the analyst failing.
+  return lang === "zh" ? `已与报告核对：略去了 ${n} 句数字无依据的话` : `Checked against the report: ${n} sentence${n === 1 ? "" : "s"} with unsupported numbers left out`;
 }
 
 export function GuardNote({ n, lang, className = "mt-2 text-[13px] text-muted-foreground" }: { n: number; lang: "en" | "zh"; className?: string }) {

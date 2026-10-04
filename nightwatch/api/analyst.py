@@ -24,6 +24,7 @@ import logging
 import re
 import threading
 import time
+import unicodedata
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
@@ -61,24 +62,41 @@ SYSTEM_EN = (
     "random hours, and then say it neutrally (for example 'history shows no clear edge over random hours'), never "
     "dismissively. When you quote how often a past moment went the position's way, quote the typical outcome next to it, "
     "because a win rate alone can mislead. Where the sample is small or the edge check is weak, say the evidence is thin. "
-    "Under 'What would change my mind' write exactly one sentence naming a condition tied to a number on the sheet.\n"
+    "Under 'What would change my mind' write exactly one sentence naming a concrete condition that could really happen and "
+    "would really change the verdict or the size: a number on the sheet moving past a level other than zero, or a missing input "
+    "(account size, a stop, an invalidation level) being supplied. Never use a threshold of zero.\n"
+    "PLAIN WORDS: write for a trader who has not read the desk's papers. Do not use unexplained jargon such as 'liquidity gap', "
+    "'basis', 'tail', 'drawdown' or 'p5'. Name the main risk as the item on the sheet's [failure mode] line, which is the "
+    "largest loss, not a different one. Where the sheet says 'about flat', write 'about flat'; never write '-0.0%' or '+0.0%'. "
+    "Where the sheet says no account size was given, say 'no account size was given'; never write 'unstated equity' or make a "
+    "condition depend on an account size you were not given. Never write a [section] tag anywhere except directly after a number.\n"
     "Do not change the desk's verdict or size; 'reconcile' must restate them. Where the sheet lists computed relations, "
     "use them as given and do not infer your own comparisons between numbers. Never tell the trader what to do; they decide."
 )
 SYSTEM_ZH = SYSTEM_EN.replace(_HEADINGS_EN, _HEADINGS_ZH).replace("these exact headings", "these exact Chinese headings") + (
     " Write for, against, reconcile and take in Simplified Chinese, but keep the [section] ids and the verdict word "
-    "exactly as the sheet gives it."
+    "exactly as the sheet gives it. EVERY sentence must be Chinese: translate scenario, crisis and failure-mode names (the sheet "
+    "gives Chinese names where they exist) and never copy English phrases from the sheet. Only the [section] ids, ticker symbols, "
+    "units such as USDT and bps, and the verdict word may stay in English. Write amounts in plain digits (20000, not 2万) and "
+    "percentages with the % sign, exactly as on the sheet."
 )
+_RETRY_ZH = "\n\nThe previous answer was not written in Chinese. Write every sentence of every key in Simplified Chinese this time."
+_RETRY_NUMBERS = "\n\nThe previous answer had several sentences deleted for numbers that were not on the sheet or had no [section] tag. Quote only numbers that are on the sheet, each directly followed by its [section] id."
 # One call, thinking off: measured 2026-09-25 at 6.5-7.5 s for a take with the old prose-only
 # prompt. Enough room for the JSON and its tags, not for the model to ramble.
 MAX_TOKENS = 1100
 
 _NUM = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
-_SENTENCE = re.compile(r"(?<=[.!?。！？])\s+|\n")
+# Chinese sentences end in 。！？ with no space after them, so split there as well; a Chinese
+# paragraph used to count as one sentence, and one bad number deleted all of it.
+_SENTENCE = re.compile(r"(?<=[.!?])\s+|(?<=[。！？；])|\n")
 
 
 def _pct(v: Any, d: int = 1) -> str:  # noqa: ANN401
-    return "n/a" if v is None else f"{v:+.{d}f}%"
+    """A signed percent; a value that rounds to zero is "about flat", never "-0.0%"."""
+    if v is None:
+        return "n/a"
+    return "about flat" if round(v, d) == 0 else f"{v:+.{d}f}%"
 
 
 def _loss_p5(h: dict[str, Any]) -> float | None:
@@ -89,8 +107,13 @@ def _loss_p5(h: dict[str, Any]) -> float | None:
     return h.get("p5_adjusted") if h.get("p5_adjusted") is not None else c.get("p5")
 
 
-def fact_sheet(r: dict[str, Any]) -> str:
-    """The report's decision-relevant facts, compact enough to keep the model quick."""
+def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
+    """The report's decision-relevant facts, compact enough to keep the model quick.
+
+    For ``zh`` the scenario and failure-mode names are the report's Chinese ones, so the model has
+    no English phrase to copy into a Chinese take.
+    """
+    zh = lang == "zh"
     t = r.get("ticket") or {}
     v = r.get("verdict") or {}
     a = r.get("analog") or {}
@@ -103,6 +126,8 @@ def fact_sheet(r: dict[str, Any]) -> str:
         f"[desk] Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
         f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
     ]
+    if not t.get("account_equity_quote"):
+        lines.append("[desk] No account size was given, so the size limits that depend on it were not checked.")
     # The actual reasons, so the take cannot guess one. On a live test it wrote "REVIEW
     # because the regime cap binds, meaning conditions are fragile" when the regime was
     # favourable and the review was for a missing account size.
@@ -126,7 +151,10 @@ def fact_sheet(r: dict[str, Any]) -> str:
                      + (f"; {lev['analog_hits']} of {lev['analog_of']} past moments reached it" if lev.get("analog_of") else "") + ".")
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:
-        lines.append(f"[failure mode] Worst way it loses: {modes[0]['title']} ({modes[0]['mechanism']}), about {modes[0]['loss_quote']:,.0f} USDT; {modes[0]['likelihood']}.")
+        # The largest loss, whatever order the report stored them in.
+        w = min(modes, key=lambda m: m["loss_quote"])
+        title = (w.get("title_zh") if zh else None) or w["title"]
+        lines.append(f"[failure mode] Largest way it loses: {title} ({w['mechanism']}), about {w['loss_quote']:,.0f} USDT; {w['likelihood']}.")
     for pm in r.get("premise") or []:
         lines.append(f"[premise] Premise check: {pm}")
     if c.get("n"):
@@ -156,7 +184,7 @@ def fact_sheet(r: dict[str, Any]) -> str:
     rows = [(p, i) for p, i in zip(st.get("presets") or [], st.get("impacts") or [], strict=False) if i.get("total_pnl_quote") is not None]
     if rows:
         p, i = min(rows, key=lambda x: x[1]["total_pnl_quote"])
-        lines.append(f"[stress] Worst stress test: {p['name']}, {_pct(i.get('total_pct_of_notional'))} of the position, {i['total_pnl_quote']:,.0f} USDT.")
+        lines.append(f"[stress] Worst stress test: {(p.get('name_zh') if zh else None) or p['name']}, {_pct(i.get('total_pct_of_notional'))} of the position, {i['total_pnl_quote']:,.0f} USDT.")
     if (st.get("inputs_summary") or {}).get("earnings_in_window") is False:
         lines.append("[stress] No earnings report falls inside this hold.")
     lines.append(f"[calendar] Next earnings: {earnings_ahead(feats.get('hours_to_earnings'))}. Never quote this as a number of hours when it says no earnings in 30 days.")
@@ -181,7 +209,7 @@ def fact_sheet(r: dict[str, Any]) -> str:
             lines.append(f"[filing] Fresh filing: {f.get('headline')} ({f.get('market_moving')} impact).")
     for w in (r.get("warnings") or [])[:3]:
         lines.append(f"[caveat] Caveat: {w}.")
-    rel = relations(r)
+    rel = relations(r, lang)
     if rel:
         lines.append("[relations] Computed relations (use these; do not work out your own comparisons):")
         lines += [f"[relations] {x}" for x in rel]
@@ -193,7 +221,7 @@ THIN_N = 30  # fewer similar moments than this is a thin sample
 SAME_LEVEL_PCT = 0.25  # stop and invalidation closer than this are one level
 
 
-def relations(r: dict[str, Any]) -> list[str]:
+def relations(r: dict[str, Any], lang: str = "en") -> list[str]:
     """Comparisons between the report's own numbers, worked out here rather than by the model.
 
     On a live test the model read "7 of 40 crossed the invalidation at 360, 4 of 40 hit
@@ -244,7 +272,7 @@ def relations(r: dict[str, Any]) -> list[str]:
     if rows and stop_pct is not None:
         p, i = min(rows, key=lambda x: x[1]["total_pct_of_notional"])
         if abs(i["total_pct_of_notional"]) > abs(stop_pct):
-            out.append(f"The worst stress test ({p['name']}) moves further than the stop: a gap while the market is shut could jump past the stop rather than fill at it.")
+            out.append(f"The worst stress test ({(p.get('name_zh') if lang == 'zh' else None) or p['name']}) moves further than the stop: a gap while the market is shut could jump past the stop rather than fill at it.")
     s = r.get("street") or {}
     live = s.get("token_vs_live_bps")
     if live is not None:
@@ -283,8 +311,34 @@ def strip_unverified(text: str, sheet: str) -> tuple[str, int]:
 
 _SHEET_LINE = re.compile(r"^\[([a-z ]+)\]\s")
 # A tag must sit right behind its number: "12 bps [order book]", "$330 target [street]".
-_TAG_AFTER = re.compile(r"^[^\d\[\]\n]{0,14}?\[([A-Za-z ]+)\]")
-_UNIT_AFTER = re.compile(r"^\s*(?:%|bps|x\b|usdt\b|h\b)", re.I)
+# The tag may be a Chinese name for the section ("[历史]"): the model was told to keep the id and
+# sometimes translates it, so those are mapped back rather than failing a correct number.
+_TAG_AFTER = re.compile(r"^[^\d\[\]\n]{0,14}?\[([A-Za-z 一-鿿]{1,12})\]")
+_UNIT_AFTER = re.compile(r"^\s*(?:%|bps|x\b|usdt\b|h\b|美元|基点|个基点|小时|倍|个百分点|个点)", re.I)
+_MAGNITUDE = re.compile(r"^\s*(万|千|亿)")
+_MAG = {"万": 10_000, "千": 1_000, "亿": 100_000_000}
+_TAG_ALIAS = {
+    "交易台": "desk", "检查": "checks", "市场": "market", "杠杆": "leverage", "失效模式": "failure mode", "故障模式": "failure mode",
+    "亏损方式": "failure mode", "前提": "premise", "历史": "history", "止损": "stop", "计划": "plan", "压力": "stress", "压力测试": "stress",
+    "订单簿": "order book", "盘口": "order book", "市场观点": "street", "华尔街": "street", "文件": "filing", "公告": "filing",
+    "提示": "caveat", "注意": "caveat", "关系": "relations", "日历": "calendar",
+}
+
+
+def _normalise(text: str) -> str:
+    """Full-width digits, percent signs and brackets become their ASCII forms, so a number written
+    the Chinese way is checked the same way as one written the English way."""
+    text = unicodedata.normalize("NFKC", text).replace("【", "[").replace("】", "]").replace("−", "-")
+    return text
+
+
+def _tag_id(raw: str) -> str:
+    raw = raw.strip().lower()
+    return _TAG_ALIAS.get(raw, raw)
+
+
+def _fmt_num(x: float) -> str:
+    return str(int(x)) if float(x).is_integer() else f"{x:.6g}"
 
 
 def sheet_sections(sheet: str) -> dict[str, set[str]]:
@@ -308,20 +362,25 @@ def verify_tagged(text: str, sheet: str) -> tuple[str, int, list[dict[str, str]]
     """
     sections = sheet_sections(sheet)
     kept, removed, cites = [], 0, []
-    for line in text.splitlines():
+    for line in _normalise(text).splitlines():
         good = []
-        for sent in [x for x in _SENTENCE.split(line) if x is not None]:
+        for sent in [x for x in _SENTENCE.split(line) if x]:
             found, ok = [], True
             for m in _NUM.finditer(sent):
                 norm = m.group().replace(",", "").lstrip("+-")
                 rest = sent[m.end():]
+                mag = _MAGNITUDE.match(rest)
+                if mag:
+                    # "2万" is 20000: compare the value, not the digit.
+                    norm = _fmt_num(float(norm) * _MAG[mag.group(1)])
+                    rest = rest[mag.end():]
                 tag = _TAG_AFTER.match(_UNIT_AFTER.sub("", rest, count=1) if _UNIT_AFTER.match(rest) else rest)
                 if tag is None:
-                    if norm.isdigit() and int(norm) <= 5 and not _UNIT_AFTER.match(rest):
+                    if not mag and norm.isdigit() and int(norm) <= 5 and not _UNIT_AFTER.match(rest):
                         continue
                     ok = False
                     break
-                src = tag.group(1).strip().lower()
+                src = _tag_id(tag.group(1))
                 if norm not in sections.get(src, ()):
                     ok = False
                     break
@@ -332,7 +391,7 @@ def verify_tagged(text: str, sheet: str) -> tuple[str, int, list[dict[str, str]]
                 continue
             cites.extend(found)
             good.append(sent)
-        kept.append(" ".join(good).rstrip())
+        kept.append(_join(good))
     seen, uniq = set(), []
     for c in cites:
         k = (c["number"], c["source"])
@@ -340,6 +399,15 @@ def verify_tagged(text: str, sheet: str) -> tuple[str, int, list[dict[str, str]]
             seen.add(k)
             uniq.append(c)
     return "\n".join(kept).strip(), removed, uniq
+
+
+def _join(parts: list[str]) -> str:
+    """Sentences back into a line: a space between English ones, none after Chinese full stops."""
+    out = ""
+    for p in parts:
+        p = p.strip() if out else p
+        out += (p if not out or out[-1] in "。！？；" else " " + p)
+    return out.rstrip()
 
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.S)
@@ -399,6 +467,129 @@ def _reconcile(model_line: str, report: dict[str, Any], sheet: str, lang: str) -
     return _fixed_reconcile(report, lang)
 
 
+# --------------------------------------------------------------------- reading polish
+# The number check proves a figure is on the sheet. It cannot tell a sentence that is true but
+# unreadable from one that helps, so these rules clean what a trader would trip over.
+
+_TAG_ANY = re.compile(r"[ \t]*\[[A-Za-z\u4e00-\u9fff][A-Za-z \u4e00-\u9fff]*\]")
+# A zero printed with a sign or a percent: "-0.0%", "+0.0%", "0.0%". Not "10%" or "0.05%".
+_ZERO_PCT = re.compile(r"(?<![\d.])(?:[-+]0(?:\.0+)?|0\.0+)\s?%(?![\d.])")
+# Sentences that were wrong in a live audit: a condition on an equity nobody gave, and a term the
+# take never defines (and which named the wrong biggest loss).
+_BAD_SENTENCE = re.compile(r"unstated|unknown equity|liquidity gap|exceed(?:s|ed)? your (?:equity|account)|流动性缺口|未说明的(?:权益|资金|账户)", re.I)
+_HEADING_WORDS = {
+    "en": ("the call", "what matters most tonight", "what would change my mind", "what i'd watch"),
+    "zh": ("结论", "今晚最重要的", "什么会改变我的看法", "我会盯着什么"),
+}
+_MIND_NEEDS_SUBSTANCE = re.compile(r"\d|account|stop|invalidation|order book|exit|账户|止损|失效|盘口|平仓|仓位", re.I)
+
+
+def _heading_index(line: str) -> int | None:
+    bare = re.sub(r"^[#*\s]+|[*:：\s]+$", "", line).lower()
+    for words in _HEADING_WORDS.values():
+        if bare in words:
+            return words.index(bare)
+    return None
+
+
+def mind_line(report: dict[str, Any], lang: str = "en") -> str:
+    """A concrete 'what would change my mind', built from the report itself.
+
+    Used when the model's sentence is missing, empty, tied to a threshold of zero or to an input
+    nobody gave. Every condition here is one the engine actually acts on, and every figure is the
+    report's own.
+    """
+    zh = lang == "zh"
+    t = report.get("ticket") or {}
+    v = report.get("verdict") or {}
+    word = _verdict_word(report)
+    bps = (((report.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"))
+    cap = str((report.get("sizing") or {}).get("binding_cap") or "")
+    failed = [x for x in ((report.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
+    if not t.get("account_equity_quote") and word != "GO":
+        return ("如果给出账户规模，本台就能检查与之挂钩的仓位上限，目前的复核结论可能随之改变。" if zh
+                else "If you give the desk your account size, it can check the size limits that depend on it, and the review could clear.")
+    if bps is not None and ("exit" in cap or "liquidity" in cap) and (v.get("recommended_notional") or 0) < (t.get("notional_quote") or 0):
+        return (f"如果盘口上的平仓成本低于 {bps:.0f} 个基点，本台允许的仓位会变大。" if zh
+                else f"If getting out cost less than {bps:.0f} bps on the order book, the size the desk allows would go up.")
+    if failed:
+        rule = failed[0]["rule"].replace("_", " ")
+        return (f"如果「{rule}」这项检查通过，当前的{word}结论可能上调。" if zh
+                else f"If the {rule} check passed, the {word.replace('_', ' ')} verdict could improve.")
+    if bps is not None:
+        return (f"如果盘口上的平仓成本升到 {bps:.0f} 个基点以上，或上面任何一项检查不再通过，这个结论就需要重新评估。" if zh
+                else f"If getting out cost more than {bps:.0f} bps on the order book, or any check above stopped passing, the verdict would need re-checking.")
+    return ("如果上面任何一项检查的结果变化，这个结论就需要重新评估。" if zh
+            else "If the result of any check above changed, the verdict would need re-checking.")
+
+
+def _fix_mind(text: str, report: dict[str, Any], lang: str) -> str:
+    """Make the 'what would change my mind' part a real condition: the model's if it is, the desk's if not."""
+    lines = text.splitlines()
+    idx = [(i, _heading_index(ln)) for i, ln in enumerate(lines)]
+    start = next((i for i, h in idx if h == 2), None)
+    if start is None:
+        return text
+    end = next((i for i, h in idx if h is not None and i > start), len(lines))
+    body = " ".join(x.strip() for x in lines[start + 1:end] if x.strip())
+    plain = _TAG_ANY.sub("", body)
+    ok = bool(plain) and _MIND_NEEDS_SUBSTANCE.search(plain) and not _ZERO_PCT.search(plain) and not _BAD_SENTENCE.search(plain)
+    if ok:
+        return text
+    return "\n".join(lines[:start + 1] + [mind_line(report, lang)] + lines[end:])
+
+
+def polish(text: str, report: dict[str, Any], lang: str = "en") -> str:
+    """Make a checked take readable: a real change-of-mind, no source tags, no signed zero, no known-bad sentences.
+
+    Runs after the number check, so it never lets a number through that the check refused.
+    """
+    if not text:
+        return text
+    text = _fix_mind(text, report, lang)
+    out = []
+    for line in text.splitlines():
+        kept = [p for p in _SENTENCE.split(line) if p and not _BAD_SENTENCE.search(p)]
+        out.append(_join(kept) if kept else "")
+    t = "\n".join(out)
+    t = _TAG_ANY.sub("", t)
+    t = _ZERO_PCT.sub("基本持平" if lang == "zh" else "about flat", t)
+    t = re.sub(r"[ \t]{2,}", " ", t)
+    # A heading left with nothing under it reads as a fault.
+    lines = [ln for ln in t.splitlines()]
+    cleaned = []
+    for i, ln in enumerate(lines):
+        if _heading_index(ln) is not None and ln.strip():
+            nxt = next((x for x in lines[i + 1:] if x.strip()), "")
+            if not nxt or _heading_index(nxt) is not None:
+                continue
+        cleaned.append(ln)
+    return "\n".join(cleaned).strip()
+
+
+def polish_line(text: str, lang: str = "en") -> str:
+    """The same cleaning for a one-part text (the case for, the case against, the reconcile line)."""
+    kept = [p for line in text.splitlines() for p in _SENTENCE.split(line) if p and not _BAD_SENTENCE.search(p)]
+    t = _TAG_ANY.sub("", _join(kept))
+    return re.sub(r"[ \t]{2,}", " ", _ZERO_PCT.sub("基本持平" if lang == "zh" else "about flat", t)).strip()
+
+
+_ASCII_WORD = re.compile(r"[A-Za-z]{2,}")
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+_KEEP_ENGLISH = {"usdt", "bps", "go", "no", "review", "reduce", "hedge", "to", "otc"}
+
+
+def mostly_english(text: str, tickers: tuple[str, ...] = ()) -> bool:
+    """True when text meant to be Chinese is mostly English words (a model that copied the fact sheet)."""
+    plain = _TAG_ANY.sub("", text or "")
+    keep = _KEEP_ENGLISH | {x.lower() for x in tickers}
+    english = sum(len(w) for w in _ASCII_WORD.findall(plain) if w.lower() not in keep)
+    cjk = len(_CJK.findall(plain))
+    if english + cjk < 20:
+        return False
+    return english > cjk * 1.5 if cjk else True
+
+
 @dataclass
 class Take:
     status: str  # "pending" | "done" | "failed" | "unavailable"
@@ -421,29 +612,30 @@ class Take:
         return d
 
 
-def write(provider: Any, report: dict[str, Any], lang: str = "en") -> Take:  # noqa: ANN401
-    """One take, written now. Blocking; the job runner calls it off the request path.
+# More deleted sentences than this and the take is written again; the cleaner of the two is kept.
+REGENERATE_AT = 3
 
-    A single model call returns the debate and the take together as JSON, so there is no
-    second round trip. Every part goes through the same tag-and-number check.
-    """
-    sheet = fact_sheet(report)
+
+def _attempt(provider: Any, report: dict[str, Any], sheet: str, lang: str, extra: str = "") -> Take | None:  # noqa: ANN401
+    """One model call, checked and polished. None when the model returned nothing."""
     t0 = time.time()
-    raw = provider.write(system=SYSTEM_ZH if lang == "zh" else SYSTEM_EN, user=f"FACT SHEET\n\n{sheet}", max_tokens=MAX_TOKENS)
+    raw = provider.write(system=SYSTEM_ZH if lang == "zh" else SYSTEM_EN, user=f"FACT SHEET\n\n{sheet}{extra}", max_tokens=MAX_TOKENS)
     if not raw:
-        return Take(status="failed", lang=lang, seconds=time.time() - t0)
+        return None
     obj = parse_reply(raw)
     model = getattr(provider, "model", "")
     if obj is None:
         # Prose instead of JSON: still a take, checked the same way, with no debate.
         clean, removed, cites = verify_tagged(raw, sheet)
-        return Take(status="done", text=clean, removed=removed, citations=cites, model=model, seconds=round(time.time() - t0, 1), lang=lang)
+        return Take(status="done", text=polish(clean, report, lang), removed=removed, citations=cites, model=model, seconds=round(time.time() - t0, 1), lang=lang)
     removed, cites, parts = 0, [], {}
     for key in ("take", "for", "against"):
         clean, n, c = verify_tagged(_as_text(obj.get(key)).replace("\\n", "\n"), sheet)
         parts[key] = clean
         removed += n
         cites += c
+    parts["take"] = polish(parts["take"], report, lang)
+    parts["for"], parts["against"] = polish_line(parts["for"], lang), polish_line(parts["against"], lang)
     # A side the model could not argue with checked numbers is filled from the desk's own
     # second opinion - rules over the report's fields, so nothing in it needs checking - and
     # says so, rather than showing one side of a debate.
@@ -452,11 +644,48 @@ def write(provider: Any, report: dict[str, Any], lang: str = "en") -> Take:  # n
             points = [c.get("text", "") for c in ((report.get("second_opinion") or {}).get(key) or []) if c.get("text")][:2]
             if points:
                 parts[side] = " ".join(points) + (" （由规则根据报告生成）" if lang == "zh" else " (from the desk's own rules)")
-    reconcile = _reconcile(_as_text(obj.get("reconcile")), report, sheet, lang) if (parts["for"] or parts["against"]) else ""
+    reconcile = polish_line(_reconcile(_as_text(obj.get("reconcile")), report, sheet, lang), lang) if (parts["for"] or parts["against"]) else ""
     seen: set[tuple[str, str]] = set()
     uniq = [c for c in cites if not ((c["number"], c["source"]) in seen or seen.add((c["number"], c["source"])))]
     return Take(status="done", text=parts["take"], removed=removed, citations=uniq, model=model, seconds=round(time.time() - t0, 1), lang=lang,
                 case_for=parts["for"], case_against=parts["against"], reconcile=reconcile)
+
+
+def _all_text(take: Take) -> str:
+    return "\n".join((take.text, take.case_for, take.case_against))
+
+
+def write(provider: Any, report: dict[str, Any], lang: str = "en") -> Take:  # noqa: ANN401
+    """One take, written now. Blocking; the job runner calls it off the request path.
+
+    A single model call returns the debate and the take together as JSON, so there is no
+    second round trip. Every part goes through the same tag-and-number check. Two things
+    send it back for a second try, at most one: a Chinese request answered mostly in English,
+    and a take the number check cut to pieces. The cleaner try is kept; a Chinese take that is
+    still mostly English is reported as not written rather than shown half translated.
+    """
+    sheet = fact_sheet(report, lang)
+    t0 = time.time()
+    ticker = ((report.get("ticket") or {}).get("ticker") or "",)
+    first = _attempt(provider, report, sheet, lang)
+    if first is None:
+        return Take(status="failed", lang=lang, seconds=time.time() - t0)
+    best = first
+    english = lang == "zh" and mostly_english(_all_text(first), ticker)
+    if english or first.removed >= REGENERATE_AT:
+        second = _attempt(provider, report, sheet, lang, _RETRY_ZH if english else _RETRY_NUMBERS)
+        if second is not None:
+            second_english = lang == "zh" and mostly_english(_all_text(second), ticker)
+            if english and second_english:
+                best = second
+            elif english:
+                best = second
+            elif not second_english and second.removed < first.removed:
+                best = second
+    if lang == "zh" and mostly_english(_all_text(best), ticker):
+        return Take(status="failed", lang=lang, seconds=round(time.time() - t0, 1), model=best.model)
+    best.seconds = round(time.time() - t0, 1)
+    return best
 
 
 class AnalystJobs:

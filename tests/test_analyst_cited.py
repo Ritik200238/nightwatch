@@ -63,8 +63,8 @@ def test_the_debate_comes_back_from_one_call_checked_and_cited():
     p = FakeProvider(text=reply)
     take = analyst.write(p, REPORT)
     assert len(p.calls) == 1, "one call for the debate and the take"
-    assert "12%" not in take.case_for and "7.6% [stop]" in take.case_for
-    assert take.case_against.startswith("A bad night") and take.reconcile == "The desk says GO at 20,000 [desk] USDT."
+    assert "12%" not in take.case_for and "7.6%" in take.case_for and "[" not in take.case_for
+    assert take.case_against.startswith("A bad night") and take.reconcile == "The desk says GO at 20,000 USDT."
     assert take.removed == 1
     d = take.to_dict()
     assert d["for"] == take.case_for and d["against"] == take.case_against and "case_for" not in d
@@ -85,7 +85,7 @@ def test_prose_instead_of_json_is_still_a_checked_take_without_a_debate():
 
 def test_a_fenced_json_reply_is_read():
     fenced = "```json\n" + _reply(**{"for": "Typical outcome -1.8% [history]."}) + "\n```"
-    assert analyst.write(FakeProvider(text=fenced), REPORT).case_for == "Typical outcome -1.8% [history]."
+    assert analyst.write(FakeProvider(text=fenced), REPORT).case_for == "Typical outcome -1.8%."
 
 
 def _wait(jobs, key, status="done"):  # noqa: ANN001, ANN202

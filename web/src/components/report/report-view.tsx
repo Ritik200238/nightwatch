@@ -311,7 +311,9 @@ function modeTitle(m: { title: string; title_zh?: string }, lang: Lang): string 
 
 function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
   const L = tr(lang);
-  const modes = report.failure_modes ?? [];
+  // Largest loss first whatever order the server stored: old reports were ranked by chance
+  // times loss, which put a small gap above a bigger crash under a "worst first" heading.
+  const modes = [...(report.failure_modes ?? [])].sort((a, b) => (a.loss_quote ?? Infinity) - (b.loss_quote ?? Infinity));
   if (!modes.length) return null;
   const worst = modes[0];
   const worstLoss = worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : "";
@@ -322,8 +324,8 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
       defaultOpen
       title={L("How this trade loses money", "这笔交易是怎么亏钱的")}
       subtitle={L(
-        "Each way it fails, what sets it off, why it costs what it does, and how often it happened. Worst first.",
-        "每一种失败方式、由什么触发、为什么会亏这么多，以及历史上发生的频率。最坏的排在最前。",
+        "Each way it fails, what sets it off, why it costs what it does, and how often it happened. Biggest loss first.",
+        "每一种失败方式、由什么触发、为什么会亏这么多，以及历史上发生的频率。亏损最大的排在最前。",
       )}
       summary={L(`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worstLoss}`, `${modes.length} 种方式 · 最坏：${modeTitle(worst, lang)}${worstLoss}`)}
     >
@@ -398,7 +400,20 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
   else if (v.verdict === "HEDGE") sizeText = L(`hedge ${fmtRatio(v.hedge_ratio)} of ${fmtUsd(req)} USDT`, `对冲 ${fmtRatio(v.hedge_ratio)} · ${fmtUsd(req)} USDT`);
   const prov = report.provenance?.items;
   const reasonLines = v.reasons.map((r) => plainReason(r, lang));
-  const subhead = reasonLines[0] ?? "";
+  // A REVIEW with no account size is the first answer most people see. One sentence: what to do,
+  // and why, with the loss at the size they asked for. The verdict and the size are unchanged.
+  const hz = report.analog?.horizons?.[report.primary_horizon];
+  const badNightPct = hz?.loss_p5_pct ?? (t.side === "short" ? null : (hz?.p5_adjusted ?? hz?.cohort?.p5 ?? null));
+  const badNight = badNightPct != null && badNightPct < 0 ? Math.abs((badNightPct / 100) * req) : null;
+  const needsAccount = v.verdict === "REVIEW" && !t.account_equity_quote;
+  const bookLimit = smaller && rec != null ? rec : null;
+  const topLine = needsAccount
+    ? L(
+        `Tell the desk your account size${t.stop_price ? "" : " (and add a stop if you can)"} to finish the checks. At ${fmtUsd(req)} USDT a bad night, one in twenty, loses about ${badNight != null ? fmtUsd(badNight) : "—"} USDT${bookLimit != null ? `, and the live order book supports only ${fmtUsd(bookLimit)} USDT` : ""}.`,
+        `请告诉系统你的账户规模${t.stop_price ? "" : "（有止损的话也请加上）"}，才能完成检查。按 ${fmtUsd(req)} USDT 计，二十分之一的坏夜晚约亏 ${badNight != null ? fmtUsd(badNight) : "—"} USDT${bookLimit != null ? `，而当前盘口只能承接 ${fmtUsd(bookLimit)} USDT` : ""}。`,
+      )
+    : "";
+  const subhead = topLine || (reasonLines[0] ?? "");
 
   return (
     <Section

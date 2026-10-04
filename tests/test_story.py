@@ -14,12 +14,10 @@ def test_every_failure_mode_carries_a_cost_a_cause_and_how_often(seeded_store): 
     assert modes, "a report with stress presets should have at least one way to lose"
     for m in modes:
         assert m.trigger and m.mechanism and m.likelihood and m.source and m.short
-    # Ranked by expected loss where the chance was measured, then the rest by size, so the
-    # brief and the panel lead with what is both likely and costly.
-    known = [m.chance * m.loss_quote for m in modes if m.chance is not None and m.loss_quote is not None]
-    assert known == sorted(known)
-    first_unknown = next((i for i, m in enumerate(modes) if m.chance is None), len(modes))
-    assert all(m.chance is None for m in modes[first_unknown:])
+    # Largest loss first: the list is headed "worst first", so the first card is the worst one.
+    losses = [m.loss_quote for m in modes if m.loss_quote is not None]
+    assert losses == sorted(losses)
+    assert modes[0].loss_quote == min(losses)
 
 
 def test_a_stop_a_gap_can_jump_is_named(seeded_store):  # noqa: F811
@@ -64,16 +62,17 @@ def test_the_report_and_the_brief_carry_them(seeded_store):  # noqa: F811
     assert "主要亏损方式" in it.brief(r, "zh")
 
 
-def test_failure_modes_rank_by_chance_times_loss_and_stop_at_the_margin():
+def test_failure_modes_rank_by_loss_largest_first_and_stop_at_the_margin():
     """A 0% liquidation was listed first and an 83% one fifth; a 50x position with 200 USDT
-    of margin was shown losing 2,995. Neither can happen."""
+    of margin was shown losing 2,995. Neither can happen. The list says "worst first", so it is
+    ordered by loss: a -833 gap must not head a list that holds a -2,843 crash replay."""
     from nightwatch.decision.story import FailureMode, _cap_at_margin, _rank
 
     def fm(key, loss, chance):  # noqa: ANN001, ANN202
         return FailureMode(key, key, "t", "m", loss, loss / 100, "l", "s", "x", chance)
 
     ranked = _rank([fm("rare_big", -2000.0, 0.01), fm("likely", -300.0, 0.6), fm("liquidation", -200.0, 0.0), fm("crisis", -3000.0, None)])
-    assert [m.key for m in ranked] == ["likely", "rare_big", "liquidation", "crisis"]
+    assert [m.key for m in ranked] == ["crisis", "rare_big", "likely", "liquidation"]
     capped = _cap_at_margin([fm("crisis", -3000.0, None), fm("small", -50.0, 0.1)], {"margin_quote": 200.0, "leverage": 50.0, "liquidation_distance_pct": 1.9})
     assert capped[0].loss_quote == -200.0 and capped[0].capped and "liquidated first" in capped[0].mechanism
     assert capped[1].loss_quote == -50.0 and not capped[1].capped

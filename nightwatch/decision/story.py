@@ -348,11 +348,15 @@ def _cap_at_margin(modes: list[FailureMode], lev: dict | None) -> list[FailureMo
 
 
 def _rank(modes: list[FailureMode]) -> list[FailureMode]:
-    """Most-expected loss first: chance times loss where the chance was measured, then
-    the rest by size. A 0% liquidation no longer outranks one that 83% of paths reach."""
-    known = sorted((m for m in modes if m.chance is not None and m.loss_quote is not None), key=lambda m: m.chance * m.loss_quote)
-    rest = sorted((m for m in modes if m.chance is None or m.loss_quote is None), key=lambda m: m.loss_quote if m.loss_quote is not None else 0.0)
-    return known + rest
+    """Largest loss first, so the list, the "worst" label and the chat reply all agree.
+
+    It used to sort by chance times loss, which put a -833 gap above a -2,843 crash replay
+    under a heading that said "worst first". Each card still shows how often it happened;
+    the order now says only what the heading says. Equal losses (a leveraged position capped
+    at its margin) go most-likely first; a mode with no priced loss goes last.
+    """
+    priced = sorted((m for m in modes if m.loss_quote is not None), key=lambda m: (m.loss_quote, -(m.chance or 0.0)))
+    return priced + [m for m in modes if m.loss_quote is None]
 
 
 # ------------------------------------------------------------------- premise
