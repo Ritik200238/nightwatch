@@ -135,6 +135,18 @@ def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
         out.append(Assumption("events", f"No earnings inside the hold ({earnings_ahead(hte)})." if hte >= _EVENT_CAP_H else f"No earnings inside the hold (next in {_days(hte)})."))
     else:
         out.append(Assumption("events", "Earnings timing is not known (no upcoming date on the earnings calendar), so the earnings-gap presets are not tied to this hold.", "caveat"))
+    ce = getattr(r, "corporate_events", None)
+    if ce:
+        from nightwatch.features import corporate as corporate_mod
+
+        inside = ce.get("in_hold") or []
+        if inside:
+            what = "; ".join(corporate_mod.plain(e) for e in inside)
+            out.append(Assumption("corporate events", f"Inside the hold: {what}. The stress presets and the past moments compared do not model it, and how Bitget adjusts the rToken for it is not verified.", "caveat"))
+        elif not ce.get("covered"):
+            out.append(Assumption("corporate events", "Dividends and splits were not checked: the calendar has not been synced yet.", "caveat"))
+        else:
+            out.append(Assumption("corporate events", "No ex-dividend date or split inside the hold in the stored calendar (Nasdaq, Yahoo, Bitget notices)."))
     return out
 
 
@@ -366,6 +378,7 @@ _EARN = re.compile(r"earning|post[-\s]?earn|guidance|report(?:s|ed)?\s+(?:q\d|re
 _POST = re.compile(r"post[-\s]?earn|after\s+(?:the\s+)?(?:earnings|report|results)|drift|财报后", re.I)
 _PRE = re.compile(r"(?:into|ahead\s+of|before|pre[-\s]?)\s*(?:the\s+)?(?:earnings|report|results)|run[-\s]?up|财报前", re.I)
 _MACRO = re.compile(r"\bcpi\b|inflation (?:data|print|number|report)|\bjobs? (?:report|data|number)\b|\bnfp\b|payrolls?|\bpce\b|\bgdp\b|retail sales|非农|通胀数据|CPI", re.I)
+_PAYOUT = re.compile(r"dividend|\bsplit\b|\bex[-\s]?div|payout|分红|股息|拆股|除息", re.I)
 _FED = re.compile(r"\bfed\b|fomc|rate\s+(?:cut|hike|decision)|powell|美联储|议息|降息|加息", re.I)
 
 
@@ -394,6 +407,18 @@ def premise(r: Any) -> list[str]:  # noqa: ANN401
     macro = f.get("macro_events_72h")
     if _MACRO.search(thesis) and macro is not None and macro == 0 and r.horizon_h <= 72:
         out.append("Your reason leans on a data release, but no scheduled release (CPI, jobs, PCE, GDP, retail sales) falls in the next 72 hours.")
+    ce = getattr(r, "corporate_events", None)
+    if _PAYOUT.search(thesis) and ce is not None:
+        from nightwatch.features import corporate as corporate_mod
+
+        if ce.get("in_hold"):
+            out.append("Your reason mentions a dividend or split; the stored calendar has: " + "; ".join(corporate_mod.plain(e) for e in ce["in_hold"]) + ".")
+        elif ce.get("next_after"):
+            out.append(f"Your reason mentions a dividend or split, but none falls inside this hold; the next is {corporate_mod.plain(ce['next_after'])}.")
+        elif ce.get("covered"):
+            out.append("Your reason mentions a dividend or split, but the stored calendar has none inside this hold and none ahead.")
+        else:
+            out.append("Your reason mentions a dividend or split, but the dividend and split calendar has not been synced, so it could not be checked.")
     # A stop beyond the line that proves the idea wrong: still holding after being wrong.
     plan = getattr(r, "plan_check", None) or {}
     t = r.ticket

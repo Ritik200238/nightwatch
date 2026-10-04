@@ -74,6 +74,8 @@ def feed_sources(store: Store, *, ticker: str, spot_symbol: str, perp_symbol: st
                   (ticker, to_epoch_ms(at - timedelta(hours=72)), at_ms, at_ms))
         _, last = _q(store, "SELECT COUNT(*), MAX(accepted_at) FROM filings WHERE ticker=? AND accepted_at<? AND observed_at<=?", (ticker, at_ms, at_ms))
         out.append(_row("sec_edgar", "SEC EDGAR filings", last, n))
+        n, last = _q(store, "SELECT COUNT(*), MAX(observed_at) FROM corporate_events WHERE ticker=? AND COALESCE(announced_at, observed_at)<=?", (ticker, at_ms))
+        out.append(_row("corporate_events", "Dividends, splits and Bitget notices", last, n))
     except Exception:  # noqa: BLE001 - provenance must never fail an analysis
         log.exception("feed provenance failed for %s", ticker)
     return out

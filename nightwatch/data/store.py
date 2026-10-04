@@ -27,6 +27,7 @@ import pandas as pd
 from nightwatch.data.book_metrics import DEPTH_BPS_LEVELS, snapshot_metrics
 from nightwatch.data.models import (
     Bar,
+    CorporateEvent,
     EarningsEvent,
     Filing,
     FundingRate,
@@ -98,6 +99,16 @@ CREATE TABLE IF NOT EXISTS earnings (
     timing TEXT, eps_estimate REAL, eps_actual REAL, surprise_pct REAL,
     fiscal_quarter_end TEXT, observed_at INTEGER NOT NULL,
     PRIMARY KEY (ticker, report_date, source)
+) WITHOUT ROWID;
+
+-- Dividends, splits and exchange notices. event_date is the ET-midnight instant of the
+-- ex-date / effective date; announced_at is when the issuer or exchange said so, where
+-- the source says (NULL otherwise, and observed_at stands in for it).
+CREATE TABLE IF NOT EXISTS corporate_events (
+    ticker TEXT NOT NULL, kind TEXT NOT NULL, event_date INTEGER NOT NULL, source TEXT NOT NULL,
+    amount REAL, ratio TEXT, currency TEXT, announced_at INTEGER, detail TEXT, url TEXT,
+    observed_at INTEGER NOT NULL,
+    PRIMARY KEY (ticker, kind, event_date, source)
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS macro (
@@ -536,6 +547,51 @@ class Store:
             EarningsEvent(
                 ticker=r[0], report_date=from_epoch_ms(r[1]), source=r[2], timing=r[3], eps_estimate=r[4],
                 eps_actual=r[5], surprise_pct=r[6], fiscal_quarter_end=r[7], observed_at=from_epoch_ms(r[8]),
+            )
+            for r in self._conn.execute(sql, args)
+        ]
+
+    # ------------------------------------------------------------ corporate events
+
+    def upsert_corporate_events(self, events: Iterable[CorporateEvent]) -> int:
+        rows = [
+            (e.ticker, e.kind, to_epoch_ms(e.event_date), e.source, e.amount, e.ratio, e.currency,
+             to_epoch_ms(e.announced_at) if e.announced_at else None, e.detail, e.url, to_epoch_ms(e.observed_at))
+            for e in events
+        ]
+        if not rows:
+            return 0
+        with self._conn:
+            self._conn.executemany(
+                """
+                INSERT INTO corporate_events VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT (ticker, kind, event_date, source) DO UPDATE SET
+                    amount=COALESCE(excluded.amount, corporate_events.amount),
+                    ratio=COALESCE(excluded.ratio, corporate_events.ratio),
+                    currency=COALESCE(excluded.currency, corporate_events.currency),
+                    announced_at=COALESCE(excluded.announced_at, corporate_events.announced_at),
+                    detail=COALESCE(excluded.detail, corporate_events.detail),
+                    url=COALESCE(excluded.url, corporate_events.url),
+                    observed_at=MIN(corporate_events.observed_at, excluded.observed_at)
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def get_corporate_events(self, ticker: str, *, as_of: datetime | None = None) -> list[CorporateEvent]:
+        """Events for one ticker that were public by ``as_of`` (the announcement date where
+        the source gives one, otherwise the moment this desk first saw the row)."""
+        sql = ("SELECT ticker, kind, event_date, source, amount, ratio, currency, announced_at, detail, url, observed_at "
+               "FROM corporate_events WHERE ticker=?")
+        args: list[object] = [ticker]
+        if as_of is not None:
+            sql += " AND COALESCE(announced_at, observed_at) <= ?"
+            args.append(to_epoch_ms(as_of))
+        sql += " ORDER BY event_date"
+        return [
+            CorporateEvent(
+                ticker=r[0], kind=r[1], event_date=from_epoch_ms(r[2]), source=r[3], amount=r[4], ratio=r[5], currency=r[6],
+                announced_at=from_epoch_ms(r[7]) if r[7] is not None else None, detail=r[8], url=r[9], observed_at=from_epoch_ms(r[10]),
             )
             for r in self._conn.execute(sql, args)
         ]

@@ -5,6 +5,7 @@ import { BookVisuals } from "@/components/report/book-visuals";
 import { MarketClock } from "@/components/report/market-clock";
 import { Group } from "@/components/report/group";
 import { ThesisCheckCard } from "@/components/report/thesis-check";
+import { CorporateEventsNote } from "@/components/report/corporate-events";
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -508,6 +509,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       <LeverageSafety report={report} lang={lang} onRerun={onRerun} />
       <WeekendNote report={report} lang={lang} />
       <PremiseNote report={report} lang={lang} />
+      <CorporateEventsNote report={report} lang={lang} />
       {report.forecast_id != null && report.ticket.thesis ? <ThesisCheckCard forecastId={report.forecast_id} thesis={report.ticket.thesis} lang={lang} /> : null}
       <PlanNote report={report} lang={lang} />
       <ActOnIt report={report} lang={lang} />
