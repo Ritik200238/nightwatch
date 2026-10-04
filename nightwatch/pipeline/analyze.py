@@ -626,6 +626,9 @@ class AnalysisReport:
     timeline: dict | None = None
     # The journal receipt for this verdict: chained to every one before it (see journal.receipts).
     receipt: str | None = None
+    # Ex-dividend dates, splits and Bitget notices around the hold, from the stored calendar
+    # (nightwatch.features.corporate.build). Point in time; never fetched during an analysis.
+    corporate_events: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
@@ -1001,6 +1004,17 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
                 )
     timings["street"] = _ms(t0)
 
+    t0 = time.perf_counter()
+    corporate = None
+    try:
+        from nightwatch.features import corporate as corporate_mod
+
+        corporate = corporate_mod.build(ctx.store, ticket.ticker, as_of=as_of, horizon_h=horizon_h,
+                                        price=snapshot.prices.get("native_close") or snapshot.prices.get("spot_close"))
+    except Exception:  # noqa: BLE001 - an optional calendar must never break a verdict
+        log.exception("corporate events for %s failed", ticket.ticker)
+    timings["corporate_events"] = _ms(t0)
+
     signal = None
     if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
         sig = ctx.signal_for(ticket.ticker)
@@ -1016,7 +1030,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal, corporate_events=corporate,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,
