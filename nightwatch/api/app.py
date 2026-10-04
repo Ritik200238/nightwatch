@@ -59,6 +59,7 @@ TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
 PAGE_CACHE_MAX = 200
 CALIBRATION_CACHE_MAX = 100
+THESIS_CHECK_CACHE_MAX = 200
 # Query params that change what a cached page shows; anything else is not cached, so a
 # caller cannot grow the cache with made-up parameters.
 PAGE_CACHE_PARAMS = frozenset({"core", "ticker", "kind", "limit"})
@@ -237,6 +238,7 @@ class AppState:
         self.started_at = utc_now()
         self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
         self.snapshot_heals = 0
+        self.thesis_checks: dict[tuple[int, str], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
 
     def prefetch_take(self, forecast_id: int | None, payload: dict[str, Any], lang: str = "en") -> None:
         """Start the analyst's take now, in the report's own language, so it is usually
@@ -379,6 +381,34 @@ class AppState:
 
     def close(self) -> None:
         self.store.close()
+
+
+def _thesis_check(s: AppState, forecast_id: int, report: dict[str, Any], lang: str = "en") -> dict[str, Any]:
+    """The reason check for one stored report, cached. Shared by its route and the chat."""
+    from nightwatch.api import whatif
+    from nightwatch.api.providers import select
+    from nightwatch.decision import thesis_check
+
+    lang = "zh" if lang == "zh" else "en"
+    key = (forecast_id, lang)
+    hit = s.thesis_checks.get(key)
+    if hit is not None:
+        return hit
+    ticket = report.get("ticket") or {}
+    try:
+        provider = select()
+    except Exception:  # noqa: BLE001 - no model means the keyword check, not an error
+        provider = None
+    got = thesis_check.check(
+        s.store._conn, ticker=str(ticket.get("ticker") or ""), thesis=str(ticket.get("thesis") or ""),
+        as_of=whatif.as_of_of(report) or utc_now(), parse=thesis_check.parser_for(provider) if provider else None,
+        model=getattr(provider, "model", None), lang=lang,
+    ).to_dict()
+    # A keyword result while a model exists means the model call failed this time; the
+    # next visit should get another try rather than the fallback for good.
+    if got["method"] != "keyword" or provider is None:
+        s.thesis_checks[key] = got
+    return got
 
 
 def _street_client():  # noqa: ANN202
@@ -972,6 +1002,16 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"No stored report {forecast_id}. Only recent live tickets are kept, not replays.")
         return found
 
+    @app.get("/thesis-check/{forecast_id}")
+    def thesis_check_for(forecast_id: int, lang: str = "en") -> dict[str, Any]:
+        """The trader's written reason, held against the headlines and SEC filings the desk
+        had stored for the token before the report. See nightwatch.decision.thesis_check."""
+        s = st()
+        report = s.reports.get(forecast_id)
+        if report is None:
+            raise HTTPException(404, f"No stored report {forecast_id}.")
+        return _thesis_check(s, forecast_id, report, lang)
+
     @app.get("/calibration")
     def calibration(ticker: str | None = None, kind: str | None = None) -> dict[str, Any]:
         s = st()
@@ -1374,6 +1414,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             got = ways.answer(s, context, language_of(latest))
             if got is not None:
                 return got
+        # "Is my reason right?" - the written thesis against the stored headlines and filings.
+        from nightwatch.decision import thesis_check as _tc
+
+        if context and latest and _tc.ASKS.search(latest):
+            lang = language_of(latest)
+            fid = context.get("forecast_id") or body.context_forecast_id
+            got = _thesis_check(s, int(fid), context, lang) if (context.get("ticket") or {}).get("thesis") else None
+            text = _tc.reply_text(got, lang)
+            return {
+                "intent": {"kind": "followup", "question": "thesis", "missing_fields": [], "reply": text},
+                "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [],
+                "reply": text, "mode": "rules" if not got or got["method"] != "model" else "model",
+                "answered_about": body.context_forecast_id, "answer_kind": "thesis",
+            }
 
         tickers_now = list(s.ctx.tickers_with_data())
         # "I also hold 30k NVDA", said about the trade on screen: the same trade, judged
