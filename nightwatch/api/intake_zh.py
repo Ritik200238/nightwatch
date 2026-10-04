@@ -34,7 +34,7 @@ _LONG = re.compile(r"做多|买入|买进|看多|多头|开多|多单|持有|拿
 _BARE_SIDE = {"多": "long", "做多": "long", "多单": "long", "空": "short", "做空": "short", "空单": "short"}
 # A size: Arabic or Chinese numerals, an optional 千/万 scale, then a money word or the
 # scale itself ("两万", "1.5万", "20000美元", "5000U").
-_SIZE = re.compile(r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(万|千|k|K)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?")
+_SIZE = re.compile(r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(万|千|k|K|w|W)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?")
 _STOP = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9][0-9,]*(?:\.[0-9]+)?)")
 # "止损3%" is a distance, not a price of 3.
 _STOP_PCT = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*[%％]|止损\s*百分之([零〇一二两三四五六七八九十]+)")
@@ -52,7 +52,7 @@ _INVALID = re.compile(r"(?:如果|若|假如)(.+?)(?:就算错|就错|说明我�
 # "账户10万U", "本金5万美元", "资金 20万U": the money on hand, never the position.
 _ACCOUNT = re.compile(
     r"(?:账户|本金|资金|总资金)\s*(?:余额|规模|有|是|为)?\s*[:：]?\s*"
-    r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?"
+    r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K|w|W)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?"
 )
 
 
@@ -148,7 +148,7 @@ _HOLD_INTRO = re.compile(
 )
 _HELD_SEP = re.compile(r"(?:\s*(?:[,，、;；]|和|以及|还有|并且|另外|外加|加上|还|也))*\s*")
 _HELD_ITEM = re.compile(
-    r"(?P<lead>做多|做空|多单|空单)?\s*(?P<num>[0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(?P<scale>万|千|k|K)?\s*(?P<money>美元|美金|刀|USDT|usdt|U|u|块)?\s*(?:的)?\s*"
+    r"(?P<lead>做多|做空|多单|空单)?\s*(?P<num>[0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(?P<scale>万|千|k|K|w|W)?\s*(?P<money>美元|美金|刀|USDT|usdt|U|u|块)?\s*(?:的)?\s*"
 )
 _HELD_TRAIL = re.compile(r"\s*(多单|空单|多头|空头|做多|做空)")
 _TRAIL_SIDE = {"多单": "long", "多头": "long", "做多": "long", "空单": "short", "空头": "short", "做空": "short"}
@@ -184,7 +184,7 @@ def read_positions(text: str, known: set[str]) -> tuple[list[tuple[str, str, flo
             got = _name_at(text, m.end(), known)
             if value is None or got is None:
                 break
-            value *= 10_000 if scale == "万" else 1_000 if scale in ("千", "k", "K") else 1
+            value *= 10_000 if scale in ("万", "w", "W") else 1_000 if scale in ("千", "k", "K") else 1
             ticker, end = got
             trail = _HELD_TRAIL.match(text, end)
             side = _TRAIL_SIDE.get(m.group("lead") or "") or (_TRAIL_SIDE[trail.group(1)] if trail else "long")
@@ -234,7 +234,7 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         value = chinese_number(account.group(1))
         if value is not None:
             scale = account.group(2)
-            if scale == "万":
+            if scale in ("万", "w", "W"):
                 value *= 10_000
             elif scale in ("千", "k", "K"):
                 value *= 1_000
@@ -256,7 +256,7 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         value = chinese_number(number)
         if value is None:
             continue
-        if scale in ("万",):
+        if scale in ("万", "w", "W"):
             value *= 10_000
         elif scale in ("千", "k", "K"):
             value *= 1_000

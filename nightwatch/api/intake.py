@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
@@ -35,7 +36,8 @@ ALIASES: dict[str, str] = {
     "nasdaq": "QQQ", "s&p": "SPY", "sp500": "SPY", "spx": "SPY",
 }
 
-_SCALE = {"k": 1e3, "m": 1e6, "b": 1e9}
+# "2w" is how traders on Chinese-speaking desks write 20,000 (万 = ten thousand).
+_SCALE = {"k": 1e3, "w": 1e4, "m": 1e6, "b": 1e9}
 
 # "short term" is a horizon, not a direction. Same for "shorter" and "short-dated".
 _SHORT = re.compile(r"\bshort(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell\b|\bbearish\b|\bfade\b", re.I)
@@ -51,8 +53,8 @@ _STOP_PCT = re.compile(
     re.I,
 )
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
-_EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmb])?", re.I)
-_MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmb])?|\b([\d,]+(?:\.\d+)?)\s*([kmb])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
+_EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?", re.I)
+_MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmbw])?|\b([\d,]+(?:\.\d+)?)\s*([kmbw])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
 # "long 20000 TSLA" states a size as plainly as "long 20k TSLA" does. A bare number is
 # read as one only when nothing else has claimed it and it is not a price: "long TSLA at
 # 350" is a level, and nobody sizes a position at fifty dollars.
@@ -72,7 +74,7 @@ _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bse
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
 # "20k margin", "margin of 4000", "with 5k collateral": the money put up, not the position.
-_MARGIN = re.compile(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmb])?\s*(?:usdt\s*)?(?:of\s+)?(?:margin|collateral)\b|\b(?:margin|collateral)\s*(?:of|is|:|=)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmb])?\b", re.I)
+_MARGIN = re.compile(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?\s*(?:usdt\s*)?(?:of\s+)?(?:margin|collateral)\b|\b(?:margin|collateral)\s*(?:of|is|:|=)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?\b", re.I)
 _HEDGE_PCT = re.compile(r"\bhedge\b[^.\d]{0,15}(\d{1,3})\s*%", re.I)
 _HEDGE = re.compile(r"\bhedge\b|\bdelta[-\s]?neutral\b", re.I)
 _THESIS = re.compile(r"\b(?:because|since|thesis\s*:|on the view that|reason\s*:|the idea is)\s+(.+?)(?:[.;!?]|$)", re.I)
@@ -94,7 +96,7 @@ _HOLD_INTRO = re.compile(
 _HELD_SEP = re.compile(r"(?:\s*(?:,|;|&|\band\b|\bplus\b|\balso\b|\bthen\b))*\s*", re.I)
 _HELD_ITEM = re.compile(
     r"(?:(?P<lead>long|short)\s+)?(?:a\s+)?(?:position\s+(?:of|in)\s+)?(?:worth\s+)?"
-    r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmb])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
+    r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmbw])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
     re.I,
 )
 _HELD_NAME = re.compile(r"\$?([A-Za-z][A-Za-z&]{1,11})(?:\s+([A-Za-z]{2,8}))?")
@@ -300,7 +302,7 @@ def _settle(out: RuleIntent) -> RuleIntent:
 
 # "-5000": a size cannot be negative. The dash must touch the number, so "TSLA - 5000" (a
 # separator) and "stop -3%" (not a size) are left alone.
-_NEG_SIZE = re.compile(r"(?<![\w.%])[-−]\$?(\d[\d,]*(?:\.\d+)?)\s*([kmb])?(?![\w%])", re.I)
+_NEG_SIZE = re.compile(r"(?<![\w.%])[-−]\$?(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?(?![\w%])", re.I)
 _LEVEL_WORD = re.compile(r"(?:stop|target|tp|止损|止盈|目标)\W*$", re.I)
 # The longest hold the history can speak to: past it the window runs out of data.
 MAX_HOLD_HOURS = 720.0
@@ -340,6 +342,8 @@ def _sanitize(out: RuleIntent, text: str, zh: bool) -> None:
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Read one message into a ticket. Nothing is invented; what is absent is asked for."""
     out = RuleIntent()
+    # Full-width digits and letters ("２万Ｕ", "％") read like their ordinary forms.
+    text = unicodedata.normalize("NFKC", text)
     # What is already held is read first and blanked out, so it cannot be mistaken for the trade.
     held: list[tuple[str, str, float]] = []
     if _CJK.search(text):
@@ -383,6 +387,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     for m in _MONEY.finditer(text):
         if any(s <= m.start() < e for s, e in spent):
             continue
+        if (m.group(4) or "").lower() == "w" and re.search(r"\b(?:for|hold|over|next|in|within)\s*$", text[: m.start()], re.I):
+            continue  # "for 2w" is a duration
         value = _money(m.groups())
         if value is not None and value != out.account_equity_quote:
             out.notional_quote = value
