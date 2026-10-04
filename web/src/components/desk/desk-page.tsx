@@ -129,7 +129,7 @@ export default function DeskPage() {
     // min-w-0 on both columns: a grid track is auto-sized by default, so one wide table
     // in the report stretches the whole column past the viewport and takes the sidebar
     // with it. With it, the tables' own overflow-x-auto wrappers do the scrolling.
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
     {!report && !heroUsed ? (
       <Hero
         draft={heroDraft}
@@ -152,9 +152,9 @@ export default function DeskPage() {
         }}
       />
     ) : null}
-    {/* On a phone the Bitget list is long and says nothing about the trade, so while the
-        hero is up it goes below the example verdict instead of pushing it off the screen. */}
-    <div className={heroUp ? "max-sm:order-last" : ""}>
+    {/* The Bitget list is long and says nothing about the trade, so while the
+        hero is up it goes below the example verdict instead of pushing the verdict off the first screen. */}
+    <div className={heroUp ? "order-last" : ""}>
       <ProofStrip stocks={universe?.length ?? null} />
     </div>
     {/* While the hero is up there is one input on the page (the hero's); the Chat/Ticket rail
@@ -409,7 +409,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           }}
           placeholder={tx("e.g. long NVDA over the weekend, 15k", "例如：周末做多 NVDA，1.5 万")}
           disabled={busy}
-          className="min-w-0 flex-1 resize-none rounded-lg border border-input bg-background px-4 py-3 text-base focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:h-14 sm:py-3.5 sm:text-lg"
+          className="min-w-0 flex-1 h-14 resize-none rounded-lg border border-input bg-background px-4 py-3 text-base focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:h-14 sm:py-3.5 sm:text-lg"
         />
         <Button type="submit" disabled={busy || !text} className="h-12 px-6 text-base sm:h-14">
           {tx("Get the verdict", "获取结论")}
@@ -440,14 +440,14 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           </button>
         </li>
       </ul>
-      <ol className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={tx("How it works", "工作方式")}>
+      <ol className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2" aria-label={tx("How it works", "工作方式")}>
         {HERO_STEPS.map((st, i) => (
-          <li key={st.en} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <li key={st.en} className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 sm:px-3 sm:py-2">
             <p className="text-[13px] font-medium leading-tight">
               <span className="tabular mr-1 text-muted-foreground">{i + 1}</span>
               {lang === "zh" ? st.zh : st.en}
             </p>
-            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{lang === "zh" ? st.subZh : st.subEn}</p>
+            <p className="mt-0.5 hidden text-xs leading-snug text-muted-foreground sm:block">{lang === "zh" ? st.subZh : st.subEn}</p>
           </li>
         ))}
       </ol>
