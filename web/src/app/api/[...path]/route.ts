@@ -128,10 +128,53 @@ async function forward(req: NextRequest, path: string[], body?: string) {
   }
 }
 
+/** The chat's live progress (Server-Sent Events). Unlike every other call it must not be
+ *  read to the end here: the upstream body is handed straight back so each step reaches
+ *  the browser as the backend writes it. A failure to start is a plain JSON error, which
+ *  the client takes as the cue to ask /chat instead (that route also has the saved-answer
+ *  fallback, so this one deliberately has none). */
+async function forwardStream(req: NextRequest, path: string[], body: string) {
+  if (!ORIGIN) return Response.json({ detail: "This deployment has no backend configured. Set NIGHTWATCH_API_ORIGIN." }, { status: 503 });
+  try {
+    const res = await withRetry(
+      () =>
+        fetch(target(req, path), {
+          method: "POST",
+          headers: { ...upstreamHeaders(req), accept: "text/event-stream" },
+          body,
+          cache: "no-store",
+          redirect: "manual",
+          signal: AbortSignal.timeout(POST_TIMEOUT_MS),
+        }),
+      false,
+    );
+    const type = res.headers.get("content-type") ?? "";
+    if (!res.ok || !type.startsWith("text/event-stream") || !res.body) {
+      return new Response(await res.text(), {
+        status: res.ok ? 502 : res.status,
+        headers: { "content-type": type || "application/json", "cache-control": "no-store" },
+      });
+    }
+    return new Response(res.body, {
+      status: 200,
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        "x-accel-buffering": "no",
+      },
+    });
+  } catch {
+    return Response.json({ detail: "Cannot reach the Nightwatch API from the server. Is the backend running?" }, { status: 502 });
+  }
+}
+
 export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   return forward(req, (await ctx.params).path);
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
-  return forward(req, (await ctx.params).path, await req.text());
+  const { path } = await ctx.params;
+  const body = await req.text();
+  if (path.length === 2 && path[0] === "chat" && path[1] === "stream") return forwardStream(req, path, body);
+  return forward(req, path, body);
 }
