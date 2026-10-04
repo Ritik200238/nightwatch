@@ -47,6 +47,11 @@ log = logging.getLogger(__name__)
 
 # Past this, the API's read snapshot is stuck behind the recorder (see Store.snapshot_lag_seconds).
 STALE_SNAPSHOT_S = 600.0
+# Well before that, the API repairs it itself: a fresh connection, no restart. A minute
+# between checks; the replaced connection is closed once no read can still be using it.
+SELF_HEAL_LAG_S = 180.0
+SNAPSHOT_CHECK_S = 60.0
+RETIRE_GRACE_S = 300.0
 HEALTH_COUNTS_TTL_S = 600.0
 _health_counts: dict[int, dict[str, Any]] = {}
 # How often the idle API re-reads its cached frames so they are not swapped out.
@@ -231,6 +236,7 @@ class AppState:
         # most deploys, and a stale container answers exactly like a fresh one.
         self.started_at = utc_now()
         self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
+        self.snapshot_heals = 0
 
     def prefetch_take(self, forecast_id: int | None, payload: dict[str, Any], lang: str = "en") -> None:
         """Start the analyst's take now, in the report's own language, so it is usually
@@ -339,9 +345,37 @@ class AppState:
             except Exception:  # noqa: BLE001 - warming must never stop the warm loop
                 log.info("could not warm %s", path)
 
+    def check_snapshot(self) -> bool:
+        """Swap the shared connection if its read snapshot is stuck. True when it did.
+
+        An unfinished statement somewhere keeps the shared connection reading the database
+        as it was: once the API served a four-hour-old order book that way. Until the
+        statement is found, the repair is to stop using that connection. The log line
+        names what held a cursor and what every thread was doing, which is the evidence
+        for finding it."""
+        lag = self.store.snapshot_lag_seconds()
+        self.store.close_retired(RETIRE_GRACE_S)
+        if lag <= SELF_HEAL_LAG_S:
+            return False
+        from nightwatch.data.store import open_cursor_report
+
+        log.error("read snapshot %.0f s behind the database; reconnecting. Evidence: %s", lag, open_cursor_report())
+        self.store.reconnect()
+        self.snapshot_heals += 1
+        return True
+
+    def watch_snapshot_forever(self) -> None:
+        while True:
+            threading.Event().wait(SNAPSHOT_CHECK_S)
+            try:
+                self.check_snapshot()
+            except Exception as exc:  # noqa: BLE001 - the watchdog must outlive one bad check
+                log.warning("snapshot check failed: %s", exc)
+
     def start_warm(self) -> None:
         self.warm_thread = threading.Thread(target=self.warm_forever, name="warm-frames", daemon=True)
         self.warm_thread.start()
+        threading.Thread(target=self.watch_snapshot_forever, name="snapshot-watch", daemon=True).start()
 
     def close(self) -> None:
         self.store.close()
@@ -627,7 +661,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # days without anyone noticing.
         llm = describe_llm()
         return {
-            "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": n_books, "last_book_ts": last_book,
+            "ok": True, "version": __version__, "time": utc_now().isoformat(), "snapshot_heals": s.snapshot_heals, "bars": bars, "orderbook_snapshots": n_books, "last_book_ts": last_book,
             "started_at": s.started_at.isoformat(), "uptime_s": int((utc_now() - s.started_at).total_seconds()),
             "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
         }
