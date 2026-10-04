@@ -295,6 +295,33 @@ export default function StudiesPage() {
         }
       />
       {rep?.studies.length ? (
+        <div className="rounded-lg border border-border bg-card p-4 text-sm">
+          <p className="font-medium">{tx("The short version", "一句话版本")}</p>
+          <ul className="mt-2 space-y-2">
+            <li>
+              <Pill tone="muted">{tx("Tested", "检验了什么")}</Pill>{" "}
+              {tx(`${rep.studies.length} claims about our own method, each written so it could fail.`, `关于我们自己方法的 ${rep.studies.length} 个主张，每个都写成可能被证伪的形式。`)}
+            </li>
+            {yes ? (
+              <li>
+                <Pill tone="good">{tx(`Passed (${yes})`, `通过（${yes}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "yes").map((s) => s.title).join(" · ")}
+              </li>
+            ) : null}
+            {no ? (
+              <li>
+                <Pill tone="warning">{tx(`Failed (${no})`, `未通过（${no}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "no").map((s) => s.title).join(" · ")}
+              </li>
+            ) : null}
+            {unclear ? (
+              <li>
+                <Pill tone="muted">{tx(`Too early (${unclear})`, `还太早（${unclear}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "unclear").map((s) => s.title).join(" · ")}
+              </li>
+            ) : null}
+          </ul>
+          <p className="mt-2 text-[13px] text-muted-foreground">{tx("Each question opens below with how it was tested and what changed. Statistical detail comes after that.", "每个问题在下面展开，说明怎么检验、因此改变了什么。统计细节在其后。")}</p>
+        </div>
+      ) : null}
+      {rep?.studies.length ? (
         <PlainBox>
           {tx(`We asked ${rep.studies.length} questions, each written so the answer could be no. ${yes} came back yes, ${no} came back no, and ${unclear} cannot be told yet. `, `我们提出了 ${rep.studies.length} 个问题，每个都写成可能得到“否”的形式。${yes} 个回答为是，${no} 个回答为否，${unclear} 个暂时无法判断。`)}
           {rep.fdr

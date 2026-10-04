@@ -98,6 +98,7 @@ export default function CalibrationPage() {
         </div>
       ) : (
         <>
+          <Scorecard rep={rep} />
           {rep.adjusted ? <PlainWords adj={rep.adjusted} /> : null}
           {rep.adjusted ? (
             <Section
@@ -135,7 +136,7 @@ export default function CalibrationPage() {
             <Section
               collapsible
               title={tx("Tail adjustment, scored out of sample", "尾部调整，样本外评分")}
-              subtitle={tx(`Each forecast re-scored with tail factors fitted only on forecasts that had matured before it (${rep.adjusted.n_evaluated} evaluated; latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}). The verdict uses the adjusted tails.`, `每个预测都用只在它之前已到期的预测拟合出的尾部系数重新评分（评估了 ${rep.adjusted.n_evaluated} 个；最新 k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `，边际 ${rep.adjusted.c_lo_last.toFixed(1)} 个百分点` : ""}，k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}）。结论使用调整后的尾部。`)}
+              subtitle={tx(`Each forecast re-scored with a correction learned only from forecasts that had already matured before it (${rep.adjusted.n_evaluated} evaluated). Technical detail: latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}. The verdict uses the corrected bad case.`, `每个预测都只用在它之前已到期的预测学到的修正来重新评分（评估了 ${rep.adjusted.n_evaluated} 个）。技术细节：最新 k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `，边际 ${rep.adjusted.c_lo_last.toFixed(1)} 个百分点` : ""}，k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}。结论使用修正后的坏情形。`)}
             >
               <ScrollTable>
 
@@ -448,5 +449,58 @@ function PlainWords({ adj }: { adj: NonNullable<CalibrationReport["adjusted"]> }
       <Term k="p5">p5</Term>
       {tx(`). We wrote down ${adj.n_evaluated.toLocaleString()} of those before knowing what would happen, then checked. The real outcome was worse than the bad case ${fmtPct(lo, 1, false)} of the time, against the 5% it should be. ${verdict} Before the correction the raw history was worse than its own bad case ${fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time, which is why the desk corrects it.`, `）。我们在不知道结果之前写下了 ${adj.n_evaluated.toLocaleString()} 个这样的坏情形，然后去核对。实际结果比坏情形更差的比例是 ${fmtPct(lo, 1, false)}，而它本应是 5%。${verdict}修正之前，原始历史比它自己的坏情形更差的比例是 ${fmtPct(adj.raw_lo_coverage * 100, 1, false)}，这就是交易台要做修正的原因。`)}
     </PlainBox>
+  );
+}
+
+/** What was tested, what passed, what did not: three lines for a reader who has not met a quantile.
+ *  Everything below keeps the technical detail; this only says it in plain words, from the same numbers. */
+function Scorecard({ rep }: { rep: CalibrationReport }) {
+  const { tx, lang } = useLang();
+  const adj = rep.adjusted;
+  const tb = (b: string) => (lang === "zh" ? ({ green: "达标", amber: "略偏", red: "不达标" } as Record<string, string>)[b] ?? b : ({ green: "on target", amber: "slightly off", red: "off target" } as Record<string, string>)[b] ?? b);
+  const bandName = (b: string) => (lang === "zh" ? BAND_LABEL_ZH[b] : BAND_LABEL[b]) ?? b;
+  const weak = adj ? adj.bands.filter((b) => b.band !== "pooled" && b.adj_tail_band !== "green") : [];
+  const sk = rep.skill;
+  const beats = sk && sk.diff_ci_low != null && sk.diff_ci_low > 0;
+  const loses = sk && sk.diff_ci_high != null && sk.diff_ci_high < 0;
+  const pct = (x: number) => fmtPct(x * 100, 1, false);
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 text-sm" aria-label={tx("The short version", "一句话版本")}>
+      <p className="font-medium">{tx("The short version", "一句话版本")}</p>
+      <ul className="mt-2 space-y-2">
+        <li>
+          <Pill tone="muted">{tx("Tested", "检验了什么")}</Pill>{" "}
+          {tx(
+            `${rep.n_matured.toLocaleString()} forecasts, each written down before the outcome was known, then scored once the holding period ended.`,
+            `${rep.n_matured.toLocaleString()} 个预测，每个都在结果未知时先写下，持有期结束后再评分。`,
+          )}
+        </li>
+        {adj ? (
+          <li>
+            <Pill tone={adj.adj_tail_band === "green" ? "good" : "warning"}>{tx("Passed", "通过")}</Pill>{" "}
+            {tx(
+              `The "1 time in 20 it goes worse than this" warning was beaten ${pct(adj.adj_lo_coverage)} of the time (target 5%): ${tb(adj.adj_tail_band)}. The raw history alone was ${pct(adj.raw_lo_coverage)}, which is why the desk corrects it.`,
+              `“二十次里有一次会比这更糟”的警告，实际被突破 ${pct(adj.adj_lo_coverage)}（目标 5%）：${tb(adj.adj_tail_band)}。只用原始历史是 ${pct(adj.raw_lo_coverage)}，所以交易台要做修正。`,
+            )}
+          </li>
+        ) : null}
+        {weak.length ? (
+          <li>
+            <Pill tone="warning">{tx("Weaker", "较弱")}</Pill>{" "}
+            {weak.map((b) => `${bandName(b.band)}: ${pct(b.adj_lo_coverage)} (${tb(b.adj_tail_band)})`).join("; ")}
+            {tx(". Shown, not hidden.", "。照实展示，没有隐藏。")}
+          </li>
+        ) : null}
+        {sk ? (
+          <li>
+            <Pill tone={beats ? "good" : loses ? "critical" : "warning"}>{beats ? tx("Passed", "通过") : tx("Not proven", "未证明")}</Pill>{" "}
+            {beats
+              ? tx(`Beats picking a random past hour: the similar-moments forecast was closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n} pairs.`, `优于随机挑一个历史小时：相似时刻的预测在 ${sk.n} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际。`)
+              : tx(`Does not clearly beat picking a random past hour (closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n} pairs).`, `没有明显优于随机挑一个历史小时（${sk.n} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际）。`)}
+          </li>
+        ) : null}
+      </ul>
+      <p className="mt-2 text-[13px] text-muted-foreground">{tx("The technical detail (percentile bands, correction factors, scoring rule) is below.", "技术细节（百分位区间、修正系数、评分规则）在下面。")}</p>
+    </div>
   );
 }
