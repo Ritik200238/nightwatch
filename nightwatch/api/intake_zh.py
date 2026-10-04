@@ -50,9 +50,11 @@ _DAYS = re.compile(r"([0-9]+)\s*天")
 _THESIS = re.compile(r"(?:因为|理由是|逻辑是|理由\s*[:：]|论点\s*[:：]|逻辑\s*[:：])(.+?)(?:[，,。；;！!？?]|$)")
 _INVALID = re.compile(r"(?:如果|若|假如)(.+?)(?:就算错|就错|说明我错|就止损|则离场|就离场)")
 # "账户10万U", "本金5万美元", "资金 20万U": the money on hand, never the position.
+# "我有10万U" is the money on hand too, unless a stock follows it ("我有2万U的特斯拉" is a holding).
 _ACCOUNT = re.compile(
-    r"(?:账户|本金|资金|总资金)\s*(?:余额|规模|有|是|为)?\s*[:：]?\s*"
+    r"(?:账户|本金|资金|总资金|余额|我(?:现在|目前)?(?:手上|手里|这里)?有)\s*(?:余额|规模|有|是|为)?\s*[:：]?\s*"
     r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K|w|W)?\s*(美元|美金|刀|USDT|usdt|U|u|块)?"
+    r"(?![万千美刀块Uu0-9.])(?!\s*(?:的)?\s*(?:" +"|".join(sorted(map(re.escape, ALIASES_ZH), key=len, reverse=True)) + r"|[A-Za-z]{2,5}))"
 )
 
 

@@ -54,6 +54,13 @@ _STOP_PCT = re.compile(
 )
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 _EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?", re.I)
+# "I have 100k", "I've got 50k": the money on hand, not a position. Not "I have 20k of TSLA"
+# (a holding) and not "I have 3 ideas" (no scale, under a hundred).
+_HAVE = re.compile(
+    r"\b(?:i|we)(?:\s+(?:only\s+|just\s+)?have|'ve(?:\s+got)?|\s+got)\s+(?:about\s+|around\s+|roughly\s+|like\s+)?\$?([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?"
+    r"(?!\s*%)(?!\s*(?:usdt|usd|u|dollars?)?\s*(?:of|in|worth)\s+(?!my\b|the\b|account\b))",
+    re.I,
+)
 _MONEY = re.compile(r"\$\s*([\d,]+(?:\.\d+)?)\s*([kmbw])?|\b([\d,]+(?:\.\d+)?)\s*([kmbw])\b|\b([\d,]+(?:\.\d+)?)\s*(?:usdt|usd|dollars?)\b", re.I)
 # "long 20000 TSLA" states a size as plainly as "long 20k TSLA" does. A bare number is
 # read as one only when nothing else has claimed it and it is not a price: "long TSLA at
@@ -234,6 +241,17 @@ def hours_until_weekday(weekday: int, which: str = "open", now: datetime | None 
     return None
 
 
+def find_equity(text: str) -> re.Match[str] | None:
+    """The account-size phrase in a message, as a match with number and scale in groups 1 and 2."""
+    got = _EQUITY.search(text)
+    if got:
+        return got
+    for m in _HAVE.finditer(text):
+        if m.group(2) or float(m.group(1).replace(",", "") or 0) >= 100:
+            return m
+    return None
+
+
 def _money(groups: tuple) -> float | None:
     """One match of ``_MONEY`` as a number, applying a k/m/b suffix."""
     for value, scale in ((groups[0], groups[1]), (groups[2], groups[3]), (groups[4], None)):
@@ -366,7 +384,7 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
 
     stop_pct = _STOP_PCT.search(text)
     stop = None if stop_pct else _STOP.search(text)
-    target, equity = _TARGET.search(text), _EQUITY.search(text)
+    target, equity = _TARGET.search(text), find_equity(text)
     out.stop_price = float(stop.group(1).replace(",", "")) if stop else None
     if stop_pct:
         out.stop_pct = float(stop_pct.group(1) or stop_pct.group(3))

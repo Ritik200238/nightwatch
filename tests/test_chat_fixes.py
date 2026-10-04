@@ -100,3 +100,53 @@ def test_when_the_model_misreads_the_amount_the_rules_reading_stands(client, mon
     r = say(client, "周末做多特斯拉 2万U，只对比周末")  # "只" asks to narrow, so the model is consulted
     assert fake.calls == 1
     assert r["ticket"]["notional_quote"] == 20000 and r["ticket"]["ticker"] == "TSLA"
+
+
+# --- 4. "I have 100k" is the account, not the position -----------------------------------
+
+@pytest.mark.parametrize("phrase", ["I have 100k", "my account is 100k", "account is 100k", "equity 100k", "I've got 100k"])
+def test_money_on_hand_is_the_account_not_a_position(phrase):
+    from nightwatch.api import intake
+
+    p = intake.parse_message(f"long tsla 20k overnight, {phrase}", ["TSLA"])
+    assert p.account_equity_quote == 100000 and p.notional_quote == 20000
+
+
+@pytest.mark.parametrize("phrase", ["本金10万U", "账户10万U", "我有10万U", "余额10万"])
+def test_chinese_money_on_hand_is_the_account(phrase):
+    from nightwatch.api import intake
+
+    p = intake.parse_message(f"周末做多特斯拉 2万U，{phrase}", ["TSLA"])
+    assert p.account_equity_quote == 100000 and p.notional_quote == 20000
+
+
+def test_a_holding_is_not_taken_for_the_account():
+    from nightwatch.api import intake
+
+    assert intake.parse_message("I have 20k of tsla", ["TSLA"]).account_equity_quote is None
+    assert intake.parse_message("我有2万U的特斯拉", ["TSLA"]).account_equity_quote is None
+
+
+def test_switching_ticker_with_same_size_and_a_new_account_keeps_the_size(client):
+    """"tsla instead, same size, I have 100k" ran a 100,000 USDT TSLA long on the live desk."""
+    first = say(client, "long 20000 NVDA overnight")
+    fid = first["report"]["forecast_id"]
+    moved = say(client, "long 20000 NVDA overnight", "actually what about tsla instead, same size, I have 100k", ctx=fid)
+    t = moved["ticket"]
+    assert t["ticker"] == "TSLA" and t["notional_quote"] == 20000 and t["account_equity_quote"] == 100000, moved["reply"]
+
+
+def test_an_account_said_on_its_own_reruns_the_trade_on_screen(client):
+    first = say(client, "long 20000 TSLA overnight")
+    assert first["ticket"]["account_equity_quote"] is None
+    fid = first["report"]["forecast_id"]
+    after = say(client, "long 20000 TSLA overnight", "my account is 100k", ctx=fid)
+    t = after["ticket"]
+    assert t["ticker"] == "TSLA" and t["notional_quote"] == 20000 and t["account_equity_quote"] == 100000, after["reply"]
+    assert "account" in after["reply"].lower()
+
+
+def test_chinese_account_on_the_trade_on_screen(client):
+    first = say(client, "周末做多特斯拉 2万U")
+    after = say(client, "周末做多特斯拉 2万U", "我有10万U", ctx=first["report"]["forecast_id"])
+    assert after["ticket"]["notional_quote"] == 20000 and after["ticket"]["account_equity_quote"] == 100000, after["reply"]

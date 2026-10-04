@@ -48,6 +48,9 @@ _MARKERS_ZH = ("如果", "要是", "假如", "换成", "改成", "只看", "只�
 _WHATIF = re.compile("|".join(_MARKERS + _MARKERS_ZH), re.I)
 
 
+_ZH_ACCOUNT = re.compile(r"账户|本金|资金|余额|我(?:现在|目前)?(?:手上|手里|这里)?有\s*\d")
+
+
 def looks_like_a_what_if(question: str, *, tickers: tuple[str, ...] = (), current: str = "") -> bool:
     """Whether this question is asking about a different report from the one on screen.
 
@@ -59,6 +62,10 @@ def looks_like_a_what_if(question: str, *, tickers: tuple[str, ...] = (), curren
     q = question.lower()
     if _WHATIF.search(q):
         return True
+    from nightwatch.api import intake as _intake
+
+    if _intake.find_equity(question) or _ZH_ACCOUNT.search(question):
+        return True  # "my account is 100k": the same trade, judged against another account
     # A change named without "what if": a size multiple, a leverage, a named day to hold to.
     from nightwatch.api import intake
     from nightwatch.api.followup import _SIZE_FACTOR
@@ -92,11 +99,13 @@ class Change:
     leverage: float | None = None
     # "halve it", "double it": the size, re-run exactly rather than read off the sweep grid.
     notional_quote: float | None = None
+    # "I have 100k": the account the verdict is judged against, not a position.
+    account_equity_quote: float | None = None
     note: str = ""  # said with the answer: something asked for that could not be run
 
     @property
     def empty(self) -> bool:
-        return not any((self.ticker, self.side, self.horizon_kind, self.horizon_hours, self.lenses, self.leverage, self.notional_quote))
+        return not any((self.ticker, self.side, self.horizon_kind, self.horizon_hours, self.lenses, self.leverage, self.notional_quote, self.account_equity_quote))
 
     def describe(self) -> str:
         bits = []
@@ -118,6 +127,8 @@ class Change:
             bits.append("no leverage" if self.leverage <= 1 else f"{self.leverage:g}x leverage")
         if self.notional_quote:
             bits.append(f"{self.notional_quote:,.0f} USDT")
+        if self.account_equity_quote:
+            bits.append(f"an account of {self.account_equity_quote:,.0f} USDT")
         return ", ".join(bits)
 
     def apply_to(self, ticket: TradeTicket, *, entry: float | None = None) -> TradeTicket:
@@ -152,6 +163,7 @@ class Change:
             lenses=tuple(x.name for x in lens_mod.resolve(list(self.lenses))) if self.lenses else ticket.lenses,
             leverage=(None if self.leverage <= 1 else self.leverage) if self.leverage else ticket.leverage,
             notional_quote=self.notional_quote or ticket.notional_quote,
+            account_equity_quote=self.account_equity_quote or ticket.account_equity_quote,
         )
 
 
@@ -210,11 +222,12 @@ def rule_change(question: str, ticket: dict, tickers: list[str], features: dict 
     if intake.asks_to_narrow(question) or re.search(r"\bworse\b|\bbetter\b|更差|更好", question, re.I):
         low = question.lower()
         lenses = tuple(dict.fromkeys(x.name for x in lens_mod.LENSES if any(p in low for p in x.says)))
+    equity = parsed.account_equity_quote if parsed.account_equity_quote and parsed.account_equity_quote != ticket.get("account_equity_quote") else None
     leverage = parsed.leverage if parsed.leverage and parsed.leverage != ticket.get("leverage") else None
     if leverage is None and ticket.get("leverage") and re.search(r"\b(?:no|without|drop the|remove the)\s+leverage\b|\bunlevered\b|\bas spot\b|不加杠杆|不用杠杆", question, re.I):
         leverage = 1.0
     return Change(ticker=ticker, side=side, horizon_kind=kind if kind in ("next_open", "window_end", "hours", "through_weekend") else None,
-                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage, notional_quote=size, note=note)
+                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage, notional_quote=size, account_equity_quote=equity, note=note)
 
 
 def ticket_from(report: dict) -> TradeTicket | None:
@@ -310,6 +323,8 @@ def _describe_zh(change: Change) -> str:
         bits.append("不加杠杆" if change.leverage <= 1 else f"{change.leverage:g} 倍杠杆")
     if change.notional_quote:
         bits.append(f"仓位 {change.notional_quote:,.0f} USDT")
+    if change.account_equity_quote:
+        bits.append(f"账户 {change.account_equity_quote:,.0f} USDT")
     return "，".join(bits)
 
 
