@@ -1,6 +1,7 @@
 "use client";
 
 import { Group } from "@/components/report/group";
+import { ThesisCheckCard } from "@/components/report/thesis-check";
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -502,6 +503,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       <LiquidationNote report={report} lang={lang} />
       <WeekendNote report={report} lang={lang} />
       <PremiseNote report={report} lang={lang} />
+      {report.forecast_id != null && report.ticket.thesis ? <ThesisCheckCard forecastId={report.forecast_id} thesis={report.ticket.thesis} lang={lang} /> : null}
       <PlanNote report={report} lang={lang} />
       <ActOnIt report={report} lang={lang} />
       {/* A what-if was never journalled, so there is no forecast to mark taken and
