@@ -37,6 +37,9 @@ from nightwatch.time_utils import utc_now
 
 log = logging.getLogger(__name__)
 
+# Seconds after start before the first daily prune.
+PRUNE_FIRST_DELAY_S = 900
+
 
 @dataclass
 class RecorderStats:
@@ -104,7 +107,9 @@ class OrderBookRecorder:
         self.stats = RecorderStats()
         self._stop = threading.Event()
         self._last_refresh = 0.0
-        self._last_prune = 0.0
+        # Not on start: a deploy restarts the API at the same moment, and the first prune
+        # used to compete with it for the write lock. Fifteen minutes in, then daily.
+        self._last_prune = time.time() - 86400 + PRUNE_FIRST_DELAY_S
 
     # ----------------------------------------------------------------- control
 
