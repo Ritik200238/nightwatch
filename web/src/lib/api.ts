@@ -1262,6 +1262,9 @@ export const api = {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    // Once a step has arrived the analysis is running on the server, and asking again would
+    // run (and journal) the same trade twice; past that point a cut stream is an error.
+    let started = false;
     try {
       for (;;) {
         const { value, done } = await reader.read();
@@ -1275,7 +1278,10 @@ export const api = {
           const data = /^data: (.+)$/m.exec(block)?.[1];
           if (!kind || !data) continue; // a keep-alive comment
           const parsed = JSON.parse(data);
-          if (kind === "step") onStep(parsed as ChatStep);
+          if (kind === "step") {
+            started = true;
+            onStep(parsed as ChatStep);
+          }
           else if (kind === "done") return parsed as ChatResponse;
           else if (kind === "error") throw new ApiError(typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail), Number(parsed.status) || 500);
         }
@@ -1283,7 +1289,8 @@ export const api = {
     } catch (e) {
       if (e instanceof ApiError) throw e;
     }
-    return again(); // cut before the answer arrived
+    if (started) throw new ApiError("The connection dropped before the answer arrived. Please send it again.", 503);
+    return again(); // cut before anything ran
   },
   calibration: (ticker?: string, kind?: string) => {
     const q = new URLSearchParams();
