@@ -489,7 +489,7 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         return None
     # "What's the fear and greed reading" shares a word with the "market nervous"
     # condition but asks about the report, not for a different one.
-    if any(kind == "street" and pattern.search(question) for kind, pattern, _ in followup.ROUTES):
+    if any(kind in ("street", "corporate") and pattern.search(question) for kind, pattern, _ in followup.ROUTES):
         return None
     # Rules first: the common changes are shapes the intake rules already read, in
     # milliseconds. The model, which takes 10-60 s, is asked only when they find none.

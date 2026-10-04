@@ -34,6 +34,7 @@ def data_sources(store: Store) -> list[dict[str, Any]]:
     # By id, not MAX(ts): the newest snapshot is the last inserted, and MAX(ts) has no index.
     books = _one(store, "SELECT (SELECT COUNT(*) FROM orderbook_snapshots), (SELECT ts FROM orderbook_snapshots ORDER BY id DESC LIMIT 1)")
     earnings = _one(store, "SELECT COUNT(*), MAX(observed_at), MIN(report_date), MAX(report_date) FROM earnings")
+    corporate = _one(store, "SELECT COUNT(*), MAX(observed_at), MAX(event_date) FROM corporate_events")
     macro = _one(store, "SELECT COUNT(*), MAX(observed_at), MAX(release_ts) FROM macro")
     news = _one(store, "SELECT COUNT(*), MAX(published_at) FROM news")
     filings = _one(store, "SELECT COUNT(*), MAX(accepted_at), COUNT(DISTINCT ticker) FROM filings")
@@ -52,6 +53,9 @@ def data_sources(store: Store) -> list[dict[str, Any]]:
         row("nasdaq", "Nasdaq", "Earnings calendar: dates, before/after the bell, estimates and actuals",
             cadence="every 6 h", last_update=last.get("earnings_calendar"), rows=int(earnings[0] or 0),
             latest=_iso(earnings[3]) if earnings else None, latest_label="furthest scheduled report", url="https://www.nasdaq.com/market-activity/earnings"),
+        row("corporate", "Dividends and splits", "Ex-dividend dates and splits (Nasdaq, Yahoo Finance) and Bitget exchange notices",
+            cadence="every 12 h", last_update=last.get("corporate_events"), rows=int(corporate[0] or 0),
+            latest=_iso(corporate[2]) if corporate else None, latest_label="furthest dated event", url="https://www.nasdaq.com/market-activity/dividends"),
         row("fred", "FRED", "FOMC, CPI, jobs and other release times; VIX, curve, dollar, 10-year",
             cadence="every 6 h", last_update=max(x for x in (last.get("macro_calendar"), last.get("macro_series")) if x) if (last.get("macro_calendar") or last.get("macro_series")) else None,
             rows=int(macro[0] or 0), latest=_iso(macro[2]) if macro else None, latest_label="furthest scheduled release", url="https://fred.stlouisfed.org"),

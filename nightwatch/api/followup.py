@@ -595,6 +595,41 @@ def _a_street(r: dict, q: str) -> Answer | None:
     return Answer("street", " ".join(bits), ("Bitget US-stock data",))
 
 
+def _a_corporate(r: dict, q: str) -> Answer | None:
+    """Dividends, splits and exchange notices, read only from the report's own section."""
+    from nightwatch.features.corporate import plain
+
+    c = r.get("corporate_events")
+    reads = ("corporate events",)
+    if not c:
+        return Answer("corporate", "This report has no dividend or split check, so I cannot say whether one is coming. "
+                      "That is a gap in this report, not a sign that none is.", reads)
+    if not c.get("covered"):
+        return Answer("corporate", "The dividend and split calendar has not been synced yet, so I cannot say whether one falls in this hold. I will not guess.", reads)
+    checked = (c.get("checked_at") or "")[:10]
+    bits = []
+    inside = c.get("in_hold") or []
+    if inside:
+        bits.append("Inside this hold: " + "; ".join(plain(e) for e in inside) + ".")
+        if c.get("handling"):
+            bits.append(c["handling"])
+    else:
+        bits.append("No ex-dividend date or split falls inside this hold in the stored calendar"
+                    + (f" (last checked {checked}; sources: {', '.join(c['sources'])})." if c.get("sources") else f" (last checked {checked})."))
+    if c.get("next_after"):
+        bits.append("The next one after it: " + plain(c["next_after"]) + ".")
+    elif not inside:
+        bits.append("None is scheduled after it either.")
+    if c.get("last_split"):
+        bits.append("Its last split: " + plain(c["last_split"]) + ".")
+    for n in (c.get("notices") or [])[-2:]:
+        bits.append("Recent Bitget notice: " + plain(n) + ".")
+    if re.search(r"suspen|halt|delist", q, re.I) and not any(n.get("kind") == "suspension" for n in c.get("notices") or []):
+        bits.append("No trading suspension notice naming this token was found in Bitget's latest announcements (that feed holds only the most recent few per type).")
+    bits.append("This is what the stored calendar knows, not a guarantee that nothing is coming.")
+    return Answer("corporate", " ".join(bits), reads)
+
+
 def _a_technicals(r: dict, _q: str) -> Answer | None:
     g = r.get("signal") or {}
     if not g:
@@ -694,6 +729,7 @@ ROUTES: tuple[tuple[str, re.Pattern[str], Any], ...] = (
     ("data", re.compile(r"\bwhat data\b|\bwhich data\b|\bdata sources?\b|\bwhere (?:does|do) (?:the|your|this) (?:data|numbers?)\b|\bwhere is (?:the|your) data\b"
                         r"|\bwhat (?:do you|does it) (?:use|read|look at)\b|\bwhat sources\b", re.I), _a_data),
     ("options", re.compile(r"(?<!my )(?<!other )(?<!the )\boptions?\b(?! (?:do i|are there|have i))|\bput options?\b|\bcall options?\b|\bbuy (?:a )?puts?\b|\bbuy (?:a )?calls?\b", re.I), _a_options),
+    ("corporate", re.compile(r"\bdividends?\b|\bex[- ]?div\w*|\b(?:stock |share )?splits?\b(?!\s+(?:the|my|it|this|that|into|up|order|across))|\bpayouts?\b|\bsuspen\w*|\bdelist\w*|\btrading halts?\b|\bcorporate (?:actions?|events?)\b", re.I), _a_corporate),
     ("shock", SHOCK, _a_shock),
     ("premise", re.compile(r"\bthesis\b|\bmy reason\b|\bsupported\b|\bwhen (?:is|are|were|was|did)\b.*\b(?:earnings|report|results|fomc|fed)\b|\bearnings (?:date|when)\b|\bnext earnings\b|财报什么时候|逻辑成立", re.I), _a_premise),
     ("technicals", re.compile(r"\brsi\b|\btechnicals?\b|\btechnical (?:analysis|indicators?|read\w*)\b|\bmacd\b|\boversold\b|\boverbought\b|\bmomentum indicators?\b", re.I), _a_technicals),

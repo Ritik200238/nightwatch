@@ -301,11 +301,51 @@ def _a_options(r: dict, q: str) -> Answer | None:
     return Answer("hedge", head + (got.text if got else ""), ("hedge quote",))
 
 
+def _zh_event(e: dict) -> str:
+    src = f"（来源：{e['source_label']}" + (f"，公告日 {e['announced']}" if e.get("announced") else "") + "）"
+    if e["kind"] == "dividend":
+        amt = f"每股 {e['amount']:g} {e.get('currency') or 'USD'}" if e.get("amount") else ""
+        pct = f"，约占股价 {e['amount_pct_of_price']:.2f}%" if e.get("amount_pct_of_price") else ""
+        return f"{e['date']} 除息{amt}{pct}{src}"
+    if e["kind"] == "split":
+        return f"{e['date']} 拆股生效，比例 {e.get('ratio') or '未知'}（新股:旧股）{src}"
+    return f"{e['date']} {e.get('detail') or e['kind']}（来源：{e['source_label']}）"
+
+
+def _a_corporate(r: dict, q: str) -> Answer | None:
+    c = r.get("corporate_events")
+    reads = ("corporate events",)
+    if not c:
+        return Answer("corporate", "这份报告没有做分红和拆股的检查，所以我无法判断是否有。这是报告的缺口，不代表没有。", reads)
+    if not c.get("covered"):
+        return Answer("corporate", "分红和拆股日历还没有同步，所以我无法判断这段持仓期内是否有。我不会猜。", reads)
+    bits = []
+    inside = c.get("in_hold") or []
+    if inside:
+        bits.append("持仓期内：" + "；".join(_zh_event(e) for e in inside) + "。")
+        bits.append("Bitget 对 rToken 持有人在这种情况下如何调整，目前无法核实：Bitget 只对股票永续合约发布过现金分红结算公告，没有找到现货代币的说明。持有前请先看 Bitget 自己的公告。")
+    else:
+        bits.append(f"在已存储的日历里，这段持仓期内没有除息日或拆股（最近检查：{(c.get('checked_at') or '')[:10]}）。")
+    if c.get("next_after"):
+        bits.append("之后最近的一次：" + _zh_event(c["next_after"]) + "。")
+    elif not inside:
+        bits.append("之后也没有已排期的。")
+    if c.get("last_split"):
+        bits.append("上一次拆股：" + _zh_event(c["last_split"]) + "。")
+    for n in (c.get("notices") or [])[-2:]:
+        bits.append("Bitget 近期公告：" + _zh_event(n) + "。")
+    if re.search(r"停牌|暂停交易|退市", q) and not any(n.get("kind") == "suspension" for n in c.get("notices") or []):
+        bits.append("在 Bitget 最新公告里没有找到点名这个代币的暂停交易公告（该公告源每类只保留最近几条）。")
+    bits.append("以上是已存储日历里已知的内容，不保证之后不会有新的。")
+    return Answer("corporate", "".join(bits), reads)
+
+
 ROUTES = (
     ("plain", re.compile(r"通俗|简单(?:说|点|解释|讲)|说人话|新手|小白|看不懂|不懂|什么意思|解释一下"), _a_plain),
     ("decide", re.compile(r"我该怎么做|要不要(?:买|做|入)|该不该|该买|值得吗|值不值|能不能买|可以买吗|能买吗|买吗|做多吗|做空吗|建议我|你会怎么做|安全吗"), _a_decide),
     ("data", re.compile(r"数据来源|什么数据|数据从哪|用了哪些数据|数据源"), _a_data),
     ("options", re.compile(r"期权|看跌期权|看涨期权"), _a_options),
+    ("corporate", re.compile(r"分红|股息|派息|除息|拆股|股票拆分|送股|停牌|暂停交易|公司行动|退市"), _a_corporate),
     ("shock", re.compile(r"(?:跌|涨|跳空|暴跌|暴涨)[^0-9]{0,6}[0-9]+(?:\.[0-9]+)?\s*[%％]"), _a_shock),
     ("similar", re.compile(r"相似|一样|像现在"), _a_similar),
     ("technicals", re.compile(r"技术面|技术指标|RSI|rsi|MACD|macd|超卖|超买"), _a_technicals),
