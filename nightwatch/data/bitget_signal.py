@@ -29,13 +29,15 @@ URL = "https://datahub.noxiaohao.com/mcp"
 PROTOCOL = "2025-06-18"
 CLIENT = {"name": "nightwatch", "version": "1"}
 HEADERS = {"content-type": "application/json", "accept": "application/json, text/event-stream"}
-# The cheap tools health() tries: (tool, arguments). A reply with usable JSON counts.
+# What health() tries: (tool, arguments). A reply with usable JSON counts. These are the
+# calls the desk actually makes. Three earlier probes named tools the server does not have
+# (full_analysis, market_sentiment, news), which made a working feed read "mostly failing";
+# on 4 Oct the server's other tools (sentiment_index, tradfi_news, news_feed, macro,
+# rates) all timed out at 15 s, so the desk does not use them.
 HEALTH_PROBES: tuple[tuple[str, dict[str, Any]], ...] = (
     ("technical_analysis", {"action": "rsi", "symbol": "TSLA"}),
     ("technical_analysis", {"action": "macd", "symbol": "TSLA"}),
-    ("full_analysis", {"symbol": "TSLA"}),
-    ("market_sentiment", {}),
-    ("news", {"symbol": "TSLA"}),
+    ("technical_analysis", {"action": "full_analysis", "symbol": "TSLA"}),
 )
 
 
