@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from nightwatch import __version__
 from nightwatch.api import followup, guard
+from nightwatch.api.locking import RequestFirstLock
 from nightwatch.api.sources import data_sources
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
@@ -66,6 +67,10 @@ def _closed_hours_slim() -> dict[str, Any] | None:
     res = closed_hours.load_result()
     return closed_hours.slim(res) if res else None
 
+
+# The warm-up steps aside for requests, but not forever: a steady stream of them must not
+# leave every other token cold.
+WARM_YIELD_MAX_S = 30.0
 
 CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
 
@@ -210,7 +215,8 @@ class AppState:
             street_client=_street_client(),
             signal_client=_signal_client(),
         )
-        self.lock = threading.Lock()  # serialises analyses that share the frame cache
+        # Serialises analyses that share the frame cache; people go before the warm-up.
+        self.lock = RequestFirstLock()
         # Scoring the whole journal takes seconds; it only changes when forecasts mature.
         self.calibration_cache: dict[tuple[str, str], tuple[datetime, dict[str, Any]]] = _BoundedCache(CALIBRATION_CACHE_MAX)
         self.warm_thread: threading.Thread | None = None
@@ -253,7 +259,7 @@ class AppState:
         end = utc_now()
         for i, t in enumerate(tickers, 1):
             try:
-                with self.lock:
+                with self.lock.background(max_wait_s=WARM_YIELD_MAX_S):
                     self.ctx.feature_frame(t, end)
             except Exception as exc:  # noqa: BLE001
                 log.warning("warm %s failed: %s", t, exc)
