@@ -35,6 +35,14 @@ form — and answers four questions with data:
 
 On top of that:
 
+* **Your reason against the news.** A written thesis ("Nvidia just hit record highs, AI
+  demand is strong") is split into claims, and each is held against the headlines and
+  SEC filings the desk stored for the token in the 14 days before the report, as known
+  then: *in the news*, *the news says otherwise*, or *not in our feeds*. The model only
+  names which stored items match; every quote shown is the stored headline with its
+  source, time and link, and an id it was never shown is thrown away. Without a model it
+  falls back to a keyword match that never says "in the news". Ask the chat "is my
+  reason right?" for the same check (`nightwatch/decision/thesis_check.py`).
 * **How this trade loses money**, worst first: each way it fails, what sets it off, why it
   costs what it does and how often it happened — written by rules from the report's own
   numbers, never by a model. Beside it, **what the answer assumes**, with the assumptions
