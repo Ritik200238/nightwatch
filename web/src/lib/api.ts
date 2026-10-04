@@ -644,6 +644,8 @@ export interface AccountPoint {
   verdict: string;
   recommended_notional: number | null;
   binding_cap: string | null;
+  /** Gate rules a bigger account alone cannot clear. */
+  blocking?: string[];
 }
 
 export interface Lesson {

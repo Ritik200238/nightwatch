@@ -843,8 +843,38 @@ def account_ladder_line(report: Any, zh: bool = False) -> str:  # noqa: ANN401
             end = (f"任何账户规模都无法让 {t.notional_quote:,.0f} USDT 通过：当前盘口只能承接约 {top.recommended_notional:,.0f} USDT。" if zh else
                    f"No account size makes {t.notional_quote:,.0f} a GO: the live order book only supports about {top.recommended_notional:,.0f} USDT.")
         else:
-            end = (f"任何账户规模都无法让 {t.notional_quote:,.0f} USDT 通过。" if zh else f"No account size makes {t.notional_quote:,.0f} a GO.")
+            needs = [x for x in ((_NEEDS_ZH if zh else _NEEDS).get(r) for r in getattr(top, "blocking", ())) if x]
+            if needs:
+                end = (f"即使账户更大，仍需：{'；'.join(dict.fromkeys(needs))}。" if zh else
+                       f"Even on a larger account it still needs: {'; '.join(dict.fromkeys(needs))}.")
+            else:
+                end = (f"任何账户规模都无法让 {t.notional_quote:,.0f} USDT 通过。" if zh else f"No account size makes {t.notional_quote:,.0f} a GO.")
     return (f"按账户规模：{steps}。{end}" if zh else f"By account size: {steps}. {end}")
+
+
+# What each gate rule asks of the trader, when an account size alone cannot clear it.
+_NEEDS = {
+    "written_plan": 'a reason and a "wrong if" line (e.g. "because ..., wrong if it closes below ...")',
+    "stop": "a stop at a sensible distance",
+    "market_posture": "calmer markets (the regime is hostile right now)",
+    "data_quality": "fresher data (some inputs are degraded right now)",
+    "exit_liquidity": "a deeper order book",
+    "liquidation": "less leverage",
+    "revenge_cooldown": "a cool-down after your recent loss",
+    "circuit_breaker": "your loss limit to reset",
+    "book_tail": "a smaller book risk",
+}
+_NEEDS_ZH = {
+    "written_plan": "写下理由和“错在哪里”（例如“因为……，如果收盘跌破……就算错”）",
+    "stop": "一个距离合理的止损",
+    "market_posture": "市场转好（当前市场状态不利）",
+    "data_quality": "更新的数据（部分输入当前不完整）",
+    "exit_liquidity": "更深的盘口",
+    "liquidation": "更低的杠杆",
+    "revenge_cooldown": "亏损后的冷静期结束",
+    "circuit_breaker": "亏损限额重置",
+    "book_tail": "降低整体持仓风险",
+}
 
 
 def brief(report: Any, lang: str = "en") -> str:

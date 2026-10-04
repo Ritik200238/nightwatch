@@ -97,6 +97,9 @@ class AccountPoint:
     verdict: str
     recommended_notional: float | None
     binding_cap: str | None
+    # Gate rules still not passed at this account size, other than the two that read it:
+    # what the trader has to give besides an account size.
+    blocking: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -313,7 +316,8 @@ def account_ladder(dc: DecisionContext, ticket: TradeTicket, headline: Evaluatio
     out = []
     for equity in LADDER_EQUITIES:
         ev = _at_equity(dc, ticket, equity, headline)
-        out.append(AccountPoint(equity=equity, verdict=ev.verdict.verdict.value, recommended_notional=ev.verdict.recommended_notional, binding_cap=ev.sizing.binding_cap))
+        blocking = tuple(r.rule for r in ev.gate.rules if r.decision != GateDecision.GO and r.rule not in ("position_size", "risk_budget"))
+        out.append(AccountPoint(equity=equity, verdict=ev.verdict.verdict.value, recommended_notional=ev.verdict.recommended_notional, binding_cap=ev.sizing.binding_cap, blocking=blocking))
     return out
 
 

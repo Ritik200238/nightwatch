@@ -312,4 +312,7 @@ def test_a_trade_without_an_account_is_still_answered_at_several_account_sizes(c
     assert rep["verdict"]["verdict"] == "REVIEW"
     ladder = rep["sensitivity"]["account_ladder"]
     assert [p["equity"] for p in ladder] == [25_000.0, 50_000.0, 100_000.0, 250_000.0]
-    assert "By account size: 25k → " in out["reply"] and ("It becomes a GO" in out["reply"] or "No account size makes" in out["reply"])
+    assert "By account size: 25k → " in out["reply"] and ("It becomes a GO" in out["reply"] or "No account size makes" in out["reply"] or "still needs" in out["reply"])
+    # No reason was written, so a larger account alone cannot clear it, and the reply says what can.
+    if all(p["verdict"] != "GO" for p in ladder) and "written_plan" in ladder[-1]["blocking"]:
+        assert "wrong if" in out["reply"]
