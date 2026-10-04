@@ -197,7 +197,11 @@ def cmd_record(args: argparse.Namespace, settings: Settings) -> int:
                 # Earnings dates move and macro releases get scheduled; six-hourly is plenty.
                 PeriodicJob("calendars", 6 * 3600, lambda: sync_calendars(store, nasdaq=nasdaq, fred=fred), run_at_start=False, age_at_start=age_of("earnings_calendar")),
                 # Ex-dividend dates, splits and Bitget notices: declared well ahead and rarely revised, so twice a day.
-                PeriodicJob("corporate-events", 12 * 3600, lambda: sync_corporate_events(store, entries), run_at_start=False, age_at_start=age_of("corporate_events")),
+                # Never synced means an empty calendar, and the chat then says it cannot tell: run
+                # the first sync ten minutes after start (clear of a deploy's busy minute), not
+                # a full twelve hours later.
+                PeriodicJob("corporate-events", 12 * 3600, lambda: sync_corporate_events(store, entries), run_at_start=False,
+                            age_at_start=ce_age if (ce_age := age_of("corporate_events")) is not None else 12 * 3600 - 600),
                 PeriodicJob("news", 1800, lambda: sync_news(store, RssNewsClient(tickers=tickers)), run_at_start=False, age_at_start=age_of("news")),
                 # The native stock's own bars: hourly while the US market is open, and a
                 # no-op the rest of the time because the missing-range check finds nothing.
