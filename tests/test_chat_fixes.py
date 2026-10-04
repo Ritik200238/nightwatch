@@ -292,3 +292,33 @@ def test_shorting_and_buying_are_sides_too(client):
     r = say(client, "thinking of shorting aapl tonite maybe 10k?? worst case?")
     assert r["ticket"]["side"] == "short" and r["ticket"]["ticker"] == "AAPL" and r["ticket"]["notional_quote"] == 10000
     assert say(client, "buying 5k nvda overnight")["ticket"]["side"] == "long"
+
+
+# --- a REVIEW waiting only for the account size opens with one clear sentence -----------------
+
+def test_review_without_an_account_opens_with_what_to_do_and_why(client):
+    r = say(client, "long 20000 TSLA overnight")
+    first = r["reply"].split("\n")[0]
+    assert first.startswith("Tell the desk your account size") and "At 20,000 USDT a bad night" in first and "Size it at" not in first
+    z = say(client, "周末做多特斯拉 2万U")["reply"].split("\n")[0]
+    assert z.startswith("请告诉系统你的账户规模") and "二十分之一的坏夜晚" in z
+    assert say(client, "long 20000 TSLA overnight, account 200k")["reply"].split("\n")[0].startswith(("GO", "REDUCE", "HEDGE", "NO GO", "REVIEW"))
+
+
+# --- 8. a what-if on the same moment does not rebuild what cannot have changed ------------------
+
+def test_a_rerun_at_the_same_moment_reuses_the_snapshot_and_regime_map(client):
+    from nightwatch.pipeline.analyze import analyze
+    from tests.test_pipeline import AS_OF as moment
+
+    ctx = client.app.state.nw.ctx
+    from nightwatch.decision.ticket import TradeTicket
+    from nightwatch.stress.scenarios import Side
+
+    t = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=10000.0, account_equity_quote=100000.0)
+    first = analyze(ctx, t, as_of=moment, record=False)
+    again = analyze(ctx, t, as_of=moment, record=False)
+    assert again.snapshot is first.snapshot and again.regimes is first.regimes
+    assert again.verdict.verdict == first.verdict.verdict and again.timings_ms["snapshot"] <= first.timings_ms["snapshot"]
+    other = analyze(ctx, t, as_of=moment.replace(hour=(moment.hour + 1) % 24), record=False)
+    assert other.snapshot is not first.snapshot  # a different moment is a different snapshot

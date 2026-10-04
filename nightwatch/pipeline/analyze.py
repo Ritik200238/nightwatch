@@ -129,6 +129,29 @@ class AnalysisContext:
     _outcomes: dict[tuple, Any] = field(default_factory=dict)
     _baselines: dict[tuple, Any] = field(default_factory=dict)
     _memo_lock: threading.Lock = field(default_factory=threading.Lock)
+    # A what-if re-runs the same ticker at the same moment with one thing changed, so the
+    # snapshot and the regime map are identical to the run before. Keyed by the moment and the
+    # frame, bounded, oldest out first.
+    _snapshots: dict[tuple, Any] = field(default_factory=dict)
+    _regime_maps: dict[tuple, Any] = field(default_factory=dict)
+
+    def snapshot_at(self, spec: SeriesSpec, as_of: datetime) -> FeatureSnapshot:
+        key = (spec.ticker, ensure_utc(as_of).isoformat())
+        hit = self._snapshots.get(key)
+        if hit is None:
+            hit = build_snapshot(self.store, spec, as_of)
+            with self._memo_lock:
+                _remember(self._snapshots, key, hit, 32)
+        return hit
+
+    def regimes_at(self, frame: pd.DataFrame, bar_ts: Any, horizon: int) -> RegimeMap:  # noqa: ANN401
+        key = (id(frame), len(frame), pd.Timestamp(bar_ts), horizon)
+        hit = self._regime_maps.get(key)
+        if hit is None:
+            hit = build_regimes(frame, as_of=pd.Timestamp(bar_ts), horizon_h=horizon)
+            with self._memo_lock:
+                _remember(self._regime_maps, key, hit, 32)
+        return hit
 
     def match_outcomes(self, frame: pd.DataFrame, ts: datetime, fixed: tuple[int, ...]) -> MatchOutcome:
         key = (id(frame), len(frame), frame.index[0], frame.index[-1], pd.Timestamp(ts), fixed)
@@ -649,7 +672,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     # 1. Snapshot (now).
     t0 = time.perf_counter()
-    snapshot = build_snapshot(ctx.store, spec, as_of)
+    snapshot = ctx.snapshot_at(spec, as_of)
     timings["snapshot"] = _ms(t0)
     entry_price = ticket.entry_price or snapshot.prices["spot_close"] or 0.0
     # A stop given as a distance becomes a price here, the first moment one is known, so
@@ -841,7 +864,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     t0 = time.perf_counter()
     regimes = None
     try:
-        regimes = build_regimes(frame, as_of=pd.Timestamp(snapshot.bar_ts), horizon_h=max(1, int(round(horizon_h))))
+        regimes = ctx.regimes_at(frame, snapshot.bar_ts, max(1, int(round(horizon_h))))
     except Exception:  # noqa: BLE001 - a map is not worth breaking a verdict for
         log.exception("regime map failed")
     timings["regimes"] = _ms(t0)
