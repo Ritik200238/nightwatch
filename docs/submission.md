@@ -129,17 +129,17 @@ orders. Nightwatch never places orders.
 
 ### 3. Validation data and key metrics
 
-**Current figures, as of 3 Oct 2026** (live; recomputed from the journal and checked
+**Current figures, as of 4 Oct 2026** (live; recomputed from the journal and checked
 against the public endpoints that day):
 
-* Receipts: `/api/verify` recomputes 712 chained verdicts with no break; 4 of 4 daily
+* Receipts: `/api/verify` recomputes 896 chained verdicts with no break; 5 of 5 daily
   anchors are confirmed in Bitcoin.
-* Scored out of sample: 2,779 matured forecasts. The raw one-in-twenty loss (the 5th
-  percentile) was breached 7.5% of the time (red band); with tail factors fitted only on
-  earlier forecasts, 4.8% on 2,735 evaluated (green band).
-* Misses, published at `/wrong`: 124 of 2,301 replays and 8 of 433 live tickets went past
+* Scored out of sample: 2,796 matured forecasts. The raw one-in-twenty loss (the 5th
+  percentile) was breached 7.4% of the time (red band); with tail factors fitted only on
+  earlier forecasts, 4.8% on 2,752 evaluated (green band).
+* Misses, published at `/wrong`: 124 of 2,301 replays and 8 of 451 live tickets went past
   the line.
-* Studies: 11 questions, 5 no, 3 yes, 3 undecided. After correcting for asking eleven
+* Studies: 11 studies (9 formal tests with a p-value, 2 measurements), 5 no, 3 yes, 3 undecided. After correcting for the nine tests asked at once
   (Benjamini-Hochberg, 5%), 1 of the 3 yes survives (a model reading an SEC filing picks
   the ones that move the price, q = 0.004). No directional edge.
 * Data: six data feeds plus two Bitget AI services; 24 core tokens.
@@ -220,7 +220,7 @@ current.
   the narrowed one **7.0%** (n = 100, 12 of 18 tokens better, clustered t = +2.9). On the
   night before earnings itself it was **54.2% against 4.2%** — but on 24 nights, under the
   30-night bar set before the run, so it is reported and not counted. Corrected for the
-  eleven questions asked at once (Benjamini–Hochberg), this result has q = 0.095:
+  nine tests asked at once (Benjamini–Hochberg), this result has q = 0.095:
   suggestive, not established, and the Studies page says so beside it. Volatile nights
   improved narrowly (15.8% to 13.9%, t = +2.0); five other conditions showed no separable
   difference, and none scored worse. The same sweep found a bug: "FOMC ahead" had enough

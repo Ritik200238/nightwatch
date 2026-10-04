@@ -819,7 +819,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             newest = max((ts for ts, _ in shown), default=None)
             out.append({
                 "key": "bitget_signal", "label": "Bitget signal skill backend",
-                "what": "RSI (4h) from the bitget-signal technical-analysis tool, shown only when it agrees with our own RSI from Bitget candles. Its other tools are mostly failing.",
+                "what": "RSI (4h) from the bitget-signal technical-analysis tool, shown only when it agrees with our own RSI from Bitget candles. Only this tool is used, and the health count below probes exactly the calls the desk makes (RSI, MACD, full analysis). The skill's other tools (sentiment, news, macro, rates) timed out on every call on 4 Oct 2026, so nothing here relies on them.",
                 "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
                 "rows": len(shown), "latest": newest.isoformat() if newest else None,
                 "latest_label": f"{health['answering']} of {health['tried']} tools answering" if health else "health check pending",
