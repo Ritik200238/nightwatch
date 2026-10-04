@@ -64,16 +64,17 @@ def test_the_report_and_the_brief_carry_them(seeded_store):  # noqa: F811
     assert "主要亏损方式" in it.brief(r, "zh")
 
 
-def test_failure_modes_rank_by_chance_times_loss_and_stop_at_the_margin():
+def test_failure_modes_rank_by_loss_largest_first_and_stop_at_the_margin():
     """A 0% liquidation was listed first and an 83% one fifth; a 50x position with 200 USDT
-    of margin was shown losing 2,995. Neither can happen."""
+    of margin was shown losing 2,995. Neither can happen. The list says "worst first", so it is
+    ordered by loss: a -833 gap must not head a list that holds a -2,843 crash replay."""
     from nightwatch.decision.story import FailureMode, _cap_at_margin, _rank
 
     def fm(key, loss, chance):  # noqa: ANN001, ANN202
         return FailureMode(key, key, "t", "m", loss, loss / 100, "l", "s", "x", chance)
 
     ranked = _rank([fm("rare_big", -2000.0, 0.01), fm("likely", -300.0, 0.6), fm("liquidation", -200.0, 0.0), fm("crisis", -3000.0, None)])
-    assert [m.key for m in ranked] == ["likely", "rare_big", "liquidation", "crisis"]
+    assert [m.key for m in ranked] == ["crisis", "rare_big", "likely", "liquidation"]
     capped = _cap_at_margin([fm("crisis", -3000.0, None), fm("small", -50.0, 0.1)], {"margin_quote": 200.0, "leverage": 50.0, "liquidation_distance_pct": 1.9})
     assert capped[0].loss_quote == -200.0 and capped[0].capped and "liquidated first" in capped[0].mechanism
     assert capped[1].loss_quote == -50.0 and not capped[1].capped

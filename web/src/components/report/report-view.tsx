@@ -310,7 +310,9 @@ function modeTitle(m: { title: string; title_zh?: string }, lang: Lang): string 
 
 function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
   const L = tr(lang);
-  const modes = report.failure_modes ?? [];
+  // Largest loss first whatever order the server stored: old reports were ranked by chance
+  // times loss, which put a small gap above a bigger crash under a "worst first" heading.
+  const modes = [...(report.failure_modes ?? [])].sort((a, b) => (a.loss_quote ?? Infinity) - (b.loss_quote ?? Infinity));
   if (!modes.length) return null;
   const worst = modes[0];
   const worstLoss = worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : "";
@@ -321,8 +323,8 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
       defaultOpen
       title={L("How this trade loses money", "这笔交易是怎么亏钱的")}
       subtitle={L(
-        "Each way it fails, what sets it off, why it costs what it does, and how often it happened. Worst first.",
-        "每一种失败方式、由什么触发、为什么会亏这么多，以及历史上发生的频率。最坏的排在最前。",
+        "Each way it fails, what sets it off, why it costs what it does, and how often it happened. Biggest loss first.",
+        "每一种失败方式、由什么触发、为什么会亏这么多，以及历史上发生的频率。亏损最大的排在最前。",
       )}
       summary={L(`${modes.length} ways · worst: ${worst.title.toLowerCase()}${worstLoss}`, `${modes.length} 种方式 · 最坏：${modeTitle(worst, lang)}${worstLoss}`)}
     >
