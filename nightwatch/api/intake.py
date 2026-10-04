@@ -40,10 +40,10 @@ ALIASES: dict[str, str] = {
 _SCALE = {"k": 1e3, "w": 1e4, "m": 1e6, "b": 1e9}
 
 # "short term" is a horizon, not a direction. Same for "shorter" and "short-dated".
-_SHORT = re.compile(r"\bshort(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell\b|\bbearish\b|\bfade\b", re.I)
+_SHORT = re.compile(r"\bshort(?:ing)?(?!\s*[-\s]?(?:term|dated|dur|er\b))\b|\bsell(?:ing)?\b|\bbearish\b|\bfade\b", re.I)
 # "hold 20k of TSLA overnight" is a long position; a trader saying it would be surprised
 # to be asked which way round they meant it.
-_LONG = re.compile(r"\blong(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy\b|\bbullish\b|\bhold(?:ing)?\b|\bcarry\b|\bkeep\b", re.I)
+_LONG = re.compile(r"\blong(?:ing)?(?!\s*[-\s]?(?:term|dated|er\b))\b|\bbuy(?:ing)?\b|\bbullish\b|\bhold(?:ing)?\b|\bcarry\b|\bkeep\b", re.I)
 _STOP = re.compile(r"\bstop(?:[-\s]?loss)?\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
 # "stop 3% below", "a 2% stop": a distance, not a price. Read as a price, "stop 1% above"
 # became a stop at 1.00 - 99.9% away, hit by every past moment - on a live test.
@@ -1064,17 +1064,31 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     """
     import json
 
+    from nightwatch.api import desk_help
     from nightwatch.pipeline.analyze import analyze
     from nightwatch.pipeline.render import render_text
 
     tickers = list(state.ctx.tickers_with_data())
     intent = read_conversation(messages, tickers, account_equity)
+    latest = next((m["content"] for m in reversed(messages) if m.get("role") == "user" and (m.get("content") or "").strip()), "")
+    lang = language_of(latest)
+    # A token, a side and an account but no size: the desk runs the largest size it allows
+    # and says so, rather than sending the trader back to type one.
+    assumed = None
+    got = desk_help.with_assumed_size(state, intent, tickers, account_equity, latest, lang)
+    if got:
+        intent, assumed = got
     result: dict[str, Any] = {
         "intent": intent.as_dict(), "ticket": None, "report": None, "narrative": None,
         "report_text": None, "unverified_numbers": [], "mode": "rules",
     }
+    if assumed:
+        result["size_assumed"] = assumed
     if intent.kind != "analyze":
         result["reply"] = intent.reply
+        if "ticker" in intent.missing_fields and not intent.negative_size:
+            # Not a dead end: say which tokens are covered.
+            result["reply"] = desk_help.no_token_reply(intent, tickers, latest, lang) or f"{intent.reply} {desk_help.covered_list(tickers, lang)}"
         return result
     if (intent.ticker or "").upper() not in {t.upper() for t in tickers}:
         result["intent"]["kind"] = "clarify"
@@ -1091,7 +1105,9 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.prefetch_take(report.forecast_id, payload, language_of(messages[-1].get("content", "") if messages else ""))
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
-    narrative = brief_short(report, language_of(messages[-1].get("content", "") if messages else ""))
+    narrative = brief_short(report, lang)
+    if assumed:
+        narrative = assumed["note"] + "\n\n" + narrative
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,

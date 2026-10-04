@@ -628,8 +628,11 @@ def _a_decide(r: dict, _q: str) -> Answer | None:
         return None
     t = _ticket(r)
     p5, loss = _loss_at_size(r)
-    bits = [f"The desk's answer is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}"
+    mine = f"On your {t.get('side')} {_usd(t.get('notional_quote'))} {t.get('ticker')}, " if t.get("ticker") and t.get("notional_quote") else ""
+    bits = [f"{mine}the desk's answer is {v['verdict'].replace('_', ' ')}: {_VERDICT_PLAIN.get(v['verdict'], '')}"
             + (f", at {_usd(v.get('recommended_notional'))}" if v.get("recommended_notional") is not None and v["verdict"] == "REDUCE_TO" else "") + "."]
+    if v["verdict"] in ("GO", "HEDGE") and v.get("recommended_notional"):
+        bits.append(f"The most it allows is {_usd(v['recommended_notional'])}.")
     if loss is not None:
         bits.append(f"If you do it at {_usd(t.get('notional_quote'))}, one time in twenty history says it loses more than {_usd(-loss)} ({_pct(p5)}).")
     bits.append("Whether the stock goes up is not something it can tell you: on thousands of scored forecasts it has no edge on direction, "

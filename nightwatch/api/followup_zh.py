@@ -303,7 +303,7 @@ def _a_options(r: dict, q: str) -> Answer | None:
 
 ROUTES = (
     ("plain", re.compile(r"通俗|简单(?:说|点|解释|讲)|说人话|新手|小白|看不懂|不懂|什么意思|解释一下"), _a_plain),
-    ("decide", re.compile(r"我该怎么做|要不要(?:买|做|入)|该不该|值得吗|值不值|能不能买|可以买吗|建议我|你会怎么做|安全吗"), _a_decide),
+    ("decide", re.compile(r"我该怎么做|要不要(?:买|做|入)|该不该|该买|值得吗|值不值|能不能买|可以买吗|能买吗|买吗|做多吗|做空吗|建议我|你会怎么做|安全吗"), _a_decide),
     ("data", re.compile(r"数据来源|什么数据|数据从哪|用了哪些数据|数据源"), _a_data),
     ("options", re.compile(r"期权|看跌期权|看涨期权"), _a_options),
     ("shock", re.compile(r"(?:跌|涨|跳空|暴跌|暴涨)[^0-9]{0,6}[0-9]+(?:\.[0-9]+)?\s*[%％]"), _a_shock),

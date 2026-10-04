@@ -178,3 +178,117 @@ def test_the_limit_is_still_a_real_ceiling():
 
     _, rate, burst = guard.rule_for("POST", "/chat")
     assert burst >= 12 and rate <= 30  # loose for a hand, closed to a loop
+
+
+# --- 2. a token, a side and an account but no size ----------------------------------------
+
+def test_no_size_runs_the_largest_size_the_desk_allows_and_says_so(client):
+    r = say(client, "5x long TSLA overnight, my account is 50k")
+    assumed = r["size_assumed"]
+    size = assumed["notional_quote"]
+    assert assumed["basis"] in ("largest_go", "desk_cap") and 0 < size <= 0.25 * 50000
+    assert r["ticket"]["notional_quote"] == size and r["ticket"]["account_equity_quote"] == 50000 and r["ticket"]["leverage"] == 5
+    assert "You didn't give a size" in r["reply"] and f"{size:,.0f} USDT" in r["reply"] and "50k account" in r["reply"]
+    assert "run that instead" in r["reply"]  # invites the trader's own size
+    assert r["report"] is not None
+
+
+def test_the_assumed_size_is_one_that_passes(client):
+    r = say(client, "long TSLA overnight, account 50k")
+    if r["size_assumed"]["basis"] == "largest_go":
+        assert r["report"]["verdict"]["verdict"] == "GO"
+
+
+def test_no_size_in_chinese(client):
+    r = say(client, "5倍杠杆做多特斯拉 过夜 账户5万U")
+    size = r["size_assumed"]["notional_quote"]
+    assert r["ticket"]["notional_quote"] == size and r["ticket"]["leverage"] == 5 and r["ticket"]["account_equity_quote"] == 50000
+    assert "你没有给仓位" in r["reply"] and "5万U 账户" in r["reply"]
+    assert f"{size:,.0f} USDT" in r["reply"]
+
+
+def test_a_given_size_is_never_replaced(client):
+    r = say(client, "long 8000 TSLA overnight, account 50k")
+    assert "size_assumed" not in r and r["ticket"]["notional_quote"] == 8000
+
+
+def test_no_size_and_no_account_still_asks(client):
+    r = say(client, "long TSLA overnight")
+    assert r["ticket"] is None and "size" in r["reply"] and "size_assumed" not in r
+
+
+def test_the_model_is_not_asked_for_a_missing_size(client, monkeypatch):
+    fake = _Fake()
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: True)
+    monkeypatch.setattr("nightwatch.api.llm.select", lambda *a, **k: fake)
+    r = say(client, "5x long TSLA overnight, my account is 50k")
+    assert fake.calls == 0 and r["size_assumed"]["notional_quote"] > 0 and "You didn't give a size" in r["reply"]
+
+
+# --- 5. an unknown ticker is not a dead end -----------------------------------------------
+
+def test_an_unknown_ticker_lists_the_covered_ones(client):
+    r = say(client, "long 5k XYZQ over the weekend")
+    assert r["ticket"] is None and "XYZQ" in r["reply"]
+    assert "AAPL, NVDA, TSLA" in r["reply"]
+
+
+def test_an_unknown_ticker_without_a_model_call(client, monkeypatch):
+    fake = _Fake()
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: True)
+    monkeypatch.setattr("nightwatch.api.llm.select", lambda *a, **k: fake)
+    r = say(client, "long 5k XYZQ over the weekend")
+    assert fake.calls == 0 and "AAPL, NVDA, TSLA" in r["reply"]
+
+
+def test_an_unnamed_token_lists_the_covered_ones_too(client):
+    r = say(client, "long 5k over the weekend")
+    assert "AAPL, NVDA, TSLA" in r["reply"]
+
+
+def test_ordinary_capitals_are_not_unknown_tokens(client):
+    r = say(client, "LONG 5k TSLA OVERNIGHT")
+    assert r["ticket"]["ticker"] == "TSLA"
+
+
+# --- 6. "should I buy?" -------------------------------------------------------------------
+
+def test_should_i_buy_on_the_trade_on_screen_answers_with_the_verdict(client):
+    first = say(client, "long 20000 TSLA overnight, account 200k")
+    fid = first["report"]["forecast_id"]
+    verdict = first["report"]["verdict"]["verdict"].replace("_", " ")
+    r = say(client, "long 20000 TSLA overnight, account 200k", "should I buy?", ctx=fid)
+    assert r["answer_kind"] == "decide" and verdict in r["reply"] and "20,000 USDT" in r["reply"]
+    assert "no edge on direction" in r["reply"]  # never a prediction
+
+
+def test_chinese_should_i_buy_on_the_trade_on_screen(client):
+    first = say(client, "周末做多特斯拉 2万U，账户20万U")
+    r = say(client, "周末做多特斯拉 2万U，账户20万U", "该买吗", ctx=first["report"]["forecast_id"])
+    assert r["answer_kind"] == "decide" and "系统的回答" in r["reply"] and "没有优势" in r["reply"]
+
+
+def test_should_i_buy_a_token_runs_it_at_a_stated_stand_in_size(client):
+    r = say(client, "should I buy nvda?")
+    assert r["size_assumed"]["basis"] == "stand_in" and r["ticket"]["ticker"] == "NVDA"
+    assert "I don't predict direction" in r["reply"] and "stand-in of 10,000 USDT" in r["reply"]
+    assert r["report"]["verdict"]["verdict"]
+
+
+def test_should_i_buy_with_an_account_uses_the_largest_allowed_size(client):
+    r = say(client, "should I buy nvda? I have 50k")
+    assert r["size_assumed"]["basis"] in ("largest_go", "desk_cap") and "I don't predict direction" in r["reply"]
+
+
+def test_should_i_buy_without_a_token_says_what_the_desk_can_do(client):
+    r = say(client, "should I buy?")
+    assert r["ticket"] is None and "I don't predict direction" in r["reply"] and "AAPL, NVDA, TSLA" in r["reply"]
+    z = say(client, "该买吗")
+    assert z["ticket"] is None and "我不预测涨跌" in z["reply"] and "AAPL, NVDA, TSLA" in z["reply"]
+
+
+def test_shorting_and_buying_are_sides_too(client):
+    """"thinking of shorting aapl tonite maybe 10k?? worst case?" asked "long or short?" and went to the model."""
+    r = say(client, "thinking of shorting aapl tonite maybe 10k?? worst case?")
+    assert r["ticket"]["side"] == "short" and r["ticket"]["ticker"] == "AAPL" and r["ticket"]["notional_quote"] == 10000
+    assert say(client, "buying 5k nvda overnight")["ticket"]["side"] == "long"
