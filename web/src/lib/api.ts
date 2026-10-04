@@ -325,6 +325,34 @@ export interface ClosedHours {
   };
 }
 
+/** One stored headline or SEC filing a claim was checked against. */
+export interface ThesisItem {
+  id: string;
+  kind: "news" | "filing";
+  title: string;
+  source: string;
+  published_at: string;
+  link: string | null;
+}
+
+export interface ThesisClaim {
+  claim: string;
+  status: "supported" | "contradicted" | "not_found" | "related";
+  evidence: ThesisItem[];
+  note: string;
+}
+
+/** The trader's reason against the headlines and filings stored before the report. */
+export interface ThesisCheck {
+  state: "checked" | "no_thesis" | "no_items";
+  method: "model" | "keyword" | "none";
+  ticker: string;
+  window_days: number;
+  items_considered: number;
+  claims: ThesisClaim[];
+  model: string | null;
+}
+
 /** What the report quotes for one token from that measurement. */
 export interface ClosedHoursLine {
   ticker: string;
@@ -1172,6 +1200,7 @@ export const api = {
   },
   studies: () => request<StudiesResponse>("/studies"),
   closedHours: (ticker: string) => request<ClosedHoursLine>(`/closed-hours/${encodeURIComponent(ticker)}`),
+  thesisCheck: (forecastId: number, lang: string) => request<ThesisCheck>(`/thesis-check/${forecastId}?lang=${lang === "zh" ? "zh" : "en"}`),
   verify: () => request<VerifyResponse>("/verify"),
   anchors: () => request<{ anchors: Anchor[] }>("/anchors"),
   misses: () => request<MissesResponse>("/misses"),
