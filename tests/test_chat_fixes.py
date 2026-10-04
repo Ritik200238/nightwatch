@@ -305,20 +305,19 @@ def test_review_without_an_account_opens_with_what_to_do_and_why(client):
     assert say(client, "long 20000 TSLA overnight, account 200k")["reply"].split("\n")[0].startswith(("GO", "REDUCE", "HEDGE", "NO GO", "REVIEW"))
 
 
-# --- 8. a what-if on the same moment does not rebuild what cannot have changed ------------------
+# --- 8. a what-if on the same AS_OF does not rebuild what cannot have changed ------------------
 
 def test_a_rerun_at_the_same_moment_reuses_the_snapshot_and_regime_map(client):
     from nightwatch.pipeline.analyze import analyze
-    from tests.test_pipeline import AS_OF as moment
 
     ctx = client.app.state.nw.ctx
     from nightwatch.decision.ticket import TradeTicket
     from nightwatch.stress.scenarios import Side
 
     t = TradeTicket(ticker="TSLA", side=Side.LONG, notional_quote=10000.0, account_equity_quote=100000.0)
-    first = analyze(ctx, t, as_of=moment, record=False)
-    again = analyze(ctx, t, as_of=moment, record=False)
+    first = analyze(ctx, t, as_of=AS_OF, record=False)
+    again = analyze(ctx, t, as_of=AS_OF, record=False)
     assert again.snapshot is first.snapshot and again.regimes is first.regimes
     assert again.verdict.verdict == first.verdict.verdict and again.timings_ms["snapshot"] <= first.timings_ms["snapshot"]
-    other = analyze(ctx, t, as_of=moment.replace(hour=(moment.hour + 1) % 24), record=False)
-    assert other.snapshot is not first.snapshot  # a different moment is a different snapshot
+    other = analyze(ctx, t, as_of=AS_OF.replace(hour=(AS_OF.hour + 1) % 24), record=False)
+    assert other.snapshot is not first.snapshot  # a different AS_OF is a different snapshot
