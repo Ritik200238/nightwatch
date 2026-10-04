@@ -117,6 +117,9 @@ def test_notes_do_not_show_internal_ids():
     assert tc._plain_note("N2 states Nvidia broke through; both N1 and F3 agree.", False) == "The headline states Nvidia broke through; both the headline and the filing agree."
     assert tc._plain_note("Headline N3 reports record highs", False) == "The headline reports record highs"
     assert tc._plain_note("N8标题明确指出", True) == "该新闻明确指出"
+    assert tc._plain_note("Both N1 and N2 report that deliveries topped expectations.", False) == "Both headlines report that deliveries topped expectations."
+    assert tc._plain_note("N1, N2 and N4 agree.", False) == "These headlines agree."
+    assert tc._plain_note("N1和N2都报道了", True) == "这些新闻都报道了"
 
 
 def test_the_chat_questions_that_ask_for_it():

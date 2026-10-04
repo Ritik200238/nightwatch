@@ -222,6 +222,12 @@ def _plain_note(note: str, lang_zh: bool) -> str:
             return "该新闻" if m.group(1).upper() == "N" else "该文件"
         return "the headline" if m.group(1).upper() == "N" else "the filing"
     text = _ID_REF.sub(name, note).strip()
+    # "Both N1 and N2 report..." became "both the headline and the headline report...".
+    for one, many in (("the headline", "headlines"), ("the filing", "filings")):
+        text = re.sub(rf"\b[Bb]oth {one} and {one}\b", f"both {many}", text)
+        text = re.sub(rf"\b{one}(?:, {one})* and {one}\b", f"these {many}", text)
+    for one, many in (("该新闻", "这些新闻"), ("该文件", "这些文件")):
+        text = re.sub(rf"{one}(?:[、,，和及与]{one})+", many, text)
     return text[:1].upper() + text[1:] if text and not lang_zh else text
 
 
