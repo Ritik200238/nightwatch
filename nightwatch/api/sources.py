@@ -31,7 +31,8 @@ def data_sources(store: Store) -> list[dict[str, Any]]:
 
     bars_bitget = _one(store, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue<>?", (Venue.YAHOO.value,))
     bars_yahoo = _one(store, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue=?", (Venue.YAHOO.value,))
-    books = _one(store, "SELECT COUNT(*), MAX(ts) FROM orderbook_snapshots")
+    # By id, not MAX(ts): the newest snapshot is the last inserted, and MAX(ts) has no index.
+    books = _one(store, "SELECT (SELECT COUNT(*) FROM orderbook_snapshots), (SELECT ts FROM orderbook_snapshots ORDER BY id DESC LIMIT 1)")
     earnings = _one(store, "SELECT COUNT(*), MAX(observed_at), MIN(report_date), MAX(report_date) FROM earnings")
     macro = _one(store, "SELECT COUNT(*), MAX(observed_at), MAX(release_ts) FROM macro")
     news = _one(store, "SELECT COUNT(*), MAX(published_at) FROM news")

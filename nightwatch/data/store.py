@@ -148,6 +148,13 @@ class Store:
     def close(self) -> None:
         self._conn.close()
 
+    def latest_book_ms(self, conn: sqlite3.Connection | None = None) -> int | None:
+        """Time of the newest order-book snapshot. Snapshots are inserted in time order, so
+        the highest id is the newest one: a primary-key lookup, where MAX(ts) has no index
+        to use and took 3.7 s over 1.5 million rows on the box."""
+        row = (conn or self._conn).execute("SELECT ts FROM orderbook_snapshots ORDER BY id DESC LIMIT 1").fetchone()
+        return int(row[0]) if row else None
+
     def snapshot_lag_seconds(self) -> float:
         """How far this store's shared connection lags the file on disk.
 
@@ -157,10 +164,10 @@ class Store:
         it was at that moment: the API served a frozen order book for four hours this way
         while the recorder kept writing. A fresh read-only connection sees the real file,
         so the difference between the two newest order-book times is the lag."""
-        shared = self._conn.execute("SELECT MAX(ts) FROM orderbook_snapshots").fetchone()[0]
+        shared = self.latest_book_ms()
         fresh_conn = sqlite3.connect(f"file:{self.path.as_posix()}?mode=ro", uri=True, timeout=5)
         try:
-            fresh = fresh_conn.execute("SELECT MAX(ts) FROM orderbook_snapshots").fetchone()[0]
+            fresh = self.latest_book_ms(fresh_conn)
         finally:
             fresh_conn.close()
         if not shared or not fresh:
