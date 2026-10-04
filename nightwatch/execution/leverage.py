@@ -34,8 +34,8 @@ between the two is the basis the stress presets already shock separately.
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, dataclass, field
 from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
