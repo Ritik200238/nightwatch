@@ -262,7 +262,8 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
     h = r.analog.horizons.get(r.primary_horizon) if r.analog else None
     c = h.cohort if h is not None else None
     wins, median = (h.pnl_win_rate, h.pnl_median_pct) if h is not None else (None, None)
-    if c is not None and c.n and wins is not None and median is not None and wins < 0.5:
+    # A median that rounds to nothing is a flat outcome, not a way of losing money: no card.
+    if c is not None and c.n and wins is not None and median is not None and wins < 0.5 and median / 100.0 * t.notional_quote <= -0.5:
         # "The wrong way" is down for a long and up for a short.
         way = "lower" if t.closing_long else "higher"
         out.append(FailureMode(

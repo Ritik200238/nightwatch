@@ -312,7 +312,7 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
   const L = tr(lang);
   // Largest loss first whatever order the server stored: old reports were ranked by chance
   // times loss, which put a small gap above a bigger crash under a "worst first" heading.
-  const modes = [...(report.failure_modes ?? [])].sort((a, b) => (a.loss_quote ?? Infinity) - (b.loss_quote ?? Infinity));
+  const modes = [...(report.failure_modes ?? [])].filter((m) => m.loss_quote == null || m.loss_quote <= -0.5).sort((a, b) => (a.loss_quote ?? Infinity) - (b.loss_quote ?? Infinity));
   if (!modes.length) return null;
   const worst = modes[0];
   const worstLoss = worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : "";

@@ -129,3 +129,18 @@ def test_the_report_payload_carries_chinese_names_for_failure_modes_and_presets(
     assert out["failure_modes"][0]["title_zh"] == "24 小时无法平仓" and "title_zh" not in out["failure_modes"][1]
     assert out["stress"]["presets"][0]["name_zh"].startswith("休市期间跳空")
     assert "2020" in out["stress"]["presets"][1]["name_zh"]
+
+
+def test_a_flat_typical_outcome_is_not_listed_as_a_way_to_lose(seeded_store):  # noqa: F811
+    from dataclasses import replace as _r
+
+    r = _report(seeded_store, stop_price=None, thesis="t", invalidation="i")
+    h = r.analog.horizons[r.primary_horizon]
+    for median in (-0.0, 0.0, -0.0001):
+        flat = _r(h, pnl_win_rate=0.4, pnl_median_pct=median)
+        r.analog.horizons[r.primary_horizon] = flat
+        modes = story.failure_modes(r)
+        assert "drift" not in {m.key for m in modes}
+        assert all(m.loss_quote is None or m.loss_quote <= -0.5 for m in modes if m.key == "drift")
+    r.analog.horizons[r.primary_horizon] = _r(h, pnl_win_rate=0.4, pnl_median_pct=-1.5)
+    assert "drift" in {m.key for m in story.failure_modes(r)}
