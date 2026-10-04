@@ -186,6 +186,19 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
   container that is running but unhealthy - a wedged API, or a recorder that has not
   written an order book in five minutes. Docker's restart policy only covers a process
   that exits. The log is `/home/ubuntu/heal.log`, and it stays empty while all is well.
+* **A stuck read snapshot is unhealthy.** `/health` compares the newest order-book time it
+  sees through the API's shared connection with a fresh read-only connection, and returns
+  503 when the API lags by more than ten minutes (an unfinished cursor pins the WAL
+  snapshot; on 3 Oct that served a four-hour-old book). The log line names the objects
+  holding open cursors.
+* **Memory on the 1 GB box** (set by hand on the host, not by compose):
+  * zswap on, zstd, 25% pool: `/etc/systemd/system/zswap.service`, enabled. Swapped pages
+    stay compressed in RAM instead of on the network disk; a cold analysis went from
+    13-35 s to 2-6 s.
+  * `multipathd` disabled (unused on a single-disk VM, 25 MB).
+  * `/etc/docker/daemon.json`: `live-restore: true` (dockerd can restart without stopping
+    the containers) and json logs capped at 3 x 20 MB.
+  * `vm.swappiness=10`. A 2 GB plan removes the problem outright.
 * The recorder logs a heartbeat every 10 ticks and every job run; `docker compose logs -f recorder`.
 * The API warms the feature frames for every token on start (about a minute for 24
   tokens); until then `/health` reports `warm.state = running` and analyses are slower.
