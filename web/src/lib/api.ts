@@ -1090,6 +1090,8 @@ export interface Report {
   /** Where the stated reason depends on an event the data can date, and does not match. */
   premise?: string[];
   weekend_only?: WeekendOnly | null;
+  /** US regular sessions around the hold (NYSE calendar), for the market-clock strip. */
+  timeline?: { as_of: string; hold_end: string; market_open_at_as_of: boolean; next_open: string | null; sessions: { open: string; close: string }[] } | null;
   /** The chained journal receipt for this verdict; see /verify. */
   receipt?: string | null;
   /** Where each headline number came from: live Bitget, history, assumed or AI. */
