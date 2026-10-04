@@ -135,7 +135,11 @@ def test_the_chat_reply_quotes_stored_headlines_and_says_not_found_is_not_false(
 
     got = tc.check(store._conn, ticker="NVDA", thesis="Nvidia hit record highs, AI demand is strong", as_of=AS_OF, parse=parse).to_dict()
     text = tc.reply_text(got)
-    assert '- In the news: "Nvidia hit record highs" - Nvidia breaks through to new record highs (cnbc_top, 2026-10-02)' in text
+    assert '- In the news: "Nvidia hit record highs" - Nvidia breaks through to new record highs (CNBC, 2026-10-02)' in text
     assert '- Not in our feeds: "AI demand is strong"' in text and "not that it is false" in text
     assert "no written reason" in tc.reply_text(None)
     assert "新闻中有" in tc.reply_text(got, "zh")
+
+
+def test_feed_ids_read_as_publishers():
+    assert [tc.source_name(f) for f in ("cnbc_top", "marketwatch_markets", "fed_press", "sec_press", "newfeed")] == ["CNBC", "MarketWatch", "Federal Reserve", "SEC", "newfeed"]
