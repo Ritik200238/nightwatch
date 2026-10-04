@@ -136,6 +136,10 @@ def _ms(ts: datetime | None) -> int | None:
     return None if ts is None else to_epoch_ms(ts)
 
 
+# Order-book rows deleted per statement when pruning: each holds the write lock briefly.
+PRUNE_BATCH = 5_000
+
+
 class Store:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -659,10 +663,52 @@ class Store:
 
     # ---------------------------------------------------------------- utilities
 
-    def prune_orderbooks_older_than(self, cutoff: datetime) -> int:
-        with self._conn:
-            cur = self._conn.execute("DELETE FROM orderbook_snapshots WHERE ts < ?", (to_epoch_ms(ensure_utc(cutoff)),))
-        return cur.rowcount
+    def prune_orderbooks_older_than(self, cutoff: datetime, *, batch: int = PRUNE_BATCH) -> int:
+        """Delete order-book snapshots older than ``cutoff``, a short batch at a time.
+
+        ``DELETE ... WHERE ts < ?`` has no index to use, so it scanned all 1.5 million rows
+        while holding the database's write lock: 10 s on a warm box, and past the API's
+        30 s busy timeout right after a deploy, when the recorder prunes on start and a
+        verdict written then failed with "database is locked" (seen 4 Oct). Snapshots are
+        inserted in time order, so the cutoff is found by id with a few primary-key reads
+        that take no write lock, and the delete runs as id ranges that each hold it briefly.
+        """
+        cut_ms = to_epoch_ms(ensure_utc(cutoff))
+        # Two queries on purpose: SQLite answers a lone MIN or MAX from the primary key, but
+        # "SELECT MIN(id), MAX(id)" scans the table (8.4 s against 2 ms on the box).
+        lowest = self._conn.execute("SELECT id FROM orderbook_snapshots ORDER BY id LIMIT 1").fetchone()
+        if lowest is None:
+            return 0
+        first = int(lowest[0])
+        last = int(self._conn.execute("SELECT id FROM orderbook_snapshots ORDER BY id DESC LIMIT 1").fetchone()[0])
+        found = self._first_id_at_or_after(cut_ms, first, last)
+        stop = found if found is not None else last + 1
+        removed = 0
+        lo = first
+        while lo < stop:
+            hi = min(lo + batch, stop)
+            with self._conn:
+                # The ts test stays, so a row out of time order is never deleted early.
+                removed += self._conn.execute("DELETE FROM orderbook_snapshots WHERE id >= ? AND id < ? AND ts < ?", (lo, hi, cut_ms)).rowcount
+            lo = hi
+        return removed
+
+    def _first_id_at_or_after(self, ts_ms: int, first: int, last: int) -> int | None:
+        """The id of the first snapshot at or after ``ts_ms``, by binary search over ids
+        (snapshots are inserted in time order, and ids may have gaps). None when every
+        snapshot is older."""
+        top = self._conn.execute("SELECT ts FROM orderbook_snapshots WHERE id = ?", (last,)).fetchone()
+        if top is None or top[0] < ts_ms:
+            return None
+        lo, hi, answer = first, last, last
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            row_id, row_ts = self._conn.execute("SELECT id, ts FROM orderbook_snapshots WHERE id >= ? ORDER BY id LIMIT 1", (mid,)).fetchone()
+            if row_ts >= ts_ms:
+                answer, hi = int(row_id), mid - 1
+            else:
+                lo = int(row_id) + 1
+        return answer
 
     def vacuum(self) -> None:
         self._conn.execute("VACUUM")
