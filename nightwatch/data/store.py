@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import time
 from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -138,15 +140,57 @@ class Store:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path), timeout=30, isolation_level=None, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA synchronous=NORMAL")
-        self._conn.execute("PRAGMA busy_timeout=30000")
-        self._conn.execute("PRAGMA foreign_keys=ON")
-        self._conn.executescript(SCHEMA)
+        self._live = self._open()
+        self._live.executescript(SCHEMA)
+        # Connections replaced by reconnect(), with when, closed once nothing can still be
+        # reading from them.
+        self._retired: list[tuple[float, sqlite3.Connection]] = []
+        self._swap_lock = threading.Lock()
+
+    def _open(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self.path), timeout=30, isolation_level=None, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA foreign_keys=ON")
+        return conn
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        """The shared connection. Everything that reads or writes through this store asks
+        for it here each time rather than keeping its own reference, so reconnect() reaches
+        all of them at once."""
+        return self._live
+
+    def reconnect(self) -> None:
+        """Swap in a fresh connection, for when the shared one is stuck on an old snapshot.
+
+        The old one is not closed here: a request on another thread may be halfway through
+        a read on it, and closing it under that read would fail the request. It is closed
+        by close_retired() once that cannot be the case any more."""
+        fresh = self._open()
+        with self._swap_lock:
+            old, self._live = self._live, fresh
+            self._retired.append((time.monotonic(), old))
+
+    def close_retired(self, grace_s: float = 300.0) -> int:
+        """Close the connections reconnect() replaced more than ``grace_s`` ago. Returns how
+        many. Closing one also ends whatever unfinished statement pinned its snapshot, so
+        the write-ahead log can be checkpointed past it again."""
+        now = time.monotonic()
+        with self._swap_lock:
+            due = [c for t, c in self._retired if now - t >= grace_s]
+            self._retired = [(t, c) for t, c in self._retired if now - t < grace_s]
+        for conn in due:
+            try:
+                conn.close()
+            except sqlite3.Error:
+                pass
+        return len(due)
 
     def close(self) -> None:
-        self._conn.close()
+        self.close_retired(grace_s=0.0)
+        self._live.close()
 
     def latest_book_ms(self, conn: sqlite3.Connection | None = None) -> int | None:
         """Time of the newest order-book snapshot. Snapshots are inserted in time order, so
@@ -629,14 +673,31 @@ class Store:
 
 
 def open_cursor_report(limit: int = 5) -> list[str]:
-    """Which objects hold an unfinished cursor, for the log when the snapshot is stuck."""
+    """Which code holds a live cursor, and what every thread is doing, for the log when the
+    snapshot is stuck. A cursor held by a frame names the function and line; the thread
+    stacks show which thread is part-way through a read."""
     import gc
+    import sys
+    import traceback
 
     out: list[str] = []
     for obj in gc.get_objects():
         if isinstance(obj, sqlite3.Cursor):
-            holders = [type(r).__name__ for r in gc.get_referrers(obj) if r is not out][:4]
-            out.append(f"cursor {obj!r} held by {holders}")
+            holders = []
+            for r in gc.get_referrers(obj):
+                if r is out:
+                    continue
+                if hasattr(r, "f_code"):
+                    holders.append(f"{r.f_code.co_filename.rsplit('/', 1)[-1]}:{r.f_lineno} {r.f_code.co_name}")
+                else:
+                    holders.append(type(r).__name__)
+            out.append(f"cursor held by {holders[:4]}")
             if len(out) >= limit:
                 break
+    names = {t.ident: t.name for t in threading.enumerate()}
+    for ident, frame in sys._current_frames().items():
+        stack = traceback.extract_stack(frame)
+        ours = [f"{fs.filename.rsplit('/', 1)[-1]}:{fs.lineno} {fs.name}" for fs in stack if "nightwatch" in fs.filename]
+        if ours:
+            out.append(f"thread {names.get(ident, ident)}: " + " > ".join(ours[-4:]))
     return out

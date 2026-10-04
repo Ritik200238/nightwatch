@@ -20,6 +20,7 @@ Three rules keep this from becoming horoscope:
 from __future__ import annotations
 
 import json
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -182,10 +183,13 @@ class LessonBook:
 
     def __init__(self, journal):  # noqa: ANN001 - nightwatch.journal.journal.Journal
         self.journal = journal
-        self._conn = journal._conn
         self._conn.executescript(SCHEMA)
 
     # ------------------------------------------------------------------ writing
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        return self.journal._conn  # asked for each time, so a reconnect reaches it
 
     def write_pending(self, *, limit: int | None = None) -> int:
         """Write a lesson for every matured forecast that does not have one yet."""

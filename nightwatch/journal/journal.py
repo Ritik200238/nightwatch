@@ -14,6 +14,7 @@ Nothing here can be edited after the fact; maturation only *adds* outcome rows.
 from __future__ import annotations
 
 import json
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -111,12 +112,15 @@ TAKEN_COLUMN = "taken"
 class Journal:
     def __init__(self, store: Store):
         self.store = store
-        self._conn = store._conn
         self._conn.executescript(SCHEMA)
         from nightwatch.journal import receipts
 
         self._conn.executescript(receipts.SCHEMA)
         self._migrate()
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        return self.store._conn  # asked for each time, so a reconnect reaches it
 
     def _migrate(self) -> None:
         """Add columns introduced after a database was created. Additive only."""
