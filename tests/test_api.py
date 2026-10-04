@@ -173,7 +173,7 @@ def test_the_book_is_judged_alongside_the_trade(client):
 
 def test_sources_lists_every_feed_with_freshness(client):
     rows = client.get("/sources").json()
-    assert [r["key"] for r in rows] == ["bitget_bars", "yahoo", "nasdaq", "fred", "rss", "sec_edgar"]
+    assert [r["key"] for r in rows] == ["bitget_bars", "yahoo", "nasdaq", "corporate", "fred", "rss", "sec_edgar"]
     bitget = rows[0]
     assert bitget["rows"] > 0 and bitget["latest"] is not None
     for r in rows:
