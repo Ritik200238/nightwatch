@@ -456,3 +456,16 @@ def test_chinese_similar_answer_skips_market_wide_features(report):
         for o in r2["analog"]["matches_outcomes"]
     ]
     assert followup_zh._a_similar(r2, "这些时刻为什么相似？") is None
+
+
+def test_the_questions_suggested_for_a_short_are_answered_as_losses(report):
+    """A short is offered "gaps up 10%" and "如果涨 10% 呢" instead of the long's questions;
+    both have to come back as a shock that loses money, not the menu."""
+    from nightwatch.api import followup_zh
+
+    r = copy.deepcopy(report)
+    r["ticket"]["side"] = "short"
+    up = answer(r, "what if it gaps up 10%?")
+    assert up is not None and up.kind == "shock" and "loses about" in up.text
+    up_zh = followup_zh.answer(r, "如果涨 10% 呢？")
+    assert up_zh is not None and up_zh.kind == "shock"

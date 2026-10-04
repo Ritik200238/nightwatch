@@ -39,6 +39,18 @@ const HAS_ZH = /[\u3400-\u9fff]/;
 /** Offered once a report is on screen, because until then there is nothing to ask about. */
 const FOLLOW_UPS = ["Why?", "Explain it simply", "What's the safest way to hold it?", "What if it gaps down 10%?", "Compare it with SPY", "Short it instead", "Talk me out of it"];
 const FOLLOW_UPS_ZH = ["为什么？", "简单解释一下", "最安全的持有方式是什么？", "如果跌 10% 呢？", "和 SPY 比呢？", "反过来做空呢？", "最坏会亏多少？"];
+/** A short loses when the stock rises, so its shock and its flip point the other way. */
+const SHORT_SWAPS: Record<string, string> = {
+  "What if it gaps down 10%?": "What if it gaps up 10%?",
+  "Short it instead": "Go long instead",
+  "如果跌 10% 呢？": "如果涨 10% 呢？",
+  "反过来做空呢？": "反过来做多呢？",
+};
+
+function followUps(lang: string, side: string | null): string[] {
+  const base = lang === "zh" ? FOLLOW_UPS_ZH : FOLLOW_UPS;
+  return side === "short" ? base.map((q) => SHORT_SWAPS[q] ?? q) : base;
+}
 
 /** What each kind of question was answered out of. Shown under the answer so the reader
  *  can go and check it rather than take the sentence on trust. */
@@ -86,6 +98,8 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
   const [messages, setMessages] = useState<Msg[]>([]);
   // The report the conversation is currently about. Questions are answered from it.
   const [contextId, setContextId] = useState<number | null>(null);
+  // Its side, so the suggested questions are the ones that hurt this position.
+  const [side, setSide] = useState<string | null>(null);
   // Refs mirror the two above so a scripted run sees its own earlier steps.
   const messagesRef = useRef<Msg[]>([]);
   const contextRef = useRef<number | null>(null);
@@ -189,6 +203,8 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         const id = (res.report.forecast_id as number | null) ?? null;
         contextRef.current = id;
         setContextId(id);
+        const reportSide = (res.report.ticket as { side?: string } | undefined)?.side;
+        if (reportSide) setSide(reportSide);
         if (id != null && res.mode !== "what_if") void followWithTake(id, chatLang);
       }
     } catch (e) {
@@ -265,7 +281,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
                 {tx(`Agent running… ${agent.run.steps?.length ?? 0} checks done`, `代理运行中… 已完成 ${agent.run.steps?.length ?? 0} 项检查`)}
               </span>
             ) : null}
-            {(lang === "zh" ? FOLLOW_UPS_ZH : FOLLOW_UPS).map((q) => (
+            {followUps(lang, side).map((q) => (
               <button
                 key={q}
                 type="button"
