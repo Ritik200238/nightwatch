@@ -34,6 +34,10 @@ MAX_SIZE_MULTIPLE = 4.0  # how far above the request the size sweep looks
 BISECTION_STEPS = 24
 BOOK_CAP_STEPS = 24  # the book cap refines a 1/64-of-equity grid cell down to a few cents
 STRESS_CAP_STEPS = 14  # enough for ~0.01% of the search range; each step re-prices the severe presets
+# Account sizes a trade with no account is judged at: a small, a typical and two larger
+# retail accounts, in USDT.
+LADDER_EQUITIES = (25_000.0, 50_000.0, 100_000.0, 250_000.0)
+EQUITY_SEARCH_MAX_MULTIPLE = 1_000.0  # "is any account big enough" looks this far up
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,20 @@ class SensitivityReport:
     widest_stop_pct_for_requested_size: float | None = None
     requested_notional: float = 0.0
     notes: list[str] = field(default_factory=list)
+    # Only when no account size was given: the same trade judged at a few account sizes,
+    # and the smallest account at which the requested size is a GO (None if none is).
+    account_ladder: list[AccountPoint] = field(default_factory=list)
+    min_go_equity: float | None = None
+
+
+@dataclass(frozen=True)
+class AccountPoint:
+    """The requested trade judged as if the account were ``equity``."""
+
+    equity: float
+    verdict: str
+    recommended_notional: float | None
+    binding_cap: str | None
 
 
 @dataclass(frozen=True)
@@ -285,6 +303,49 @@ def largest_go_notional(dc: DecisionContext, ticket: TradeTicket) -> float | Non
     return lo
 
 
+def account_ladder(dc: DecisionContext, ticket: TradeTicket, headline: Evaluation | None = None) -> list[AccountPoint]:
+    """The requested trade judged at each of ``LADDER_EQUITIES``.
+
+    A REVIEW that only waits for the account size is honest and useless on its own: the
+    trader learns nothing they can act on. The same gate and caps run at a few account
+    sizes, so the answer becomes "on 50k it is REDUCE TO 4,357; on 250k still 4,357,
+    because the book is the limit" - the account size stays the trader's to give."""
+    out = []
+    for equity in LADDER_EQUITIES:
+        ev = _at_equity(dc, ticket, equity, headline)
+        out.append(AccountPoint(equity=equity, verdict=ev.verdict.verdict.value, recommended_notional=ev.verdict.recommended_notional, binding_cap=ev.sizing.binding_cap))
+    return out
+
+
+def smallest_go_equity(dc: DecisionContext, ticket: TradeTicket, headline: Evaluation | None = None) -> float | None:
+    """The smallest account at which the requested size is a GO, or None if none is.
+
+    Valid because acceptability only loosens as the account grows: the rules that read
+    equity (position share, risk budget, the book's loss limit) all get easier, and none
+    of the others reads it. So a GO at a huge account is the test for "any account"."""
+    lo = ticket.notional_quote / 100.0
+    hi = ticket.notional_quote * EQUITY_SEARCH_MAX_MULTIPLE
+    if not _is_go(_at_equity(dc, ticket, hi, headline)):
+        return None
+    if _is_go(_at_equity(dc, ticket, lo, headline)):
+        return lo
+    for _ in range(BISECTION_STEPS):
+        mid = (lo + hi) / 2
+        if _is_go(_at_equity(dc, ticket, mid, headline)):
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+def _at_equity(dc: DecisionContext, ticket: TradeTicket, equity: float, headline: Evaluation | None) -> Evaluation:
+    # Same size, so the scenario impacts and the exit walk do not change: reuse them.
+    t = replace(ticket, account_equity_quote=equity)
+    if headline is None:
+        return dc.evaluate(t)
+    return dc.evaluate(t, impacts=headline.impacts, exit_cost_bps=headline.exit_cost_bps, exit_fully_filled=headline.exit_fully_filled, has_book=headline.exit_cost_bps is not None)
+
+
 def _stop_price(ticket: TradeTicket, entry: float, distance_pct: float) -> float:
     return entry * (1.0 - distance_pct / 100.0) if ticket.closing_long else entry * (1.0 + distance_pct / 100.0)
 
@@ -348,4 +409,12 @@ def build_sensitivity(dc: DecisionContext, ticket: TradeTicket, *, headline: Eva
         notes.append(f"a GO up to {max_go:,.0f}, {1 - max_go / ticket.notional_quote:.0%} below the request")
     if widest is not None and (d := ticket.stop_distance_pct(dc.entry_price)) is not None and d > widest:
         notes.append(f"the stop would have to come in from {d:.2f}% to {widest:.2f}% for this size to fit the risk budget")
-    return SensitivityReport(sizes=sizes, stops=stops, max_go_notional=max_go, widest_stop_pct_for_requested_size=widest, requested_notional=ticket.notional_quote, notes=notes)
+    ladder: list[AccountPoint] = []
+    min_equity = None
+    if ticket.account_equity_quote is None:
+        ladder = account_ladder(dc, ticket, ev)
+        min_equity = smallest_go_equity(dc, ticket, ev)
+    return SensitivityReport(
+        sizes=sizes, stops=stops, max_go_notional=max_go, widest_stop_pct_for_requested_size=widest, requested_notional=ticket.notional_quote, notes=notes,
+        account_ladder=ladder, min_go_equity=min_equity,
+    )

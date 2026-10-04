@@ -121,3 +121,35 @@ def test_report_says_what_would_have_to_change(dc):
     rep = build_sensitivity(dc, ticket(notional_quote=100_000.0, stop_price=95.0))
     assert rep.requested_notional == 100_000.0
     assert any("stop" in n for n in rep.notes)
+
+
+def test_without_an_account_the_trade_is_judged_at_several_and_the_smallest_go_is_the_boundary(dc):
+    from nightwatch.decision.sensitivity import LADDER_EQUITIES, smallest_go_equity
+
+    t = ticket(account_equity_quote=None)
+    rep = build_sensitivity(dc, t)
+    assert [p.equity for p in rep.account_ladder] == list(LADDER_EQUITIES)
+    assert dc.evaluate(t).verdict.verdict.value == "REVIEW"  # the headline itself stays REVIEW
+    edge = rep.min_go_equity
+    assert edge is not None and edge == smallest_go_equity(dc, t)
+    assert dc.evaluate(replace(t, account_equity_quote=edge * 1.01)).verdict.verdict.value == "GO"
+    assert dc.evaluate(replace(t, account_equity_quote=edge * 0.95)).verdict.verdict.value != "GO"
+    # Bigger accounts never judge the same trade more harshly.
+    order = {"NO_GO": 0, "REVIEW": 0, "REDUCE_TO": 1, "HEDGE": 1, "GO": 2}
+    ranks = [order[p.verdict] for p in rep.account_ladder]
+    assert ranks == sorted(ranks)
+
+
+def test_no_account_makes_it_a_go_when_the_book_is_the_limit(dc):
+    from nightwatch.decision.sensitivity import smallest_go_equity
+
+    thin = replace(dc, max_exit_notional_within_budget=5_000.0)
+    t = ticket(account_equity_quote=None)
+    assert smallest_go_equity(thin, t) is None
+    rep = build_sensitivity(thin, t)
+    assert rep.min_go_equity is None and all(p.verdict != "GO" for p in rep.account_ladder)
+
+
+def test_an_account_given_means_no_ladder(dc):
+    rep = build_sensitivity(dc, ticket())
+    assert rep.account_ladder == [] and rep.min_go_equity is None
