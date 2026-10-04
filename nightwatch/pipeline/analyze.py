@@ -777,6 +777,15 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             mc_worst_pct=stress.monte_carlo.worst_drawdown_pct if stress.monte_carlo is not None else None,
         )
         leverage_rule = lev_mod.gate_rule(lev_view, p5)
+        # The same position at other leverage levels, judged on the same drawn paths, so
+        # "5x is too much" arrives with what would be fine and what it costs in margin.
+        rungs, safest, extra = lev_mod.safety_ladder(
+            requested=float(ticket.leverage or 1.0), notional=ticket.notional_quote, entry=entry_price,
+            long=ticket.closing_long, perp_symbol=spec.perp_symbol, tiers=ctx.margin_tiers(spec.perp_symbol),
+            taker_fee=fees["perp_taker"], preset_moves=moves, p5_loss_pct=p5,
+            worst_adverse=[p.worst_adverse_pct for p in paths.paths] if paths else None,
+        )
+        lev_mod.attach_ladder(lev_view, rungs, safest, extra)
     residual_p5 = None
     if execution.hedge_quote and execution.hedge_quote.residual_basis_p95_bps is not None:
         residual_p5 = -execution.hedge_quote.residual_basis_p95_bps / 100.0

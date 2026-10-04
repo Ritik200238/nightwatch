@@ -34,6 +34,7 @@ between the two is the basis the stress presets already shock separately.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -83,6 +84,22 @@ def liquidation_price(entry: float, leverage: float, *, long: bool, mmr: float, 
 
 
 @dataclass
+class LadderRung:
+    """One leverage level for the same position: where it liquidates and what history says."""
+
+    leverage: float
+    requested: bool
+    liquidation_price: float | None
+    distance_pct: float | None
+    margin_quote: float  # notional / leverage: what the exchange asks to hold the same size
+    analog_hits: int | None  # past moments whose worst move against you reached the liquidation price
+    analog_of: int | None
+    p5_reaches: bool | None  # the calibrated 1-in-20 loss is at least as far as the liquidation price
+    presets_hit: list[str]
+    gate: str  # GO | REVIEW_REQUIRED | NO_GO, from the same rule as the verdict
+
+
+@dataclass
 class LeverageView:
     leverage: float
     perp_symbol: str | None
@@ -99,6 +116,10 @@ class LeverageView:
     presets_hit: list[str] = field(default_factory=list)
     mc_share: float | None = None
     notes: list[str] = field(default_factory=list)
+    # The same position at other leverage levels, and the highest one history says is safe.
+    ladder: list[LadderRung] = field(default_factory=list)
+    safest_leverage: float | None = None
+    safest_extra_margin_quote: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -148,6 +169,66 @@ def attach_history(view: LeverageView, *, analog_hits: int | None, analog_of: in
     view.presets_hit = [name for name, move in preset_moves.items() if move is not None and move <= -d]
     if mc_worst_pct is not None and len(mc_worst_pct):
         view.mc_share = float((np.asarray(mc_worst_pct, dtype=float) <= -d).mean())
+    return view
+
+
+# Levels worth showing: the ones a person actually picks. The requested level is added.
+LADDER_LEVELS = (2.0, 3.0, 5.0, 10.0, 20.0)
+
+
+def safety_ladder(
+    *, requested: float, notional: float, entry: float, long: bool, perp_symbol: str | None,
+    tiers: list[MarginTier] | None, taker_fee: float, worst_adverse: Sequence[float | None] | None,
+    preset_moves: dict[str, float], p5_loss_pct: float | None,
+) -> tuple[list[LadderRung], float | None, float | None]:
+    """The same position at several leverage levels: (rungs, safest leverage, extra margin).
+
+    A person told "5x is too much" next asks "then what is fine?". Every number here is
+    something already computed for the requested level, redone at another one: the
+    liquidation price from the same tiers, the count of past moments from each analog's
+    worst move against the position (``worst_adverse``, % of entry, one per drawn path),
+    and the verdict from ``gate_rule`` itself so a rung can never disagree with the gate.
+
+    Only levels Bitget allows at this size are shown, plus the requested one even when it
+    is not allowed (its row is how the report says so). ``safest`` is the highest level the
+    gate calls GO - nothing liquidated, the 1-in-20 loss stops short, no preset reaches
+    it. It needs the drawn paths: without them history has said nothing, so none is claimed.
+    ``extra margin`` is what moving from the requested level to it costs, or None when the
+    requested level is already that safe or safer.
+    """
+    if perp_symbol is None or notional <= 0 or entry <= 0 or requested <= 0:
+        return [], None, None
+    levels = sorted({*LADDER_LEVELS, float(requested)})
+    have_paths = worst_adverse is not None and len(worst_adverse) > 0
+    rungs: list[LadderRung] = []
+    for lev in levels:
+        view = assess(leverage=lev, notional=notional, entry=entry, long=long, perp_symbol=perp_symbol, tiers=tiers, taker_fee=taker_fee)
+        is_requested = abs(lev - requested) < 1e-9
+        if not view.allowed and not is_requested:
+            continue
+        d = view.liquidation_distance_pct
+        hits = of = None
+        if have_paths and d is not None:
+            hits = sum(1 for w in worst_adverse if w is not None and w >= d)
+            of = len(worst_adverse)
+        attach_history(view, analog_hits=hits, analog_of=of, preset_moves=preset_moves, mc_worst_pct=None)
+        gate = gate_rule(view, p5_loss_pct)
+        rungs.append(LadderRung(
+            leverage=lev, requested=is_requested, liquidation_price=view.liquidation_price, distance_pct=d,
+            margin_quote=view.margin_quote, analog_hits=hits, analog_of=of,
+            p5_reaches=None if p5_loss_pct is None or d is None else abs(p5_loss_pct) >= d,
+            presets_hit=list(view.presets_hit), gate=gate[0] if gate else "GO",
+        ))
+    safe = [r.leverage for r in rungs if have_paths and r.gate == "GO"]
+    safest = max(safe) if safe else None
+    extra = None
+    if safest is not None and safest < requested - 1e-9:
+        extra = notional / safest - notional / requested
+    return rungs, safest, extra
+
+
+def attach_ladder(view: LeverageView, rungs: list[LadderRung], safest: float | None, extra_margin: float | None) -> LeverageView:
+    view.ladder, view.safest_leverage, view.safest_extra_margin_quote = rungs, safest, extra_margin
     return view
 
 

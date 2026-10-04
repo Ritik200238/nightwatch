@@ -70,6 +70,8 @@ def looks_like_a_what_if(question: str, *, tickers: tuple[str, ...] = (), curren
     from nightwatch.api import intake
     from nightwatch.api.followup import _SIZE_FACTOR
 
+    if intake.margin_adjustment(question) is not None:
+        return True  # "add 500 more margin": the same position at another leverage
     if _SIZE_FACTOR.search(question) or intake._LEVERAGE.search(question) or intake._WEEKDAY.search(question) or _THROUGH_EARNINGS.search(question):
         return True
     for x in lens_mod.LENSES:
@@ -102,6 +104,9 @@ class Change:
     # "I have 100k": the account the verdict is judged against, not a position.
     account_equity_quote: float | None = None
     note: str = ""  # said with the answer: something asked for that could not be run
+    # "Add 500 more margin": the leverage above already carries the effect (the same size
+    # over a bigger margin); this only lets the answer say what was actually asked.
+    margin_delta_quote: float | None = None
 
     @property
     def empty(self) -> bool:
@@ -123,8 +128,10 @@ class Change:
             bits.append("held through the weekend")
         if self.lenses:
             bits.append(lens_mod.describe(lens_mod.resolve(list(self.lenses))))
+        if self.margin_delta_quote:
+            bits.append(f"{'adding' if self.margin_delta_quote > 0 else 'taking off'} {abs(self.margin_delta_quote):,.0f} USDT of margin")
         if self.leverage:
-            bits.append("no leverage" if self.leverage <= 1 else f"{self.leverage:g}x leverage")
+            bits.append("no leverage" if self.leverage <= 1 else f"{self.leverage:.3g}x leverage")
         if self.notional_quote:
             bits.append(f"{self.notional_quote:,.0f} USDT")
         if self.account_equity_quote:
@@ -226,8 +233,28 @@ def rule_change(question: str, ticket: dict, tickers: list[str], features: dict 
     leverage = parsed.leverage if parsed.leverage and parsed.leverage != ticket.get("leverage") else None
     if leverage is None and ticket.get("leverage") and re.search(r"\b(?:no|without|drop the|remove the)\s+leverage\b|\bunlevered\b|\bas spot\b|不加杠杆|不用杠杆", question, re.I):
         leverage = 1.0
+    # "Add 500 more margin" / "withdraw 500 margin": the same position over a different
+    # cushion, so the leverage is what changes - notional / (margin + added) - and the
+    # size does not. An explicit multiple in the same sentence ("add margin, use 3x") wins.
+    margin_delta = intake.margin_adjustment(question) if leverage is None else None
+    if margin_delta:
+        zh = intake.language_of(question) == "zh"
+        notional, current = float(ticket.get("notional_quote") or 0.0), float(ticket.get("leverage") or 0.0)
+        if current <= 1 or notional <= 0:
+            note = ("这笔交易没有加杠杆，所以没有保证金可以增减。可以问“5 倍杠杆呢？”。" if zh
+                    else "This trade is not leveraged, so there is no margin to add or take off. Ask for a leverage instead, such as 5x.")
+            margin_delta = None
+        else:
+            new_margin = notional / current + margin_delta
+            if new_margin <= 0:
+                note = ("取出这么多保证金后就没有保证金了，无法运行。" if zh
+                        else f"Taking off {abs(margin_delta):,.0f} USDT would leave no margin on a {notional / current:,.0f} USDT margin, so it was not run.")
+                margin_delta = None
+            else:
+                # Margin at or above the whole position is no leverage at all.
+                leverage = max(1.0, notional / new_margin)
     return Change(ticker=ticker, side=side, horizon_kind=kind if kind in ("next_open", "window_end", "hours", "through_weekend") else None,
-                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage, notional_quote=size, account_equity_quote=equity, note=note)
+                  horizon_hours=hours if kind == "hours" else None, lenses=lenses, leverage=leverage, notional_quote=size, account_equity_quote=equity, note=note, margin_delta_quote=margin_delta)
 
 
 def ticket_from(report: dict) -> TradeTicket | None:
@@ -319,8 +346,10 @@ def _describe_zh(change: Change) -> str:
         bits.append("持有到本时段结束")
     if change.lenses:
         bits.append("只比较：" + lens_mod.describe(lens_mod.resolve(list(change.lenses))))
+    if change.margin_delta_quote:
+        bits.append(f"{'追加' if change.margin_delta_quote > 0 else '取出'} {abs(change.margin_delta_quote):,.0f} USDT 保证金")
     if change.leverage:
-        bits.append("不加杠杆" if change.leverage <= 1 else f"{change.leverage:g} 倍杠杆")
+        bits.append("不加杠杆" if change.leverage <= 1 else f"{change.leverage:.3g} 倍杠杆")
     if change.notional_quote:
         bits.append(f"仓位 {change.notional_quote:,.0f} USDT")
     if change.account_equity_quote:
@@ -430,9 +459,9 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
     lev = after.get("leverage")
     if lev and lev.get("liquidation_distance_pct") is not None and not zh:
         seen = f"; {lev['analog_hits']} of {lev['analog_of']} past moments reached it" if lev.get("analog_of") else ""
-        bits.append(f"At {lev['leverage']:g}x it is liquidated near {lev['liquidation_price']:,.2f}, {lev['liquidation_distance_pct']:.1f}% away{seen}.")
+        bits.append(f"At {lev['leverage']:.3g}x it is liquidated near {lev['liquidation_price']:,.2f}, {lev['liquidation_distance_pct']:.1f}% away{seen}.")
     elif lev and lev.get("liquidation_distance_pct") is not None:
-        bits.append(f"{lev['leverage']:g} 倍杠杆约在 {lev['liquidation_price']:,.2f} 强平（距现价 {lev['liquidation_distance_pct']:.1f}%）。")
+        bits.append(f"{lev['leverage']:.3g} 倍杠杆约在 {lev['liquidation_price']:,.2f} 强平（距现价 {lev['liquidation_distance_pct']:.1f}%）。")
     if change.note and not zh:
         bits.append(change.note)
     return Answer("what_if", join.join(bits), ("analog cohort", "gate and sizing", "re-run"))

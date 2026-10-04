@@ -14,6 +14,7 @@ import { Scenarios } from "@/components/charts/scenarios";
 import { AgentPanel } from "@/components/report/agent-panel";
 import { ActOnIt } from "@/components/report/act-on-it";
 import { GuardNote } from "@/components/report/guard-note";
+import { LeverageSafety } from "@/components/report/leverage-safety";
 import { Feedback, WatchButton } from "@/components/report/feedback";
 import { BookContrast } from "@/components/report/book-contrast";
 import { PlanCard } from "@/components/report/plan-card";
@@ -383,7 +384,7 @@ function Assumptions({ report, openAll, lang }: { report: Report; openAll?: bool
   );
 }
 
-function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
+function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; onRerun?: (patch: Partial<TicketInput>) => void }) {
   const L = tr(lang);
   const v = report.verdict;
   const t = report.ticket;
@@ -504,6 +505,7 @@ function DecisionCard({ report, lang }: { report: Report; lang: Lang }) {
       ) : null}
 
       <LiquidationNote report={report} lang={lang} />
+      <LeverageSafety report={report} lang={lang} onRerun={onRerun} />
       <WeekendNote report={report} lang={lang} />
       <PremiseNote report={report} lang={lang} />
       {report.forecast_id != null && report.ticket.thesis ? <ThesisCheckCard forecastId={report.forecast_id} thesis={report.ticket.thesis} lang={lang} /> : null}
@@ -775,7 +777,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         </p>
       ) : null}
       <Hypothetical report={report} lang={lang} />
-      <DecisionCard report={report} lang={lang} />
+      <DecisionCard report={report} lang={lang} onRerun={onRerun} />
       <AccountLadder report={report} lang={lang} onRerun={onRerun} />
       <MarketClock report={report} lang={lang} />
       <BookVisuals report={report} lang={lang} />

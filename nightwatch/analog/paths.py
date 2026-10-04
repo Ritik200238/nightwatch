@@ -52,6 +52,11 @@ class ScenarioPath:
     rank: float
     values: tuple[float, ...]  # token move from entry, %, one per grid point
     stopped_at_h: float | None  # hours into the window the stop would have triggered
+    # The furthest this moment went against the position inside the horizon, as a positive
+    # percent of entry (0 when it never went against). It is what lets one set of paths
+    # answer "would you have been liquidated at distance d" for *any* d: yes iff this is
+    # at least d. Judged on the low for a long and the high for a short, like the stop.
+    worst_adverse_pct: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -60,6 +65,7 @@ class ScenarioPath:
             "rank": round(self.rank, 4),
             "values": [round(v, 3) for v in self.values],
             "stopped_at_h": self.stopped_at_h,
+            "worst_adverse_pct": None if self.worst_adverse_pct is None else round(self.worst_adverse_pct, 3),
         }
 
 
@@ -148,6 +154,32 @@ def _stop_hit(frame: pd.DataFrame, ts: datetime, hours: float, stop_pct: float, 
     return float((window.index[int(np.argmax(breached))] - t0).total_seconds() / 3600.0)
 
 
+def _worst_adverse(frame: pd.DataFrame, ts: datetime, hours: float, side: str) -> float | None:
+    """How far against the position this moment went inside the horizon, in % of entry.
+
+    The same bars and the same column ``_stop_hit`` reads, so "worst adverse >= d" and
+    "a stop d away was hit" are one statement. Never negative: a window that only ever
+    moved in the position's favour reports 0, not a gain.
+    """
+    t0 = pd.Timestamp(ts)
+    if t0 not in frame.index:
+        return None
+    entry = float(frame.at[t0, "spot_close"])
+    if not np.isfinite(entry) or entry <= 0:
+        return None
+    window = frame.loc[t0 + pd.Timedelta(hours=1): t0 + pd.Timedelta(hours=float(hours))]
+    col = "spot_low" if side == "long" else "spot_high"
+    if window.empty or col not in window:
+        return None
+    series = window[col].to_numpy(dtype=float)
+    series = series[np.isfinite(series)]
+    if not len(series):
+        return None
+    if side == "long":
+        return max(0.0, (entry - float(series.min())) / entry * 100.0)
+    return max(0.0, (float(series.max()) - entry) / entry * 100.0)
+
+
 def build(
     matches: list[Any],
     frames: dict[str, pd.DataFrame],
@@ -192,6 +224,7 @@ def build(
             ts=m.ts, ticker=m.ticker, distance=float(m.distance),
             distance_percentile=float(m.distance_percentile), rank=0.0, values=tuple(values),
             stopped_at_h=_stop_hit(frame, m.ts, horizon_h, stop_pct, side) if stop_pct is not None else None,
+            worst_adverse_pct=_worst_adverse(frame, m.ts, horizon_h, side),
         ))
     if not drawn:
         return None
