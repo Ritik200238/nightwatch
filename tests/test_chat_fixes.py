@@ -150,3 +150,31 @@ def test_chinese_account_on_the_trade_on_screen(client):
     first = say(client, "周末做多特斯拉 2万U")
     after = say(client, "周末做多特斯拉 2万U", "我有10万U", ctx=first["report"]["forecast_id"])
     assert after["ticket"]["notional_quote"] == 20000 and after["ticket"]["account_equity_quote"] == 100000, after["reply"]
+
+
+# --- 7. the rate limit a fast human cannot hit --------------------------------------------
+
+def test_a_judge_clicking_quickly_is_not_limited_but_a_script_is():
+    """Five to eight quick messages got "Too many requests". Uses the real production rules."""
+    from nightwatch.api import guard
+
+    now = [0.0]
+    rl = guard.RateLimiter(clock=lambda: now[0])
+    for path in ("/chat", "/analyze"):
+        group, rate, burst = guard.rule_for("POST", path)
+        waits = []
+        for _ in range(8):  # eight clicks inside two seconds
+            waits.append(rl.take(group, "judge", rate, burst))
+            now[0] += 0.25
+        assert waits == [0.0] * 8, path
+        spam = [rl.take(group, "script", rate, burst) for _ in range(60)]  # 60 in the same instant
+        assert spam.count(0.0) == burst and all(w > 0 for w in spam[burst:])
+        now[0] += 3.0  # one token comes back every three seconds
+        assert rl.take(group, "script", rate, burst) == 0.0 and rl.take(group, "script", rate, burst) > 0
+
+
+def test_the_limit_is_still_a_real_ceiling():
+    from nightwatch.api import guard
+
+    _, rate, burst = guard.rule_for("POST", "/chat")
+    assert burst >= 12 and rate <= 30  # loose for a hand, closed to a loop
