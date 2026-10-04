@@ -786,6 +786,28 @@ def _at_rec(m: dict, zh: bool = False) -> str:
     return f"（按建议仓位：约 {abs(q):,.0f} USDT）" if zh else f" (at the recommended size: about {abs(q):,.0f} USDT)"
 
 
+def _needs_account_head(report: Any, head: str, zh: bool) -> str:  # noqa: ANN401
+    """A REVIEW that is only waiting for the account size, as one plain sentence: what to do,
+    and why, with the loss at the size asked and what the live book supports. The verdict and
+    the numbers are the report's; only the wording of the first line changes."""
+    v, t = report.verdict, report.ticket
+    if v.verdict.value != "REVIEW" or t.account_equity_quote:
+        return head
+    horizon = report.analog.horizons.get(report.primary_horizon) if report.analog else None
+    p5 = horizon.loss_p5_pct if horizon is not None else None
+    if p5 is None or p5 >= 0:
+        return head
+    bad = abs(p5) / 100.0 * t.notional_quote
+    book = v.recommended_notional if v.recommended_notional is not None and 1 <= v.recommended_notional < t.notional_quote - 1 else None
+    stop = "" if t.stop_price or t.stop_offset_pct else (" （有止损的话也请加上）" if zh else " (and add a stop if you can)")
+    if zh:
+        tail = f"，而当前盘口只能承接 {book:,.0f} USDT" if book is not None else ""
+        return f"请告诉系统你的账户规模{stop}，才能完成检查。按 {t.notional_quote:,.0f} USDT 计，二十分之一的坏夜晚约亏 {bad:,.0f} USDT{tail}。"
+    tail = f", and the live order book supports only {book:,.0f} USDT" if book is not None else ""
+    return (f"Tell the desk your account size{stop} to finish the checks. At {t.notional_quote:,.0f} USDT a bad night, one in twenty, "
+            f"loses about {bad:,.0f} USDT{tail}.")
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -812,6 +834,7 @@ def brief(report: Any, lang: str = "en") -> str:
             head += " 目前没有任何仓位能通过限制。" if zh else " No size passes the limits right now."
     elif v.recommended_notional is not None and abs(v.recommended_notional - t.notional_quote) > 1:
         head += f" 建议仓位改为 {v.recommended_notional:,.0f}。" if zh else f" Size it at {v.recommended_notional:,.0f} instead."
+    head = _needs_account_head(report, head, zh)
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."
     lines.append(head)

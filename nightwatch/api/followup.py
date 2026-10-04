@@ -658,7 +658,7 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
                     + (f", which on your size is about {_usd(-loss)}." if loss is not None else "."))
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:
-        bits.append(f"The way this most likely hurts: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])}.")
+        bits.append(f"The way this costs the most: {modes[0]['title'].lower()}, costing about {_usd(modes[0]['loss_quote'])}.")
     q = (r.get("execution") or {}).get("exit_quote") or {}
     if q.get("total_cost_bps") is not None:
         bits.append(f"Selling it again right now would cost about {_bps(q['total_cost_bps'])} ({_usd(q.get('total_cost_quote'))}) on Bitget's live order book.")
