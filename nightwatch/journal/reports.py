@@ -35,8 +35,12 @@ KEEP = 500
 
 class ReportStore:
     def __init__(self, store: Store):
-        self._conn: sqlite3.Connection = store._conn
+        self.store = store
         self._conn.executescript(SCHEMA)
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        return self.store._conn  # asked for each time, so a reconnect reaches it
 
     def save(self, forecast_id: int, report: dict[str, Any], *, keep: int = KEEP) -> None:
         body = zlib.compress(json.dumps(report, default=str).encode("utf-8"), 6)
