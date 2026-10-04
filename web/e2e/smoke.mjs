@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 
 const BASE = (process.argv[2] || process.env.SMOKE_URL || "https://nightwatch-gules.vercel.app").replace(/\/$/, "");
 const REPORT_TIMEOUT = 90_000;
+// Typed into the home page's one input (#hero-input), as a first visitor would.
 const STARTERS = [
   "Hold $20k of TSLA through the weekend, stop at 350",
   "Short 5k NVDA for the next 12 hours",
@@ -17,6 +18,9 @@ const RAIL_AFTER_REPORT = "Safest way to hold META";
 const FREE_TEXT = "I'm bullish on NVDA into the weekend, 15k, stop 215";
 const PAGES = ["/calibration", "/studies", "/wrong", "/status", "/usage"];
 const REPORT_RE = /What history says|历史怎么说/;
+// The home page shows a stored example report before anything is asked, labelled with this.
+// A live report replaces it, so "report visible and this gone" is a report this run made.
+const EXAMPLE_RE = /Example from|示例，生成于/;
 
 const browser = await chromium.launch();
 const results = [];
@@ -38,14 +42,20 @@ async function guard(page, errors) {
   if (await page.getByText("This page couldn", { exact: false }).count()) throw new Error("error boundary: 'This page couldn...' shown");
 }
 
+async function isLive(page) {
+  const report = await page.getByText(REPORT_RE).first().isVisible().catch(() => false);
+  const example = await page.getByText(EXAMPLE_RE).first().isVisible().catch(() => false);
+  return report && !example;
+}
+
 async function waitReport(page, errors) {
   const deadline = Date.now() + REPORT_TIMEOUT;
   while (Date.now() < deadline) {
     await guard(page, errors);
-    if (await page.getByText(REPORT_RE).first().isVisible().catch(() => false)) break;
+    if (await isLive(page)) break;
     await page.waitForTimeout(1000);
   }
-  if (!(await page.getByText(REPORT_RE).first().isVisible().catch(() => false))) throw new Error(`no report within ${REPORT_TIMEOUT / 1000}s`);
+  if (!(await isLive(page))) throw new Error(`no live report within ${REPORT_TIMEOUT / 1000}s`);
   await page.getByText(/Running the desk|正在计算/).first().waitFor({ state: "hidden", timeout: 30_000 });
   await page.waitForTimeout(1500); // let any post-render effect throw
   await guard(page, errors);
@@ -53,7 +63,8 @@ async function waitReport(page, errors) {
 
 async function openHome(page, errors) {
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.getByRole("tab", { name: /^(Chat|聊天)$/ }).waitFor();
+  // One input until a trade is asked; the Chat/Ticket rail appears after that.
+  await page.locator("#hero-input").waitFor();
   await guard(page, errors);
 }
 
@@ -84,8 +95,8 @@ await flow("home + example card", async (page, errors) => {
 for (const s of STARTERS) {
   await flow(`starter: ${s.slice(0, 28)}`, async (page, errors) => {
     await openHome(page, errors);
-    await page.getByRole("tab", { name: /^(Chat|聊天)$/ }).click();
-    await page.getByRole("button", { name: s, exact: true }).click();
+    await page.locator("#hero-input").fill(s);
+    await page.locator("#hero-input").press("Enter");
     await waitReport(page, errors);
   });
 }
@@ -106,11 +117,17 @@ await flow(`rail after a report: ${RAIL_AFTER_REPORT}`, async (page, errors) => 
   await waitReport(page, errors);
 });
 
+// The chat rail, once the first report has brought it up: a new trade typed there.
 await flow("free-text chat", async (page, errors) => {
   await openHome(page, errors);
+  await page.getByRole("button", { name: SCENARIOS[1] }).first().click();
+  await waitReport(page, errors);
   await page.getByRole("tab", { name: /^(Chat|聊天)$/ }).click();
+  const answered = page.waitForResponse((r) => r.url().includes("/chat") && r.request().method() === "POST", { timeout: REPORT_TIMEOUT });
   await page.locator("#chat-input").fill(FREE_TEXT);
   await page.locator("#chat-input").press("Enter");
+  const r = await answered;
+  if (r.status() >= 400) throw new Error(`chat HTTP ${r.status()}`);
   await waitReport(page, errors);
 });
 
