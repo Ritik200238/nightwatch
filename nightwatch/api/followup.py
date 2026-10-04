@@ -736,8 +736,11 @@ _INSTRUCTION = re.compile(
 
 
 def looks_like_a_question(text: str) -> bool:
+    from nightwatch.api.intake import margin_adjustment
+
     t = text.strip()
-    return bool(_QUESTIONY.search(t) or _INSTRUCTION.search(t) or SHOCK.search(t))
+    # "add 500 more margin" has no question mark and no leading verb the list knows.
+    return bool(_QUESTIONY.search(t) or _INSTRUCTION.search(t) or SHOCK.search(t) or margin_adjustment(t) is not None)
 
 
 def answer(report: dict, question: str) -> Answer | None:

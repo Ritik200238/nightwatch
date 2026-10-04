@@ -321,3 +321,24 @@ def test_a_rerun_at_the_same_moment_reuses_the_snapshot_and_regime_map(client):
     assert again.verdict.verdict == first.verdict.verdict and again.timings_ms["snapshot"] <= first.timings_ms["snapshot"]
     other = analyze(ctx, t, as_of=AS_OF.replace(hour=(AS_OF.hour + 1) % 24), record=False)
     assert other.snapshot is not first.snapshot  # a different AS_OF is a different snapshot
+
+
+# --- 8. margin added to a leveraged position is a leverage change, not a size -------------
+
+@pytest.mark.parametrize("text", ["add 500 more margin", "what if I add 2k collateral", "加 500 保证金"])
+def test_adding_margin_reruns_the_same_position_at_lower_leverage(client, text):
+    """"add 500 more margin" used to be read as a size change (a 500 USDT trade)."""
+    first = say(client, "long 20000 TSLA overnight at 5x leverage, account 200k")
+    assert first["ticket"]["leverage"] == 5
+    after = say(client, "long 20000 TSLA overnight at 5x leverage, account 200k", text, ctx=first["report"]["forecast_id"])
+    added = {"add 500 more margin": 500, "what if I add 2k collateral": 2000, "加 500 保证金": 500}[text]
+    t = after["ticket"]
+    assert t["notional_quote"] == 20000, after["reply"]  # the size did not move
+    assert t["leverage"] == pytest.approx(20000 / (4000 + added))
+    assert after["report"]["leverage"]["margin_quote"] == pytest.approx(4000 + added)
+
+
+def test_taking_margin_off_raises_the_leverage_in_the_chat(client):
+    first = say(client, "long 20000 TSLA overnight at 5x leverage, account 200k")
+    after = say(client, "long 20000 TSLA overnight at 5x leverage, account 200k", "withdraw 1000 margin", ctx=first["report"]["forecast_id"])
+    assert after["ticket"]["notional_quote"] == 20000 and after["ticket"]["leverage"] == pytest.approx(20000 / 3000)

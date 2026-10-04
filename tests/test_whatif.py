@@ -400,3 +400,101 @@ def test_flipping_the_side_mirrors_the_stop_around_the_entry():
     assert short.side == Side.SHORT and short.stop_price == 247.0
     assert Change(side="short").apply_to(long_).stop_price is None  # no price to mirror around: dropped, not kept wrong
     assert Change(notional_quote=10_000.0).apply_to(long_).stop_price == 215.0
+
+
+# --- margin added to or taken off a leveraged position -------------------------------
+
+LEVERAGED = {**TICKET, "leverage": 5.0}  # 20,000 over 4,000 of margin
+
+
+@pytest.mark.parametrize(
+    ("text", "delta"),
+    [
+        ("add 500 more margin", 500.0),
+        ("what if I add 2k collateral", 2000.0),
+        ("what if I add 500 USDT of margin?", 500.0),
+        ("put in another 1,500 margin", 1500.0),
+        ("deposit $1k collateral", 1000.0),
+        ("top up 750 margin", 750.0),
+        ("with 500 more margin", 500.0),
+        ("add more margin of 800", 800.0),
+        ("withdraw 500 margin", -500.0),
+        ("take out 1k collateral", -1000.0),
+        ("what if I remove 500 of margin", -500.0),
+        ("with 500 less margin", -500.0),
+        ("加 500 保证金", 500.0),
+        ("追加 2k 保证金", 2000.0),
+        ("如果我加1万保证金呢", 10000.0),
+        ("减 500 保证金", -500.0),
+        ("取出 1000 USDT 保证金", -1000.0),
+        ("保证金加 300", 300.0),
+    ],
+)
+def test_margin_adjustment_is_read_with_its_sign(text, delta):
+    from nightwatch.api import intake
+
+    assert intake.margin_adjustment(text) == delta
+
+
+@pytest.mark.parametrize("text", [
+    "long 20k TSLA overnight with 4k margin", "margin of 4000", "what about 5x?", "add 500 to the stop", "halve it",
+    "how much margin do I need?", "add TSLA 20k", "加倍", "5x 保证金",
+])
+def test_things_that_are_not_a_margin_change_are_left_alone(text):
+    from nightwatch.api import intake
+
+    assert intake.margin_adjustment(text) is None
+
+
+def test_adding_margin_lowers_the_leverage_and_keeps_the_size():
+    ch = whatif.rule_change("add 500 more margin", LEVERAGED, ["TSLA"])
+    assert ch.leverage == pytest.approx(20_000 / 4_500) and ch.notional_quote is None  # not read as a 500 USDT size
+    assert ch.margin_delta_quote == 500.0 and not ch.empty
+    assert "adding 500 USDT of margin" in ch.describe() and "4.44x leverage" in ch.describe()
+    base = whatif.ticket_from({"ticket": LEVERAGED})
+    out = ch.apply_to(base)
+    assert out.leverage == pytest.approx(4.4444, abs=1e-3) and out.notional_quote == 20_000.0
+    assert out.notional_quote / out.leverage == pytest.approx(4_500)  # exactly the margin plus what was added
+
+
+def test_a_chinese_margin_top_up_names_the_change_in_chinese():
+    ch = whatif.rule_change("加 500 保证金", LEVERAGED, ["TSLA"])
+    assert ch.leverage == pytest.approx(20_000 / 4_500) and ch.notional_quote is None
+    assert whatif._describe_zh(ch) == "追加 500 USDT 保证金，4.44 倍杠杆"
+
+
+def test_taking_margin_off_raises_the_leverage():
+    ch = whatif.rule_change("withdraw 1000 margin", LEVERAGED, ["TSLA"])
+    assert ch.leverage == pytest.approx(20_000 / 3_000) and ch.margin_delta_quote == -1000.0
+    assert "taking off 1,000 USDT of margin" in ch.describe()
+    assert whatif.rule_change("取出 1000 保证金", LEVERAGED, ["TSLA"]).leverage == pytest.approx(20_000 / 3_000)
+
+
+def test_margin_covering_the_whole_position_is_no_leverage():
+    ch = whatif.rule_change("add 20k margin", LEVERAGED, ["TSLA"])
+    assert ch.leverage == 1.0 and ch.apply_to(whatif.ticket_from({"ticket": LEVERAGED})).leverage is None
+
+
+def test_taking_off_all_the_margin_is_refused_with_a_reason_not_run():
+    ch = whatif.rule_change("withdraw 5000 margin", LEVERAGED, ["TSLA"])
+    assert ch.empty and "no margin" in ch.note
+    assert whatif.rule_change("取出 5000 保证金", LEVERAGED, ["TSLA"]).note.startswith("取出这么多")
+
+
+def test_margin_on_an_unleveraged_trade_says_so_instead_of_becoming_a_size():
+    ch = whatif.rule_change("add 500 more margin", TICKET, ["TSLA"])
+    assert ch.empty and ch.notional_quote is None and "not leveraged" in ch.note
+    assert "没有加杠杆" in whatif.rule_change("加 500 保证金", TICKET, ["TSLA"]).note
+
+
+def test_an_explicit_multiple_beats_a_margin_amount_in_the_same_sentence():
+    ch = whatif.rule_change("add 500 margin and use 3x", LEVERAGED, ["TSLA"])
+    assert ch.leverage == 3.0 and ch.margin_delta_quote is None
+
+
+def test_a_margin_change_is_routed_as_a_what_if_and_as_a_question():
+    from nightwatch.api import followup
+
+    for text in ("add 500 more margin", "what if I add 2k collateral", "加 500 保证金", "withdraw 500 margin"):
+        assert whatif.looks_like_a_what_if(text, tickers=("TSLA", "NVDA"), current="TSLA"), text
+        assert followup.looks_like_a_question(text), text
