@@ -184,3 +184,39 @@ def test_a_single_path_is_ranked_without_dividing_by_zero():
     f = frame([100.0, 101.0, 102.0])
     out = mod.build([FakeMatch(T0, "X")], {"X": f}, horizon_h=2)
     assert out is not None and out.paths[0].rank == 0.0
+
+
+def test_worst_adverse_is_the_low_for_a_long_and_the_high_for_a_short():
+    f = frame([100.0, 99.0, 101.0, 100.0], lows=[100.0, 94.0, 99.0, 100.0], highs=[100.0, 100.0, 108.0, 100.0])
+    long_ = mod.build([FakeMatch(T0, "X")], {"X": f}, horizon_h=3, side="long")
+    short = mod.build([FakeMatch(T0, "X")], {"X": f}, horizon_h=3, side="short")
+    assert long_ is not None and short is not None
+    assert long_.paths[0].worst_adverse_pct == pytest.approx(6.0)
+    assert short.paths[0].worst_adverse_pct == pytest.approx(8.0)
+    assert long_.paths[0].to_dict()["worst_adverse_pct"] == 6.0
+
+
+def test_a_window_that_only_moves_in_favour_has_zero_worst_adverse_not_a_negative():
+    f = frame([100.0, 101.0, 102.0], lows=[100.0, 100.5, 101.5])
+    out = mod.build([FakeMatch(T0, "X")], {"X": f}, horizon_h=2, side="long")
+    assert out is not None and out.paths[0].worst_adverse_pct == 0.0
+
+
+@pytest.mark.parametrize("side", ["long", "short"])
+def test_worst_adverse_agrees_exactly_with_the_liquidated_count(side):
+    """One set of paths must answer "liquidated at distance d" for every d, and for the
+    ticket's own d it must be the very count the report already prints."""
+    rng = np.random.default_rng(7)
+    n_bars, n_matches = 60, 25
+    closes = 100.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n_bars)))
+    lows = closes * (1 - rng.uniform(0, 0.02, n_bars))
+    highs = closes * (1 + rng.uniform(0, 0.02, n_bars))
+    f = frame(list(closes), lows=list(lows), highs=list(highs))
+    matches = [FakeMatch(T0 + timedelta(hours=i), "X") for i in range(n_matches)]
+    for d in (0.5, 1.0, 2.0, 3.5, 5.0, 8.0, 15.0):
+        entry = 100.0
+        liq = entry * (1 - d / 100) if side == "long" else entry * (1 + d / 100)
+        out = mod.build(matches, {"X": f}, horizon_h=12, side=side, entry_price=entry, liquidation_price=liq)
+        assert out is not None and len(out.paths) == n_matches
+        by_paths = sum(1 for p in out.paths if p.worst_adverse_pct is not None and p.worst_adverse_pct >= d)
+        assert by_paths == out.liquidated, (side, d)
