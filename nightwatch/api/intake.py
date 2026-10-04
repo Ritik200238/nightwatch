@@ -950,7 +950,7 @@ def brief(report: Any, lang: str = "en") -> str:
         repeats = bool(priced) and against.startswith(name)
         if not repeats and not zh:
             lines.append("Case against: " + against)
-    equity_missing = any(r.rule == "position_size" and r.decision.value != "GO" and "equity" in r.reason for r in report.gate.rules)
+    equity_missing = getattr(report.ticket, "account_equity_quote", None) is None and any(r.rule == "position_size" and r.decision.value != "GO" for r in report.gate.rules)
     if equity_missing:
         if zh:
             lines.append("要给出明确结论，请告诉我你的账户规模——例如“账户 20万U”——我会据此判断仓位是否过大。")
