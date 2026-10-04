@@ -46,6 +46,8 @@ log = logging.getLogger(__name__)
 
 # Past this, the API's read snapshot is stuck behind the recorder (see Store.snapshot_lag_seconds).
 STALE_SNAPSHOT_S = 600.0
+HEALTH_COUNTS_TTL_S = 600.0
+_health_counts: dict[int, dict[str, Any]] = {}
 # How often the idle API re-reads its cached frames so they are not swapped out.
 TOUCH_EVERY_S = 180.0
 CALIBRATION_TTL_SEC = 120
@@ -601,15 +603,25 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
             log.error("API read snapshot is %.0f s behind the database; open cursors: %s", lag, open_cursor_report())
             return JSONResponse({"ok": False, "detail": f"read snapshot {lag:.0f} s behind the database"}, status_code=503)
-        bars = c.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
-        ob = c.execute("SELECT COUNT(*), MAX(ts) FROM orderbook_snapshots").fetchone()
-        last_book = datetime.fromtimestamp(ob[1] / 1000, tz=UTC).isoformat() if ob[1] else None
+        # Row counts are a second each over a million rows on the box, and Docker asks for
+        # this page every 30 s; they change slowly, so they are counted every ten minutes.
+        now_m = time.monotonic()
+        counts = _health_counts.setdefault(id(s.store), {})  # per store, so test apps never share
+        if now_m - counts.get("at", -1e9) > HEALTH_COUNTS_TTL_S:
+            counts.update(
+                at=now_m,
+                bars=c.execute("SELECT COUNT(*) FROM bars").fetchone()[0],
+                books=c.execute("SELECT COUNT(*) FROM orderbook_snapshots").fetchone()[0],
+            )
+        bars, n_books = counts["bars"], counts["books"]
+        newest = s.store.latest_book_ms()
+        last_book = datetime.fromtimestamp(newest / 1000, tz=UTC).isoformat() if newest else None
         # Which model is answering, not just whether one is. "chat_ready: true" with no
         # way to see who is behind it was how the box ran on the rule-based fallback for
         # days without anyone noticing.
         llm = describe_llm()
         return {
-            "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": ob[0], "last_book_ts": last_book,
+            "ok": True, "version": __version__, "time": utc_now().isoformat(), "bars": bars, "orderbook_snapshots": n_books, "last_book_ts": last_book,
             "started_at": s.started_at.isoformat(), "uptime_s": int((utc_now() - s.started_at).total_seconds()),
             "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
         }
@@ -807,7 +819,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             newest = max((ts for ts, _ in shown), default=None)
             out.append({
                 "key": "bitget_signal", "label": "Bitget signal skill backend",
-                "what": "RSI (4h) from the bitget-signal technical-analysis tool, shown only when it agrees with our own RSI from Bitget candles. Its other tools are mostly failing.",
+                "what": "RSI (4h) from the bitget-signal technical-analysis tool, shown only when it agrees with our own RSI from Bitget candles. Only this tool is used, and the health count below probes exactly the calls the desk makes (RSI, MACD, full analysis). The skill's other tools (sentiment, news, macro, rates) timed out on every call on 4 Oct 2026, so nothing here relies on them.",
                 "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
                 "rows": len(shown), "latest": newest.isoformat() if newest else None,
                 "latest_label": f"{health['answering']} of {health['tried']} tools answering" if health else "health check pending",

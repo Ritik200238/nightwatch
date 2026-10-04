@@ -38,8 +38,7 @@ can send): [docs/features.md](docs/features.md).
 ## Try it
 
 * **Live desk:** https://nightwatch-gules.vercel.app
-* Demo video: (link added at submission)
-* **Telegram:** @<bot handle, set by the owner>. Say the trade in plain words ("long 20k NVDA
+* **Telegram bot:** ships in this repo and switches on when `TELEGRAM_BOT_TOKEN` is set (no public bot is run for judging; the web desk and MCP show the same verdicts). Say the trade in plain words ("long 20k NVDA
   over the weekend", "周末做多特斯拉 2万U") and get the same sized verdict the site gives:
   size, one-in-twenty loss, worst stress, exit cost, liquidation, and the `/r/<id>` link.
   Follow up with "halve it" or "short instead"; `/tripwire stop` and `/watch` message the chat.
@@ -65,10 +64,10 @@ Figures as of 3 Oct 2026.
 
 | Claim | How you can check it yourself |
 |---|---|
-| Every live verdict is on the record, unedited | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the receipt chain (712 checked, no break); [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) has the daily Bitcoin timestamps (4 of 4 in Bitcoin; check a `.ots` proof at opentimestamps.org) |
-| The one-in-twenty loss (the 5th percentile) holds out of sample | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed from the journal: 2,779 scored forecasts, raw breach rate 7.5% (red), 4.8% with factors fitted only on earlier forecasts (green) |
-| We publish our misses and our mistakes | [`/wrong`](https://nightwatch-gules.vercel.app/wrong): 124 of 2,301 replays and 8 of 433 live tickets went past the line |
-| Studies of the method, corrected for asking eleven questions | [`/studies`](https://nightwatch-gules.vercel.app/studies) |
+| Every live verdict is on the record, unedited | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the receipt chain (896 checked, no break, as of 4 Oct 2026); [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) has the daily Bitcoin timestamps (5 of 5 in Bitcoin; check a `.ots` proof at opentimestamps.org) |
+| The one-in-twenty loss (the 5th percentile) holds out of sample | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed from the journal: 2,796 scored forecasts, raw breach rate 7.4% (red), 4.8% with factors fitted only on earlier forecasts (green), as of 4 Oct 2026; the page recomputes live, so the last digit moves |
+| We publish our misses and our mistakes | [`/wrong`](https://nightwatch-gules.vercel.app/wrong): 124 of 2,301 replays and 8 of 451 live tickets went past the line (as of 4 Oct 2026) |
+| Eleven studies of the method, corrected for the nine that are formal tests | [`/studies`](https://nightwatch-gules.vercel.app/studies) |
 | Not verified by us | real-trader adoption; directional edge (measured: none) |
 
 ## How it works
@@ -98,7 +97,7 @@ Three of the most surprising, failures included. The full set is in
 * **Shorts were sized on the wrong tail, and that is fixed.** A short was stress-tested and
   sized on the tail that is a gain for it (a TSLA short's "1-in-100 gap" read +7.4%).
   Presets now use the side that hurts: the same short reads −6.8%.
-* **Asking eleven questions makes a lucky yes likely.** Five came back no, three could not
+* **Asking nine testable questions at once makes a lucky yes likely.** (Eleven studies; two are measurements with no p-value.) Five came back no, three could not
   be decided, three said yes — and after correcting for false discoveries (Benjamini–Hochberg,
   5%) only 1 of the 3 yes answers survives: a model reading an SEC filing does pick the ones
   that move the price (q = 0.004). The pitch is the loss tail, not direction: no directional

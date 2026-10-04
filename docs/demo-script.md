@@ -135,7 +135,7 @@ submission form as the worked example — it reopens this exact verdict for anyo
 > weekend. Fixing it changed what the desk allows on a weekend hold by seventy-six per
 > cent.
 >
-> Asking eleven questions makes a lucky yes likely, so the page corrects for it. Of the three
+> Asking nine testable questions at once makes a lucky yes likely, so the page corrects for it. Of the three
 > yes answers, one survives: a model reading an SEC filing does pick the ones that move the
 > price. There is no directional edge, and the page says so.
 

@@ -67,7 +67,7 @@ def test_failures_and_junk_are_no_reading_never_an_exception():
 
 def test_health_counts_the_tools_that_answered():
     h = _transport({"rsi": RSI, "macd": MACD}).health()
-    assert h == {"answering": 2, "tried": 5}
+    assert h == {"answering": 2, "tried": 3}
 
 
 def _hourly(n=400, seed=1):
