@@ -576,3 +576,50 @@ def test_the_brief_names_the_verdict_and_cap_in_words_not_identifiers(seeded_sto
     assert en.startswith("REDUCE TO on") and "REDUCE_TO" not in en and "exit_liquidity" not in en
     assert "Size held at 715 USDT: the live order book" in en
     assert zh.startswith("建议减仓") and "REDUCE_TO" not in zh
+
+
+def _lev_dict(**over):
+    rungs = [
+        {"leverage": 2.0, "margin_quote": 5_000.0, "analog_of": 40, "analog_hits": 0},
+        {"leverage": 3.0, "margin_quote": 3_333.333, "analog_of": 40, "analog_hits": 0},
+        {"leverage": 10.0, "margin_quote": 1_000.0, "analog_of": 40, "analog_hits": 6},
+    ]
+    base = {
+        "leverage": 10.0, "perp_symbol": "TSLAUSDT", "allowed": True, "margin_quote": 1_000.0, "liquidation_price": 91.0,
+        "liquidation_distance_pct": 9.0, "analog_hits": 6, "analog_of": 40, "mc_share": None, "presets_hit": [],
+        "tiers_source": "bitget", "mmr": 0.005, "ladder": rungs, "safest_leverage": 3.0, "safest_extra_margin_quote": 2_333.333,
+    }
+    return {**base, **over}
+
+
+def test_the_leverage_line_says_what_would_be_safer_and_what_it_costs():
+    from nightwatch.api import intake as it
+
+    en = it._leverage_line(_lev_dict(), "en")
+    assert "Safer: at 3x (3,333 USDT margin, 2,333 more than now) none of 40 past moments like this reached liquidation." in en
+    zh = it._leverage_line(_lev_dict(), "zh")
+    assert "更稳妥：3 倍（保证金 3,333 USDT，比现在多 2,333）" in zh and "40 个相似时刻" in zh
+
+
+def test_no_safer_sentence_when_the_requested_level_is_already_safe_or_there_is_no_ladder():
+    from nightwatch.api import intake as it
+
+    assert "Safer" not in it._leverage_line(_lev_dict(safest_extra_margin_quote=None), "en")
+    assert "Safer" not in it._leverage_line(_lev_dict(ladder=[], safest_leverage=None), "en")
+
+
+def test_when_no_level_is_safe_the_chat_says_so():
+    from nightwatch.api import intake as it
+
+    line = it._leverage_line(_lev_dict(safest_leverage=None, safest_extra_margin_quote=None), "en")
+    assert "No leverage level from 2x to 10x came through clean." in line
+
+
+def test_a_leveraged_report_carries_the_ladder(seeded_store):  # noqa: F811
+    r = _report(seeded_store, leverage=5.0, thesis="t", invalidation="i")
+    assert r.leverage is not None and r.leverage.get("ladder")
+    levels = [x["leverage"] for x in r.leverage["ladder"]]
+    assert 5.0 in levels and levels == sorted(levels)
+    assert sum(1 for x in r.leverage["ladder"] if x["requested"]) == 1
+    req = next(x for x in r.leverage["ladder"] if x["requested"])
+    assert req["analog_hits"] == r.leverage["analog_hits"]  # the ladder agrees with the headline count

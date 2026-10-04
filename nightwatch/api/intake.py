@@ -673,6 +673,33 @@ def weekend_line(report: Any, lang: str) -> str | None:
     )
 
 
+def _safer_leverage(lev: dict[str, Any], lang: str) -> str:
+    """One sentence on the highest leverage history calls safe, or "" when there is nothing to add.
+
+    Said only when the requested level is not already that safe: someone who is fine as
+    asked does not need to hear about lower leverage. The figures are the report's own
+    ladder, so this can never differ from the table beside it.
+    """
+    rungs = lev.get("ladder") or []
+    if not rungs or not any(r.get("analog_of") for r in rungs):
+        return ""
+    zh = lang == "zh"
+    safest, extra = lev.get("safest_leverage"), lev.get("safest_extra_margin_quote")
+    if safest is None:
+        lo, hi = rungs[0]["leverage"], rungs[-1]["leverage"]
+        return (f"从 {lo:g} 倍到 {hi:g} 倍，没有一档是安全的。" if zh
+                else f"No leverage level from {lo:g}x to {hi:g}x came through clean.")
+    if extra is None:
+        return ""
+    rung = next((r for r in rungs if abs(r["leverage"] - safest) < 1e-9), None)
+    if rung is None:
+        return ""
+    of = rung.get("analog_of")
+    if zh:
+        return f"更稳妥：{safest:g} 倍（保证金 {rung['margin_quote']:,.0f} USDT，比现在多 {extra:,.0f}），过去 {of} 个相似时刻没有一个触及强平。"
+    return f"Safer: at {safest:g}x ({rung['margin_quote']:,.0f} USDT margin, {extra:,.0f} more than now) none of {of} past moments like this reached liquidation."
+
+
 def _leverage_line(lev: dict[str, Any], lang: str) -> str:
     """Where the exchange closes a leveraged position, and how often history got there."""
     zh = lang == "zh"
@@ -695,13 +722,16 @@ def _leverage_line(lev: dict[str, Any], lang: str) -> str:
             line += f"；模拟路径中约 {mc:.0%} 会触及。" if mc is not None else "。"
         if presets:
             line += f"有 {len(presets)} 个压力情景会导致强平。"
-        return line
+        return line + _safer_leverage(lev, lang)
     line = f"{x}x leverage: about {lev['margin_quote']:,.0f} USDT of margin, liquidated near {price:,.2f} ({d:.1f}% away)."
     if of:
         line += f" {hits} of {of} past moments like this would have reached it inside the hold"
         line += f", and {mc:.0%} of simulated paths do." if mc is not None else "."
     if presets:
         line += f" Stress presets that liquidate it: {'; '.join(presets[:3])}{'...' if len(presets) > 3 else ''}."
+    safer = _safer_leverage(lev, lang)
+    if safer:
+        line += f" {safer}"
     if lev.get("tiers_source") == "assumed":
         line += f" (Bitget's margin tiers were unavailable; {lev['mmr']:.1%} maintenance margin assumed.)"
     return line
