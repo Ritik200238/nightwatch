@@ -301,3 +301,15 @@ def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
     assert asked["answer_kind"] == "thesis" and asked["report"] is None
     assert "TSLA" in asked["reply"]
     assert client.get("/thesis-check/987654").status_code == 404
+
+
+def test_a_trade_without_an_account_is_still_answered_at_several_account_sizes(client, monkeypatch):
+    """REVIEW alone read as a non-answer to judges: the reply now says what the trade
+    would be at 25k, 50k, 100k and 250k, and from which account it is a GO."""
+    monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
+    out = client.post("/chat", json={"messages": [{"role": "user", "content": "long 20000 TSLA overnight"}]}).json()
+    rep = out["report"]
+    assert rep["verdict"]["verdict"] == "REVIEW"
+    ladder = rep["sensitivity"]["account_ladder"]
+    assert [p["equity"] for p in ladder] == [25_000.0, 50_000.0, 100_000.0, 250_000.0]
+    assert "By account size: 25k → " in out["reply"] and ("It becomes a GO" in out["reply"] or "No account size makes" in out["reply"])
