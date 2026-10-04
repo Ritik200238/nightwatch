@@ -12,6 +12,8 @@ and say which was used.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 import threading
 import time
@@ -661,8 +663,45 @@ def _add_zh_names(out: dict[str, Any]) -> None:
 # --------------------------------------------------------------------- analyse
 
 
-def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None = None, record: bool = True) -> AnalysisReport:
+_PROGRESS: contextvars.ContextVar[Callable[[dict[str, Any]], None] | None] = contextvars.ContextVar("nightwatch_progress", default=None)
+
+
+@contextlib.contextmanager
+def progress_to(callback: Callable[[dict[str, Any]], None] | None):
+    """Route the progress events of every analyze() call made inside the block to ``callback``.
+
+    A context variable rather than a parameter threaded through the chat's many call
+    sites: the chat routing stays one code path, and a call made with no listener behaves
+    exactly as before.
+    """
+    token = _PROGRESS.set(callback)
+    try:
+        yield
+    finally:
+        _PROGRESS.reset(token)
+
+
+def _money(x: float) -> str:
+    return f"{x:,.0f}"
+
+
+def _announce(cb: Callable[[dict[str, Any]], None] | None, stage: str, en: str, zh: str, t_start: float) -> None:
+    """One finished stage, in plain words, with a number taken from that stage's own result.
+    A listener that fails must never fail an analysis."""
+    if cb is None:
+        return
+    try:
+        cb({"stage": stage, "en": en, "zh": zh, "ms": int((time.perf_counter() - t_start) * 1000)})
+    except Exception:  # noqa: BLE001
+        log.exception("progress listener failed")
+
+
+def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None = None, record: bool = True,
+            progress: Callable[[dict[str, Any]], None] | None = None) -> AnalysisReport:
+    """Run the whole analysis. ``progress``, if given (or set with ``progress_to``), is called
+    as each major stage finishes with ``{stage, en, zh, ms}``; it changes nothing else."""
     t_start = time.perf_counter()
+    cb = progress or _PROGRESS.get()
     timings: dict[str, int] = {}
     warnings: list[str] = []
     sources: list[dict[str, Any]] = []
@@ -676,6 +715,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     t0 = time.perf_counter()
     snapshot = ctx.snapshot_at(spec, as_of)
     timings["snapshot"] = _ms(t0)
+    _announce(cb, "snapshot", f"Read {ticket.ticker} and the market as it stands now", f"已读取 {ticket.ticker} 和当前市场状况", t_start)
     entry_price = ticket.entry_price or snapshot.prices["spot_close"] or 0.0
     # A stop given as a distance becomes a price here, the first moment one is known, so
     # everything after - the gate, the paths, the brief - sees an ordinary stop.
@@ -730,6 +770,11 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             auto_reason += f"; the unfiltered answer was more cautious for {', '.join(floored)}, so that is what the size uses"
         analog.lens = replace(analog.lens, auto=auto_reason)
     timings["analog"] = _ms(t0)
+    if analog is not None and analog.result.n:
+        n = analog.result.n
+        _announce(cb, "analog", f"Found {n} past moments like now", f"找到 {n} 个与现在相似的历史时刻", t_start)
+    else:
+        _announce(cb, "analog", "Searched history for moments like now: too few to rely on", "已搜索历史相似时刻：数量太少，不足以依赖", t_start)
 
     from nightwatch.decision import plan_check as plan_mod
 
@@ -746,11 +791,23 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     else:
         warnings.append("no order book available: exit cost and liquidity caps are unknown")
     timings["book"] = _ms(t0)
+    if book is not None:
+        lv = len(book.bids) + len(book.asks)
+        _announce(cb, "book", f"Read the Bitget order book ({lv} price levels)", f"已读取 Bitget 盘口（{lv} 档）", t_start)
+    else:
+        _announce(cb, "book", "No order book available for this token", "该代币暂无盘口数据", t_start)
 
     # 4. Stress.
     t0 = time.perf_counter()
     stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings)
     timings["stress"] = _ms(t0)
+    totals = [i.total_pnl_quote for i in stress.impacts if i.total_pnl_quote is not None]
+    if totals:
+        w = min(totals)
+        worst = f"{'-' if w < 0 else ''}{_money(abs(w))} USDT"
+        _announce(cb, "stress", f"Ran {len(stress.presets)} stress presets: worst {worst}", f"已运行 {len(stress.presets)} 个压力情景：最坏 {worst}", t_start)
+    else:
+        _announce(cb, "stress", f"Ran {len(stress.presets)} stress presets", f"已运行 {len(stress.presets)} 个压力情景", t_start)
 
     # 5. Execution.
     t0 = time.perf_counter()
@@ -758,6 +815,11 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     if execution.book_note:
         warnings.append(execution.book_note)
     timings["execution"] = _ms(t0)
+    if execution.exit_quote is not None and execution.exit_quote.total_cost_bps is not None:
+        c = execution.exit_quote.total_cost_bps
+        _announce(cb, "execution", f"Walked the live Bitget order book: exit costs {c:.0f} bps", f"按 Bitget 实时盘口平仓：成本 {c:.0f} 个基点", t_start)
+    else:
+        _announce(cb, "execution", "Priced the exit: the book cannot absorb this size", "已计算平仓：盘口无法承接该仓位", t_start)
 
     # 6. Gate, sizing, verdict.
     t0 = time.perf_counter()
@@ -854,6 +916,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     entry_size = verdict.recommended_notional if verdict.recommended_notional else ticket.notional_quote
     entry_plan = plan_entry(book, entry_size, long=ticket.closing_long, taker_fee=fees["spot_taker"], budget_bps=ctx.sizing_policy.exit_cost_budget_bps)
     timings["decision"] = _ms(t0)
+    v = getattr(verdict.verdict, "value", verdict.verdict)
+    _announce(cb, "decision", f"Checked the risk rules and sized the trade: {v}", f"已核对风控规则并确定仓位：{v}", t_start)
 
     # 7. What happened last time conditions looked like this.
     lessons: list[dict[str, Any]] = []
