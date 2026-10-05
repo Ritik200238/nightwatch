@@ -14,6 +14,7 @@ engine did: it cannot echo a field the engine did not receive.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from nightwatch.stress.scenarios import Side
@@ -68,20 +69,32 @@ def unused_parts(
     return out
 
 
-def echo_line(report: Any, lang: str, *, carried: set[str] | frozenset[str] = frozenset(), unused: list[str] | None = None, earnings_hold: bool = False) -> str:  # noqa: ANN401
+def echo_line(report: Any, lang: str, *, carried: Mapping[str, str] | set[str] | frozenset[str] = frozenset(), unused: list[str] | None = None, earnings_hold: bool = False) -> str:  # noqa: ANN401
     """"I read this as: long 20,000 USDT of NVDA, 3x (margin 6,667), hold ..., account ..., stop ..., reason ...".
 
-    ``carried`` names the fields that came from an earlier message rather than this one, so a
-    hold inherited from the last ticker is said out loud instead of applied silently."""
+    ``carried`` names the fields that did not come from this message, each with where it did
+    come from: a quote of the earlier message that typed it, the account box on the page, or
+    the desk's own default. Every field is labelled with its true origin, never silently
+    applied; a field typed in this message, or derived (the earnings hold, from the
+    calendar), is labelled as such."""
     from nightwatch.api.intake import _horizon_phrase
 
     zh = lang == "zh"
     t = report.ticket
     side = ("做多" if t.side == Side.LONG else "做空") if zh else t.side.value
+    origin = carried if isinstance(carried, Mapping) else {k: "" for k in carried}
+
     def tag(name: str, text: str) -> str:
-        if name == "account" and "account_box" in carried:
+        if name == "account" and "account_box" in origin:
             return text + ("（用的是页面上设置的账户）" if zh else " - the account you set on the page")
-        return text + (("（沿用你之前消息里的）" if zh else " - same as in your earlier message") if name in carried else "")
+        if name == "hold" and "hold_default" in origin:
+            return text + ("（你没说持有多久，这是系统默认）" if zh else " - the desk's default, you gave no hold")
+        if name not in origin:
+            return text
+        said = origin[name]
+        if not said:
+            return text + ("（沿用你之前消息里的）" if zh else " - same as in your earlier message")
+        return text + (f"（沿用你之前说的：“{said}”）" if zh else f' - typed earlier, in "{said}"')
 
     bits = [tag("size", f"{side} {t.ticker} {t.notional_quote:,.0f} USDT" if zh else f"{side} {t.notional_quote:,.0f} USDT of {t.ticker}")]
 
@@ -90,7 +103,7 @@ def echo_line(report: Any, lang: str, *, carried: set[str] | frozenset[str] = fr
         bits.append(tag("leverage", f"{round(t.leverage, 2):g} 倍杠杆（保证金 {margin:,.0f}）" if zh else f"{round(t.leverage, 2):g}x leverage (margin {margin:,.0f})"))
     hold = _horizon_phrase(report, lang)
     if earnings_hold:
-        hold += "，持有到财报之后" if zh else ", through the earnings report"
+        hold += "，持有到财报之后（按财报日历推算）" if zh else ", through the earnings report (worked out from the earnings calendar)"
     bits.append(tag("hold", hold))
     if t.account_equity_quote:
         bits.append(tag("account", f"账户 {t.account_equity_quote:,.0f}" if zh else f"account {t.account_equity_quote:,.0f}"))
@@ -116,7 +129,7 @@ def carried_fields(
     merged: Any,  # noqa: ANN401
     messages: list[dict[str, str]] | None = None,
     account_equity: float | None = None,
-) -> set[str]:
+) -> dict[str, str]:
     """Fields in the conversation's merged reading that this message did not state.
 
     A hold from the last ticker, a stop, a leverage: kept because an earlier message gave
@@ -128,30 +141,42 @@ def carried_fields(
     from nightwatch.api.intake import parse_message
 
     alone = parse_message(latest, tickers)
-    earlier = [parse_message(m["content"], tickers) for m in (messages or [])[:-1] if m.get("role") == "user" and (m.get("content") or "").strip()]
+    earlier = [(m["content"], parse_message(m["content"], tickers)) for m in (messages or [])[:-1] if m.get("role") == "user" and (m.get("content") or "").strip()]
 
-    def said_before(attr: str) -> bool:
-        return messages is None or any(getattr(e, attr, None) for e in earlier)
+    def said_in(attr: str) -> str | None:
+        """The newest earlier message that typed this field, quoted; "" when no history is given."""
+        if messages is None:
+            return ""
+        for text, e in reversed(earlier):
+            if getattr(e, attr, None):
+                return _short(text, 50)
+        return None
 
-    got: set[str] = set()
-    if merged.horizon_kind and not alone.horizon_kind and said_before("horizon_kind"):
-        got.add("hold")
-    if (merged.stop_price or merged.stop_pct) and not (alone.stop_price or alone.stop_pct) and (messages is None or any(e.stop_price or e.stop_pct for e in earlier)):
-        got.add("stop")
-    if merged.leverage and not alone.leverage and said_before("leverage"):
-        got.add("leverage")
+    got: dict[str, str] = {}
+    if merged.horizon_kind and not alone.horizon_kind and (q := said_in("horizon_kind")) is not None:
+        got["hold"] = q
+    elif not merged.horizon_kind and not alone.horizon_kind:
+        got["hold_default"] = ""
+    if (merged.stop_price or merged.stop_pct) and not (alone.stop_price or alone.stop_pct):
+        q = said_in("stop_price") or said_in("stop_pct")
+        if q is not None:
+            got["stop"] = q
+    if merged.leverage and not alone.leverage and (q := said_in("leverage")) is not None:
+        got["leverage"] = q
     if merged.account_equity_quote and not alone.account_equity_quote:
-        if said_before("account_equity_quote"):
-            got.add("account")
+        if (q := said_in("account_equity_quote")) is not None:
+            got["account"] = q
         elif account_equity and float(account_equity) == float(merged.account_equity_quote):
-            got.add("account_box")
-    if merged.thesis and not alone.thesis and said_before("thesis"):
-        got.add("reason")
+            got["account_box"] = ""
+    if merged.thesis and not alone.thesis and (q := said_in("thesis")) is not None:
+        got["reason"] = q
     # Only a size an earlier message really stated. One the desk chose itself (the largest it
     # allows on the account) or computed from margin and leverage matches nothing said before.
-    if (merged.notional_quote and not alone.notional_quote and messages is not None
-            and any(e.notional_quote and abs(e.notional_quote - merged.notional_quote) < 0.5 for e in earlier)):
-        got.add("size")
+    if merged.notional_quote and not alone.notional_quote and messages is not None:
+        for text, e in reversed(earlier):
+            if e.notional_quote and abs(e.notional_quote - merged.notional_quote) < 0.5:
+                got["size"] = _short(text, 50)
+                break
     return got
 
 
