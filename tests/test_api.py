@@ -316,3 +316,13 @@ def test_a_trade_without_an_account_is_still_answered_at_several_account_sizes(c
     # No reason was written, so a larger account alone cannot clear it, and the reply says what can.
     if all(p["verdict"] != "GO" for p in ladder) and "written_plan" in ladder[-1]["blocking"]:
         assert "wrong if" in out["reply"]
+
+
+def test_a_stop_on_the_wrong_side_is_refused_up_front_in_plain_words(client):
+    base = {"ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000, "thesis": "t", "invalidation": "i", "as_of": AS_OF.isoformat()}
+    r = client.post("/analyze", json={**base, "stop_price": 99999})
+    assert r.status_code == 422 and "must be below the current price" in r.json()["detail"]
+    s = client.post("/analyze", json={**base, "side": "short", "stop_price": 0.5})
+    assert s.status_code == 422 and "must be above the current price" in s.json()["detail"]
+    # Nothing was journaled for the refused tickets.
+    assert client.post("/analyze", json={**base, "stop_price": 300}).status_code == 200

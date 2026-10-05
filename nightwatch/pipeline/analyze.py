@@ -508,6 +508,17 @@ class AnalysisContext:
             self._with_data = tuple(e.ticker for e in self.entries if e.spot_symbol in have)
         return self._with_data
 
+    def latest_spot_close(self, ticker: str, as_of: datetime | None = None) -> float | None:
+        """The newest stored hourly close of the token at or before ``as_of``: one indexed read,
+        for checks that need the price without running the whole analysis."""
+        spot = self.entry(ticker).spot_symbol
+        cutoff = int((ensure_utc(as_of) if as_of else utc_now()).timestamp() * 1000)
+        row = self.store._conn.execute(
+            "SELECT close FROM bars WHERE venue=? AND symbol=? AND interval=? AND kind=? AND ts<=? ORDER BY ts DESC LIMIT 1",
+            (Venue.BITGET_SPOT.value, spot, Interval.H1.value, "trade", cutoff),
+        ).fetchone()
+        return float(row[0]) if row and row[0] else None
+
     def entry(self, ticker: str) -> UniverseEntry:
         for e in self.entries:
             if e.ticker == ticker.upper():

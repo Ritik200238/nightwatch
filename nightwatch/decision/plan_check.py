@@ -71,14 +71,22 @@ def _moving_average(frame: pd.DataFrame, days: int) -> float | None:
 
 def _paths_crossing(paths: Any, move_pct: float, *, downward: bool) -> tuple[int, int] | None:  # noqa: ANN401
     """How many analog paths moved at least ``move_pct`` from entry inside the hold."""
-    rows = [p.values for p in getattr(paths, "paths", None) or [] if p.values]
-    if not rows:
+    drawn = [p for p in getattr(paths, "paths", None) or [] if p.values]
+    if not drawn:
         return None
-    if downward:
-        hit = sum(1 for v in rows if min(v) <= move_pct)
-    else:
-        hit = sum(1 for v in rows if max(v) >= move_pct)
-    return hit, len(rows)
+    # Judged on each bar's worst point (the low for a long), the same measure the stop
+    # count uses, so "N crossed the line, M of those hit the stop" can never have M > N.
+    # Paths without it fall back to their hourly closes.
+    hit = 0
+    for p in drawn:
+        adverse = getattr(p, "worst_adverse_pct", None)
+        if adverse is not None:
+            hit += abs(move_pct) <= adverse
+        elif downward:
+            hit += min(p.values) <= move_pct
+        else:
+            hit += max(p.values) >= move_pct
+    return int(hit), len(drawn)
 
 
 def _thesis_mismatch(thesis: str, long: bool) -> str:
