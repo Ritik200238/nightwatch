@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from nightwatch import __version__
 from nightwatch.api import followup, guard
 from nightwatch.api.locking import RequestFirstLock
-from nightwatch.api.sources import data_sources
+from nightwatch.api.sources import data_sources, street_row
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Venue
@@ -695,6 +695,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "snapshot_heals": s.snapshot_heals, "bars": bars, "orderbook_snapshots": n_books, "last_book_ts": last_book,
             "started_at": s.started_at.isoformat(), "uptime_s": int((utc_now() - s.started_at).total_seconds()),
             "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
+            "bitget_mcp": s.ctx.street_status() if s.ctx.street_client is not None else None,
         }
 
     @app.post("/tonight")
@@ -876,14 +877,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # memory for an hour, and never stored, because it describes today only.
         cached = [(ts, v) for ts, v in s.ctx._street.values()]
         if s.ctx.street_client is not None:
-            newest = max((ts for ts, _ in cached), default=None)
-            out.append({
-                "key": "bitget_mcp", "label": "Bitget US-stock data",
-                "what": "Live quote for the underlying, analyst ratings and targets, insider trades, market fear & greed (bitget-mcp-server)",
-                "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
-                "rows": len(cached), "latest": newest.isoformat() if newest else None,
-                "latest_label": f"{len(cached)} tokens with current street data", "url": "https://agent.bitget.com/mcp",
-            })
+            out.append(street_row(cached, s.ctx.street_status(), utc_now()))
         if s.ctx.signal_client is not None:
             health = s.ctx.signal_health()
             shown = [(ts, v) for ts, v in s.ctx._signal.values() if v and v.get("agrees")]

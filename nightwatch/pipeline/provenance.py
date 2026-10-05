@@ -101,5 +101,13 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
 
     if (payload.get("sizing") or {}).get("caps"):
         items["size"] = {"kind": "assumed", "source": "policy caps: risk budget, concentration, cost budget"}
+    # Bitget's US-stock data: live, last-good (labelled with its age) or unavailable.
+    st = payload.get("street")
+    mcp_row = next((x for x in (payload.get("sources") or []) if x.get("kind") == "bitget_mcp"), None)
+    if st:
+        items["street"] = {"kind": "live", "source": "Bitget US-stock data (bitget-mcp-server)", "ts": st.get("fetched_at"), "age_s": st.get("age_s"),
+                           "stale": bool(st.get("stale")), "note": st.get("age_label")}
+    elif mcp_row and mcp_row.get("status") == "unavailable":
+        items["street"] = {"kind": "live", "source": "Bitget US-stock data (bitget-mcp-server)", "ts": None, "age_s": None, "unavailable": True, "note": mcp_row.get("note")}
     items["analyst"] = {"kind": "ai", "source": "Qwen analyst; reads the finished report, never moves a number"}
     return out

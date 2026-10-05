@@ -23,6 +23,35 @@ def _one(store: Store, sql: str, args: tuple = ()) -> tuple:
     return row if row is not None else ()
 
 
+def street_row(cached: list[tuple[datetime, Any]], status: dict[str, Any] | None, now: datetime) -> dict[str, Any]:
+    """The Bitget US-stock data row, honest about an outage.
+
+    Counts only views that hold something (a blank view is a failed or empty pull, not a
+    token "with current street data"), and when the service is failing says so, with when
+    it started and the HTTP status, instead of calling the cache current.
+    """
+    from nightwatch.features.street import last_good_label, outage_clause
+
+    held = [(ts, v) for ts, v in cached if v is not None and not v.empty]
+    newest = max((ts for ts, _ in held), default=None)
+    down = bool(status) and status.get("ok") is False
+    if down:
+        label = f"Bitget US-stock data: unavailable{outage_clause(status)}"
+        if newest:
+            label += f"; {len(held)} tokens serve data that is {last_good_label(int((now - newest).total_seconds())).replace('last good ', '')}"
+    else:
+        label = f"{len(held)} tokens with current street data"
+    return {
+        "key": "bitget_mcp", "label": "Bitget US-stock data",
+        "what": "Live quote for the underlying, analyst ratings and targets, insider trades, market fear & greed (bitget-mcp-server)",
+        "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
+        "rows": len(held), "latest": newest.isoformat() if newest else None,
+        "latest_label": label, "url": "https://agent.bitget.com/mcp",
+        "status": "unavailable" if down else ("ok" if held else "no data yet"),
+        "down_since": status.get("down_since") if down else None, "http_status": status.get("http_status") if down else None,
+    }
+
+
 def data_sources(store: Store) -> list[dict[str, Any]]:
     c = store._conn
     last = {task: ms for task, ms in c.execute("SELECT task, MAX(finished_at) FROM sync_log GROUP BY task").fetchall()}

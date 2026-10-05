@@ -25,9 +25,13 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
+from datetime import datetime
 from typing import Any
 
 import httpx
+
+from nightwatch.time_utils import utc_now
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +39,13 @@ URL = "https://agent.bitget.com/mcp"
 PROTOCOL = "2025-06-18"
 CLIENT = {"name": "nightwatch", "version": "1"}
 HEADERS = {"content-type": "application/json", "accept": "application/json, text/event-stream"}
+
+
+# After this many failures in a row the service is called down: calls are skipped for
+# COOLDOWN_S (a warm-up asks for 24 tokens x 4 entries, and each would wait out its own
+# timeout against a service that is answering 503), then one call probes it again.
+DOWN_AFTER = 2
+COOLDOWN_S = 60.0
 
 
 class BitgetMcpError(RuntimeError):
@@ -63,6 +74,45 @@ class BitgetMcpClient:
         self._session: str | None = None
         self._lock = threading.Lock()
         self._next_id = 1
+        # Health, for /sources and the report: an outage must read as an outage, never as
+        # "no analyst coverage". Only a failed *request* counts; an entry that answers with
+        # nothing (an ETF has no analysts) is the service working.
+        self._state = threading.Lock()
+        self._failures = 0
+        self._down_since: datetime | None = None
+        self._last_ok: datetime | None = None
+        self._last_status: int | None = None
+        self._last_error: str | None = None
+        self._cool_until = 0.0
+
+    # ------------------------------------------------------------------ health
+
+    def _succeeded(self) -> None:
+        with self._state:
+            self._failures, self._down_since, self._last_status, self._last_error = 0, None, None, None
+            self._last_ok = utc_now()
+
+    def _failed(self, exc: Exception) -> None:
+        with self._state:
+            self._failures += 1
+            self._last_status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            self._last_error = f"HTTP {self._last_status}" if self._last_status else (type(exc).__name__ if not isinstance(exc, BitgetMcpError) else str(exc)[:120])
+            if self._failures >= DOWN_AFTER:
+                self._down_since = self._down_since or utc_now()
+                self._cool_until = time.monotonic() + COOLDOWN_S
+
+    def status(self) -> dict[str, Any]:
+        """``ok`` is True after a good call, False once it has failed twice running, and
+        None before any call. ``down_since`` is the first failure of the current run."""
+        with self._state:
+            down = self._failures >= DOWN_AFTER
+            return {
+                "ok": False if down else (True if self._last_ok and self._failures == 0 else None),
+                "down_since": self._down_since.isoformat() if down and self._down_since else None,
+                "last_ok": self._last_ok.isoformat() if self._last_ok else None,
+                "http_status": self._last_status if down else None,
+                "error": self._last_error if down else None,
+            }
 
     # ------------------------------------------------------------------ protocol
 
@@ -115,11 +165,15 @@ class BitgetMcpClient:
 
     def query(self, entry_id: str, **params: Any) -> list[dict[str, Any]]:  # noqa: ANN401
         """Rows from one catalogue entry, or an empty list if there are none or it failed."""
+        if self._failures >= DOWN_AFTER and time.monotonic() < self._cool_until:
+            return []  # known down: do not spend a timeout per call; one probe follows the cooldown
         try:
             doc = self._call("do_query", {"entry_id": entry_id, "params": {k: v for k, v in params.items() if v is not None}})
         except (httpx.HTTPError, BitgetMcpError) as exc:
             log.info("bitget mcp %s %s failed: %s", entry_id, params, exc)
+            self._failed(exc)
             return []
+        self._succeeded()
         if not doc.get("success"):
             log.info("bitget mcp %s %s unsuccessful: %s", entry_id, params, str(doc)[:200])
             return []

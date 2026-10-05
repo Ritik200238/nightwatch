@@ -206,6 +206,37 @@ def build(client: Any, ticker: str, *, now: datetime | None = None) -> StreetVie
     return view
 
 
+def age_seconds(view: StreetView, now: datetime) -> int | None:
+    try:
+        return max(0, int((now - datetime.fromisoformat(view.fetched_at)).total_seconds()))
+    except (TypeError, ValueError):
+        return None
+
+
+def last_good_label(age_s: int | None) -> str:
+    """"last good 3 h ago": the age of a view that is being served from the cache."""
+    if age_s is None:
+        return "last good, age unknown"
+    if age_s < 3600:
+        return f"last good {max(1, round(age_s / 60))} min ago"
+    h = age_s / 3600
+    return f"last good {h:.1f} h ago" if h < 10 else f"last good {round(h)} h ago"
+
+
+def outage_clause(status: dict[str, Any] | None) -> str:
+    """" since 08:00 UTC (HTTP 503)" for a service that is failing, else nothing."""
+    if not status or status.get("ok") is not False:
+        return ""
+    since = ""
+    if status.get("down_since"):
+        try:
+            since = f" since {datetime.fromisoformat(status['down_since']).astimezone(UTC):%H:%M} UTC"
+        except (TypeError, ValueError):
+            pass
+    code = f" (HTTP {status['http_status']})" if status.get("http_status") else (f" ({status['error']})" if status.get("error") else "")
+    return f"{since}{code}"
+
+
 def quote_disagreement_bps(view: StreetView | None, native_close: float | None, native_age_h: float | None) -> float | None:
     """How far the native price fair value uses is from Bitget's quote for the same close.
 

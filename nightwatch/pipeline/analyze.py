@@ -198,16 +198,29 @@ class AnalysisContext:
         analysis passes ``fetch=False``: the analyst feed takes 1-9 s to answer, measured,
         and a request must not wait on a context feed, so a miss returns what is cached (or
         nothing) and asks for a background refresh instead.
+
+        When a refresh fails, the last good view is kept and served (up to
+        ``STREET_LAST_GOOD_MAX`` old). It carries its own ``fetched_at``, so the report can
+        say how old it is; it is never passed off as current.
         """
         if self.street_client is None:
             return None
         hit = self._street.get(ticker)
         if hit and utc_now() - hit[0] <= max_age:
             return hit[1]
+        last_good = hit[1] if hit and utc_now() - hit[0] <= STREET_LAST_GOOD_MAX else None
         if not fetch:
             self.refresh_street_later(ticker)
-            return hit[1] if hit else None
-        return self._fetch_street(ticker) or (hit[1] if hit else None)
+            return last_good
+        return self._fetch_street(ticker) or last_good
+
+    def street_status(self) -> dict | None:
+        """The street feed's health, from the client, or None if it keeps none."""
+        fn = getattr(self.street_client, "status", None)
+        try:
+            return fn() if callable(fn) else None
+        except Exception:  # noqa: BLE001
+            return None
 
     def _fetch_street(self, ticker: str):  # noqa: ANN202
         from nightwatch.features import street as street_mod
@@ -217,6 +230,14 @@ class AnalysisContext:
         except Exception:  # noqa: BLE001 - context must never fail an analysis
             log.exception("street context for %s failed", ticker)
             return None
+        if view.empty:
+            # Nothing came back. If the service is down that is an outage, not "no
+            # coverage": keep the last good view rather than overwrite it with a blank, and
+            # cache nothing so the next ask retries. If it is up, the token genuinely has
+            # no street data and the blank is cached like any other answer.
+            status = self.street_status()
+            if status is not None and status.get("ok") is not True:
+                return None
         self._street[ticker] = (utc_now(), view)
         return view
 
@@ -989,13 +1010,34 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         from nightwatch.features import street as street_mod
 
         view = ctx.street_for(ticket.ticker, fetch=False)
+        mcp = ctx.street_status()
+        down = mcp is not None and mcp.get("ok") is False
+        if (view is None or view.empty) and down:
+            # An outage, not "no coverage": say so on the report, in its warnings and in the
+            # sources line, so the missing section is not mistaken for a quiet stock.
+            note = f"unavailable{street_mod.outage_clause(mcp)}"
+            warnings.append(f"Bitget's US-stock data (analysts, insiders, live quote) is {note}; this report has no street section")
+            sources.append({"kind": "bitget_mcp", "label": "Bitget US-stock MCP", "last_ts": None, "rows_used": 0, "ticker": ticket.ticker, "status": "unavailable", "note": note})
         if view is not None and not view.empty:
             street = view.to_dict()
-            sources.append({"kind": "bitget_mcp", "label": "Bitget US-stock MCP", "last_ts": view.fetched_at, "rows_used": 1, "ticker": ticket.ticker, "fetched_at": view.fetched_at})
+            age_s = street_mod.age_seconds(view, utc_now())
+            # Served from the cache after the feed stopped answering, or simply old: say so,
+            # and do not let a price that old stand in for the live one.
+            stale = down or (age_s is not None and age_s > STREET_LIVE_S)
+            street["age_s"] = age_s
+            street["stale"] = stale
+            street["age_label"] = street_mod.last_good_label(age_s) if stale else None
+            sources.append({"kind": "bitget_mcp", "label": "Bitget US-stock MCP", "last_ts": view.fetched_at, "rows_used": 1, "ticker": ticket.ticker, "fetched_at": view.fetched_at,
+                            **({"status": "last_good", "note": street["age_label"]} if stale else {})})
+            if stale:
+                warnings.append(
+                    f"Bitget's US-stock data (analysts, insiders, live quote) is {street['age_label']}{street_mod.outage_clause(mcp)}; "
+                    f"it is context, not live, and is left out of the live-price checks"
+                )
             native = snapshot.prices.get("native_close")
-            gap = street_mod.quote_disagreement_bps(view, native, snapshot.features.get("native_close_age_h"))
+            gap = None if stale else street_mod.quote_disagreement_bps(view, native, snapshot.features.get("native_close_age_h"))
             street["quote_gap_bps"] = gap
-            street["token_vs_live_bps"] = street_mod.token_vs_live_bps(view, snapshot.prices.get("spot_close"))
+            street["token_vs_live_bps"] = None if stale else street_mod.token_vs_live_bps(view, snapshot.prices.get("spot_close"))
             street["token_vs_close_bps"] = ((snapshot.prices["spot_close"] / native - 1.0) * 10_000.0) if native and snapshot.prices.get("spot_close") else None
             if gap is not None and abs(gap) > street_mod.QUOTE_DISAGREE_BPS:
                 warnings.append(
@@ -1123,6 +1165,9 @@ def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
 FILING_LOOKBACK_H = 72.0
 # How close to now an analysis must be for today's street data to belong on it.
 STREET_FRESH_S = 6 * 3600
+# A cached street view older than this is served only as "last good", labelled with its age.
+STREET_LIVE_S = 2 * 3600
+STREET_LAST_GOOD_MAX = timedelta(hours=24)
 
 
 def _filing_notes(ctx: AnalysisContext, ticket: TradeTicket, as_of: datetime, horizon_h: float) -> list[FilingNote]:
