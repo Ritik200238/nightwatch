@@ -98,7 +98,7 @@ class AnalysisContext:
     entries: list[UniverseEntry]
     spot_client: BitgetPublicClient | None = None
     perp_client: BitgetPublicClient | None = None
-    analog_config: AnalogConfig = field(default_factory=AnalogConfig)
+    analog_config: AnalogConfig = field(default_factory=AnalogConfig.vol_focused)
     gate_policy: GatePolicy = field(default_factory=GatePolicy)
     breaker_policy: BreakerPolicy = field(default_factory=BreakerPolicy)
     sizing_policy: SizingPolicy = field(default_factory=SizingPolicy)
@@ -1408,7 +1408,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
             notes.append(lens_result.refused)
         searchable = weekend_cut([(ticket.ticker, searchable)], "same_ticker")[0][1]
 
-        result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
+        result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker, hold_h=horizon_h)
         scope = "same_ticker"
         same_ticker_episodes = result.n_distinct_available
         # A lens the token's own past cannot support is the main reason to widen. TSLA has 96
@@ -1440,7 +1440,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
                 pooled_parts, pooled_lens = lens_mod.apply_to_parts(pooled_parts, list(names), min_rows=floor)
                 pooled_parts = weekend_cut(pooled_parts, "pooled")
                 pooled = pooled_history(pooled_parts)
-                pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
+                pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker, hold_h=horizon_h)
                 # A pooled cohort that honours the lens beats a same-ticker one that ignores
                 # it, whatever their sizes: they are answers to different questions.
                 honours_lens = lens_needs_more and pooled_lens.applied
