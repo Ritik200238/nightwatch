@@ -349,8 +349,9 @@ function HeroProof() {
       {has ? (
         <>
           <li>
-            <Link href="/calibration" className={CHIP}>
-              <span className="tabular mr-1 font-semibold">{scored.toLocaleString()}</span> {tx("verdicts scored in public", "个结论已公开评分")}
+            {/* The same /misses number the page it links to shows as "Live verdicts scored": verdicts whose hold has ended and whose outcome is known. */}
+            <Link href="/wrong" className={CHIP} title={tx("Live verdicts whose hold has ended and whose outcome is recorded. Open verdicts are not in this number; /usage counts the answers given to visitors.", "持有期已结束、结果已记录的实时结论。未到期的不在其中；/usage 统计的是给访客的回答。")}>
+              <span className="tabular mr-1 font-semibold">{scored.toLocaleString()}</span> {tx("live verdicts scored (hold over)", "个实时结论已评分（持有期已过）")}
             </Link>
           </li>
           <li>

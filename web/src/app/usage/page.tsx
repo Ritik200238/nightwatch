@@ -68,7 +68,14 @@ export default function UsagePage() {
       />
       <Section title={tx("Numbers", "数字")}>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label={tx("Live verdicts", "实时结论")} value={String(u.live_verdicts)} hint={tx(`${u.journal_live_verdicts_all_time} in the journal all time`, `日志中累计 ${u.journal_live_verdicts_all_time} 条`)} />
+          <Stat
+            label={tx("Verdicts given to visitors", "给访客的结论")}
+            value={u.live_verdicts.toLocaleString()}
+            hint={tx(
+              `answers visitors asked for, our own checks left out. The journal holds ${u.journal_live_verdicts_all_time.toLocaleString()} live analyses in all (open ones and our own checks included); the scored count is on /wrong.`,
+              `访客请求的回答，不含我们自己的检查。日志里共有 ${u.journal_live_verdicts_all_time.toLocaleString()} 条实时分析（含尚未到期的和我们自己的检查）；已评分的数量见 /wrong。`,
+            )}
+          />
           <Stat
             label={tx("Anonymous visitors", "匿名访客")}
             value={String(u.distinct_anonymous_clients)}
