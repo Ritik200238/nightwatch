@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api, peek, type DataSource } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
-import { LoadingRecord, PageHead, PROOF_WIDTH } from "@/components/proof-page";
+import { LoadingRecord, PageHead, PROOF_WIDTH, RecordError } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
 import { localLatest, localSource } from "@/lib/source-zh";
 
@@ -14,25 +14,36 @@ export default function SourcesPage() {
   const [rows, setRows] = useState<DataSource[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
+    let live = true;
+    setError(null);
     const c = peek<DataSource[]>("/sources");
     if (c) setRows(c);
     void api
       .sources()
-      .then(setRows)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "unavailable"));
-  }, []);
+      .then((r) => live && setRows(r))
+      .catch((e) => live && setError(e instanceof ApiError ? e.message : tx("The server did not answer.", "服务器没有响应。")));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
 
   return (
     <div className={`${PROOF_WIDTH} space-y-4`}>
       <PageHead title={tx("Data sources", "数据来源")} intro={tx("Every number in a report comes from one of these feeds. Nothing is typed in by hand.", "报告里的每个数字都来自下面这些数据源，没有任何手工填写。")} />
-      {error ? (
-        <p className="text-sm text-destructive">
-          {tx("Could not load the sources: ", "无法加载数据源：")}
-          {error}
+      {error && !rows ? <RecordError message={error} onRetry={() => setAttempt((n) => n + 1)} /> : null}
+      {error && rows ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {tx("Could not refresh just now; showing the last saved list. ", "刚才无法刷新，显示的是上次保存的列表。")}
+          <button type="button" onClick={() => setAttempt((n) => n + 1)} className="inline-flex min-h-10 items-center px-2 underline underline-offset-2">
+            {tx("Try again", "重试")}
+          </button>
         </p>
       ) : null}
-      {!rows && !error ? <LoadingRecord blocks={[88, 88, 88]} /> : null}
+      {!rows && !error ? <LoadingRecord blocks={[88, 88, 88]} onRetry={() => setAttempt((n) => n + 1)} /> : null}
       <ul className="space-y-3">
         {rows?.map((raw) => {
           const fresh = isFresh(raw);

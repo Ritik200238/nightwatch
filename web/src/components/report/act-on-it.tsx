@@ -102,7 +102,7 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
         href={perp ? `https://www.bitget.com/futures/usdt/${perp}` : `https://www.bitget.com/spot/${symbol}`}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent sm:min-h-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <ExternalLink className="h-3.5 w-3.5" aria-hidden />
         {perp ? L(`Open ${perp} (perpetual) on Bitget`, `在 Bitget 打开 ${perp}（永续合约）`) : L(`Open ${symbol} on Bitget`, `在 Bitget 打开 ${symbol}`)}
@@ -113,7 +113,7 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
         <button
           type="button"
           onClick={() => void copy()}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent sm:min-h-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-status-good" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
           {copied ? L("Ticket copied", "单据已复制") : L("Copy the sized ticket", "复制按建议仓位生成的单据")}
@@ -186,7 +186,7 @@ function EntryPlanNote({ report, symbol, lang }: { report: Report; symbol: strin
               }
             });
           }}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="mt-2 inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs sm:min-h-0 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           title={prompt}
         >
           {copied ? <Check className="h-3 w-3 text-status-good" aria-hidden /> : <Copy className="h-3 w-3" aria-hidden />}

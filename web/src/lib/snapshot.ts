@@ -109,6 +109,16 @@ export function snapshotGet(data: SnapshotData | null, path: string, search: str
   return v === undefined ? null : v;
 }
 
+/** What a /health reply means for liveness. A reply the proxy served from its saved copy is
+ *  never "up": the box did not answer, so the page says it is down and when the copy is from. */
+export type HealthVerdict = { state: "up" | "slow" } | { state: "down"; savedAt?: string };
+
+export function classifyHealth(ok: boolean, headerIso: string | null, elapsedMs: number, slowAfterMs = 3_000): HealthVerdict {
+  if (headerIso) return { state: "down", savedAt: headerIso };
+  if (!ok) return { state: "down" };
+  return { state: elapsedMs > slowAfterMs ? "slow" : "up" };
+}
+
 // Client-side flag: set by api.ts when a response carries the header, read by the banner.
 let current: string | null = null;
 const listeners = new Set<() => void>();

@@ -10,6 +10,7 @@ export function HealthPill() {
   const { tx, lang } = useLang();
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -18,7 +19,10 @@ export function HealthPill() {
         // Bounded (about 16 s), so the pill always settles instead of showing "checking" for ever.
         const h = await probeHealth();
         if (!cancelled) {
-          if (h.state === "down") setError("offline");
+          if (h.state === "down") {
+            setError("offline");
+            setSavedAt(h.savedAt ?? null);
+          }
           else {
             setHealth(h.health);
             setError(null);
@@ -38,7 +42,11 @@ export function HealthPill() {
 
   if (error) {
     return (
-      <span role="status" className="inline-flex shrink-0 items-center gap-2 rounded-full border border-destructive/40 px-3 py-1 text-xs whitespace-nowrap text-destructive">
+      <span
+        role="status"
+        title={savedAt ? tx(`Showing saved data from ${fmtTimeL(savedAt, lang)}`, `正在显示 ${fmtTimeL(savedAt, lang)} 的已保存数据`) : undefined}
+        className="inline-flex shrink-0 items-center gap-2 rounded-full border border-destructive/40 px-3 py-1 text-xs whitespace-nowrap text-destructive"
+      >
         <span aria-hidden className="h-2 w-2 rounded-full bg-destructive" />
         {tx("API offline", "API 离线")}
       </span>

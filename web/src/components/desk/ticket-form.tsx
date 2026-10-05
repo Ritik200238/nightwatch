@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Working } from "@/components/desk/working";
 import { useLang } from "@/lib/lang";
 import { holdLabel } from "@/lib/plain";
 import { ticketProblems } from "@/lib/errors";
@@ -14,6 +15,11 @@ import { api, type HorizonKind, type Lens, type Side, type TicketInput, type Uni
 interface Props {
   universe: UniverseEntry[];
   busy: boolean;
+  /** True while this form's own analysis is running (not a chat turn). */
+  working?: boolean;
+  /** The last failure, kept beside the form so the inputs and the message are on one screen. */
+  error?: string | null;
+  onRetry?: () => void;
   onSubmit: (ticket: TicketInput) => void;
   initial?: Partial<TicketInput>;
 }
@@ -139,7 +145,7 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
   );
 }
 
-export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
+export function TicketForm({ universe, busy, working = false, error = null, onRetry, onSubmit, initial }: Props) {
   const { tx, lang } = useLang();
   const [ticker, setTicker] = useState(initial?.ticker ?? "TSLA");
   const [side, setSide] = useState<Side>(initial?.side ?? "long");
@@ -297,6 +303,24 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
         <Label htmlFor="invalidation">{tx("What proves it wrong", "什么情况说明判断错了")}</Label>
         <Textarea id="invalidation" rows={2} value={invalidation} onChange={(e) => setInvalidation(e.target.value)} placeholder={tx("e.g. a close below 350", "例如 收盘跌破 350")} />
       </div>
+      {working ? (
+        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3" role="status" aria-live="polite">
+          <Working compact />
+          <p className="text-[13px] text-muted-foreground">{tx("This can take up to a minute when the desk is busy. Your inputs are kept.", "服务器繁忙时最多需要一分钟。您填写的内容会保留。")}</p>
+        </div>
+      ) : null}
+      {error && !working ? (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+          <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
+          <p className="text-[13px] text-muted-foreground">{error}</p>
+          <p className="text-[13px] text-muted-foreground">{tx("Your inputs are still here.", "您填写的内容还在。")}</p>
+          {onRetry ? (
+            <Button type="button" variant="secondary" className="mt-2 min-h-10" onClick={onRetry} disabled={busy}>
+              {tx("Try again", "重试")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <Button type="submit" disabled={busy || available.length === 0} className="w-full">
         {busy ? tx("Stress-testing…", "压力测试中…") : tx("Stress-test this trade", "对这笔交易做压力测试")}
       </Button>

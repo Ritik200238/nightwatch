@@ -8,6 +8,7 @@ import { PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
 import { AsOf } from "@/components/as-of";
 import { localSource } from "@/lib/source-zh";
+import { fmtDateTimeL } from "@/lib/i18n";
 
 type Load<T> = { data: T | null; error: boolean };
 
@@ -64,7 +65,7 @@ export default function StatusPage() {
 
   return (
     <div className={`${PROOF_WIDTH} space-y-4`}>
-      <PageHead title={tx("Status", "状态")} intro={tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
+      <PageHead title={tx("Status", "状态")} intro={health.data?.state === "down" ? tx("The API is down, so the cards below may be saved copies, not live readings.", "API 离线，下面的卡片可能是已保存的副本，而非实时读数。") : tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <AsOf path="/sources" />
       <Card title="API" ok={health.data ? health.data.state === "up" : null}>
@@ -74,7 +75,12 @@ export default function StatusPage() {
             {health.data.health.llm ? ` · ${tx("analyst model", "分析师模型")} ${health.data.health.llm.ready ? tx("ready", "就绪") : tx("not ready", "未就绪")}` : ""}
           </p>
         ) : health.data ? (
-          <p>{tx("Not answering right now. Saved copies of the public pages are still shown.", "暂时没有响应。公开页面仍显示已保存的副本。")}</p>
+          <p>
+            {tx("Down: the API is not answering right now.", "离线：API 暂时没有响应。")}{" "}
+            {health.data.savedAt
+              ? tx(`Showing saved data from ${fmtDateTimeL(health.data.savedAt, lang)}.`, `正在显示 ${fmtDateTimeL(health.data.savedAt, lang)} 的已保存数据。`)
+              : tx("Saved copies of the public pages are still shown.", "公开页面仍显示已保存的副本。")}
+          </p>
         ) : (
           <p>{tx("Checking (up to 15 seconds)…", "检查中（最多 15 秒）…")}</p>
         )}
