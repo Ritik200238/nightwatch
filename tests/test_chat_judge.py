@@ -1,5 +1,7 @@
 """Chat problems a second judge found on the live desk, each with the judge's own input."""
 
+from types import SimpleNamespace as NS
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -84,8 +86,6 @@ def test_a_followup_with_leverage_and_margin_sets_both_never_the_account(client)
 
 
 # --- a NO GO never sits beside "Size it at" ------------------------------------------------
-
-from types import SimpleNamespace as NS  # noqa: E402
 
 
 def _fake(verdict, rec, req, rules=(), caps=()):
