@@ -851,6 +851,8 @@ export interface Counterpoint {
   text: string;
   magnitude_quote: number | null;
   source: string;
+  /** The same sentence in Chinese, from the same numbers; empty when there is none. */
+  text_zh?: string;
 }
 
 export interface SecondOpinion {
@@ -1123,6 +1125,10 @@ export interface FailureMode {
   title_zh?: string;
   /** The same loss at the recommended size, when that is smaller than the one asked for. */
   loss_quote_at_recommended?: number | null;
+  /** The sentences above in Chinese, from the same numbers; empty when there is no twin. */
+  trigger_zh?: string;
+  mechanism_zh?: string;
+  likelihood_zh?: string;
 }
 
 export interface LeverageView {

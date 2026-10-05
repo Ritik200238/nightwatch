@@ -9,6 +9,7 @@ import { Term } from "@/components/term";
 import { api, peek, type StudiesResponse, type Study } from "@/lib/api";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
+import { STUDY_ZH } from "@/lib/studies-zh";
 import { ClosedHoursSection } from "./closed-hours";
 
 /** The verdict answers the question in the title, and nothing else.
@@ -271,6 +272,9 @@ function Significance({ s, m }: { s: Study; m: number | undefined }) {
 export default function StudiesPage() {
   const { tx, lang } = useLang();
   const statLabel = (k: string) => (lang === "zh" ? STAT_LABEL_ZH[k] : undefined) ?? STAT_LABEL[k] ?? k.replace(/_/g, " ");
+  // Titles and questions are fixed per study and translated; the computed prose stays as the server wrote it.
+  const studyTitle = (s: Study) => (lang === "zh" ? STUDY_ZH[s.key]?.title : undefined) ?? s.title;
+  const studyQuestion = (s: Study) => (lang === "zh" ? STUDY_ZH[s.key]?.question : undefined) ?? s.question;
   const verdictLabel = (k: Study["verdict"]) => (lang === "zh" ? { yes: "是", no: "否", unclear: "暂时无法判断" }[k] : VERDICT[k].label);
   const [rep, setRep] = useState<StudiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -318,17 +322,17 @@ export default function StudiesPage() {
             </li>
             {yes ? (
               <li>
-                <Pill tone="good">{tx(`Passed (${yes})`, `通过（${yes}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "yes").map((s) => s.title).join(" · ")}
+                <Pill tone="good">{tx(`Passed (${yes})`, `通过（${yes}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "yes").map(studyTitle).join(" · ")}
               </li>
             ) : null}
             {no ? (
               <li>
-                <Pill tone="warning">{tx(`Failed (${no})`, `未通过（${no}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "no").map((s) => s.title).join(" · ")}
+                <Pill tone="warning">{tx(`Failed (${no})`, `未通过（${no}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "no").map(studyTitle).join(" · ")}
               </li>
             ) : null}
             {unclear ? (
               <li>
-                <Pill tone="muted">{tx(`Too early (${unclear})`, `还太早（${unclear}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "unclear").map((s) => s.title).join(" · ")}
+                <Pill tone="muted">{tx(`Too early (${unclear})`, `还太早（${unclear}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "unclear").map(studyTitle).join(" · ")}
               </li>
             ) : null}
           </ul>
@@ -392,6 +396,12 @@ export default function StudiesPage() {
             </p>
           </Section>
 
+          {lang === "zh" ? (
+            <p className="text-[13px] text-muted-foreground">
+              各项研究的标题和问题已译成中文；“怎么检验的”“结果如何”“因此改变了什么”和统计细节含有计算出的数字，仍为服务器给出的英文原文，数字与英文版完全一致。
+            </p>
+          ) : null}
+
           {rep.studies.map((s) => {
             const v = VERDICT[s.verdict];
             return (
@@ -400,11 +410,13 @@ export default function StudiesPage() {
                 collapsible
                 summary={
                   <>
-                    <span className="block text-[13px]">{s.question}</span>
-                    <span className="mt-1 block text-[13px] font-medium text-foreground">{firstSentence(s.finding)}</span>
+                    <span className="block text-[13px]">{studyQuestion(s)}</span>
+                    <span className="mt-1 block text-[13px] font-medium text-foreground">
+                      {lang === "zh" ? `答案：${verdictLabel(s.verdict)}。` : firstSentence(s.finding)}
+                    </span>
                   </>
                 }
-                title={s.title}
+                title={studyTitle(s)}
                 action={
                   <Pill tone={v.tone}>
                     <v.Icon className="mr-1 h-3 w-3" aria-hidden />
@@ -415,16 +427,16 @@ export default function StudiesPage() {
                 <div className="space-y-3 text-sm">
                   <div>
                     <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("How it was tested", "怎么检验的")}</p>
-                    <p className="mt-1 text-muted-foreground">{s.method}</p>
+                    <p lang="en" className="mt-1 text-muted-foreground">{s.method}</p>
                   </div>
                   <div>
                     <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("What came back", "结果如何")}</p>
-                    <p className="mt-1 leading-relaxed">{s.finding}</p>
+                    <p lang="en" className="mt-1 leading-relaxed">{s.finding}</p>
                   </div>
                   <Significance s={s} m={rep.fdr?.m_tests} />
                   <div className="rounded-lg border border-border bg-muted/30 p-3">
                     <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("What changed because of it", "因此改变了什么")}</p>
-                    <p className="mt-1 leading-relaxed">{s.consequence}</p>
+                    <p lang="en" className="mt-1 leading-relaxed">{s.consequence}</p>
                   </div>
                   {Object.keys(s.stats).length ? (
                     <div>
