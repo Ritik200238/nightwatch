@@ -1,6 +1,6 @@
 """Multiple-testing correction across the published studies.
 
-Eleven studies were run and each one's verdict was read off its own statistic, so the
+Twelve studies were run and each one's verdict was read off its own statistic, so the
 chance that at least one "yes" is luck is higher than any single test suggests. This
 module derives, where it can be done honestly, one p-value per study from what the
 study already stores, corrects them together with Benjamini-Hochberg at a 5% false
@@ -154,7 +154,7 @@ def _p_weighting(st: dict[str, Any], n: int) -> tuple[float | None, str]:
     )
 
 
-def _p_random_hours(st: dict[str, Any]) -> tuple[float | None, str]:
+def _p_random_hours(st: dict[str, Any], unit: str = "week") -> tuple[float | None, str]:
     p_t, _ = _clustered(_f(st, "clustered_t"), _f(st, "tokens"), "clustered t")
     lo, hi, mean = _f(st, "boot_ci_low"), _f(st, "boot_ci_high"), _f(st, "mean_advantage")
     if p_t is None or lo is None or hi is None or mean is None or hi <= lo:
@@ -166,7 +166,7 @@ def _p_random_hours(st: dict[str, Any]) -> tuple[float | None, str]:
     # so the claim is only as strong as the weaker of the two.
     return max(p_t, p_b), (
         f"The verdict needs two things at once, so p is the larger of two: the token-clustered t (p = {p_t:.3f}, Student t, "
-        f"{int(_f(st, 'tokens') or 0) - 1} degrees of freedom) and the week-bootstrap interval (p = {p_b:.3f}). The bootstrap draws are not "
+        f"{int(_f(st, 'tokens') or 0) - 1} degrees of freedom) and the {unit}-bootstrap interval (p = {p_b:.3f}). The bootstrap draws are not "
         "stored, so that second p is a normal approximation from the width of the 95% interval."
     )
 
@@ -232,6 +232,8 @@ def derive_p(study: dict[str, Any]) -> tuple[float | None, str]:
         return _p_weighting(st, n)
     if key == "analogs_beat_random_hours":
         return _p_random_hours(st)
+    if key == "adjusted_analogs_beat_adjusted_baseline":
+        return _p_random_hours(st, "night")
     if key == "pooling_beats_own_history":
         return _p_pooling(st, n)
     if key == "narrowing_gives_a_truer_tail":

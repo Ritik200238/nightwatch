@@ -132,3 +132,9 @@ def test_annotate_is_additive_and_counts_yes_answers_that_survive():
     assert summary["yes_total"] == 2 and summary["yes_survive"] == 1
     assert summary["yes_fail"] == ["distance_does_not_warn"]
     assert math.isclose(by["closer_is_not_tighter"]["q_value"], bh_adjust([o["p_value"] for o in out if o["p_value"] is not None])[0])
+
+
+def test_adjusted_baseline_study_is_inside_the_correction_family():
+    st = {"clustered_t": 3.0, "tokens": 24.0, "mean_advantage": 0.01, "boot_ci_low": 0.004, "boot_ci_high": 0.016}
+    p, how = derive_p(_study("adjusted_analogs_beat_adjusted_baseline", "yes", 2000, st))
+    assert p is not None and "night-bootstrap" in how

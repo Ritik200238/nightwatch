@@ -42,6 +42,11 @@ const STAT_LABEL_ZH: Record<string, string> = {
   mean_move_closest_quartile: "最近四分之一之后的波动",
   pooled_t: "t 值，合并",
   clustered_t: "t 值，按代币聚类",
+  nights: "独立夜晚数",
+  analog_lo_coverage: "低于 p5 的结果，调整后相似时刻",
+  baseline_lo_coverage: "低于 p5 的结果，调整后随机小时",
+  analog_width: "平均宽度，调整后相似时刻",
+  baseline_width: "平均宽度，调整后随机小时",
   raw_diff: "突破率，分歧最大的三分之一减最小的三分之一",
   raw_t: "t 值，仅看分歧（三等分）",
   alone_t: "t 值，仅看分歧（斜率）",
@@ -97,6 +102,11 @@ const STAT_LABEL: Record<string, string> = {
   mean_move_closest_quartile: "move after the closest quarter",
   pooled_t: "t, pooled",
   clustered_t: "t, clustered by token",
+  nights: "independent nights",
+  analog_lo_coverage: "outcomes below p5, adjusted analogs",
+  baseline_lo_coverage: "outcomes below p5, adjusted random hours",
+  analog_width: "mean width, adjusted analogs",
+  baseline_width: "mean width, adjusted random hours",
   raw_diff: "breach rate, most-disagreed third minus least",
   raw_t: "t, disagreement alone (thirds)",
   alone_t: "t, disagreement alone (slope)",
@@ -210,6 +220,8 @@ function statValue(key: string, v: number): string {
     key.startsWith("pooled_lo") ||
     key.startsWith("banded_lo") ||
     key.startsWith("heldout_lo") ||
+    key === "analog_lo_coverage" ||
+    key === "baseline_lo_coverage" ||
     key === "share_near_tighter" ||
     key === "hit_rate" ||
     key === "ci_low" ||

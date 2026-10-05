@@ -215,3 +215,45 @@ def test_studies_travel_with_the_replays_they_were_built_on(tmp_path):
     with Store(target) as store:
         got = StudyStore(store).all()
     assert got[0]["finding"] == "from work.sqlite" and got[0]["verdict"] == "no"
+
+
+def _informative(n: int = 1500, *, informative: bool, seed: int = 8) -> pd.DataFrame:
+    """The analog tail follows each forecast's true volatility; the stored baseline is one
+    flat width. Both are rescaled by the same adjustment inside the study."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for i in range(n):
+        at = T0 + timedelta(hours=8 * i)
+        sigma = float(rng.choice([0.7, 1.4, 2.8]))
+        spread = 1.645 * (sigma if informative else 1.4)
+        rows.append({
+            "ticker": TOKENS[i % len(TOKENS)], "as_of": at, "horizon_end": at + timedelta(hours=2), "horizon_h": 18.0,
+            "p5": -spread, "p25": -spread / 2, "p50": 0.0, "p75": spread / 2, "p95": spread,
+            "ret_pct": float(rng.normal(0, sigma)),
+            "base_p5": -1.645 * 1.4, "base_p50": 0.0, "base_p95": 1.645 * 1.4,
+        })
+    return pd.DataFrame(rows)
+
+
+def test_adjusted_baseline_study_credits_the_retrieval_only_when_it_carries_information():
+    from nightwatch.journal.studies import study_adjusted_analogs_beat_adjusted_baseline
+
+    good = study_adjusted_analogs_beat_adjusted_baseline(_informative(informative=True))
+    assert good.verdict == YES, good.finding
+    assert good.stats["boot_ci_low"] > 0 and good.stats["nights"] > 100
+
+
+def test_adjusted_baseline_study_says_not_shown_when_the_two_tie():
+    from nightwatch.journal.studies import study_adjusted_analogs_beat_adjusted_baseline
+
+    tie = study_adjusted_analogs_beat_adjusted_baseline(_informative(informative=False))
+    assert tie.verdict == UNCLEAR, tie.finding
+    assert abs(tie.stats["mean_advantage"]) < 1e-9
+    assert "rescaling" in tie.finding
+
+
+def test_adjusted_baseline_study_is_inconclusive_on_thin_history():
+    from nightwatch.journal.studies import study_adjusted_analogs_beat_adjusted_baseline
+
+    s = study_adjusted_analogs_beat_adjusted_baseline(_informative(n=60, informative=True))
+    assert s.verdict == UNCLEAR and not s.stats
