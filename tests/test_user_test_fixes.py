@@ -162,3 +162,25 @@ def test_a_leverage_is_printed_to_two_decimals_everywhere():
     line = intake._leverage_line(lev, "en")
     assert "4.44x" in line and "4.444" not in line
     assert "4.44 倍" in intake._leverage_line(lev, "zh")
+
+
+# 8. The first answer: a two-line headline, how it was read, then at most three short paragraphs
+
+@pytest.mark.parametrize("text", ["long 20k TSLA over the weekend", "5x long TSLA overnight, account 50k", "周末做多特斯拉 2万U"])
+def test_the_first_answer_is_at_most_five_paragraphs(client, text):  # noqa: F811
+    got = _chat(client, [_u(text)])
+    paragraphs = [p for p in got["reply"].split("\n\n") if p.strip()]
+    assert len(paragraphs) <= 5, got["reply"]
+    assert got["report"] is not None  # what was dropped from the bubble is still on the report
+    assert paragraphs[-1].startswith(("Ask me", "可以接着问我"))
+
+
+# 3. No account typed means no account sent: the reply and the report carry the account-size ladder
+
+def test_without_an_account_the_report_carries_the_account_size_row(client):  # noqa: F811
+    got = _chat(client, [_u("long 20000 TSLA overnight")])  # the page sends no account unless the trader gave one
+    assert got["ticket"]["account_equity_quote"] is None
+    ladder = got["report"]["sensitivity"]["account_ladder"]
+    assert [p["equity"] for p in ladder] == [25000, 50000, 100000, 250000]
+    assert "25k" in got["reply"] and "250k" in got["reply"]
+    assert "account: not given" in got["reply"]  # and the echo says so rather than inventing one

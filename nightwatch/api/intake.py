@@ -1357,23 +1357,14 @@ def brief_short(report: Any, lang: str = "en", *, echo: str | None = None, notes
     asks_account = head.startswith(("REVIEW: tell the desk", "需复核（REVIEW）：请告诉系统"))
     nxt = next_step(report, zh)
     out = [head if asks_account else head + "\n" + nxt]
-    for extra in (echo, *notes):
-        if extra:
-            out.append(extra)
-    bk = book_line(report, lang)
-    if bk:
-        out.append(bk)
-    wk = weekend_line(report, lang)
-    if wk:
-        out.append(wk)
-    note = getattr(report.execution, "book_note", None)
-    if note:
-        out.append("注意：盘口此刻异常宽，仓位上限按过去两小时的正常盘口计算；现在进出成本更高，可以等一等或用限价单。" if zh
-                   else "Heads-up: " + note[0].upper() + note[1:] + ".")
-    lev = getattr(report, "leverage", None)
-    if lev:
-        out.append(_leverage_line(lev, lang))
-    modes = [m for m in (getattr(report, "failure_modes", None) or []) if m.get("loss_quote") is not None]
+    # How the message was read and what was not used stay together as one block, directly under
+    # the headline; they are what a trader checks first.
+    reading_block = "\n".join(x for x in (echo, *notes) if x)
+    if reading_block:
+        out.append(reading_block)
+    # Everything else competes for TWO slots (the third paragraph is the offer of follow-ups), in
+    # the order that matters most. What does not fit is not lost: every line is on the report below.
+    ranked: list[str] = []
     picked = {p: next((x for x in full[1:] if x.startswith(p)), None) for p in keep}
     # What the second line already says is not said again below it.
     if not asks_account:
@@ -1384,28 +1375,47 @@ def brief_short(report: Any, lang: str = "en", *, echo: str | None = None, notes
         # The headline already carries the size rules' numbers; "Why:" keeps only the rest.
         rest = [r for r in report.verdict.reasons if not r.startswith(("written plan", "Size held at", "position size", "risk budget"))]
         picked["Why:"] = ("Why: " + "; ".join(rest[:3]) + ".") if rest and not zh else None
+    # The book the trade would join leads: it changes what every other line means.
+    bk = book_line(report, lang)
+    if bk:
+        ranked.append(bk)
     for p in keep[:2] if not zh else keep[:1]:
         if picked.get(p):
-            out.append(picked[p])
+            ranked.append(picked[p])
+    wk = weekend_line(report, lang)
+    if wk:
+        ranked.append(wk)
+    for p in (keep[3:] if not zh else keep[2:]):
+        if picked.get(p):
+            ranked.append(picked[p])
+    lev = getattr(report, "leverage", None)
+    if lev:
+        ranked.append(_leverage_line(lev, lang))
+    note = getattr(report.execution, "book_note", None)
+    if note:
+        ranked.append("注意：盘口此刻异常宽，仓位上限按过去两小时的正常盘口计算；现在进出成本更高，可以等一等或用限价单。" if zh
+                      else "Heads-up: " + note[0].upper() + note[1:] + ".")
+    modes = [m for m in (getattr(report, "failure_modes", None) or []) if m.get("loss_quote") is not None]
     if modes:
         m = modes[0]
         if zh:
-            out.append(f"最需要注意的亏损方式：{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT{_at_rec(m, True)}。")
+            ranked.append(f"最需要注意的亏损方式：{FAILURE_ZH.get(m['key'], m['title'])}，约 {m['loss_quote']:,.0f} USDT{_at_rec(m, True)}。")
         else:
-            out.append(f"The one to watch: {m['title']} ({m.get('short') or m['mechanism']}) - about {m['loss_quote']:,.0f} USDT{_at_rec(m)}; {m['likelihood']}.")
-    for p in (keep[2:] if not zh else keep[1:]):
-        if picked.get(p):
-            out.append(picked[p])
+            ranked.append(f"The one to watch: {m['title']} ({m.get('short') or m['mechanism']}) - about {m['loss_quote']:,.0f} USDT{_at_rec(m)}; {m['likelihood']}.")
+    history = picked.get(keep[1] if zh else keep[2])
+    if history:
+        ranked.append(history)
+    out.extend(ranked[:2])
     t = report.ticket
     lev_ask = ("不加杠杆呢？" if zh else "what about no leverage?") if t.leveraged else ("5 倍杠杆呢？" if zh else "what about 5x?")
     # A short is hurt by a rise, so its shock and its odds question point up.
     short = t.side == Side.SHORT
     if zh:
         move, odds = ("涨", "涨") if short else ("跌", "跌")
-        out.append(f"可以接着问我：为什么？· 如果{move} 10% 呢？· 仓位减半 · {lev_ask} · {t.ticker} 周末{odds} 5% 的概率是多少？")
+        out.append(f"可以接着问我：为什么？· 如果{move} 10% 呢？· 仓位减半 · {lev_ask} · {t.ticker} 周末{odds} 5% 的概率是多少？完整内容见下方报告。")
     else:
         gap, odds = ("up", "rise") if short else ("down", "fall")
-        out.append(f"Ask me: why? · what if it gaps {gap} 10%? · halve it · {lev_ask} · how often does {t.ticker} {odds} 5% over a weekend?")
+        out.append(f"Ask me: why? · what if it gaps {gap} 10%? · halve it · {lev_ask} · how often does {t.ticker} {odds} 5% over a weekend? The rest is in the report below.")
     return "\n\n".join(out)
 
 
