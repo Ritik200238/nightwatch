@@ -116,6 +116,12 @@ class AnalysisContext:
     # Bitget's bitget-signal Skill backend (nightwatch.data.bitget_signal.BitgetSignalClient):
     # an RSI reading, shown only when it agrees with the desk's own candles. Context only.
     signal_client: Any = None
+    # Bitget Wallet's tokenized-stock listing (nightwatch.data.bitget_rwa.BitgetRwaClient):
+    # tradable status, pause or alert text, per-order size limits. Cached, refreshed in the
+    # background, never waited on.
+    rwa_client: Any = None
+    _rwa: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
+    _rwa_pending: set[str] = field(default_factory=set)
     sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
@@ -412,6 +418,42 @@ class AnalysisContext:
                 self._signal_pending.discard(ticker)
 
         threading.Thread(target=run, name=f"signal-{ticker}", daemon=True).start()
+
+    def rwa_for(self, ticker: str, *, max_age: timedelta = timedelta(minutes=30), fetch: bool = False) -> dict | None:
+        """The cached Bitget Wallet listing for a ticker. An analysis passes ``fetch=False``:
+        a miss returns what is cached (up to a day old) and asks for a background refresh."""
+        if self.rwa_client is None:
+            return None
+        hit = self._rwa.get(ticker)
+        if hit and utc_now() - hit[0] <= max_age:
+            return hit[1]
+        if fetch:
+            return self._fetch_rwa(ticker) or (hit[1] if hit else None)
+        self.refresh_rwa_later(ticker)
+        return hit[1] if hit and utc_now() - hit[0] <= timedelta(days=1) else None
+
+    def _fetch_rwa(self, ticker: str) -> dict | None:
+        try:
+            info = self.rwa_client.stock_info(ticker)
+        except Exception:  # noqa: BLE001 - context must never fail an analysis
+            log.exception("bitget rwa for %s failed", ticker)
+            return None
+        if info is not None:
+            self._rwa[ticker] = (utc_now(), info)
+        return info
+
+    def refresh_rwa_later(self, ticker: str) -> None:
+        if self.rwa_client is None or ticker in self._rwa_pending:
+            return
+        self._rwa_pending.add(ticker)
+
+        def run() -> None:
+            try:
+                self._fetch_rwa(ticker)
+            finally:
+                self._rwa_pending.discard(ticker)
+
+        threading.Thread(target=run, name=f"rwa-{ticker}", daemon=True).start()
 
     def signal_health(self, *, max_age: timedelta = timedelta(hours=1)) -> dict | None:
         """{answering, tried, checked_at} from cache; a stale or missing value triggers a
@@ -782,6 +824,12 @@ class AnalysisReport:
     # beside the desk's own one-in-twenty loss (nightwatch.features.options). Context only;
     # None for past moments, names with no listed options, or while the cache is cold.
     options: dict | None = None
+    # For every source used: what it supplied and whether it changed the answer
+    # (nightwatch.pipeline.effects), built from the decisions above, not from narrative.
+    source_effects: list[dict] = field(default_factory=list)
+    # Bitget Wallet's listing of the token (nightwatch.features.rwa_status): tradable status,
+    # pause or alert text, per-order limits. A caution only; it never moves the size.
+    rwa_listing: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
@@ -953,9 +1001,21 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     else:
         _announce(cb, "book", "No order book available for this token", "该代币暂无盘口数据", t_start)
 
+    # What the options market implies for this hold, beside the desk's own 1-in-20 loss.
+    # From cache only: a cold cache means no line this time and a background fetch. Read
+    # before the stress step because a bigger implied move than history's is a stress preset.
+    options = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        options = _options_block(ctx, ticket.ticker, as_of, horizon_h, analog, primary)
+
     # 4. Stress.
     t0 = time.perf_counter()
-    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary))
+    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary),
+                             options_move_pct=options["implied_move_pct"] if options else None)
+    if options:
+        from nightwatch.features import options as options_mod
+
+        options_mod.attach_sizing(options, next((p for p in stress.presets if p.id == "options_implied_move"), None))
     timings["stress"] = _ms(t0)
     totals = [i.total_pnl_quote for i in stress.impacts if i.total_pnl_quote is not None]
     if totals:
@@ -1225,14 +1285,21 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         open_interest = ctx.open_interest_for(spec.perp_symbol, price=snapshot.prices.get("perp_close"))
         if open_interest:
             sources.append({"kind": "bitget_open_interest", "label": "Bitget perp open interest", "last_ts": open_interest["observed_at"], "rows_used": 1, "symbol": spec.perp_symbol})
-    # What the options market implies for this hold, beside the desk's own 1-in-20 loss.
-    # From cache only: a cold cache means no line this time and a background fetch.
-    options = None
+    if options:
+        sources.append({"kind": "cboe_options", "label": "Cboe options quotes", "last_ts": options["quote_ts"] or options["fetched_at"], "rows_used": options["n_strikes"], "ticker": ticket.ticker,
+                        "fetched_at": options["fetched_at"]})
+    rwa_listing = None
     if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
-        options = _options_block(ctx, ticket.ticker, as_of, horizon_h, analog, primary)
-        if options:
-            sources.append({"kind": "cboe_options", "label": "Cboe options quotes", "last_ts": options["quote_ts"] or options["fetched_at"], "rows_used": options["n_strikes"], "ticker": ticket.ticker,
-                            "fetched_at": options["fetched_at"]})
+        try:
+            from nightwatch.features import rwa_status
+
+            rwa_listing = rwa_status.build(ctx.rwa_for(ticket.ticker), ticket.notional_quote, ticket.side.value == "long")
+        except Exception:  # noqa: BLE001 - optional context must never break a verdict
+            log.exception("bitget rwa listing for %s failed", ticket.ticker)
+        if rwa_listing:
+            sources.append({"kind": "bitget_wallet_rwa", "label": "Bitget Wallet RWA listing", "last_ts": rwa_listing["fetched_at"], "rows_used": 1, "ticker": ticket.ticker, "fetched_at": rwa_listing["fetched_at"]})
+            for f in rwa_listing["flags"]:
+                warnings.append(f"{f[0].upper()}{f[1:]}; this did not change the size")
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
     from nightwatch.pipeline.feeds import feed_sources
 
@@ -1242,13 +1309,22 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, bitget=bitget, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, bitget=bitget, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options, rwa_listing=rwa_listing,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,
     )
     if report.leverage is not None and open_interest:
         report.leverage["open_interest_line"] = open_interest["line"]
+        report.leverage["open_interest_crowded_line"] = open_interest.get("crowded_line")
+    if open_interest and open_interest.get("crowded"):
+        report.warnings.append(f"The {open_interest['symbol']} perp looks crowded: {open_interest['crowded_line']}. A liquidation cascade has more to feed on; this did not change the size")
+    try:
+        from nightwatch.pipeline.effects import build as build_effects
+
+        report.source_effects = build_effects(report)
+    except Exception:  # noqa: BLE001 - an explanation of the sources must never break a verdict
+        log.exception("source effects failed")
     # The case against whatever was just decided, from the report's own numbers.
     try:
         from nightwatch.decision.devil import build as build_second_opinion
@@ -1671,7 +1747,7 @@ def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
                 worst_up = (p95, name)
 
 
-def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str], *, as_of: datetime | None = None, analog_p5: float | None = None) -> StressSection:
+def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str], *, as_of: datetime | None = None, analog_p5: float | None = None, options_move_pct: float | None = None) -> StressSection:
     daily = ctx.store.get_bars(Venue.YAHOO, spec.yahoo_ticker, Interval.D1)
     events = ctx.store.get_earnings(ticket.ticker)
     closed = closed_window_returns(frame)
@@ -1686,7 +1762,7 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
                           hours_to_earnings=snapshot.features.get("hours_to_earnings"), hours_since_earnings=snapshot.features.get("hours_since_earnings"),
                           adverse_sign=-1.0 if ticket.closing_long else 1.0,
                           ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {},
-                          closed_windows_in_hold=closed_windows_in_hold(as_of, horizon_h) if as_of is not None else 1, analog_p5_loss_pct=analog_p5)
+                          closed_windows_in_hold=closed_windows_in_hold(as_of, horizon_h) if as_of is not None else 1, analog_p5_loss_pct=analog_p5, options_implied_move_pct=options_move_pct)
     presets = build_presets(inp)
     position = Position(ticket.ticker, ticket.side, ticket.notional_quote, entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
     impacts = [apply_scenario(position, p, book=book, taker_fee=taker_fee) for p in presets]

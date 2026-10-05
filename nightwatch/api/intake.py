@@ -701,7 +701,7 @@ def preset_zh(sid: str, name: str) -> str:
     return {
         "earnings_gap_worst": "财报跳空：历史最差", "earnings_gap_typical": "财报跳空：典型不利",
         "liquidity_drought": "流动性枯竭（盘口深度 ÷5）", "exchange_halt_24h": "24 小时无法平仓",
-        "funding_spike": "对冲腿资金费率飙升", "analog_p5_floor": "历史二十分之一的亏损（同一持有期）",
+        "funding_spike": "对冲腿资金费率飙升", "options_implied_move": "期权市场隐含的持有期波动", "analog_p5_floor": "历史二十分之一的亏损（同一持有期）",
     }.get(sid, name)
 _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 

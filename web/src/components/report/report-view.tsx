@@ -8,6 +8,7 @@ import { ThreeSteps } from "@/components/report/three-steps";
 import { ThesisCheckCard } from "@/components/report/thesis-check";
 import { CorporateEventsNote } from "@/components/report/corporate-events";
 import { MarketContext } from "@/components/report/market-context";
+import { SourceEffects } from "@/components/report/source-effects";
 import { sourceLine } from "@/components/report/source-ages";
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
@@ -928,6 +929,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <MarketContext report={report} lang={lang} />
 
       <Group title={L("Evidence", "证据")} hint={L("Assumptions, today's inputs, exit cost, discipline gate, size caps, the case against, regime, what would change it", "假设、当前输入、平仓成本、纪律闸门、仓位上限、反面意见、市场状态、什么会改变结论")} openAll={openAll}>
+        <SourceEffects report={report} lang={lang} />
         <Assumptions report={report} openAll={openAll} lang={lang} />
       {/* Now */}
       <Section

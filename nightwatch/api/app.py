@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from nightwatch import __version__
 from nightwatch.api import followup, guard
 from nightwatch.api.locking import RequestFirstLock
-from nightwatch.api.sources import data_sources, open_interest_row, options_row, street_row
+from nightwatch.api.sources import annotate_used_for, data_sources, open_interest_row, options_row, rwa_row, street_row
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Venue
@@ -223,6 +223,7 @@ class AppState:
             street_client=street_client,
             bitget_data=_bitget_data(street_client),
             signal_client=_signal_client(),
+            rwa_client=_rwa_client(),
             options_client=_options_client(),
         )
         # Serialises analyses that share the frame cache; people go before the warm-up.
@@ -330,6 +331,11 @@ class AppState:
             self.ctx.signal_for(t, max_age=timedelta(minutes=50), fetch=True)
         self.ctx.signal_health(max_age=timedelta(minutes=50))
 
+    def refresh_rwa(self) -> None:
+        """The Bitget Wallet listing for every token, one at a time, outside the analysis lock."""
+        for t in self.ctx.tickers_with_data():
+            self.ctx.rwa_for(t, max_age=timedelta(minutes=25), fetch=True)
+
     def refresh_options(self) -> None:
         """Option chains for every token, one at a time and outside the analysis lock: each
         download is 2-5 MB parsed in memory, and the box has 1 GB. A fresh entry is skipped."""
@@ -349,6 +355,8 @@ class AppState:
                 threading.Thread(target=self.refresh_bitget, name="bitget-refresh", daemon=True).start()
             if self.ctx.signal_client is not None:
                 threading.Thread(target=self.refresh_signal, name="signal-refresh", daemon=True).start()
+            if self.ctx.rwa_client is not None:
+                threading.Thread(target=self.refresh_rwa, name="rwa-refresh", daemon=True).start()
             if self.ctx.options_client is not None:
                 threading.Thread(target=self.refresh_options, name="options-refresh", daemon=True).start()
             self.warm()
@@ -464,6 +472,15 @@ def _options_client():  # noqa: ANN202
     from nightwatch.data.cboe import CboeOptionsClient
 
     return CboeOptionsClient()
+
+
+def _rwa_client():  # noqa: ANN202
+    """Bitget Wallet's tokenized-stock market data, unless turned off (NIGHTWATCH_BITGET_RWA=0)."""
+    if os.environ.get("NIGHTWATCH_BITGET_RWA", "1") != "1":
+        return None
+    from nightwatch.data.bitget_rwa import BitgetRwaClient
+
+    return BitgetRwaClient()
 
 
 def _signal_client():  # noqa: ANN202
@@ -1038,6 +1055,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             out.append(open_interest_row(s.ctx._open_interest))
         if s.ctx.options_client is not None:
             out.append(options_row(s.ctx._options, s.ctx._options_failed))
+        if s.ctx.rwa_client is not None:
+            out.append(rwa_row(s.ctx._rwa))
         if s.ctx.signal_client is not None:
             health = s.ctx.signal_health()
             shown = [(ts, v) for ts, v in s.ctx._signal.values() if v and v.get("agrees")]
@@ -1050,7 +1069,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 "latest_label": f"{health['answering']} of {health['tried']} tools answering" if health else "health check pending",
                 "url": "https://datahub.noxiaohao.com/mcp",
             })
-        return out
+        return annotate_used_for(out)
 
     @app.get("/universe")
     def universe(core: bool = True) -> list[dict[str, Any]]:
