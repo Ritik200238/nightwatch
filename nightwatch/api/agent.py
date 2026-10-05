@@ -1,7 +1,7 @@
 """The stress-test agent: the model plans and runs a few tool calls against the desk's own
 engine, then writes a cited conclusion.
 
-The model never computes anything. Its four tools wrap code that already exists and is
+The model never computes anything. Its five tools wrap code that already exists and is
 deterministic (a what-if re-run, the base-rate query, the safest-ways sweep, the follow-up
 answers), so every figure it can see comes from the engine. The loop is bounded and the
 conclusion is held to the same rule as the analyst's take:
@@ -24,6 +24,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from nightwatch.api import analyst
+from nightwatch.features import bitget_data
+from nightwatch.time_utils import utc_now
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ EXPLAIN_KINDS = ("why", "worst", "exit", "history", "hedge", "premise")
 HORIZON_KINDS = ("hours", "next_open", "window_end", "through_weekend")
 
 # The section id a tool's result is filed under, so the model can cite it like a sheet line.
-SECTION = {"rerun": "rerun", "base_rate": "base rate", "safest_ways": "safest ways", "explain": "explain"}
+SECTION = {"rerun": "rerun", "base_rate": "base rate", "safest_ways": "safest ways", "explain": "explain", "bitget_data": "bitget"}
 
 TOOLS_DOC = (
     "TOOLS (call at most one per turn; all are exact engine runs on this same moment):\n"
@@ -47,6 +49,9 @@ TOOLS_DOC = (
     "over past closed windows.\n"
     "- safest_ways: args {} - the same idea run several ways (half size, hedged, ...).\n"
     "- explain: args {\"kind\": \"" + "|".join(EXPLAIN_KINDS) + "\"} - the desk's own answer on that topic.\n"
+    '- bitget_data: args {"entry": "' + "|".join(bitget_data.ALLOWED) + '", "ticker": "<optional, default the ticket\'s>"} - one entry '
+    "of Bitget's US-stock data service: earnings calendar, valuation ratios, dividends, analyst consensus, company profile, the "
+    "stock's live quote, analyst ratings, insider trades, market fear and greed. Cached reads, so it is fast; cite its numbers as [bitget].\n"
 )
 
 SYSTEM_EN = (
@@ -196,8 +201,48 @@ def tool_explain(_state: Any, report: dict[str, Any], args: dict[str, Any]) -> s
     return got.text
 
 
+BITGET_TIMEOUT_S = 6.0  # the longest the chat waits for one cold entry; the cache answers the rest instantly
+BITGET_RESULT_CHARS = 700
+
+
+def tool_bitget_data(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:  # noqa: ANN401
+    """One allow-listed Bitget catalogue entry for a ticker, as one plain sentence.
+
+    Cache first. A cold entry is fetched once, with a timeout, through the same refresher the
+    background uses - so the one-call-per-entry-per-hour limit holds here too - and a slow or
+    failing service is reported as such, never waited on."""
+    entry = str(args.get("entry") or "")
+    if entry not in bitget_data.ALLOWED:
+        raise ValueError(f"entry must be one of {', '.join(bitget_data.ALLOWED)}")
+    ticker = str(args.get("ticker") or (report.get("ticket") or {}).get("ticker") or "").upper()
+    ctx = state.ctx
+    if not ticker or ticker not in ctx.tickers_with_data():
+        raise ValueError(f"'{ticker}' is not a ticker the desk covers")
+    if entry in bitget_data.STREET_ENTRIES:
+        data = bitget_data.street_entry_data(entry, ctx.street_for(ticker, fetch=False))
+        text = bitget_data.describe_street(entry, data) if data else ""
+    else:
+        bd = ctx.bitget_data
+        if bd is None:
+            raise ValueError("Bitget data is switched off on this desk")
+        cell = bd.get(ticker, entry)
+        if cell is None and bd.due(ticker, entry, utc_now()):
+            pool = ThreadPoolExecutor(max_workers=1)
+            try:
+                pool.submit(bd.refresh, ticker, entry).result(timeout=BITGET_TIMEOUT_S)
+            except Exception:  # noqa: BLE001 - slow or failing: say so below
+                log.info("bitget_data %s %s did not answer in time", entry, ticker)
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
+            cell = bd.get(ticker, entry)
+        text = bitget_data.describe(entry, cell.data) if cell and cell.data else ""
+    if not text:
+        raise ValueError(f"Bitget has no {entry} data for {ticker} right now (not delivered yet, no coverage, or the service is not answering)")
+    return text[:BITGET_RESULT_CHARS]
+
+
 TOOLS: dict[str, Callable[[Any, dict[str, Any], dict[str, Any]], str]] = {
-    "rerun": tool_rerun, "base_rate": tool_base_rate, "safest_ways": tool_safest_ways, "explain": tool_explain,
+    "rerun": tool_rerun, "base_rate": tool_base_rate, "safest_ways": tool_safest_ways, "explain": tool_explain, "bitget_data": tool_bitget_data,
 }
 
 
