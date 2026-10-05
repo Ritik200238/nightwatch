@@ -573,14 +573,27 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     if change.empty:
         return None
 
+    from dataclasses import replace
+
+    from nightwatch.api import desk_help
+    from nightwatch.api.intake import language_of
+
+    cap_note = None
+    if change.leverage and change.leverage > 1:
+        # "what about 500x?": run at what Bitget allows for this size and say so, never refuse.
+        cap = desk_help.leverage_cap(state, (change.ticker or base.ticker), change.notional_quote or base.notional_quote)
+        if change.leverage > cap + 1e-9:
+            cap_note = desk_help.leverage_cap_note(float(change.leverage), cap, language_of(question))
+            change = replace(change, leverage=cap)
     ticket = change.apply_to(base, entry=((context.get("snapshot") or {}).get("prices") or {}).get("spot_close"))
     with state.lock:
         report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
         payload = report.to_dict()
     state.keep_hypothetical(payload)
-    from nightwatch.api.intake import language_of
 
     answer = whatif.compare(context, payload, change, language_of(question))
+    if cap_note:
+        answer = replace(answer, text=f"{cap_note} {answer.text}")
     return {
         "intent": {"kind": "what_if", "question": answer.kind, "missing_fields": [], "reply": answer.text},
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
