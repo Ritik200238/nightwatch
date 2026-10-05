@@ -160,24 +160,36 @@ def test_a_bare_number_that_is_not_a_size_is_left_alone():
     assert p("long 10k TSLA for 12 hours").horizon_hours == 12.0  # a duration is not money
 
 
-def test_through_the_weekend_on_a_weekday_runs_to_the_open_after_it(monkeypatch):
-    """"Hold through the weekend" said on a Thursday means Monday's open. It used to be
-    read as the next open - seven hours later, on Thursday."""
-    from datetime import datetime, timedelta
+def test_through_the_weekend_early_in_the_week_means_the_coming_weekend_not_a_week_long_hold(monkeypatch):
+    """"Over the weekend" said on a Monday became a 173 hour hold, longer than any the desk has
+    scored, and the verdict was built on it. Monday to Thursday it now means the coming weekend:
+    Friday's close to Monday's open, about 65 hours, which is a hold with a track record."""
+    from datetime import datetime
 
     from nightwatch.api import intake as it
     from nightwatch.time_utils import UTC
 
-    thursday = datetime(2026, 9, 24, 6, 21, tzinfo=UTC)
-    monkeypatch.setattr("nightwatch.time_utils.utc_now", lambda: thursday)
-    for text in ("Hold $20k of TSLA through the weekend, stop at 350", "short 5k NVDA into Monday", "long 10k AAPL over the weekend"):
-        i = it.parse_message(text, ["TSLA", "NVDA", "AAPL"])
-        t = it.intent_to_ticket(i, 200_000.0)
-        end = thursday + timedelta(hours=t.horizon_hours)
-        assert t.horizon_kind.value == "hours" and end.weekday() == 0 and end.hour == 13, text
-        assert t.extra.get("horizon_label", "").startswith("through the weekend")
+    for now in (datetime(2026, 10, 5, 15, 0, tzinfo=UTC), datetime(2026, 9, 24, 6, 21, tzinfo=UTC)):  # a Monday, a Thursday
+        monkeypatch.setattr("nightwatch.time_utils.utc_now", lambda now=now: now)
+        for text in ("Hold $20k of TSLA through the weekend, stop at 350", "short 5k NVDA into Monday", "long 10k AAPL over the weekend", "做空英伟达 2万U 周五收盘进，周一开盘平仓"):
+            t = it.intent_to_ticket(it.parse_message(text, ["TSLA", "NVDA", "AAPL"]), 200_000.0)
+            assert t.horizon_kind.value == "hours" and 60 <= t.horizon_hours <= 70, (text, t.horizon_hours)
+            assert t.extra.get("horizon_label") == it.SCHEDULED_WEEKEND
+    # From Friday on, the weekend is the one under way: to the next open after it.
+    saturday = datetime(2026, 10, 10, 15, 0, tzinfo=UTC)
+    monkeypatch.setattr("nightwatch.time_utils.utc_now", lambda: saturday)
+    t = it.intent_to_ticket(it.parse_message("long 10k AAPL over the weekend", ["AAPL"]), None)
+    assert t.extra.get("horizon_label", "").startswith("through the weekend") and 40 <= t.horizon_hours <= 50
     # "Overnight" is still the next open.
     assert it.intent_to_ticket(it.parse_message("long 20k TSLA overnight", ["TSLA"]), None).horizon_kind.value == "next_open"
+
+
+def test_the_chinese_friday_close_to_monday_open_is_the_weekend_not_five_hours():
+    from nightwatch.api import intake_zh as zh
+
+    assert zh.read("周五收盘做空英伟达 2万U，周一开盘平仓", {"NVDA"}).get("horizon_kind") == "through_weekend"
+    assert zh.read("做空英伟达 2万U 周一开盘平仓", {"NVDA"}).get("horizon_kind") == "through_weekend"
+    assert zh.read("做空英伟达 2万U 今晚", {"NVDA"}).get("horizon_kind") == "next_open"
 
 
 def test_the_language_is_read_from_the_message():

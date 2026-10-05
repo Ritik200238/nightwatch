@@ -435,6 +435,9 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     with state.lock:
         report = analyze(state.ctx, ticket)
         payload = report.to_dict()
+        # Who turned the sentence into a ticket: shown in step 1 of the report, so the AI's
+        # part in it is on the page. "rules" means no model was needed.
+        payload["read_by"] = {"parsed_by": parsed_by, "provider": provider.name, "model": provider.model}
         # Keep it, so the next message can be a question about this answer.
         if report.forecast_id is not None:
             try:

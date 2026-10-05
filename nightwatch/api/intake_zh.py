@@ -38,7 +38,8 @@ _SIZE = re.compile(r"([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七�
 _STOP = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9][0-9,]*(?:\.[0-9]+)?)")
 # "止损3%" is a distance, not a price of 3.
 _STOP_PCT = re.compile(r"止损(?:价|位|在|设在|设置在)?\s*[:：]?\s*([0-9]+(?:\.[0-9]+)?)\s*[%％]|止损\s*百分之([零〇一二两三四五六七八九十]+)")
-_WEEKEND = re.compile(r"周末|过周末|到周一|下周一")
+# "周五收盘 ... 周一开盘" is the weekend too, even with no 到/下 before the Monday.
+_WEEKEND = re.compile(r"周末|过周末|到周一|下周一|周一(?:的)?开盘|周五收盘.{0,20}?周一")
 # "到周三", "持有到星期四收盘": held to that day's open unless the close is said.
 _WEEKDAY = re.compile(r"(?:到|至)\s*(?:下)?(?:周|星期)([二三四五])(开盘|收盘)?")
 _WEEKDAY_INDEX = {"二": 1, "三": 2, "四": 3, "五": 4}

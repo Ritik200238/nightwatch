@@ -97,6 +97,24 @@ def hours_through_weekend(ts: datetime) -> float:
     return structural_horizons(now)["next_open"]
 
 
+def coming_weekend_hours(ts: datetime) -> tuple[float, datetime]:
+    """The length of the coming weekend as a hold - the last regular close of this week to
+    the first regular open after it - and the instant that close happens.
+
+    "Over the weekend" said on a Monday means buying on Friday, not holding the whole
+    week: from Monday that would be a 173 hour hold, longer than any the desk has scored.
+    A holiday Friday moves the close to Thursday, as the calendar says. From Friday itself
+    (or later) the weekend is the one under way, which is ``hours_through_weekend``'s."""
+    from nightwatch.time_utils import ET, _regular_bounds, is_trading_day, previous_trading_day
+
+    now = ensure_utc(ts)
+    friday = now.astimezone(ET).date() + timedelta(days=(4 - now.astimezone(ET).weekday()) % 7)
+    if not is_trading_day(friday):
+        friday = previous_trading_day(friday)
+    close = _regular_bounds(friday)[1]
+    return structural_horizons(close)["next_open"], close
+
+
 def tag_outcome(ret_pct: float, mfe_pct: float, mae_pct: float) -> str:
     if ret_pct >= TAG_STRONG_PCT:
         return "STRONG_UP"

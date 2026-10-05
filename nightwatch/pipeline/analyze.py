@@ -57,6 +57,7 @@ from nightwatch.stress.scenarios import (
     apply_scenario,
     build_presets,
     closed_window_returns,
+    closed_windows_in_hold,
     crash_replays,
     earnings_gaps,
     earnings_in_window,
@@ -632,6 +633,10 @@ class AnalogSection:
     # Which named conditions narrowed the search, what they cost in evidence, and
     # whether they could be honoured at all. nightwatch.analog.lens.LensResult.
     lens: Any = None
+    # How a hold over a weekend was matched against past weekend holds, and how many of the
+    # final matches were one. nightwatch.analog.lens.WeekendHold; None for a hold that
+    # crosses no weekend.
+    weekend_hold: Any = None
 
 
 @dataclass
@@ -922,7 +927,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     # 4. Stress.
     t0 = time.perf_counter()
-    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings)
+    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary))
     timings["stress"] = _ms(t0)
     totals = [i.total_pnl_quote for i in stress.impacts if i.total_pnl_quote is not None]
     if totals:
@@ -1252,7 +1257,8 @@ def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as
     """Past weekends, when "through the weekend" was asked far enough ahead of it that
     holding from now runs past the longest scored hold."""
     label = (ticket.extra or {}).get("horizon_label") if isinstance(ticket.extra, dict) else None
-    if not label or "weekend" not in label or horizon_h <= CALIBRATED_MAX_H:
+    scheduled = bool(label) and label.startswith("the coming weekend")
+    if not label or "weekend" not in label or (horizon_h <= CALIBRATED_MAX_H and not scheduled):
         return None
     from nightwatch.analog.outcomes import weekend_history
     from nightwatch.time_utils import ET
@@ -1264,7 +1270,12 @@ def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as
         return None
     if hist is None:
         return None
-    return {**hist, "today": ensure_utc(as_of).astimezone(ET).strftime("%A"), "hold_from_now_h": horizon_h}
+    out = {**hist, "today": ensure_utc(as_of).astimezone(ET).strftime("%A"), "hold_from_now_h": horizon_h}
+    if scheduled:
+        from nightwatch.analog.outcomes import hours_through_weekend
+
+        out.update(scheduled=True, scheduled_h=horizon_h, hold_from_now_h=hours_through_weekend(as_of))
+    return out
 
 
 def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
@@ -1375,11 +1386,27 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     # question. The floor keeps a filter from leaving too little to search at all.
     floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h
 
+    # A hold over a weekend is matched to past holds over a weekend, not to any hour that
+    # happens to look like now: the same hard-match idea as a lens, on the shape of the hold.
+    # "Over the weekend" asked early in the week is a scheduled Friday-to-Monday hold, which
+    # the clock from now would not show as one.
+    scheduled = str((ticket.extra or {}).get("horizon_label", "")).startswith("the coming weekend") if isinstance(ticket.extra, dict) else False
+    wk_query = scheduled or bool(lens_mod.spans_weekend(pd.DatetimeIndex([ensure_utc(as_of)]), horizon_h)[0])
+    weekend_state: dict[str, Any] = {}
+
+    def weekend_cut(parts: list[tuple[str, pd.DataFrame]], scope: str) -> list[tuple[str, pd.DataFrame]]:
+        if not wk_query:
+            return parts
+        kept, state = lens_mod.restrict_to_weekend_holds(parts, horizon_h, min_rows=floor)
+        weekend_state[scope] = state
+        return kept
+
     def search_with(names: tuple[str, ...]) -> tuple[Any, str, Any, list[str]]:
         notes: list[str] = []
         searchable, lens_result = lens_mod.apply(frame, list(names), min_rows=floor)
         if lens_result.refused:
             notes.append(lens_result.refused)
+        searchable = weekend_cut([(ticket.ticker, searchable)], "same_ticker")[0][1]
 
         result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
         scope = "same_ticker"
@@ -1411,6 +1438,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
                 # where a narrow question becomes answerable at all. Narrowing each part before
                 # stacking gives the same rows without building the whole haystack first.
                 pooled_parts, pooled_lens = lens_mod.apply_to_parts(pooled_parts, list(names), min_rows=floor)
+                pooled_parts = weekend_cut(pooled_parts, "pooled")
                 pooled = pooled_history(pooled_parts)
                 pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
                 # A pooled cohort that honours the lens beats a same-ticker one that ignores
@@ -1460,9 +1488,15 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         )
         notes.append(lens_result.refused)
     warnings.extend(notes)
+    weekend_hold = weekend_state.get(scope) if wk_query else None
+    if weekend_hold is not None and result.ok and result.matches:
+        k = int(lens_mod.spans_weekend(pd.DatetimeIndex([pd.Timestamp(m.ts) for m in result.matches]), horizon_h).sum())
+        weekend_hold = replace(weekend_hold, k_weekend=k, n_matches=result.n)
+        if weekend_hold.note:
+            warnings.append(weekend_hold.note)
     if not result.ok:
         warnings.append(f"analog search refused: {result.reason}")
-        return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[], lens=lens_result)
+        return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[], lens=lens_result, weekend_hold=weekend_hold)
 
     # The ticket's own horizon length is applied uniformly to every analog (that is the
     # cohort the verdict uses); the structural horizons are each analog's *own* next
@@ -1534,7 +1568,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         result.matches, frames, horizon_h=float(ticket_h), side=ticket.side.value,
         stop_price=ticket.stop_price, entry_price=entry_price, liquidation_price=liquidation_price,
     )
-    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result)
+    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result, weekend_hold=weekend_hold)
 
 
 def _cautious_of(narrowed: AnalogSection, plain: AnalogSection | None) -> list[str]:
@@ -1586,7 +1620,7 @@ def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
                 worst_up = (p95, name)
 
 
-def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str]) -> StressSection:
+def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str], *, as_of: datetime | None = None, analog_p5: float | None = None) -> StressSection:
     daily = ctx.store.get_bars(Venue.YAHOO, spec.yahoo_ticker, Interval.D1)
     events = ctx.store.get_earnings(ticket.ticker)
     closed = closed_window_returns(frame)
@@ -1600,7 +1634,8 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
     inp = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=gaps, abs_basis_closed_bps=basis_closed, rv_24h_now=float(snapshot.features.get("rv_24h") or 0.0), rv_168h_now=float(snapshot.features.get("rv_168h") or 0.0), horizon_h=horizon_h, funding_rate_abs_p95=funding_p95,
                           hours_to_earnings=snapshot.features.get("hours_to_earnings"), hours_since_earnings=snapshot.features.get("hours_since_earnings"),
                           adverse_sign=-1.0 if ticket.closing_long else 1.0,
-                          ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {})
+                          ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {},
+                          closed_windows_in_hold=closed_windows_in_hold(as_of, horizon_h) if as_of is not None else 1, analog_p5_loss_pct=analog_p5)
     presets = build_presets(inp)
     position = Position(ticket.ticker, ticket.side, ticket.notional_quote, entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
     impacts = [apply_scenario(position, p, book=book, taker_fee=taker_fee) for p in presets]

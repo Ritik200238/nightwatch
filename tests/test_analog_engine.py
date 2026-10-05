@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
@@ -143,3 +144,35 @@ def test_a_value_most_of_history_shares_is_not_offered_as_the_resemblance():
     now = h.index[-1] + timedelta(hours=200)
     res = AnalogEngine(cfg(features=("a", "b", "c", "cap"))).search(h, {"a": 0.0, "b": 0.0, "c": 5.0, "cap": 720.0}, query_ts=now)
     assert res.ok and all("cap" not in m.alike_on for m in res.matches)
+
+
+def test_a_slow_macro_field_is_not_offered_as_the_resemblance():
+    """VIX percentile and the like are identical for any two hours of one fortnight, so
+    "alike on VIX" says when a match happened, not why it resembles now."""
+    h = history()
+    wk = h.index.isocalendar().week.to_numpy() + 53 * (h.index.year.to_numpy() - 2025)
+    h["vix"] = pd.Series(wk).map(dict(zip(np.unique(wk), np.random.default_rng(3).normal(50, 20, len(np.unique(wk))), strict=True))).to_numpy()  # moves weekly
+    now = h.index[-1] + timedelta(hours=200)
+    q = {"a": 0.0, "b": 0.0, "c": 5.0, "vix": float(h["vix"].iloc[100])}
+    res = AnalogEngine(cfg(features=("a", "b", "c", "vix"))).search(h, q, query_ts=now)
+    assert res.ok and res.broad_features == ("vix",)
+    assert all("vix" not in m.alike_on for m in res.matches)
+    assert all(len(m.alike_on) == 3 for m in res.matches)
+
+
+def test_matches_are_separate_episodes_and_no_week_is_most_of_the_sample():
+    """A burst of look-alike hours in one week counts once or a few times, never forty."""
+    h = history()
+    q = {"a": 3.0, "b": 2.7, "c": 12.0, "d": -2.5}
+    burst = h.index[2000]  # plant an exact match every 6 hours for a week
+    for k in range(0, 168, 6):
+        h.loc[burst + pd.Timedelta(hours=k), list(FEATS)] = [q[f] for f in FEATS]
+    res = AnalogEngine(cfg(k=30)).search(h, q, query_ts=h.index[-1] + timedelta(hours=1))
+    assert res.ok
+    ts = sorted(m.ts for m in res.matches)
+    assert all((b - a).total_seconds() >= 36 * 3600 for a, b in zip(ts, ts[1:], strict=False))  # the final cohort, not a draft
+    weeks = Counter(pd.Timestamp(t).isocalendar()[:2] for t in ts)
+    assert max(weeks.values()) <= 3
+    assert res.n_weeks == len(weeks)
+    loose = AnalogEngine(cfg(k=30, max_per_week=0)).search(h, q, query_ts=h.index[-1] + timedelta(hours=1))
+    assert max(Counter(pd.Timestamp(m.ts).isocalendar()[:2] for m in loose.matches).values()) > 3
