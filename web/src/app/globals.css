@@ -159,3 +159,14 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* On a phone an inline text link is a finger target: 17-20 px tall measured in the last QA
+   pass, 40 px minimum here. Phone only; the desktop layout is untouched. */
+@media (max-width: 639px) {
+  a.underline,
+  a[class*="underline-offset"] {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+}
