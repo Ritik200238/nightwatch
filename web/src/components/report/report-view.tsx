@@ -671,6 +671,104 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
   );
 }
 
+/** The rest of what Bitget's US-stock catalogue knows about the company: its own earnings date
+ *  (set against Nasdaq's), valuation, dividends and the analysts' consensus target.
+ *
+ *  Read from the desk's cache and labelled as Bitget's. Context beside the verdict: none of it
+ *  has been tested against what the token did overnight, so none of it reaches the size. The one
+ *  line that can matter is the earnings dates disagreeing, which is also raised as a caveat. */
+function BitgetSection({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
+  const L = tr(lang);
+  const b = report.bitget;
+  if (!b) return null;
+  const cal = b.entries.equity_calendar;
+  const val = b.entries.equity_fundamental_ratios;
+  const div = b.entries.equity_fundamental_dividends;
+  const con = b.entries.equity_estimates_consensus;
+  const prof = b.entries.equity_profile;
+  const chk = b.earnings_check;
+  const next = cal?.next_report;
+  const earningsHint =
+    chk?.status === "agree"
+      ? L("Nasdaq's calendar gives the same date", "纳斯达克日历给出相同日期")
+      : chk?.status === "differ"
+        ? L(`Nasdaq says ${chk.nasdaq}: ${Math.abs(chk.gap_days ?? 0)} day(s) apart, so one is an estimate`, `纳斯达克为 ${chk.nasdaq}：相差 ${Math.abs(chk.gap_days ?? 0)} 天，其中一个是预估日期`)
+        : chk?.status === "nasdaq_only"
+          ? L(`Bitget has no date; Nasdaq says ${chk.nasdaq}`, `Bitget 没有日期；纳斯达克为 ${chk.nasdaq}`)
+          : cal?.confirmed === false
+            ? L("expected, not confirmed", "预计日期，尚未确认")
+            : undefined;
+  const earningsValue = next
+    ? `${fmtDateL(next, lang)}${cal?.timing ? ` · ${cal.timing}` : ""}`
+    : chk?.status === "nasdaq_only" && chk.nasdaq
+      ? L("not in Bitget's calendar", "Bitget 日历中没有")
+      : cal?.last_report
+        ? L(`none ahead; last ${fmtDateL(cal.last_report, lang)}`, `暂无后续；上次 ${fmtDateL(cal.last_report, lang)}`)
+        : "—";
+  const stats = [
+    cal || chk ? { key: "earn", label: L("Next earnings (Bitget calendar)", "下次财报（Bitget 日历）"), value: earningsValue, hint: earningsHint } : null,
+    val
+      ? {
+          key: "val",
+          label: L("Valuation (Bitget)", "估值（Bitget）"),
+          value: [val.pe != null ? `P/E ${val.pe.toFixed(1)}` : null, val.pb != null ? `P/B ${val.pb.toFixed(1)}` : null, val.ps != null ? `P/S ${val.ps.toFixed(1)}` : null].filter(Boolean).join(" · ") || "—",
+          hint:
+            [
+              val.market_cap_usd != null ? L(`market cap ${fmtUsd(val.market_cap_usd, 0)}`, `市值 ${fmtUsd(val.market_cap_usd, 0)}`) : null,
+              val.period_ending ? L(`as of ${fmtDateL(val.period_ending, lang)}`, `截至 ${fmtDateL(val.period_ending, lang)}`) : null,
+            ]
+              .filter(Boolean)
+              .join(", ") || undefined,
+        }
+      : null,
+    div
+      ? {
+          key: "div",
+          label: L("Dividends (Bitget)", "分红（Bitget）"),
+          value: div.next_ex_date
+            ? L(`ex-date ${fmtDateL(div.next_ex_date, lang)}`, `除息日 ${fmtDateL(div.next_ex_date, lang)}`)
+            : div.last_ex_date
+              ? L(`last ex-date ${fmtDateL(div.last_ex_date, lang)}`, `上次除息日 ${fmtDateL(div.last_ex_date, lang)}`)
+              : "—",
+          hint:
+            div.next_amount != null
+              ? L(`${div.next_amount.toFixed(2)} per share`, `每股 ${div.next_amount.toFixed(2)}`)
+              : div.last_amount != null
+                ? L(`${div.last_amount.toFixed(2)} per share, ${div.paid_last_12m} paid in 12 months`, `每股 ${div.last_amount.toFixed(2)}，12 个月内派发 ${div.paid_last_12m} 次`)
+                : undefined,
+        }
+      : null,
+    con
+      ? {
+          key: "con",
+          label: L("Analyst consensus target (Bitget)", "分析师一致目标价（Bitget）"),
+          value: con.target_consensus != null ? fmtUsd(con.target_consensus, 0) : con.target_median != null ? fmtUsd(con.target_median, 0) : "—",
+          hint: con.target_low != null && con.target_high != null ? L(`range ${fmtUsd(con.target_low, 0)} to ${fmtUsd(con.target_high, 0)}`, `区间 ${fmtUsd(con.target_low, 0)} 至 ${fmtUsd(con.target_high, 0)}`) : undefined,
+        }
+      : null,
+  ].filter((x): x is { key: string; label: string; value: string; hint: string | undefined } => x != null);
+  if (!stats.length) return null;
+  const sector = prof?.sector ? `${prof.sector}${prof.industry ? `, ${prof.industry}` : ""}` : "";
+  return (
+    <Section
+      openAll={openAll}
+      collapsible
+      title={L("More from Bitget's data: earnings date, valuation, dividends", "Bitget 数据补充：财报日期、估值、分红")}
+      subtitle={L(
+        `From Bitget's US-stock catalogue${sector ? ` (${sector})` : ""}. Context beside the verdict, not an input to it.`,
+        `来自 Bitget 美股数据目录${sector ? `（${sector}）` : ""}。只是结论旁边的背景信息，不参与结论的计算。`,
+      )}
+      summary={stats.map((x) => x.value).join(" · ")}
+    >
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((x) => (
+          <Stat key={x.key} label={x.label} value={x.value} hint={x.hint} />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 /** hours_to_earnings is capped at 720 h: at the cap it means none in 30 days, and null means not known. */
 function earningsAhead(h: number | null | undefined, lang: Lang): string {
   const L = tr(lang);
@@ -1060,6 +1158,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
 
       <Group title={L("Research", "研究")} hint={L("What the street says, Bitget signal, the book contrast", "市场观点、Bitget 信号、组合对比")} openAll={openAll}>
         <StreetSection report={report} openAll={openAll} lang={lang} />
+        <BitgetSection report={report} openAll={openAll} lang={lang} />
         <SignalLine report={report} lang={lang} />
         <BookContrast ticket={report.ticket} lang={lang} />
       </Group>

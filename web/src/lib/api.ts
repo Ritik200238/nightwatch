@@ -90,7 +90,7 @@ export interface DataSource {
   latest_label: string | null;
   url: string;
   /** Only the Bitget US-stock row sets this: "unavailable" while the service is failing. */
-  status?: "ok" | "unavailable" | "no data yet";
+  status?: "ok" | "unavailable" | "no data yet" | "degraded";
   down_since?: string | null;
   http_status?: number | null;
 }
@@ -994,6 +994,22 @@ export interface CorporateEvents {
   sources: string[];
 }
 
+/** More of Bitget's US-stock catalogue, read from the desk's cache (never fetched by the report):
+ *  the company's own earnings date beside Nasdaq's, valuation, dividends, analyst consensus.
+ *  Every entry is optional: the ones the service has not delivered are simply absent. Context only. */
+export interface BitgetBlock {
+  source: "Bitget";
+  fetched_at: string | null;
+  earnings_check: { status: "agree" | "differ" | "bitget_only" | "nasdaq_only"; bitget: string | null; nasdaq: string | null; gap_days: number | null } | null;
+  entries: {
+    equity_calendar?: { fetched_at: string | null; next_report?: string; days_ahead?: number; confirmed?: boolean; timing?: string; last_report?: string; days_ago?: number; text: string };
+    equity_fundamental_ratios?: { fetched_at: string | null; pe?: number; pb?: number; ps?: number; div_yield_12m?: number; market_cap_usd?: number; period_ending?: string; text: string };
+    equity_fundamental_dividends?: { fetched_at: string | null; next_ex_date?: string; next_amount?: number; days_ahead?: number; last_ex_date?: string; last_amount?: number; paid_last_12m: number; currency?: string; text: string };
+    equity_estimates_consensus?: { fetched_at: string | null; target_consensus?: number; target_median?: number; target_high?: number; target_low?: number; text: string };
+    equity_profile?: { fetched_at: string | null; sector?: string; industry?: string; exchange?: string; ceo?: string; employees?: number; text: string };
+  };
+}
+
 /** Bitget's view of the underlying stock right now. None of it reaches the size. */
 export interface StreetView {
   ticker: string;
@@ -1192,6 +1208,8 @@ export interface Report {
   /** Analysts, insiders, market mood and a live quote for the stock, from Bitget's
    *  US-stock data. Context only; null for past moments and when the service is down. */
   street?: StreetView | null;
+  /** Earnings calendar (cross-checked against Nasdaq), valuation, dividends and consensus from Bitget's catalogue. Context only; null for past moments. */
+  bitget?: BitgetBlock | null;
   /** Ex-dividend dates, splits and Bitget notices around the hold, from the stored calendar. */
   corporate_events?: CorporateEvents | null;
   /** Perp open interest and its 24 h change. Context only; null for past moments or when Bitget did not answer. */
