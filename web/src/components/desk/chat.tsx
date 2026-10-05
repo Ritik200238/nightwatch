@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ApiError, api, type ChatStep, type Report } from "@/lib/api";
+import { ApiError, api, type ChatCard, type ChatStep, type Report } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 import { isoIn, isSnapshotAnswer, snapshotFlag, snapshotNoticeFor } from "@/lib/snapshot";
 import { plainText } from "@/lib/plain";
 import { startAgent, useAgent } from "@/lib/agent-run";
 import { GuardNote } from "@/components/report/guard-note";
+import { ChatCardView } from "./chat-card";
 import { Working } from "./working";
 
 interface Msg {
@@ -21,6 +22,8 @@ interface Msg {
   byline?: string;
   /** Sentences the number guard dropped from a model take. */
   removed?: number;
+  /** The small picture of the answer's own numbers, when the desk drew one. */
+  card?: ChatCard;
 }
 
 interface Props {
@@ -199,7 +202,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         commit([...next, { role: "assistant", content: snapshotNoticeFor(snapshotFlag.get() ?? isoIn(res.reply), chatLang) }]);
         return;
       }
-      commit([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined }]);
+      commit([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined, card: res.card }]);
       // A follow-up answers about the report already on screen and leaves it there.
       if (res.report) {
         onReport(res.report, chatLang);
@@ -261,6 +264,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}>
             <p className="whitespace-pre-wrap">{m.role === "assistant" ? plainText(m.content, lang) : m.content}</p>
+            {m.card ? <ChatCardView card={m.card} /> : null}
             {m.readFrom ? <p className="mt-2 text-[13px] text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}
             {m.byline ? <p className="mt-2 text-[13px] text-muted-foreground">{m.byline}</p> : null}
             {m.removed ? <GuardNote n={m.removed} lang={lang} /> : null}
