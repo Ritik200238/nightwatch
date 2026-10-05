@@ -782,6 +782,9 @@ class AnalysisReport:
     # beside the desk's own one-in-twenty loss (nightwatch.features.options). Context only;
     # None for past moments, names with no listed options, or while the cache is cold.
     options: dict | None = None
+    # For every source used: what it supplied and whether it changed the answer
+    # (nightwatch.pipeline.effects), built from the decisions above, not from narrative.
+    source_effects: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
@@ -953,9 +956,21 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     else:
         _announce(cb, "book", "No order book available for this token", "该代币暂无盘口数据", t_start)
 
+    # What the options market implies for this hold, beside the desk's own 1-in-20 loss.
+    # From cache only: a cold cache means no line this time and a background fetch. Read
+    # before the stress step because a bigger implied move than history's is a stress preset.
+    options = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        options = _options_block(ctx, ticket.ticker, as_of, horizon_h, analog, primary)
+
     # 4. Stress.
     t0 = time.perf_counter()
-    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary))
+    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary),
+                             options_move_pct=options["implied_move_pct"] if options else None)
+    if options:
+        from nightwatch.features import options as options_mod
+
+        options_mod.attach_sizing(options, next((p for p in stress.presets if p.id == "options_implied_move"), None))
     timings["stress"] = _ms(t0)
     totals = [i.total_pnl_quote for i in stress.impacts if i.total_pnl_quote is not None]
     if totals:
@@ -1225,14 +1240,9 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         open_interest = ctx.open_interest_for(spec.perp_symbol, price=snapshot.prices.get("perp_close"))
         if open_interest:
             sources.append({"kind": "bitget_open_interest", "label": "Bitget perp open interest", "last_ts": open_interest["observed_at"], "rows_used": 1, "symbol": spec.perp_symbol})
-    # What the options market implies for this hold, beside the desk's own 1-in-20 loss.
-    # From cache only: a cold cache means no line this time and a background fetch.
-    options = None
-    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
-        options = _options_block(ctx, ticket.ticker, as_of, horizon_h, analog, primary)
-        if options:
-            sources.append({"kind": "cboe_options", "label": "Cboe options quotes", "last_ts": options["quote_ts"] or options["fetched_at"], "rows_used": options["n_strikes"], "ticker": ticket.ticker,
-                            "fetched_at": options["fetched_at"]})
+    if options:
+        sources.append({"kind": "cboe_options", "label": "Cboe options quotes", "last_ts": options["quote_ts"] or options["fetched_at"], "rows_used": options["n_strikes"], "ticker": ticket.ticker,
+                        "fetched_at": options["fetched_at"]})
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
     from nightwatch.pipeline.feeds import feed_sources
 
@@ -1249,6 +1259,15 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     )
     if report.leverage is not None and open_interest:
         report.leverage["open_interest_line"] = open_interest["line"]
+        report.leverage["open_interest_crowded_line"] = open_interest.get("crowded_line")
+    if open_interest and open_interest.get("crowded"):
+        report.warnings.append(f"The {open_interest['symbol']} perp looks crowded: {open_interest['crowded_line']}. A liquidation cascade has more to feed on; this did not change the size")
+    try:
+        from nightwatch.pipeline.effects import build as build_effects
+
+        report.source_effects = build_effects(report)
+    except Exception:  # noqa: BLE001 - an explanation of the sources must never break a verdict
+        log.exception("source effects failed")
     # The case against whatever was just decided, from the report's own numbers.
     try:
         from nightwatch.decision.devil import build as build_second_opinion
@@ -1671,7 +1690,7 @@ def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
                 worst_up = (p95, name)
 
 
-def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str], *, as_of: datetime | None = None, analog_p5: float | None = None) -> StressSection:
+def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str], *, as_of: datetime | None = None, analog_p5: float | None = None, options_move_pct: float | None = None) -> StressSection:
     daily = ctx.store.get_bars(Venue.YAHOO, spec.yahoo_ticker, Interval.D1)
     events = ctx.store.get_earnings(ticket.ticker)
     closed = closed_window_returns(frame)
@@ -1686,7 +1705,7 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
                           hours_to_earnings=snapshot.features.get("hours_to_earnings"), hours_since_earnings=snapshot.features.get("hours_since_earnings"),
                           adverse_sign=-1.0 if ticket.closing_long else 1.0,
                           ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {},
-                          closed_windows_in_hold=closed_windows_in_hold(as_of, horizon_h) if as_of is not None else 1, analog_p5_loss_pct=analog_p5)
+                          closed_windows_in_hold=closed_windows_in_hold(as_of, horizon_h) if as_of is not None else 1, analog_p5_loss_pct=analog_p5, options_implied_move_pct=options_move_pct)
     presets = build_presets(inp)
     position = Position(ticket.ticker, ticket.side, ticket.notional_quote, entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
     impacts = [apply_scenario(position, p, book=book, taker_fee=taker_fee) for p in presets]
