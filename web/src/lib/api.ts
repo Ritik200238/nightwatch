@@ -87,6 +87,10 @@ export interface DataSource {
   latest: string | null;
   latest_label: string | null;
   url: string;
+  /** Only the Bitget US-stock row sets this: "unavailable" while the service is failing. */
+  status?: "ok" | "unavailable" | "no data yet";
+  down_since?: string | null;
+  http_status?: number | null;
 }
 
 export interface GateRule {
@@ -1012,6 +1016,44 @@ export interface StreetView {
   /** The token against the stock's live price and against the last close, in bps. */
   token_vs_live_bps?: number | null;
   token_vs_close_bps?: number | null;
+  /** Seconds since this view was fetched, and whether it is being served as "last good"
+   *  (the feed stopped answering, or it is more than 2 h old) rather than live. */
+  age_s?: number | null;
+  stale?: boolean;
+  age_label?: string | null;
+}
+
+/** Open interest on the token's Bitget perpetual, with its change against the desk's own
+ *  recorded reading about a day ago (null until the recorder has one that old). */
+export interface OpenInterestView {
+  symbol: string;
+  contracts: number;
+  usd: number | null;
+  observed_at: string;
+  change_24h_pct: number | null;
+  compared_with_ts: string | null;
+  line: string;
+}
+
+/** The options market's one-standard-deviation move over this hold (Cboe delayed quotes)
+ *  beside the desk's own one-in-twenty loss. */
+export interface OptionsView {
+  ticker: string;
+  source: string;
+  spot: number;
+  expiry: string;
+  atm_strike: number;
+  atm_iv_pct: number;
+  hold_h: number;
+  implied_move_pct: number;
+  straddle_move_pct: number;
+  iv30_pct: number | null;
+  /** The quote's own time (the last trade it prices), not when the desk fetched it. */
+  quote_ts: string | null;
+  fetched_at: string;
+  /** The desk's own one-in-twenty loss for this position (negative), or null. */
+  desk_p5_pct: number | null;
+  line: string | null;
 }
 
 export interface FailureMode {
@@ -1051,6 +1093,8 @@ export interface LeverageView {
   safest_leverage?: number | null;
   /** Margin needed to move from the requested level to it; null when already that safe. */
   safest_extra_margin_quote?: number | null;
+  /** One plain sentence on open interest and its 24 h change; absent when Bitget did not answer. */
+  open_interest_line?: string;
 }
 
 export interface LadderRung {
@@ -1135,6 +1179,11 @@ export interface Report {
   street?: StreetView | null;
   /** Ex-dividend dates, splits and Bitget notices around the hold, from the stored calendar. */
   corporate_events?: CorporateEvents | null;
+  /** Perp open interest and its 24 h change. Context only; null for past moments or when Bitget did not answer. */
+  open_interest?: OpenInterestView | null;
+  /** What the options market implies for this hold, beside the desk's own 1-in-20 loss.
+   *  Null for past moments, names with no listed options, or while the cache is cold. */
+  options?: OptionsView | null;
   /** The signal skill's RSI, only when it agrees with our own; null otherwise. Context only. */
   signal?: SignalView | null;
   /** The trader's invalidation read for a testable level and measured; plus a flag when

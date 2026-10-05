@@ -75,7 +75,7 @@ export const STRINGS = {
     feed: {
       features: "computed features", bitget_candles: "Bitget candles", orderbook: "Bitget order book", bitget_perp: "Bitget perp and funding",
       bitget_margin_tiers: "Bitget margin tiers", yahoo_bars: "Yahoo stock bars", nasdaq_earnings: "Nasdaq earnings", fred_macro: "FRED macro",
-      rss_news: "RSS news", sec_edgar: "SEC EDGAR", bitget_mcp: "Bitget US-stock MCP",
+      rss_news: "RSS news", sec_edgar: "SEC EDGAR", bitget_mcp: "Bitget US-stock MCP", bitget_open_interest: "Bitget perp open interest", cboe_options: "Cboe options quotes", corporate_events: "Dividends, splits and Bitget notices",
     } as Record<string, string>,
     breaker: { NORMAL: "normal", COOLDOWN: "cooldown", HALTED: "halted" } as Record<string, string>,
     side: { long: "long", short: "short", buy: "buy", sell: "sell" } as Record<string, string>,
@@ -164,7 +164,7 @@ export const STRINGS = {
     feed: {
       features: "计算特征", bitget_candles: "Bitget K 线", orderbook: "Bitget 订单簿", bitget_perp: "Bitget 永续与资金费率",
       bitget_margin_tiers: "Bitget 保证金档位", yahoo_bars: "Yahoo 正股行情", nasdaq_earnings: "Nasdaq 财报日历", fred_macro: "FRED 宏观数据",
-      rss_news: "RSS 新闻", sec_edgar: "SEC EDGAR 文件", bitget_mcp: "Bitget 美股 MCP",
+      rss_news: "RSS 新闻", sec_edgar: "SEC EDGAR 文件", bitget_mcp: "Bitget 美股 MCP", bitget_open_interest: "Bitget 永续未平仓量", cboe_options: "Cboe 期权行情", corporate_events: "分红、拆股与 Bitget 公告",
     } as Record<string, string>,
     breaker: { NORMAL: "正常", COOLDOWN: "冷静期", HALTED: "已暂停" } as Record<string, string>,
     side: { long: "做多", short: "做空", buy: "买入", sell: "卖出" } as Record<string, string>,

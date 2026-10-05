@@ -6,6 +6,8 @@ import { MarketClock } from "@/components/report/market-clock";
 import { Group } from "@/components/report/group";
 import { ThesisCheckCard } from "@/components/report/thesis-check";
 import { CorporateEventsNote } from "@/components/report/corporate-events";
+import { MarketContext } from "@/components/report/market-context";
+import { sourceLine } from "@/components/report/source-ages";
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -594,7 +596,14 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
       openAll={openAll}
       collapsible
       title={L("The stock right now, and what the street thinks", "这只股票现在的情况，以及华尔街怎么看")}
-      subtitle={L("From Bitget's US-stock data. Context beside the verdict, not an input to it.", "来自 Bitget 的美股数据。只是结论旁边的背景信息，不参与结论的计算。")}
+      subtitle={
+        s.stale
+          ? L(
+              `From Bitget's US-stock data, but not live: ${s.age_label ?? "last good, age unknown"}. Context beside the verdict, not an input to it.`,
+              `来自 Bitget 的美股数据，但不是实时的：${s.age_s != null ? `${fmtHoursL(s.age_s / 3600, lang)}前的最近一次有效数据` : "最近一次有效数据，时间未知"}。只是结论旁边的背景信息，不参与结论的计算。`,
+            )
+          : L("From Bitget's US-stock data. Context beside the verdict, not an input to it.", "来自 Bitget 的美股数据。只是结论旁边的背景信息，不参与结论的计算。")
+      }
       summary={summary}
     >
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -812,6 +821,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
 
       {/* Stress */}
       <StressSection report={report} openAll={openAll} lang={lang} />
+      <MarketContext report={report} lang={lang} />
 
       <Group title={L("Evidence", "证据")} hint={L("Assumptions, today's inputs, exit cost, discipline gate, size caps, the case against, regime, what would change it", "假设、当前输入、平仓成本、纪律闸门、仓位上限、反面意见、市场状态、什么会改变结论")} openAll={openAll}>
         <Assumptions report={report} openAll={openAll} lang={lang} />
@@ -1052,12 +1062,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         <span>
           {L(`Computed in ${report.timings_ms.total} ms · sources: `, `计算耗时 ${report.timings_ms.total} 毫秒 · 数据来源：`)}
           {report.sources
-            .map((s) => {
-              const name = tl(lang, "feed", String(s.kind));
-              const ts = typeof s.last_ts === "string" ? Date.parse(s.last_ts) : NaN;
-              const age = Number.isNaN(ts) ? "" : ` ${fmtHoursL(Math.max(0, (Date.parse(report.as_of) - ts) / 3_600_000), lang)}`;
-              return `${name}${age ? ` (${age.trim()}${lang === "zh" ? "前" : " old"})` : ""}`;
-            })
+            .map((s) => sourceLine(s, report.as_of, lang))
             .join(lang === "zh" ? "、" : ", ")}
           {report.forecast_id != null && report.forecast_id > 0 ? L(` · journaled as forecast #${report.forecast_id}`, ` · 已记入日志，预测编号 #${report.forecast_id}`) : ""}
           {report.forecast_id != null && report.forecast_id < 0 ? L(" · a what-if: not journaled, never scored", " · 假设情景：不记入日志，也不评分") : ""}
