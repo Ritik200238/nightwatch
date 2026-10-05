@@ -214,12 +214,14 @@ class AppState:
 
         self.agent = AgentJobs()
         live = os.environ.get("NIGHTWATCH_LIVE_BOOK", "1") == "1"
+        street_client = _street_client()
         self.ctx = AnalysisContext(
             store=self.store, entries=self.entries, journal=self.journal,
             spot_client=BitgetPublicClient(Venue.BITGET_SPOT, rate_per_sec=4) if live else None,
             perp_client=BitgetPublicClient(Venue.BITGET_UMCBL, rate_per_sec=4) if live else None,
             frame_cache_size=settings.frame_cache_size,
-            street_client=_street_client(),
+            street_client=street_client,
+            bitget_data=_bitget_data(street_client),
             signal_client=_signal_client(),
             options_client=_options_client(),
         )
@@ -309,6 +311,18 @@ class AppState:
             for t in tickers:
                 pool.submit(self.ctx.street_for, t, max_age=timedelta(minutes=50))
 
+    def refresh_bitget(self) -> None:
+        """The rest of the Bitget catalogue for every token, one call at a time.
+
+        Sequential on purpose: 24 tokens x 5 entries is 120 calls an hour, and the box has 1 GB
+        and the service is flaky. ``BitgetData`` itself refuses a second call for the same
+        token and entry inside an hour, so this is safe to run as often as the warm-up does."""
+        bd = self.ctx.bitget_data
+        if bd is None:
+            return
+        for t in self.ctx.tickers_with_data():
+            bd.refresh_ticker(t)
+
     def refresh_signal(self) -> None:
         """The signal skill's reading for every token, one at a time: its backend is flaky
         and slow, so it gets no parallel load, and it runs outside the analysis lock."""
@@ -331,6 +345,8 @@ class AppState:
         while True:
             if self.ctx.street_client is not None:
                 threading.Thread(target=self.refresh_street, name="street-refresh", daemon=True).start()
+            if self.ctx.bitget_data is not None:
+                threading.Thread(target=self.refresh_bitget, name="bitget-refresh", daemon=True).start()
             if self.ctx.signal_client is not None:
                 threading.Thread(target=self.refresh_signal, name="signal-refresh", daemon=True).start()
             if self.ctx.options_client is not None:
@@ -430,6 +446,15 @@ def _street_client():  # noqa: ANN202
     from nightwatch.data.bitget_mcp import BitgetMcpClient
 
     return BitgetMcpClient()
+
+
+def _bitget_data(client):  # noqa: ANN001, ANN202
+    """The cache over the rest of Bitget's catalogue, sharing the street feed's client (one session)."""
+    if client is None:
+        return None
+    from nightwatch.features.bitget_data import BitgetData
+
+    return BitgetData(client=client)
 
 
 def _options_client():  # noqa: ANN202
@@ -1002,6 +1027,13 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         cached = [(ts, v) for ts, v in s.ctx._street.values()]
         if s.ctx.street_client is not None:
             out.append(street_row(cached, s.ctx.street_status(), utc_now()))
+            # The same service, entry by entry: each catalogue entry the desk reads gets its own
+            # row, with when it last delivered and whether it is working.
+            from nightwatch.features.bitget_data import street_source_rows
+
+            out.extend(street_source_rows(cached, s.ctx.street_status(), utc_now()))
+            if s.ctx.bitget_data is not None:
+                out.extend(s.ctx.bitget_data.source_rows(utc_now()))
         if s.ctx.perp_client is not None:
             out.append(open_interest_row(s.ctx._open_interest))
         if s.ctx.options_client is not None:
