@@ -402,6 +402,10 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
   const smaller = rec != null && rec < req - 1;
   let sizeText = "";
   if (v.verdict === "GO") sizeText = `${fmtUsd(rec ?? req)} USDT`;
+  // A size under 5% of the request, or under 100 USDT, is not one anyone would trade: say no sensible size
+  // passes rather than print "56 of 10,000 USDT" beside a verdict (the chat reply follows the same rule).
+  else if ((v.verdict === "REDUCE_TO" || v.verdict === "REVIEW") && rec != null && smaller && rec < Math.max(100, 0.05 * req))
+    sizeText = L("no sensible size passes right now", "目前没有合适的仓位能通过限制");
   else if ((v.verdict === "REDUCE_TO" || v.verdict === "REVIEW") && rec != null && smaller) sizeText = L(`${fmtUsd(rec)} of ${fmtUsd(req)} USDT`, `${fmtUsd(rec)} / ${fmtUsd(req)} USDT`);
   else if (v.verdict === "HEDGE") sizeText = L(`hedge ${fmtRatio(v.hedge_ratio)} of ${fmtUsd(req)} USDT`, `对冲 ${fmtRatio(v.hedge_ratio)} · ${fmtUsd(req)} USDT`);
   const prov = report.provenance?.items;
