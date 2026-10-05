@@ -93,6 +93,10 @@ export interface DataSource {
   status?: "ok" | "unavailable" | "no data yet" | "degraded";
   down_since?: string | null;
   http_status?: number | null;
+  /** What the feed is used for in a report, and the strongest thing it can do to an answer. */
+  used_for?: string;
+  used_for_zh?: string;
+  effect?: string;
 }
 
 export interface GateRule {
@@ -1058,6 +1062,10 @@ export interface OpenInterestView {
   change_24h_pct: number | null;
   compared_with_ts: string | null;
   line: string;
+  /** Top decile of this perp's own 24 h changes: a caution flag on the report. */
+  crowded?: boolean;
+  threshold_pct?: number | null;
+  crowded_line?: string | null;
 }
 
 /** The options market's one-standard-deviation move over this hold (Cboe delayed quotes)
@@ -1079,6 +1087,21 @@ export interface OptionsView {
   /** The desk's own one-in-twenty loss for this position (negative), or null. */
   desk_p5_pct: number | null;
   line: string | null;
+  /** True when the options market's move beat every severe move in the token's history, so the
+   *  stress limit was sized on it. */
+  sizing_binding?: boolean;
+  history_severe_pct?: number | null;
+}
+
+/** One source a report used, what it supplied and whether it changed the answer. */
+export interface SourceEffect {
+  kind: string;
+  label: string | null;
+  effect: "moved_size" | "set_preset" | "raised_flag" | "context";
+  supplied: string;
+  supplied_zh: string;
+  note: string;
+  note_zh: string;
 }
 
 export interface FailureMode {
@@ -1120,6 +1143,8 @@ export interface LeverageView {
   safest_extra_margin_quote?: number | null;
   /** One plain sentence on open interest and its 24 h change; absent when Bitget did not answer. */
   open_interest_line?: string;
+  /** "crowded: OI +X% in 24h" when the perp's open interest is in its own top decile. */
+  open_interest_crowded_line?: string | null;
 }
 
 export interface LadderRung {
@@ -1217,6 +1242,8 @@ export interface Report {
   /** What the options market implies for this hold, beside the desk's own 1-in-20 loss.
    *  Null for past moments, names with no listed options, or while the cache is cold. */
   options?: OptionsView | null;
+  /** For every source used: what it supplied and whether it changed the answer. */
+  source_effects?: SourceEffect[];
   /** The signal skill's RSI, only when it agrees with our own; null otherwise. Context only. */
   signal?: SignalView | null;
   /** The trader's invalidation read for a testable level and measured; plus a flag when

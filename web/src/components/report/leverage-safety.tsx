@@ -57,6 +57,7 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
         {onRerun ? L(" Click a row to re-run at that leverage.", " 点击一行，即可按该杠杆重新运行。") : ""}
       </p>
       {report.open_interest ? <p className="mt-1 text-[13px] text-foreground">{oiLine(report.open_interest, lang)}</p> : null}
+      {l.open_interest_crowded_line ? <p className="text-[13px] font-medium text-status-warning">{L(`Crowded: OI ${(report.open_interest?.change_24h_pct ?? 0) >= 0 ? "+" : ""}${(report.open_interest?.change_24h_pct ?? 0).toFixed(0)}% in 24h, a bigger target for a liquidation cascade.`, `拥挤：未平仓量 24 小时 ${(report.open_interest?.change_24h_pct ?? 0) >= 0 ? "+" : ""}${(report.open_interest?.change_24h_pct ?? 0).toFixed(0)}%，更容易引发连环强平。`)}</p> : null}
       <Table className="mt-1">
         <TableHeader>
           <TableRow>
