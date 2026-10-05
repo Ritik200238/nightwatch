@@ -1,6 +1,6 @@
 """Chat problems a second judge found on the live desk, each with the judge's own input."""
 
-from types import SimpleNamespace as NS
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -89,10 +89,10 @@ def test_a_followup_with_leverage_and_margin_sets_both_never_the_account(client)
 
 
 def _fake(verdict, rec, req, rules=(), caps=()):
-    return NS(
-        ticket=NS(notional_quote=req),
-        verdict=NS(verdict=NS(value=verdict), recommended_notional=rec, caps=[NS(name=n, notional=v, detail="") for n, v in caps]),
-        gate=NS(rules=[NS(rule=r, decision=NS(value=d), reason=why) for r, d, why in rules]),
+    return SimpleNamespace(
+        ticket=SimpleNamespace(notional_quote=req),
+        verdict=SimpleNamespace(verdict=SimpleNamespace(value=verdict), recommended_notional=rec, caps=[SimpleNamespace(name=n, notional=v, detail="") for n, v in caps]),
+        gate=SimpleNamespace(rules=[SimpleNamespace(rule=r, decision=SimpleNamespace(value=d), reason=why) for r, d, why in rules]),
     )
 
 
