@@ -150,3 +150,15 @@ def test_a_far_invalidation_is_named_too_far_and_never_called_a_stop(client):  #
     assert near["plan_check"]["too_far"] is False
     none = client.post("/analyze", json={**base, "invalidation": "when my gut says so"}).json()
     assert next(r for r in none["gate"]["rules"] if r["rule"] == "stop")["reason"].startswith("no stop given")
+
+
+# 6. One way to print a leverage
+
+def test_a_leverage_is_printed_to_two_decimals_everywhere():
+    from nightwatch.api import intake
+
+    lev = {"leverage": 4.444444444444445, "perp_symbol": "TSLAUSDT", "allowed": True, "liquidation_distance_pct": 21.9, "liquidation_price": 294.72,
+           "margin_quote": 4500.0, "analog_hits": 0, "analog_of": 80, "mc_share": 0.0, "presets_hit": []}
+    line = intake._leverage_line(lev, "en")
+    assert "4.44x" in line and "4.444" not in line
+    assert "4.44 倍" in intake._leverage_line(lev, "zh")

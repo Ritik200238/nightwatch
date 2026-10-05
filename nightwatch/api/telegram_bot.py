@@ -179,7 +179,7 @@ def format_verdict(report: dict[str, Any], lang: str = "en") -> str:
         if lev.get("analog_of"):
             hit = f"; {lev.get('analog_hits', 0)}/{lev['analog_of']} " + ("个历史相似时刻触及" if zh else "past moments reached it")
         dist = lev.get("liquidation_distance_pct")
-        lines.append(f"{'爆仓价' if zh else 'Liquidation'} ({lev.get('leverage'):g}x): {_n(lev['liquidation_price'], 2)}"
+        lines.append(f"{'爆仓价' if zh else 'Liquidation'} ({round(lev.get('leverage') or 0, 2):g}x): {_n(lev['liquidation_price'], 2)}"
                      + (f", {dist:.1f}% {'之外' if zh else 'away'}" if isinstance(dist, int | float) else "") + hit)
 
     reasons = [str(r)[:160] for r in (v.get("reasons") or [])[:2]]

@@ -94,7 +94,7 @@ def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
         out.append(Assumption("entry", f"Entered at the token's last price, {entry:,.2f}, as of {r.snapshot.bar_ts:%d %b %H:%M} UTC."))
     lev = getattr(r, "leverage", None)
     if lev:
-        out.append(Assumption("leverage", f"{lev['leverage']:g}x on the Bitget perpetual, isolated margin, maintenance margin {lev['mmr']:.2%}"
+        out.append(Assumption("leverage", f"{round(lev['leverage'], 2):g}x on the Bitget perpetual, isolated margin, maintenance margin {lev['mmr']:.2%}"
                               + (" from Bitget's tier for this size." if lev.get("tiers_source") == "bitget" else " (assumed; Bitget's tiers were unavailable).")))
         out.append(Assumption("leverage", "The perp is priced off the token's path; the gap between the two is shocked separately by the basis presets.", "caveat"))
     else:
@@ -377,7 +377,7 @@ def _cap_at_margin(modes: list[FailureMode], lev: dict | None) -> list[FailureMo
     for m in modes:
         if m.key != "liquidation" and m.loss_quote is not None and m.loss_quote < -margin:
             m = FailureMode(**{**asdict(m), "loss_quote": -margin, "loss_pct": -100.0 / float(lev["leverage"]), "capped": True,
-                               "mechanism": m.mechanism + f"; at {lev['leverage']:g}x it is liquidated first, so the loss stops at the {margin:,.0f} USDT margin"})
+                               "mechanism": m.mechanism + f"; at {round(lev['leverage'], 2):g}x it is liquidated first, so the loss stops at the {margin:,.0f} USDT margin"})
         out.append(m)
     return out
 

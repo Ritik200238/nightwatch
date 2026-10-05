@@ -87,7 +87,7 @@ def echo_line(report: Any, lang: str, *, carried: set[str] | frozenset[str] = fr
 
     if t.leveraged and t.leverage:
         margin = t.notional_quote / t.leverage
-        bits.append(tag("leverage", f"{t.leverage:g} 倍杠杆（保证金 {margin:,.0f}）" if zh else f"{t.leverage:g}x leverage (margin {margin:,.0f})"))
+        bits.append(tag("leverage", f"{round(t.leverage, 2):g} 倍杠杆（保证金 {margin:,.0f}）" if zh else f"{round(t.leverage, 2):g}x leverage (margin {margin:,.0f})"))
     hold = _horizon_phrase(report, lang)
     if earnings_hold:
         hold += "，持有到财报之后" if zh else ", through the earnings report"

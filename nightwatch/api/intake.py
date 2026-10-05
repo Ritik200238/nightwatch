@@ -452,8 +452,8 @@ def _apply_margin(out: RuleIntent, zh: bool) -> None:
         said = out.notional_quote
         if said and abs(said - position) > max(1.0, 0.01 * position):
             out.notes.append(
-                f"你给的仓位 {said:,.0f} 与 {m:,.0f} 保证金 × {out.leverage:g} 倍 = {position:,.0f} 不一致，按保证金和杠杆算 {position:,.0f} USDT。" if zh
-                else f"You said {said:,.0f} USDT, but {m:,.0f} margin at {out.leverage:g}x is {position:,.0f}, so I used {position:,.0f} (margin times leverage)."
+                f"你给的仓位 {said:,.0f} 与 {m:,.0f} 保证金 × {round(out.leverage, 2):g} 倍 = {position:,.0f} 不一致，按保证金和杠杆算 {position:,.0f} USDT。" if zh
+                else f"You said {said:,.0f} USDT, but {m:,.0f} margin at {round(out.leverage, 2):g}x is {position:,.0f}, so I used {position:,.0f} (margin times leverage)."
             )
         out.notional_quote = position
     elif out.notional_quote and out.notional_quote > m:
@@ -848,7 +848,7 @@ def _safer_leverage(lev: dict[str, Any], lang: str) -> str:
 def _leverage_line(lev: dict[str, Any], lang: str) -> str:
     """Where the exchange closes a leveraged position, and how often history got there."""
     zh = lang == "zh"
-    x = f"{lev['leverage']:g}"
+    x = f"{round(lev['leverage'], 2):g}"
     if lev.get("perp_symbol") is None:
         return "该股票在 Bitget 没有永续合约，无法加杠杆；以下按现货分析。" if zh else f"{x}x: Bitget lists no perpetual for this stock, so it cannot be held with leverage; the rest is the spot trade."
     if not lev.get("allowed", True):
@@ -1210,12 +1210,12 @@ def brief(report: Any, lang: str = "en") -> str:
         if zh:
             line = f"最坏压力情景（{preset_zh(worst.scenario_id, name)}）：仓位 {_pct(worst.total_pct_of_notional)}，约 {worst.total_pnl_quote:,.0f} USDT。"
             if margin and worst.total_pnl_quote < -margin:
-                line += f"但 {lev_x:g} 倍杠杆会先被强平，亏损止于 {margin:,.0f} USDT 保证金。"
+                line += f"但 {round(lev_x, 2):g} 倍杠杆会先被强平，亏损止于 {margin:,.0f} USDT 保证金。"
             lines.append(line)
         else:
             line = f"Worst stress preset ({name}): {_pct(worst.total_pct_of_notional)} of the position, about {worst.total_pnl_quote:,.0f} USDT."
             if margin and worst.total_pnl_quote < -margin:
-                line += f" At {lev_x:g}x the exchange liquidates first, so the loss stops at the {margin:,.0f} USDT margin."
+                line += f" At {round(lev_x, 2):g}x the exchange liquidates first, so the loss stops at the {margin:,.0f} USDT margin."
             lines.append(line)
     mc = report.stress.monte_carlo
     if mc is not None:

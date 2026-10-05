@@ -202,7 +202,7 @@ def _a_shock(r: dict, q: str) -> Answer | None:
         lev = r.get("leverage") or {}
         if lev.get("liquidation_distance_pct") is not None:
             d = lev["liquidation_distance_pct"]
-            bits.append(f"{lev['leverage']:g} 倍杠杆下" + (f"会被强平，{_usd(lev['margin_quote'])} 保证金全部损失。" if size >= d else f"还不会强平（强平线距现价 {d:.1f}%）。"))
+            bits.append(f"{round(lev['leverage'], 2):g} 倍杠杆下" + (f"会被强平，{_usd(lev['margin_quote'])} 保证金全部损失。" if size >= d else f"还不会强平（强平线距现价 {d:.1f}%）。"))
         presets = {p["id"]: p for p in ((r.get("stress") or {}).get("presets") or [])}
         p1 = presets.get("closed_window_gap_p1")
         if p1 and abs(p1.get("price_move_pct") or 0) < size:
