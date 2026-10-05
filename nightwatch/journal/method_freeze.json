@@ -1,10 +1,16 @@
 {
-  "frozen_at": "2026-10-06T00:00:00+00:00",
-  "git_tag": "method-freeze-1",
-  "git_commit": "7a1492b5ca57f42e98015e61a764233e2b152993",
+  "frozen_at": "2026-10-07T00:00:00+00:00",
+  "git_tag": "method-freeze-2",
+  "git_commit": "7aa4495ac3a343e90c5f630a439dc54ff6e88b77",
   "frozen": [
     "nightwatch/journal/adjust.py (tail factors, horizon bands, the narrow-window margin, MIN_BAND_N, refit cadence, K clamps)",
-    "the analog search that produces the p5 to p95 forecast it adjusts"
+    "the analog search that produces the p5 to p95 forecast it adjusts (hold-shape match plus three volatility features, k=80)"
   ],
-  "note": "The adjustment was designed and tuned by looking at the 2,302 replayed forecasts it is also scored on, so the headline breach rate on that history is optimistic by an unknown amount. Forecasts whose as-of time is on or after frozen_at were made after the method was fixed and could not have influenced it. Their result is the out-of-sample one."
+  "superseded": {
+    "git_tag": "method-freeze-1",
+    "git_commit": "7a1492b5ca57f42e98015e61a764233e2b152993",
+    "was_to_start": "2026-10-06T00:00:00+00:00",
+    "why": "Replaced before it took effect. A held-out test (first 60% of dates to choose, last 40% judged once) found a search that beats the old one on the tail loss (+0.074, CI +0.045 to +0.103) with a 19% narrower band; it ties random hours, which the studies page reports. The replays were re-run with it and the adjustment refitted before the new freeze date."
+  },
+  "note": "The adjustment was designed and tuned by looking at the replayed forecasts it is also scored on, so the headline breach rate on that history is optimistic by an unknown amount. Forecasts whose as-of time is on or after frozen_at were made after the method was fixed and could not have influenced it. Their result is the out-of-sample one."
 }
