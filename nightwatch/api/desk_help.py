@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import unicodedata
 from dataclasses import replace
 from typing import Any
 
@@ -59,6 +60,47 @@ def unknown_token(text: str, known: list[str]) -> str | None:
     if cash and cash.group(1).upper() not in upper and cash.group(1).upper() not in _NOT_TICKERS:
         return cash.group(1).upper()
     return None
+
+
+# A trade that names its token right beside the side or the size: "long 10k ZZZZ",
+# "buy $ZZZZ", "ZZZZ short 5k", "做多 ZZZZ 2万U". Only an upper-case word or a $tag counts.
+_SIDE_EN = r"(?:long|short|buy|sell)(?:ing)?"
+_SIDE_ZH = r"(?:做多|做空|买入|卖出|买|卖)"
+_SIZE = r"(?:\$?\s*[\d,]+(?:\.\d+)?\s*[kKmMbBwW万千]?\s*(?:usdt|usd|u|U|美元|美金|刀)?)"
+_AFTER_SIDE = re.compile(rf"(?:\b{_SIDE_EN}|{_SIDE_ZH})\s*(?:{_SIZE}\s*)?(?:(?:of|in|worth of)\s+)?(\$[A-Za-z]{{2,5}}|[A-Z]{{2,5}})(?![A-Za-z])", re.I)
+_BEFORE_SIDE = re.compile(rf"(?<![A-Za-z$])(\$[A-Za-z]{{2,5}}|[A-Z]{{2,5}})\s*[,:：-]?\s*(?:{_SIDE_ZH}|\b{_SIDE_EN}\b)", re.I)
+
+
+def named_unknown_ticker(text: str, known: list[str]) -> str | None:
+    """The upper-case word a trade names as its token when the desk does not cover it.
+
+    "long 10k ZZZZ" must never be answered as a trade in some other stock: if the message
+    names a token beside its side or size and that token is not covered, that is the answer.
+    A message that also names a covered token is left to the normal reading.
+    """
+    from nightwatch.api.intake import _find_ticker
+
+    text = unicodedata.normalize("NFKC", text or "")
+    upper = {t.upper() for t in known}
+    if _find_ticker(text, known):
+        return None
+    for rx in (_AFTER_SIDE, _BEFORE_SIDE):
+        for m in rx.finditer(text):
+            raw = m.group(1)
+            word = raw.lstrip("$").upper()
+            if raw.startswith("$") or raw == raw.upper():
+                if word not in upper and word not in _NOT_TICKERS:
+                    return word
+    return None
+
+
+def unknown_ticker_reply(word: str, known: list[str], lang: str) -> str:
+    names = ", ".join(sorted(t.upper() for t in known))
+    n = len(known)
+    if lang == "zh":
+        return f"{word} 不在我们覆盖的 {n} 只代币化美股里：{names}。没有运行任何交易，屏幕上的报告没有变。请从这些里选一只，比如“周末做多 TSLA 2万U”。"
+    return (f"{word} isn't one of the {n} tokenized stocks we cover: {names}. "
+            "Nothing was run and the report on screen is unchanged. Pick one of these, e.g. \"long 10k TSLA over the weekend\".")
 
 
 def covered_list(known: list[str], lang: str) -> str:

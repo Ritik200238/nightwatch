@@ -1650,6 +1650,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             except InsufficientData as exc:
                 raise HTTPException(422, str(exc)) from exc
 
+        # "long 10k ZZZZ": a token we do not cover is said so, never swapped for the ticker of
+        # the report on screen or of an earlier message.
+        if latest:
+            from nightwatch.api import desk_help
+
+            unknown = desk_help.named_unknown_ticker(latest, list(s.ctx.tickers_with_data()))
+            if unknown:
+                reply = desk_help.unknown_ticker_reply(unknown, list(s.ctx.tickers_with_data()), language_of(latest))
+                return {
+                    "intent": {"kind": "clarify", "question": "unknown_ticker", "missing_fields": ["ticker"], "reply": reply},
+                    "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [],
+                    "reply": reply, "mode": "rules", "answer_kind": "unknown_ticker",
+                }
+
         # A question about the report already on screen, rather than a new trade idea.
         context = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
         from nightwatch.api import converse
