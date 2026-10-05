@@ -233,13 +233,22 @@ ASKS = {"ticker": "which token", "side": "long or short", "notional_quote": "wha
 THROUGH_WEEKEND = "through_weekend"
 
 
-def horizon_fields(kind: str | None, hours: float | None) -> tuple[HorizonKind, float | None, str | None]:
+SCHEDULED_WEEKEND = "the coming weekend, Friday's close to Monday's open"
+
+
+def horizon_fields(kind: str | None, hours: float | None, now: datetime | None = None) -> tuple[HorizonKind, float | None, str | None]:
     """A parsed holding period as the ticket's (kind, hours, label)."""
     if kind == THROUGH_WEEKEND:
-        from nightwatch.analog.outcomes import hours_through_weekend
-        from nightwatch.time_utils import utc_now
+        from nightwatch.analog.outcomes import coming_weekend_hours, hours_through_weekend
+        from nightwatch.time_utils import ET, utc_now
 
-        return HorizonKind.HOURS, round(hours_through_weekend(utc_now()), 2), "through the weekend, to the next open after it"
+        now = now or utc_now()
+        if now.astimezone(ET).weekday() <= 3:
+            # Monday to Thursday: "over the weekend" means the coming one, bought at Friday's
+            # close. Holding from now would be a 5-7 day trade the desk has never scored.
+            h, _ = coming_weekend_hours(now)
+            return HorizonKind.HOURS, round(h, 2), SCHEDULED_WEEKEND
+        return HorizonKind.HOURS, round(hours_through_weekend(now), 2), "through the weekend, to the next open after it"
     if kind in ("next_open", "window_end", "hours"):
         return HorizonKind(kind), hours, None
     return HorizonKind.NEXT_OPEN, hours, None
@@ -687,6 +696,8 @@ def _horizon_phrase(report: Any, lang: str) -> str:
     t, h = report.ticket, report.horizon_h
     label = (t.extra or {}).get("horizon_label") if isinstance(t.extra, dict) else None
     if lang == "zh":
+        if label == SCHEDULED_WEEKEND:
+            return f"持有即将到来的周末（周五收盘到周一开盘，{h:.0f} 小时）"
         if label:
             return f"持有过周末（{h:.0f} 小时，到周末后的第一个美股开盘）"
         if t.horizon_kind == HorizonKind.NEXT_OPEN:
@@ -718,6 +729,18 @@ def weekend_line(report: Any, lang: str) -> str | None:
     if not w:
         return None
     days = w["hold_from_now_h"] / 24.0
+    if w.get("scheduled"):
+        if lang == "zh":
+            return (
+                f"说明：今天是{_DAY_ZH.get(w['today'], w['today'])}，所以“过周末”按即将到来的周末来算：周五收盘到周一开盘（{w['scheduled_h']:.0f} 小时），用今天的行情状态来判断。"
+                f"{report.ticket.ticker} 过去 {w['n']} 个周末（周五收盘到周一开盘），大约每二十个周末有一个亏损超过 {-w['p5_pct']:.1f}%，最差 {w['worst_pct']:+.1f}%（未经校准的原始历史）。"
+                "周五再问我一次，可以得到那个周末的完整检查。"
+            )
+        return (
+            f"Note: today is {w['today']}, so 'over the weekend' is read as the coming weekend: Friday's close to Monday's open ({w['scheduled_h']:.0f}h), judged on today's conditions. "
+            f"Over {report.ticket.ticker}'s last {w['n']} weekends, Friday's close to Monday's open, 1 in 20 lost more than {-w['p5_pct']:.1f}% and the worst was {w['worst_pct']:+.1f}% "
+            "(raw history, not calibrated). Ask again on Friday for the full check of that weekend."
+        )
     if lang == "zh":
         return (
             f"说明：今天是{_DAY_ZH.get(w['today'], w['today'])}，从现在持有到周末后的周一开盘是 {days:.1f} 天，比我们评分过的任何持有期都长。"

@@ -1076,7 +1076,8 @@ def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as
     """Past weekends, when "through the weekend" was asked far enough ahead of it that
     holding from now runs past the longest scored hold."""
     label = (ticket.extra or {}).get("horizon_label") if isinstance(ticket.extra, dict) else None
-    if not label or "weekend" not in label or horizon_h <= CALIBRATED_MAX_H:
+    scheduled = bool(label) and label.startswith("the coming weekend")
+    if not label or "weekend" not in label or (horizon_h <= CALIBRATED_MAX_H and not scheduled):
         return None
     from nightwatch.analog.outcomes import weekend_history
     from nightwatch.time_utils import ET
@@ -1088,7 +1089,12 @@ def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as
         return None
     if hist is None:
         return None
-    return {**hist, "today": ensure_utc(as_of).astimezone(ET).strftime("%A"), "hold_from_now_h": horizon_h}
+    out = {**hist, "today": ensure_utc(as_of).astimezone(ET).strftime("%A"), "hold_from_now_h": horizon_h}
+    if scheduled:
+        from nightwatch.analog.outcomes import hours_through_weekend
+
+        out.update(scheduled=True, scheduled_h=horizon_h, hold_from_now_h=hours_through_weekend(as_of))
+    return out
 
 
 def _record(ctx: AnalysisContext, r: AnalysisReport) -> int:
