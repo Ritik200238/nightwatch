@@ -9,6 +9,7 @@ import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, peek, type DataSource, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
+import { AsOf } from "@/components/as-of";
 import { fmtPct, fmtUsd } from "@/lib/format";
 import { fmtTimeL, t } from "@/lib/i18n";
 
@@ -108,6 +109,7 @@ export default function WrongPage() {
         title={tx("What we got wrong", "我们错在哪")}
         intro={tx("A risk tool that only shows its hits is asking to be trusted. This page shows the other half: every live verdict where the loss went past the line, the mistakes we found in the desk itself, and a check anyone can run that no past verdict was edited.", "只展示命中的风险工具，是在要求你相信它。这个页面展示另一半：每一个亏损越过那条线的实时结论、我们在交易台自身发现的错误，以及任何人都能运行的检查，证明过去的结论没有被改动。")}
       />
+      <AsOf path="/misses" />
       {live ? (
         <PlainBox>
           {tx(`The desk says its bad case (the `, `交易台说它的坏情形（即 `)}

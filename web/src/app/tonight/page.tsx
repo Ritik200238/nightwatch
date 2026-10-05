@@ -7,7 +7,7 @@ import { OpenPositions, useOpenPositions } from "@/components/desk/open-position
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiError, api, type TonightReport, type UniverseEntry } from "@/lib/api";
+import { ApiError, api, peek, type TonightReport, type UniverseEntry } from "@/lib/api";
 import { presetName, stateWord } from "@/lib/i18n-terms";
 import { useLang } from "@/lib/lang";
 import { fmtBps, fmtPct, fmtUsd } from "@/lib/format";
@@ -53,8 +53,16 @@ export default function TonightPage() {
   const [error, setError] = useState<string | null>(null);
   const [equity, setEquity] = useState<number | null>(200000);
 
+  const [universeFailed, setUniverseFailed] = useState(false);
+  const loadUniverse = useCallback(() => {
+    setUniverseFailed(false);
+    void api.universe(true).then(setUniverse).catch(() => setUniverseFailed(true));
+  }, []);
+
   useEffect(() => {
-    void api.universe(true).then(setUniverse).catch(() => setUniverse([]));
+    const cached = peek<UniverseEntry[]>("/universe?core=true");
+    if (cached) setUniverse(cached);
+    loadUniverse();
     try {
       const raw = window.localStorage.getItem("nightwatch.equity");
       if (raw) setEquity(Number(raw) || null);
@@ -93,7 +101,20 @@ export default function TonightPage() {
             {tx("The desk answers what you ask it. This is the question you would not have thought to ask: of what you are already holding, which position needs you before the market opens again.", "交易台只回答你问到的问题。这是你可能想不到要问的一个：在你已有的持仓里，哪一个在市场再次开盘之前需要你处理。")}
           </p>
         </div>
-        {universe ? <OpenPositions universe={universe} positions={positions} onChange={setPositions} /> : <Skeleton className="h-32 w-full" />}
+        {universe ? (
+          <OpenPositions universe={universe} positions={positions} onChange={setPositions} />
+        ) : universeFailed ? (
+          <div role="alert" className="rounded-lg border border-border p-4 text-sm">
+            <p>{tx("The token list did not load. The desk may be busy.", "代币列表没有加载出来，交易台可能正忙。")}</p>
+            <Button variant="secondary" size="sm" className="mt-2" onClick={loadUniverse}>
+              {tx("Try again", "重试")}
+            </Button>
+          </div>
+        ) : (
+          <div role="status" className="flex h-32 w-full items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+            {tx("Loading the token list…", "正在加载代币列表…")}
+          </div>
+        )}
         <Button onClick={() => void run()} disabled={busy || !positions.length} className="w-full">
           {busy ? tx("Reading the book…", "正在读取持仓…") : positions.length ? tx(`Watch these ${positions.length}`, `盯住这 ${positions.length} 个`) : tx("Add what you hold", "添加你的持仓")}
         </Button>

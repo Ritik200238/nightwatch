@@ -6,6 +6,7 @@ import { api, probeHealth, type Liveness, type Anchor, type CalibrationReport, t
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
 import { PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
+import { AsOf } from "@/components/as-of";
 import { localSource } from "@/lib/source-zh";
 
 type Load<T> = { data: T | null; error: boolean };
@@ -65,6 +66,7 @@ export default function StatusPage() {
     <div className={`${PROOF_WIDTH} space-y-4`}>
       <PageHead title={tx("Status", "状态")} intro={tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
+      <AsOf path="/sources" />
       <Card title="API" ok={health.data ? health.data.state === "up" : null}>
         {health.data && health.data.state !== "down" ? (
           <p>

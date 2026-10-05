@@ -8,6 +8,7 @@ import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/c
 import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, peek, type CalibrationReport } from "@/lib/api";
+import { AsOf } from "@/components/as-of";
 import { useLang } from "@/lib/lang";
 import { fmtPct, fmtRatio } from "@/lib/format";
 
@@ -81,6 +82,7 @@ export default function CalibrationPage() {
           </div>
         }
       />
+      <AsOf path={kind === "all" ? "/calibration" : `/calibration?kind=${kind}`} />
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
