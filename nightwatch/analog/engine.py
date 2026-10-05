@@ -45,6 +45,13 @@ MAD_SCALE = 1.4826
 # robust standard deviation away.
 ALIKE_N, DIFFERS_N, DIFFERS_Z = 3, 2, 1.0
 UNINFORMATIVE_SHARE = 0.3  # a value this share of history also has says nothing about a match
+# A feature that barely moves inside a calendar week (VIX percentile, yield curve, the dollar)
+# is "alike" for any two hours of the same fortnight. That says when a match happened, not why
+# it resembles now, so it is not offered as a reason. Measured on the cohort's own history: the
+# share of a feature's variance that lives *inside* a week. Below this it is a slow, broad field.
+SLOW_WITHIN_WEEK_SHARE = 0.20
+WEEK_NS = np.int64(7 * 24 * 3_600_000_000_000)
+MONDAY_OFFSET_NS = np.int64(3 * 24 * 3_600_000_000_000)  # the epoch is a Thursday
 
 
 @dataclass(frozen=True)
@@ -53,7 +60,8 @@ class AnalogConfig:
     weights: dict[str, float] = field(default_factory=dict)  # default 1.0 each
     k: int = 40
     min_matches: int = 15
-    min_separation_h: int = 36
+    min_separation_h: int = 36  # no two matches closer than this: one situation, counted once
+    max_per_week: int = 3  # and no more than this many from any one calendar week
     min_age_h: int = 96  # exclude the most recent hours: their outcomes are incomplete
     same_bucket: bool = False
     same_ticker: bool = False
@@ -89,6 +97,9 @@ class AnalogResult:
     n_distinct_available: int  # distinct episodes found before capping at k
     distance_scale: float
     query: dict[str, float]
+    # Features left out of every match's "alike on" because they barely move inside a week.
+    broad_features: tuple[str, ...] = ()
+    n_weeks: int = 0  # distinct calendar weeks the matches fall in
 
     @property
     def n(self) -> int:
@@ -170,7 +181,7 @@ class AnalogEngine:
         scale = _distance_scale(Zw, hist.index, cfg.min_separation_h)
 
         order = np.argsort(d, kind="stable")
-        chosen, n_distinct = _select_episodes(order, hist.index, cfg.k, cfg.min_separation_h)
+        chosen, n_distinct = _select_episodes(order, hist.index, cfg.k, cfg.min_separation_h, cfg.max_per_week)
         if len(chosen) < cfg.min_matches:
             return self._refuse(f"only {len(chosen)} distinct episodes (need {cfg.min_matches})", history, used, dropped, query, n_candidates=n_candidates, n_distinct=len(chosen))
 
@@ -180,7 +191,12 @@ class AnalogEngine:
         # no macro release ahead - explains nothing about why this match was chosen. It is
         # left out of "alike on", which otherwise named exactly those.
         common = (np.abs(X - q) < 1e-9).mean(axis=0) >= UNINFORMATIVE_SHARE
-        telling = [j for j in range(len(used)) if not common[j]] or list(range(len(used)))
+        slow = _slow_features(X, hist.index)
+        telling = (
+            [j for j in range(len(used)) if not common[j] and not slow[j]]
+            or [j for j in range(len(used)) if not common[j]]
+            or list(range(len(used)))
+        )
 
         def alike(i: int) -> tuple[str, ...]:
             order = sorted(telling, key=lambda j: gaps[i, j])
@@ -215,6 +231,8 @@ class AnalogEngine:
             n_distinct_available=n_distinct,
             distance_scale=float(scale),
             query={f: float(query[f]) for f in used},
+            broad_features=tuple(f for j, f in enumerate(used) if slow[j]),
+            n_weeks=len({int(w) for w in _week_key(index_epoch_ns(hist.index)[chosen])}),
         )
 
     @staticmethod
@@ -229,14 +247,33 @@ class AnalogEngine:
 # -------------------------------------------------------------------------- helpers
 
 
-def _select_episodes(order: np.ndarray, index: pd.DatetimeIndex, k: int, min_separation_h: int) -> tuple[list[int], int]:
+def _week_key(ts_ns: np.ndarray) -> np.ndarray:
+    return (np.asarray(ts_ns, dtype=np.int64) + MONDAY_OFFSET_NS) // WEEK_NS
+
+
+def _slow_features(X: np.ndarray, index: pd.DatetimeIndex) -> np.ndarray:
+    """True for each feature whose variance sits almost entirely *between* calendar weeks."""
+    weeks = _week_key(index_epoch_ns(index))
+    df = pd.DataFrame(X)
+    total = ((df - df.mean()) ** 2).sum().to_numpy()
+    within = ((df - df.groupby(weeks).transform("mean")) ** 2).sum().to_numpy()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        share = np.where(total > 0, within / total, 1.0)
+    return share < SLOW_WITHIN_WEEK_SHARE
+
+
+def _select_episodes(order: np.ndarray, index: pd.DatetimeIndex, k: int, min_separation_h: int, max_per_week: int = 0) -> tuple[list[int], int]:
     """Walk candidates by ascending distance; keep one per episode.
 
     A candidate is skipped when it lies within ``min_separation_h`` of an already
     *selected* match (selected set stays ≤ k, so the check is cheap). ``n_distinct``
     counts how many episodes exist in total, which the caller reports so a thin
-    history is visible. Timestamps are compared as int64 nanoseconds.
+    history is visible. Timestamps are compared as int64 nanoseconds. ``max_per_week`` (0 =
+    off) also caps how many selected matches may share a calendar week, so a burst of
+    similar hours in one fortnight cannot be most of the sample.
     """
+    week_of = _week_key(index_epoch_ns(index))
+    per_week: dict[int, int] = {}
     ts_ns = index_epoch_ns(index)
     sep_ns = np.int64(min_separation_h) * 3_600_000_000_000
     chosen: list[int] = []
@@ -251,6 +288,10 @@ def _select_episodes(order: np.ndarray, index: pd.DatetimeIndex, k: int, min_sep
         if chosen_ns.size and np.abs(chosen_ns - t).min() < sep_ns:
             continue
         if len(chosen) < k:
+            wk = int(week_of[i])
+            if max_per_week and per_week.get(wk, 0) >= max_per_week:
+                continue
+            per_week[wk] = per_week.get(wk, 0) + 1
             chosen.append(int(i))
             chosen_ns = np.append(chosen_ns, t)
             n_distinct += 1
