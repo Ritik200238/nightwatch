@@ -133,7 +133,7 @@ def test_judge_reach_flags_a_line_beyond_the_one_in_twenty_move():
 
 
 def test_a_far_invalidation_is_named_too_far_and_never_called_a_stop(client):  # noqa: F811
-    from nightwatch.decision.plan_check import describe, PlanCheck
+    from nightwatch.decision.plan_check import PlanCheck, describe
 
     base = {"ticker": "TSLA", "side": "long", "notional_quote": 5000, "account_equity_quote": 200000, "thesis": "momentum", "as_of": AS_OF.isoformat(), "record": False}
     far = client.post("/analyze", json={**base, "invalidation": "wrong if it drops 60%"}).json()
