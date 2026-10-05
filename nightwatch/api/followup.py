@@ -93,9 +93,8 @@ def _primary(r: dict) -> dict | None:
     return (a.get("horizons") or {}).get(r.get("primary_horizon"))
 
 
-def _a_size(r: dict, q: str) -> Answer | None:
-    sen = r.get("sensitivity") or {}
-    sizes = sen.get("sizes") or []
+def asked_size(r: dict, q: str) -> float | None:
+    """The size a question names: a sum of money, or a multiple of what is on screen."""
     requested = _ticket(r).get("notional_quote")
     asked = _money_in(q)
     # "halve it", "double it", "three times the size": a multiple of what is on screen.
@@ -107,6 +106,14 @@ def _a_size(r: dict, q: str) -> Answer | None:
             mult = float(factor.group(2))
         if mult:
             asked = requested * mult
+    return asked
+
+
+def _a_size(r: dict, q: str) -> Answer | None:
+    sen = r.get("sensitivity") or {}
+    sizes = sen.get("sizes") or []
+    requested = _ticket(r).get("notional_quote")
+    asked = asked_size(r, q)
 
     # "what if I do 40k" - the sweep already ran the whole gate at that size.
     if asked and sizes and (requested is None or abs(asked - requested) > 1):

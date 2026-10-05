@@ -73,9 +73,11 @@ def answer(state: Any, q: BaseRateQuestion, *, as_of: datetime | None = None, la
     zh = lang == "zh"
     word = "rose" if q.up else "fell"
     bits = []
+    facts: dict[str, Any] = {"ticker": q.ticker, "move_pct": q.move_pct, "up": q.up, "weekend": q.weekend, "windows": None, "conditional": None}
     if len(w):
         hit = w["ret_pct"] >= q.move_pct if q.up else w["ret_pct"] <= -q.move_pct
         worst = w.loc[w["ret_pct"].idxmax() if q.up else w["ret_pct"].idxmin()]
+        facts["windows"] = {"n": int(len(w)), "hits": int(hit.sum()), "share": float(hit.mean()), "since": f"{w['start'].min():%Y-%m}", "biggest_pct": float(worst["ret_pct"])}
         if zh:
             bits.append(
                 f"基准概率：自 {w['start'].min():%Y 年 %m 月}以来的 {len(w)} 个{'周末' if q.weekend else '隔夜休市'}中，{q.ticker} 代币{'上涨' if q.up else '下跌'} {q.move_pct:g}% 或以上的有 "
@@ -111,6 +113,7 @@ def answer(state: Any, q: BaseRateQuestion, *, as_of: datetime | None = None, la
         if vals:
             v = np.asarray(vals, dtype=float)
             n_hit = int((v >= q.move_pct).sum() if q.up else (v <= -q.move_pct).sum())
+            facts["conditional"] = {"n": int(len(v)), "hits": n_hit, "share": n_hit / len(v)}
             bits.append(f"在与现在最相似的 {len(v)} 个历史时刻中，有 {n_hit} 个（{n_hit / len(v):.0%}）在同样的持有期内{'上涨' if q.up else '下跌'}了这么多。" if zh
                         else f"Among the {len(v)} past moments most like now, {n_hit} ({n_hit / len(v):.0%}) {word} that much over the same hold.")
     bits.append(f"下面是按 {DEFAULT_NOTIONAL:,.0f} USDT {'空头' if q.up else '多头'}同样持有的完整压力测试；告诉我你的仓位和止损，我来给出具体仓位。" if zh
@@ -119,5 +122,5 @@ def answer(state: Any, q: BaseRateQuestion, *, as_of: datetime | None = None, la
     return {
         "intent": {"kind": "base_rate", "ticker": q.ticker, "missing_fields": [], "reply": text},
         "ticket": None, "report": payload, "narrative": text, "report_text": None, "unverified_numbers": [],
-        "reply": text + "\n\n" + brief(report, lang), "mode": "base_rate", "language": lang,
+        "reply": text + "\n\n" + brief(report, lang), "mode": "base_rate", "language": lang, "base_rate": facts,
     }

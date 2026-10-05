@@ -1434,6 +1434,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         return _chat(ChatIn(messages=[ChatMessage(**m) for m in messages], context_forecast_id=context_id))
 
     def _chat(body: ChatIn) -> dict[str, Any]:
+        """One chat turn, plus the small card for it when a picture helps."""
+        from nightwatch.api import cards
+
+        out = _chat_turn(body)
+        latest = next((m.content for m in reversed(body.messages) if m.role == "user" and (m.content or "").strip()), "")
+        context = st().reports.get(body.context_forecast_id) if body.context_forecast_id else None
+        card = cards.card_for(out, context, latest)
+        if card:
+            out["card"] = card
+        return out
+
+    def _chat_turn(body: ChatIn) -> dict[str, Any]:
         """Talk to the desk in plain language.
 
         Two implementations, one contract. With an Anthropic key the model parses the
