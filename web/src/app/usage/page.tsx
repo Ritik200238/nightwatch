@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Section, Stat } from "@/components/report/primitives";
-import { LoadingRecord, PageHead, PROOF_WIDTH } from "@/components/proof-page";
+import { LoadingRecord, PageHead, PROOF_WIDTH, RecordError } from "@/components/proof-page";
 import { engagement, type Usage } from "@/lib/engagement";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
@@ -28,8 +28,11 @@ export default function UsagePage() {
   const [u, setU] = useState<Usage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     const c = peek<Usage>("/usage");
     if (c) setU(c);
     void engagement
@@ -39,13 +42,18 @@ export default function UsagePage() {
     return () => {
       cancelled = true;
     };
-  }, [tx]);
+  }, [tx, attempt]);
 
-  if (error) return <p className={`${PROOF_WIDTH} py-10 text-center text-sm text-muted-foreground`}>{error}</p>;
+  if (error && !u)
+    return (
+      <div className={PROOF_WIDTH}>
+        <RecordError message={error} onRetry={() => setAttempt((n) => n + 1)} />
+      </div>
+    );
   if (!u)
     return (
       <div className={PROOF_WIDTH}>
-        <LoadingRecord blocks={[256]} />
+        <LoadingRecord blocks={[256]} onRetry={() => setAttempt((n) => n + 1)} />
       </div>
     );
 

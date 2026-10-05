@@ -3,6 +3,7 @@ import { API_URL } from "@/lib/api";
 import { withIdentity } from "@/lib/identity";
 import { friendlyDetail, stillBusyMessage } from "@/lib/errors";
 import { isRemembered, remember } from "@/lib/record-cache";
+import { SNAPSHOT_HEADER, snapshotFlag } from "@/lib/snapshot";
 
 export class EngagementError extends Error {
   constructor(
@@ -42,8 +43,11 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new EngagementError(friendlyDetail(detail, res.status, lang), res.status);
   }
+  // A copy the proxy saved is shown with the banner but never remembered as a fresh reading.
+  const savedAt = res.headers.get(SNAPSHOT_HEADER);
+  snapshotFlag.set(savedAt);
   const data = (await res.json()) as T;
-  if (isRead && isRemembered(path)) remember(path, data);
+  if (isRead && isRemembered(path) && !savedAt) remember(path, data);
   return data;
 }
 
