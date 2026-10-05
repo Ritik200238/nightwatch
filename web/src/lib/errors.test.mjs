@@ -27,4 +27,29 @@ assert.equal(ticketProblems({ ...ok, side: "short", stop: 300 }, 378, "zh").stop
 assert.equal(ticketProblems({ ...ok, stop: 450 }, null, "en").stop, undefined);
 assert.equal(ticketProblems({ ...ok, ticker: "" }, null, "en").ticker, "Pick a token.");
 assert.equal(ticketProblems({ ...ok, hoursNeeded: true }, null, "zh").hours, "请输入小时数。");
+// Size edge cases, both languages: negative, zero, NaN (empty field), the exact limits, huge.
+for (const lang of ["en", "zh"]) {
+  for (const bad of [-1, 0, -0.01, NaN, Infinity]) assert.ok(ticketProblems({ ...ok, notional: bad }, null, lang).notional, `notional ${bad} ${lang}`);
+  assert.ok(ticketProblems({ ...ok, notional: 10_000_001 }, null, lang).notional);
+  assert.ok(ticketProblems({ ...ok, notional: 0.5 }, null, lang).notional);
+  assert.equal(ticketProblems({ ...ok, notional: 1 }, null, lang).notional, undefined);
+  assert.equal(ticketProblems({ ...ok, notional: 10_000_000 }, null, lang).notional, undefined);
+}
+assert.equal(ticketProblems({ ...ok, notional: -5 }, null, "zh").notional, "请输入大于 0 的 USDT 金额。");
+// Equity: zero, negative and absurd are refused; empty (null) is allowed.
+assert.ok(ticketProblems({ ...ok, equity: 0 }, null, "en").equity);
+assert.ok(ticketProblems({ ...ok, equity: -10 }, null, "zh").equity);
+assert.ok(ticketProblems({ ...ok, equity: 2e9 }, null, "en").equity);
+assert.equal(ticketProblems({ ...ok, equity: null }, null, "en").equity, undefined);
+// Stops: zero and negative are refused with or without a price; the wrong side needs the price.
+assert.equal(ticketProblems({ ...ok, stop: 0 }, null, "en").stop, "A stop must be a price above 0.");
+assert.equal(ticketProblems({ ...ok, stop: -3 }, 378, "zh").stop, "止损必须是大于 0 的价格。");
+assert.equal(ticketProblems({ ...ok, stop: 378 }, 378, "en").stop, "A stop for a long must be below the current price (378).");
+assert.equal(ticketProblems({ ...ok, stop: 360 }, 378, "en").stop, undefined);
+assert.equal(ticketProblems({ ...ok, side: "short", stop: 378 }, 378, "en").stop, "A stop for a short must be above the current price (378).");
+// Leverage and hours.
+assert.ok(ticketProblems({ ...ok, leverage: 0 }, null, "en").leverage);
+assert.ok(ticketProblems({ ...ok, leverage: 126 }, null, "zh").leverage);
+assert.equal(ticketProblems({ ...ok, leverage: 125 }, null, "en").leverage, undefined);
+assert.ok(ticketProblems({ ...ok, hoursNeeded: true, hours: -4 }, null, "en").hours);
 console.log("errors tests ok");
