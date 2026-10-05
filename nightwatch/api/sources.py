@@ -39,6 +39,27 @@ def open_interest_row(cache: dict[str, tuple[datetime, dict | None]]) -> dict[st
     }
 
 
+def options_row(cache: dict[str, tuple[datetime, Any]], failed: dict[str, datetime]) -> dict[str, Any]:
+    """Cboe option quotes: how many tokens have a chain cached, how many have no listed
+    options (an ETF of ETFs, say), and how many pulls are failing."""
+    chains = {k: ts for k, (ts, v) in cache.items() if v not in (None, "none")}
+    none = sorted(k for k, (_, v) in cache.items() if v == "none")
+    newest = max(chains.values(), default=None)
+    parts = [f"{len(chains)} tokens with an options chain"]
+    if none:
+        parts.append(f"{len(none)} with no listed options")
+    if failed:
+        parts.append(f"{len(failed)} not answering")
+    return {
+        "key": "cboe_options", "label": "Cboe options quotes",
+        "what": "Delayed (about 15 min) option chains for each token's underlying: the at-the-money implied volatility gives the market's expected move over a hold, shown beside the desk's own 1-in-20 loss",
+        "cadence": "hourly in the background, cached 30 min per ticker", "last_update": newest.isoformat() if newest else None,
+        "rows": len(chains), "latest": newest.isoformat() if newest else None,
+        "latest_label": "; ".join(parts) if cache else "none fetched yet",
+        "url": "https://www.cboe.com/delayed_quotes/",
+    }
+
+
 def street_row(cached: list[tuple[datetime, Any]], status: dict[str, Any] | None, now: datetime) -> dict[str, Any]:
     """The Bitget US-stock data row, honest about an outage.
 

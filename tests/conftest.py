@@ -12,3 +12,4 @@ import pytest
 def _no_external_data_services(monkeypatch):
     monkeypatch.setenv("NIGHTWATCH_BITGET_MCP", "0")
     monkeypatch.setenv("NIGHTWATCH_BITGET_SIGNAL", "0")
+    monkeypatch.setenv("NIGHTWATCH_CBOE_OPTIONS", "0")

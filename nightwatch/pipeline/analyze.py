@@ -119,6 +119,12 @@ class AnalysisContext:
     _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
     _street_pending: set[str] = field(default_factory=set)
     _open_interest: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
+    # Cboe's delayed option quotes (nightwatch.data.cboe.CboeOptionsClient), reduced to one
+    # at-the-money quote per expiry. Optional: without it the report has no implied move.
+    options_client: Any = None
+    _options: dict[str, tuple[datetime, Any]] = field(default_factory=dict)  # chain, "none" (no options) or None (failed)
+    _options_pending: set[str] = field(default_factory=set)
+    _options_failed: dict[str, datetime] = field(default_factory=dict)
     _signal: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
     _signal_pending: set[str] = field(default_factory=set)
     _signal_health: tuple[datetime, dict] | None = None
@@ -217,6 +223,64 @@ class AnalysisContext:
             return None
         self._open_interest[perp_symbol] = (now, block)
         return block
+
+    def options_chain_for(self, ticker: str, *, fetch: bool = False):  # noqa: ANN201
+        """The cached options chain for a ticker: an ``OptionsChain``, ``"none"`` when the
+        underlying has no listed options, or None when nothing usable is cached.
+
+        Never waits on the network unless asked to (``fetch=True``, the warm-up). A stale or
+        missing entry asks for a background refresh and returns what is cached, so an
+        analysis is never held up by a 2-5 MB download. Chains are served up to
+        ``OPTIONS_STALE_MAX`` old (the quote carries its own time, and out of session the
+        feed is the last session's anyway); "no options" is remembered for hours and a
+        failure for a few minutes.
+        """
+        if self.options_client is None:
+            return None
+        now = utc_now()
+        hit = self._options.get(ticker)
+        stale = hit is None or now - hit[0] > (OPTIONS_NONE_TTL if hit[1] == "none" else OPTIONS_TTL)
+        failed = self._options_failed.get(ticker)
+        if stale and not (failed and now - failed < OPTIONS_RETRY):
+            if fetch:
+                self._fetch_options(ticker)
+                hit = self._options.get(ticker)
+            else:
+                self.refresh_options_later(ticker)
+        if hit is None:
+            return None
+        if hit[1] != "none" and now - hit[0] > OPTIONS_STALE_MAX:
+            return None
+        return hit[1]
+
+    def _fetch_options(self, ticker: str) -> None:
+        from nightwatch.data.cboe import NoOptions
+
+        now = utc_now()
+        try:
+            self._options[ticker] = (now, self.options_client.get_chain(ticker, fetched_at=now))
+            self._options_failed.pop(ticker, None)
+        except NoOptions:
+            self._options[ticker] = (now, "none")
+            self._options_failed.pop(ticker, None)
+        except Exception as exc:  # noqa: BLE001 - context must never fail an analysis
+            # An older good chain stays and is served with its own age; the retry is paced.
+            log.warning("options for %s unavailable: %s", ticker, exc)
+            self._options_failed[ticker] = now
+
+    def refresh_options_later(self, ticker: str) -> None:
+        """Fetch one ticker's chain in the background, once at a time."""
+        if self.options_client is None or ticker in self._options_pending:
+            return
+        self._options_pending.add(ticker)
+
+        def run() -> None:
+            try:
+                self._fetch_options(ticker)
+            finally:
+                self._options_pending.discard(ticker)
+
+        threading.Thread(target=run, name=f"options-{ticker}", daemon=True).start()
 
     def street_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=2), fetch: bool = True):  # noqa: ANN201
         """Street context for a ticker, from cache when fresh enough.
@@ -681,6 +745,10 @@ class AnalysisReport:
     # the leverage section shows (nightwatch.features.open_interest). Context only; None for
     # past moments, tokens without a perp, or when Bitget did not answer.
     open_interest: dict | None = None
+    # The options market's implied one-sigma move over the hold, from Cboe's delayed quotes,
+    # beside the desk's own one-in-twenty loss (nightwatch.features.options). Context only;
+    # None for past moments, names with no listed options, or while the cache is cold.
+    options: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
@@ -1101,6 +1169,14 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         open_interest = ctx.open_interest_for(spec.perp_symbol, price=snapshot.prices.get("perp_close"))
         if open_interest:
             sources.append({"kind": "bitget_open_interest", "label": "Bitget perp open interest", "last_ts": open_interest["observed_at"], "rows_used": 1, "symbol": spec.perp_symbol})
+    # What the options market implies for this hold, beside the desk's own 1-in-20 loss.
+    # From cache only: a cold cache means no line this time and a background fetch.
+    options = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        options = _options_block(ctx, ticket.ticker, as_of, horizon_h, analog, primary)
+        if options:
+            sources.append({"kind": "cboe_options", "label": "Cboe options quotes", "last_ts": options["quote_ts"] or options["fetched_at"], "rows_used": options["n_strikes"], "ticker": ticket.ticker,
+                            "fetched_at": options["fetched_at"]})
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
     from nightwatch.pipeline.feeds import feed_sources
 
@@ -1110,7 +1186,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal, corporate_events=corporate, open_interest=open_interest,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,
@@ -1151,6 +1227,25 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         except Exception:  # noqa: BLE001 - journaling must never break an analysis
             log.exception("failed to journal the forecast")
     return report
+
+
+def _options_block(ctx: AnalysisContext, ticker: str, as_of: datetime, horizon_h: float, analog: Any, primary: str) -> dict | None:  # noqa: ANN401
+    """The implied-move block, or None for any reason at all: it is context and must never
+    cost an analysis anything."""
+    try:
+        chain = ctx.options_chain_for(ticker)
+        if chain is None or chain == "none":
+            return None
+        from nightwatch.features import options as options_mod
+
+        block = options_mod.implied_move(chain, as_of, horizon_h)
+        if block is None:
+            return None
+        horizon = analog.horizons.get(primary) if analog else None
+        return options_mod.attach_history(block, horizon.loss_p5_pct if horizon is not None else None)
+    except Exception:  # noqa: BLE001
+        log.exception("options implied move for %s failed", ticker)
+        return None
 
 
 def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as_of: datetime) -> dict | None:
@@ -1207,6 +1302,10 @@ FILING_LOOKBACK_H = 72.0
 STREET_FRESH_S = 6 * 3600
 # A cached street view older than this is served only as "last good", labelled with its age.
 STREET_LIVE_S = 2 * 3600
+OPTIONS_TTL = timedelta(minutes=30)
+OPTIONS_NONE_TTL = timedelta(hours=6)
+OPTIONS_RETRY = timedelta(minutes=5)
+OPTIONS_STALE_MAX = timedelta(hours=24)
 OI_TTL = timedelta(minutes=5)
 OI_RETRY = timedelta(seconds=60)
 STREET_LAST_GOOD_MAX = timedelta(hours=24)
