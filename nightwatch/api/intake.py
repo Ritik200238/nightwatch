@@ -600,6 +600,10 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     return out
 
 
+# "same size", "again", "as before": the words that let a new message reuse the last trade's inputs.
+SAME_CUE = re.compile(r"\bsame\b|\bagain\b|\bas (?:before|earlier|last time)\b|\blike before\b|\bthat size\b|同样|同上|一样|跟刚才|和刚才|照旧|再来", re.I)
+
+
 def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Build one ticket from every user message so far.
 
@@ -622,6 +626,16 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
             # at 350 became an NVDA stop 56% away that "40 of 40 past moments hit".
             merged.stop_price = merged.target_price = merged.invalidation = None
             merged.stop_pct = merged.stop_dir = None
+            if not SAME_CUE.search(m["content"]):
+                # A reason is about one stock, so it never rides along to another unless the
+                # trader says "same". A message with its own side or size is a new trade: the
+                # last one's size and leverage do not ride along either. "Switch to NVDA" with
+                # neither is the same trade in another token, and keeps them. The account is
+                # the trader's, not the trade's, so it stays; the echo line says where it came from.
+                merged.thesis = None
+                if latest.side or latest.notional_quote:
+                    merged.notional_quote = merged.leverage = merged.margin_quote = merged.hedge_ratio = None
+                    merged.through_earnings = False
         merged.open_positions = merge_positions(merged.open_positions, latest.open_positions)
         for key, value in latest.as_dict().items():
             if key in ("kind", "reply", "missing_fields", "open_positions", "notes") or value in (None, [], ""):
@@ -1452,7 +1466,7 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
 
     # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
     earnings_hold, earnings_note = reading.apply_earnings_hold(state, intent, lang)
-    carried = reading.carried_fields(latest, tickers, intent)
+    carried = reading.carried_fields(latest, tickers, intent, messages, account_equity)
     ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)

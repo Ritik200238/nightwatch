@@ -360,7 +360,7 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
 
     # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
     earnings_hold, earnings_note = reading.apply_earnings_hold(state, rules, lang) if (rules.ticker or "").upper() in tickers else (False, None)
-    carried = reading.carried_fields(latest, tickers, rules)
+    carried = reading.carried_fields(latest, tickers, rules, messages, account_equity)
     dropped_reason: str | None = None
     fast = rules.kind == "analyze" and (rules.ticker or "").upper() in tickers and not intake.needs_the_model(latest)
     if lang == "zh" and not fast and rules.ticker and rules.missing_fields and not intake.needs_the_model(latest):

@@ -78,10 +78,12 @@ def echo_line(report: Any, lang: str, *, carried: set[str] | frozenset[str] = fr
     zh = lang == "zh"
     t = report.ticket
     side = ("做多" if t.side == Side.LONG else "做空") if zh else t.side.value
-    bits = [f"{side} {t.ticker} {t.notional_quote:,.0f} USDT" if zh else f"{side} {t.notional_quote:,.0f} USDT of {t.ticker}"]
-
     def tag(name: str, text: str) -> str:
+        if name == "account" and "account_box" in carried:
+            return text + ("（用的是页面上设置的账户）" if zh else " - the account you set on the page")
         return text + (("（沿用你之前消息里的）" if zh else " - same as in your earlier message") if name in carried else "")
+
+    bits = [tag("size", f"{side} {t.ticker} {t.notional_quote:,.0f} USDT" if zh else f"{side} {t.notional_quote:,.0f} USDT of {t.ticker}")]
 
     if t.leveraged and t.leverage:
         margin = t.notional_quote / t.leverage
@@ -108,26 +110,45 @@ def echo_line(report: Any, lang: str, *, carried: set[str] | frozenset[str] = fr
     return line
 
 
-def carried_fields(latest: str, tickers: list[str], merged: Any) -> set[str]:  # noqa: ANN401
+def carried_fields(
+    latest: str,
+    tickers: list[str],
+    merged: Any,  # noqa: ANN401
+    messages: list[dict[str, str]] | None = None,
+    account_equity: float | None = None,
+) -> set[str]:
     """Fields in the conversation's merged reading that this message did not state.
 
     A hold from the last ticker, a stop, a leverage: kept because an earlier message gave
-    it. Said in the echo line, so it is never applied silently.
+    it. Said in the echo line, so it is never applied silently. With ``messages`` given, a
+    field counts only when an earlier user message really stated it; an account that came
+    from the page's account box instead is reported as ``account_box``, never as "said
+    earlier".
     """
     from nightwatch.api.intake import parse_message
 
     alone = parse_message(latest, tickers)
+    earlier = [parse_message(m["content"], tickers) for m in (messages or [])[:-1] if m.get("role") == "user" and (m.get("content") or "").strip()]
+
+    def said_before(attr: str) -> bool:
+        return messages is None or any(getattr(e, attr, None) for e in earlier)
+
     got: set[str] = set()
-    if merged.horizon_kind and not alone.horizon_kind:
+    if merged.horizon_kind and not alone.horizon_kind and said_before("horizon_kind"):
         got.add("hold")
-    if (merged.stop_price or merged.stop_pct) and not (alone.stop_price or alone.stop_pct):
+    if (merged.stop_price or merged.stop_pct) and not (alone.stop_price or alone.stop_pct) and (messages is None or any(e.stop_price or e.stop_pct for e in earlier)):
         got.add("stop")
-    if merged.leverage and not alone.leverage:
+    if merged.leverage and not alone.leverage and said_before("leverage"):
         got.add("leverage")
     if merged.account_equity_quote and not alone.account_equity_quote:
-        got.add("account")
-    if merged.thesis and not alone.thesis:
+        if said_before("account_equity_quote"):
+            got.add("account")
+        elif account_equity and float(account_equity) == float(merged.account_equity_quote):
+            got.add("account_box")
+    if merged.thesis and not alone.thesis and said_before("thesis"):
         got.add("reason")
+    if merged.notional_quote and not alone.notional_quote and messages is not None and said_before("notional_quote"):
+        got.add("size")
     return got
 
 
