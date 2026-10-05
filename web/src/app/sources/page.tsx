@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, api, type DataSource } from "@/lib/api";
+import { ApiError, api, peek, type DataSource } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
 import { LoadingRecord, PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
+import { localLatest, localSource } from "@/lib/source-zh";
 
 /** Every feed behind a report: what it is, how often it is pulled, when it last was. */
 export default function SourcesPage() {
@@ -14,6 +15,8 @@ export default function SourcesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const c = peek<DataSource[]>("/sources");
+    if (c) setRows(c);
     void api
       .sources()
       .then(setRows)
@@ -31,8 +34,9 @@ export default function SourcesPage() {
       ) : null}
       {!rows && !error ? <LoadingRecord blocks={[88, 88, 88]} /> : null}
       <ul className="space-y-3">
-        {rows?.map((r) => {
-          const fresh = isFresh(r);
+        {rows?.map((raw) => {
+          const fresh = isFresh(raw);
+          const r = { ...localSource(raw, zh), latest_label: localLatest(raw.latest_label, zh) };
           return (
             <li key={r.key} className="rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">

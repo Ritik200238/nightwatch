@@ -7,10 +7,10 @@ import { Pill, Section, Stat } from "@/components/report/primitives";
 import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
 import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, type MissesResponse, type VerifyResponse } from "@/lib/api";
+import { api, peek, type DataSource, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 import { fmtPct, fmtUsd } from "@/lib/format";
-import { fmtTimeL } from "@/lib/i18n";
+import { fmtTimeL, t } from "@/lib/i18n";
 
 /** Mistakes found in the desk itself, newest first. Each one changed a number a trader
  *  was shown; the fix is in the repository's history and the evidence in the notes. */
@@ -82,11 +82,21 @@ export default function WrongPage() {
   const [misses, setMisses] = useState<MissesResponse | null>(null);
   const [chain, setChain] = useState<VerifyResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sources, setSources] = useState<DataSource[] | null>(null);
 
   useEffect(() => {
+    const m = peek<MissesResponse>("/misses");
+    if (m) setMisses(m);
+    const v = peek<VerifyResponse>("/verify");
+    if (v) setChain(v);
     api.misses().then(setMisses).catch((e: unknown) => setError(e instanceof Error ? e.message : tx("Could not load the misses.", "无法加载未达标记录。")));
     api.verify().then(setChain).catch(() => setChain(null));
+    // Whether Bitget's US-stock service is answering right now: the entry about it must say so.
+    const s = peek<DataSource[]>("/sources");
+    if (s) setSources(s);
+    api.sources().then(setSources).catch(() => undefined);
   }, []);
+  const bitget = sources?.find((x) => x.key === "bitget_mcp");
 
   const live = misses?.totals.ticket;
   const replay = misses?.totals.replay;
@@ -166,7 +176,7 @@ export default function WrongPage() {
                           {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
                           {m.notional < TEST_SIZE_USDT ? <span className="ml-1.5 rounded border border-border px-1 text-[11px] text-muted-foreground">{tx("test size", "测试规模")}</span> : null}
                         </TableCell>
-                        <TableCell>{(m.verdict ?? "—").replace("_", " ")}</TableCell>
+                        <TableCell>{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</TableCell>
                         <TableCell className="tabular text-right">{fmtPct(m.stated_p5_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right font-medium">{fmtPct(m.outcome_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right">{fmtUsd(Math.abs(m.beyond_quote))} USDT</TableCell>
@@ -224,12 +234,25 @@ export default function WrongPage() {
       <Section title={tx("Mistakes we found in the desk itself", "我们在交易台自身发现的错误")} subtitle={tx("Each one changed a number a trader was shown. Newest first; the open one is still open.", "每一个都改变过展示给交易者的某个数字。最新的在前；标为未解决的仍未解决。")}>
         <ul className="space-y-3">
           {FOUND.map((f0, fi) => {
-            const f = lang === "zh" && FOUND_ZH[fi] ? { ...f0, ...FOUND_ZH[fi] } : f0;
+            let f = lang === "zh" && FOUND_ZH[fi] ? { ...f0, ...FOUND_ZH[fi] } : f0;
+            // The Bitget entry was marked fixed on 29 Sep. The fix was ours (we reach it over IPv6 and say when it
+            // fails); the service itself can still be down, and then the entry says so instead of "fixed".
+            if (f0.what.startsWith("Bitget's US-stock data") && bitget?.status === "unavailable") {
+              const since = bitget.down_since ? fmtTimeL(bitget.down_since, lang) : null;
+              f = {
+                ...f,
+                fix:
+                  lang === "zh"
+                    ? `Bitget 的服务${since ? `自 ${since} 起` : "目前"}不可用（HTTP ${bitget.http_status ?? "?"}）。我们的处理已修复：不可用时会明说，而不是显示过期数据。`
+                    : `Bitget's service has been unavailable${since ? ` since ${since}` : " right now"} (HTTP ${bitget.http_status ?? "?"}). Our handling is fixed: we say so instead of showing stale data.`,
+              };
+            }
             return (
             <li key={f0.what} className="rounded-lg border border-border p-3 text-sm">
               <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
                 {f.when}
                 {f.open ? <Pill tone="warning">{tx("open", "未解决")}</Pill> : <Pill tone="good">{tx("fixed", "已修复")}</Pill>}
+                {f0.what.startsWith("Bitget's US-stock data") && bitget?.status === "unavailable" ? <Pill tone="warning">{tx("outside outage ongoing", "外部服务仍在故障")}</Pill> : null}
               </p>
               <p className="mt-1">{f.what}</p>
               <p className="mt-1 text-muted-foreground">{f.fix}</p>
