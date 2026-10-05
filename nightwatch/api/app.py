@@ -240,6 +240,8 @@ class AppState:
         self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
         self.snapshot_heals = 0
         self.thesis_checks: dict[tuple[int, str], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
+        # The trade on screen re-run with the account the page sent, keyed by (report, account).
+        self.equity_runs: dict[tuple[int, float], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
 
     def prefetch_take(self, forecast_id: int | None, payload: dict[str, Any], lang: str = "en") -> None:
         """Start the analyst's take now, in the report's own language, so it is usually
@@ -538,6 +540,34 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         "provider": provider.name if provider else None,
         "model": provider.model if provider else None,
     }
+
+
+def _with_account(state: AppState, context: dict[str, Any], equity: float) -> dict[str, Any] | None:
+    """The trade on screen judged against the account the page sent with the request.
+
+    A report made before the trader's account was known says "account equity not provided"
+    to every follow-up, although the request carries it. The same trade is re-run at the
+    same moment with that account (never journalled) and the follow-up is answered from it.
+    Cached per (report, account), so a run of questions pays for one analysis.
+    """
+    from dataclasses import replace as _replace
+
+    from nightwatch.api import whatif
+
+    fid = context.get("forecast_id")
+    key = (int(fid), float(equity)) if isinstance(fid, int) else None
+    if key is not None and key in state.equity_runs:
+        return state.equity_runs[key]
+    base = whatif.ticket_from(context)
+    if base is None:
+        return None
+    with state.lock:
+        report = analyze(state.ctx, _replace(base, account_equity_quote=float(equity)), as_of=whatif.as_of_of(context), record=False)
+        payload = report.to_dict()
+    state.keep_hypothetical(payload)
+    if key is not None:
+        state.equity_runs[key] = payload
+    return payload
 
 
 def _plan_missing(context: dict[str, Any]) -> bool:
@@ -1618,6 +1648,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             # desk runs one. The model names what changed and the engine does the rest.
             # No key needed: the rules read most what-ifs, and the model is asked only
             # when they cannot (in which case no key simply means no re-run).
+            #
+            # A request that carries the trader's account while the report on screen was made
+            # without one: judge the same trade against it, so "why?" does not say the account
+            # was not provided when the page sent it.
+            equity_used: float | None = None
+            on_screen = (context.get("ticket") or {}).get("account_equity_quote")
+            if body.account_equity_quote and not said_account and not on_screen:
+                try:
+                    rerun = _with_account(s, context, body.account_equity_quote)
+                except Exception as exc:  # noqa: BLE001 - the report on screen still answers
+                    log.warning("could not apply the account to the report on screen: %s", exc)
+                    rerun = None
+                if rerun is not None:
+                    context, equity_used = rerun, float(body.account_equity_quote)
             try:
                 hypothetical = _what_if(s, context, latest)
             except InsufficientData as exc:
@@ -1646,6 +1690,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                     payload.update(followup_turn(context, latest, found))
                 except Exception as exc:  # noqa: BLE001 - the rules answer already stands
                     log.warning("model follow-up fell back to rules: %s", exc)
+            if equity_used:
+                # Say it, and hand the page the report this answer was read from.
+                note = f"按你的账户 {equity_used:,.0f} USDT 重新判断：" if chinese else f"Judged against your account of {equity_used:,.0f} USDT, which the report on screen did not have: "
+                payload["reply"] = payload["intent"]["reply"] = note + payload["reply"]
+                payload["report"] = context
             return payload
 
         try:

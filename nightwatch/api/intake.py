@@ -559,6 +559,16 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     thesis, invalid = _THESIS.search(text), _INVALID.search(text)
     out.thesis = thesis.group(1).strip() if thesis else None
     out.invalidation = invalid.group(1).strip() if invalid else None
+    if not _CJK.search(text):
+        # "because momentum, wrong if it closes below 290": the reason must not swallow the
+        # line that says what would prove it wrong, nor the account tacked on after it.
+        from nightwatch.api import thesis_capture
+
+        said = thesis_capture.read(text)
+        if said.thesis:
+            out.thesis = said.thesis
+        if said.invalidation:
+            out.invalidation = said.invalidation
     if _CJK.search(text):
         # A Chinese message: read it with the Chinese rules, filling only what the
         # English rules did not find (a ticker written as TSLA reads the same either way).
@@ -1272,19 +1282,47 @@ _SHORT_KEEP_EN = ("Why:", "Check your plan:", "History:", "For a firm GO", "To c
 _SHORT_KEEP_ZH = ("未通过的检查", "历史：", "要给出明确结论", "要通过复核")
 
 
-def brief_short(report: Any, lang: str = "en") -> str:
-    """The first reply in chat: the answer and the one thing that matters, then an offer.
+def next_step(report: Any, zh: bool) -> str:  # noqa: ANN401
+    """The one thing to do next, as the second line of the headline."""
+    v, t = report.verdict, report.ticket
+    plan_missing = any(r.rule == "written_plan" and r.decision.value != "GO" for r in report.gate.rules)
+    equity_missing = t.account_equity_quote is None and any(r.rule == "position_size" and r.decision.value != "GO" for r in report.gate.rules)
+    rec = v.recommended_notional
+    if plan_missing:
+        return ("下一步：告诉我你为什么做这笔交易、什么情况说明你错了，例如“因为……，如果收盘跌破……就算错”。" if zh
+                else 'Next: tell me why you want it and what would prove you wrong, e.g. "because ..., wrong if it closes below ...".')
+    if equity_missing:
+        return "下一步：告诉我你的账户规模，例如“账户 20万U”。" if zh else 'Next: tell me your account size, e.g. "account 200k".'
+    if v.verdict.value in ("NO_GO", "REDUCE_TO") and rec is not None and rec >= sensible_floor(t.notional_quote) and rec < t.notional_quote - 1:
+        return f"下一步：把仓位降到 {rec:,.0f} 或更低，或者问我“为什么？”。" if zh else f'Next: size it at {rec:,.0f} or less, or ask "why?".'
+    if v.verdict.value == "GO":
+        return "下一步：下单前先问我“如果跌 10% 呢？”。" if zh else 'Next: before you place it, ask "what if it gaps down 10%?".'
+    return "下一步：问我“为什么？”，看是什么拦住了它。" if zh else 'Next: ask "why?" to see what is holding it back.'
+
+
+def brief_short(report: Any, lang: str = "en", *, echo: str | None = None, notes: tuple[str, ...] | list[str] = ()) -> str:
+    """The first reply in chat: a two-line headline, then what matters, then an offer.
 
     The full briefing ran to ten paragraphs and a judge called it a wall of text. The chat
-    now leads with the verdict and size, why when it is not a go, leverage, the plan check,
-    the single most likely-and-costly way the trade loses, the history in one line and
-    anything the trader still has to say - and invites the follow-ups that open the rest.
-    Every line is one the full briefing prints; the page below still shows everything.
+    now opens with two lines - the verdict with the one number that matters, and the one
+    thing to do next - then, after a blank line, how the desk read the message (``echo``),
+    why when it is not a go, leverage, the plan check, the single most likely-and-costly way
+    the trade loses, the history in one line and anything the trader still has to say, and
+    invites the follow-ups that open the rest. Every line is one the full briefing prints;
+    the page below still shows everything. A sentence the headline already says is not
+    repeated further down.
     """
     zh = lang == "zh"
     full = brief(report, lang).split("\n\n")
     keep = _SHORT_KEEP_ZH if zh else _SHORT_KEEP_EN
-    out = [full[0]]
+    head = full[0]
+    # A REVIEW waiting on the account already reads as two lines (what to do, then the ladder).
+    asks_account = head.startswith(("REVIEW: tell the desk", "需复核（REVIEW）：请告诉系统"))
+    nxt = next_step(report, zh)
+    out = [head if asks_account else head + "\n" + nxt]
+    for extra in (echo, *notes):
+        if extra:
+            out.append(extra)
     bk = book_line(report, lang)
     if bk:
         out.append(bk)
@@ -1300,6 +1338,15 @@ def brief_short(report: Any, lang: str = "en") -> str:
         out.append(_leverage_line(lev, lang))
     modes = [m for m in (getattr(report, "failure_modes", None) or []) if m.get("loss_quote") is not None]
     picked = {p: next((x for x in full[1:] if x.startswith(p)), None) for p in keep}
+    # What the second line already says is not said again below it.
+    if not asks_account:
+        said = keep[-1] if nxt.startswith(("Next: tell me why", "下一步：告诉我你为什么")) else keep[-2] if nxt.startswith(("Next: tell me your account", "下一步：告诉我你的账户")) else None
+        if said:
+            picked[said] = None
+    if "Too big:" in head or "仓位过大" in head:
+        # The headline already carries the size rules' numbers; "Why:" keeps only the rest.
+        rest = [r for r in report.verdict.reasons if not r.startswith(("written plan", "Size held at", "position size", "risk budget"))]
+        picked["Why:"] = ("Why: " + "; ".join(rest[:3]) + ".") if rest and not zh else None
     for p in keep[:2] if not zh else keep[:1]:
         if picked.get(p):
             out.append(picked[p])
@@ -1378,6 +1425,11 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         result["intent"]["kind"] = "clarify"
         result["reply"] = f"{intent.ticker} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'...' if len(tickers) > 20 else ''}."
         return result
+    from nightwatch.api import reading
+
+    # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
+    earnings_hold, earnings_note = reading.apply_earnings_hold(state, intent, lang)
+    carried = reading.carried_fields(latest, tickers, intent)
     ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)
@@ -1389,9 +1441,12 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.prefetch_take(report.forecast_id, payload, language_of(messages[-1].get("content", "") if messages else ""))
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
-    narrative = brief_short(report, lang)
-    if assumed:
-        narrative = assumed["note"] + "\n\n" + narrative
+    # How the message was read, and what could not be used, sit under the two-line headline.
+    echo = reading.echo_line(
+        report, lang, carried=carried, earnings_hold=earnings_hold,
+        unused=reading.unused_parts(intent, ticket, latest, lang, earnings_note=earnings_note, earnings_applied=earnings_hold),
+    )
+    narrative = brief_short(report, lang, echo=echo, notes=tuple(intent.notes))
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,

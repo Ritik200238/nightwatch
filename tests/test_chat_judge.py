@@ -206,3 +206,140 @@ def test_a_question_is_not_taken_for_a_reason(client):
     first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
     got = say(client, "is it because of earnings?", ctx=first["report"]["forecast_id"])
     assert got.get("answer_kind") != "thesis_saved" and not (got.get("ticket") or {}).get("thesis")
+
+
+# --- a request that carries the account is honoured by follow-ups ---------------------------
+
+
+def test_a_followup_uses_the_account_the_request_carries(client):
+    first = say(client, "long 5000 TSLA overnight, stop 300")
+    assert first["ticket"]["account_equity_quote"] is None
+    got = say(client, "why?", ctx=first["report"]["forecast_id"], equity=100000)
+    assert "account equity not provided" not in got["reply"] and "Judged against your account of 100,000 USDT" in got["reply"]
+    assert got["report"]["ticket"]["account_equity_quote"] == 100000
+    # the same question again does not pay for a second analysis
+    again = say(client, "why?", ctx=first["report"]["forecast_id"], equity=100000)
+    assert again["report"]["forecast_id"] == got["report"]["forecast_id"]
+
+
+def test_a_followup_without_an_account_in_the_request_is_unchanged(client):
+    first = say(client, "long 5000 TSLA overnight, stop 300")
+    got = say(client, "why?", ctx=first["report"]["forecast_id"])
+    assert "Judged against your account" not in got["reply"] and got["report"] is None
+
+
+def test_a_report_that_already_has_an_account_is_not_rerun(client):
+    first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    got = say(client, "why?", ctx=first["report"]["forecast_id"], equity=100000)
+    assert got["report"] is None
+
+
+# --- "I read this as" -----------------------------------------------------------------------
+
+
+def test_the_first_reply_says_how_the_message_was_read(client):
+    r = say(client, "long 20000 TSLA overnight, stop 300, because momentum, wrong if it closes below 290")
+    echo = next(p for p in r["reply"].split("\n\n") if p.startswith("I read this as:"))
+    assert "long 20,000 USDT of TSLA" in echo and "until the next US open" in echo and "account: not given" in echo
+    assert "stop 300.00" in echo and 'reason "momentum"' in echo and 'wrong if "it closes below 290"' in echo
+
+
+def test_the_echo_names_leverage_and_margin(client):
+    r = say(client, "long TSLA 3x with 2k margin")
+    assert "6,000 USDT of TSLA, 3x leverage (margin 2,000)" in r["reply"]
+    assert r["ticket"]["leverage"] == 3 and r["ticket"]["notional_quote"] == 6000 and r["ticket"]["account_equity_quote"] is None
+
+
+def test_the_echo_lists_what_it_could_not_use(client):
+    r = say(client, "short AAPL 5k ovr earnigns 🚀")
+    echo = next(p for p in r["reply"].split("\n\n") if p.startswith("I read this as:"))
+    assert "Not used:" in echo and "holding over earnings" in echo and '"🚀" (reads bullish, but you said short' in echo
+    assert not r["ticket"]["thesis"]  # the typed fragments were never a reason
+
+
+def test_a_hold_carried_over_from_an_earlier_ticker_is_said_out_loud(client):
+    r = say(client, "long 5000 NVDA for 40 hours, account 100k", "short 5k TSLA")
+    echo = next(p for p in r["reply"].split("\n\n") if p.startswith("I read this as:"))
+    assert "short 5,000 USDT of TSLA" in echo and "for 40h - same as in your earlier message" in echo
+
+
+def test_the_echo_is_in_chinese_for_a_chinese_message(client):
+    r = say(client, "周末做多特斯拉 2万U")
+    assert any(p.startswith("我的理解：做多 TSLA 20,000 USDT") for p in r["reply"].split("\n\n"))
+
+
+# --- the headline --------------------------------------------------------------------------
+
+
+def test_the_reply_opens_with_a_two_line_headline_then_the_rest_after_a_blank_line(client):
+    r = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    headline, *rest = r["reply"].split("\n\n")
+    lines = headline.split("\n")
+    assert len(lines) == 2 and lines[0].startswith("REVIEW on long 5,000 USDT of TSLA") and lines[1].startswith("Next: tell me why you want it")
+    assert rest[0].startswith("I read this as:")
+    # the sentence the headline says is not repeated below it, and nothing else was dropped
+    assert not any(p.startswith("To clear the review") for p in rest)
+    assert any(p.startswith("History:") for p in rest) and rest[-1].startswith("Ask me:")
+
+
+def test_a_review_waiting_on_the_account_keeps_its_two_line_opening(client):
+    r = say(client, "long 20000 TSLA overnight")
+    headline = r["reply"].split("\n\n")[0]
+    assert headline.startswith("REVIEW: tell the desk your account size") and "\n" in headline
+
+
+def test_a_go_says_what_to_do_next(client):
+    r = say(client, "long 5000 TSLA overnight, account 200k, stop 300, because AI demand, wrong if it closes below 290")
+    assert r["report"]["verdict"]["verdict"] == "GO"
+    assert r["reply"].split("\n")[1].startswith("Next: before you place it")
+
+
+# --- over earnings, dated from the calendar ---------------------------------------------------
+
+
+def test_a_hold_over_earnings_is_stretched_to_the_report_when_it_can_be_dated():
+    from nightwatch.api import reading
+    from nightwatch.api.whatif import AFTER_REPORT_OPEN_H
+
+    state = SimpleNamespace(ctx=SimpleNamespace(
+        spec=lambda t: t, snapshot_at=lambda spec, at: SimpleNamespace(features={"hours_to_earnings": 20.0}),
+    ))
+    intent = intake.parse_message("short AAPL 5k ovr earnigns", TICKERS)
+    applied, note = reading.apply_earnings_hold(state, intent)
+    assert applied and note is None and intent.horizon_kind == "hours" and intent.horizon_hours == 20.0 + AFTER_REPORT_OPEN_H
+
+
+def test_a_hold_length_in_the_message_wins_over_earnings():
+    from nightwatch.api import reading
+
+    state = SimpleNamespace(ctx=SimpleNamespace(spec=lambda t: t, snapshot_at=lambda spec, at: SimpleNamespace(features={"hours_to_earnings": 20.0})))
+    intent = intake.parse_message("short AAPL 5k for 6 hours over earnings", TICKERS)
+    assert reading.apply_earnings_hold(state, intent) == (False, None) and intent.horizon_hours == 6.0
+
+
+def test_an_undatable_report_is_not_guessed_at_and_is_said():
+    from nightwatch.api import reading
+
+    state = SimpleNamespace(ctx=SimpleNamespace(spec=lambda t: t, snapshot_at=lambda spec, at: SimpleNamespace(features={"hours_to_earnings": 720.0})))
+    intent = intake.parse_message("long TSLA 5k, 过完 earnings 就走", TICKERS)
+    applied, note = reading.apply_earnings_hold(state, intent, "zh")
+    assert not applied and "没有拉长持有期" in note and intent.horizon_kind is None
+
+
+# --- the model's reading is checked against the rules' --------------------------------------
+
+
+def test_a_model_reading_cannot_turn_margin_into_an_account_or_typed_words_into_a_reason():
+    from nightwatch.api.llm import ParsedIntent, _guard_model_reading
+
+    rules = intake.parse_message("yo thinking of aping into $TSLA long w 2k margin 5x, stop at 240", TICKERS)
+    model = ParsedIntent(kind="analyze", ticker="TSLA", side="long", notional_quote=2000, account_equity_quote=2000, thesis="ovr earnigns rocket", missing_fields=[], reply="")
+    got, dropped = _guard_model_reading(model, rules, None)
+    assert got.account_equity_quote is None and got.notional_quote == 10000
+    assert got.thesis is None and dropped == "ovr earnigns rocket"
+    # an account the request carries is still used
+    assert _guard_model_reading(model, rules, 100000)[0].account_equity_quote == 100000
+    # a reason the trader marked with "because" stands
+    because = intake.parse_message("long TSLA 5k because momentum", TICKERS)
+    kept, none = _guard_model_reading(model.model_copy(update={"thesis": "momentum"}), because, None)
+    assert kept.thesis == "momentum" and none is None

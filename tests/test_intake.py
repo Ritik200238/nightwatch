@@ -492,7 +492,9 @@ def test_the_first_reply_is_short_and_leads_with_what_matters(seeded_store):  # 
 
     r = _report(seeded_store, thesis="t", invalidation="i")
     short, full = it.brief_short(r), it.brief(r)
-    assert short.split("\n\n")[0] == full.split("\n\n")[0]  # the verdict line, unchanged
+    # a two-line headline: the verdict line unchanged, then the one thing to do next
+    lines = short.split("\n\n")[0].split("\n")
+    assert lines[0] == full.split("\n\n")[0] and lines[1].startswith("Next:")
     assert len(short) < len(full) and "Ask me:" in short and "what about 5x?" in short
     assert "可以接着问我" in it.brief_short(r, "zh")
     lev = _report(seeded_store, thesis="t", invalidation="i", leverage=5.0)

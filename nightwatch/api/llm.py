@@ -291,6 +291,29 @@ def _rules_win(intent: ParsedIntent, rules: Any) -> ParsedIntent:  # noqa: ANN40
     return intent
 
 
+def _guard_model_reading(intent: ParsedIntent, rules: Any, account_equity: float | None) -> tuple[ParsedIntent, str | None]:  # noqa: ANN401
+    """Where the model read something the rules show it should not have.
+
+    * Margin is not the account: "2k margin 5x" was stored as an account of 2,000.
+    * Margin times leverage is the position, however the model sized it.
+    * A thesis must read as a reason: "ovr earnigns rocket" was stored as one. A reason the
+      trader marked with "because" stands; anything else that is not one is dropped, and the
+      reply says it was not used.
+    """
+    from nightwatch.api.thesis_capture import reads_as_reason
+
+    update: dict[str, Any] = {}
+    if rules.margin_quote:
+        if intent.account_equity_quote and abs(intent.account_equity_quote - rules.margin_quote) < 1 and not rules.account_equity_quote:
+            update["account_equity_quote"] = account_equity
+        if rules.notional_quote and rules.leverage:
+            update["notional_quote"] = rules.notional_quote
+    dropped = None
+    if intent.thesis and not rules.thesis and not reads_as_reason(intent.thesis):
+        dropped = intent.thesis
+        update["thesis"] = None
+    return (intent.model_copy(update=update) if update else intent), dropped
+
 
 def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None, client: Any = None, provider: Provider | None = None) -> dict[str, Any]:  # noqa: ANN401
     """One conversational turn.
@@ -333,6 +356,12 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             "intent": {**rules.as_dict(), "reply": reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
             "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": reply, "parsed_by": "rules", "language": lang,
         }
+    from nightwatch.api import reading
+
+    # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
+    earnings_hold, earnings_note = reading.apply_earnings_hold(state, rules, lang) if (rules.ticker or "").upper() in tickers else (False, None)
+    carried = reading.carried_fields(latest, tickers, rules)
+    dropped_reason: str | None = None
     fast = rules.kind == "analyze" and (rules.ticker or "").upper() in tickers and not intake.needs_the_model(latest)
     if lang == "zh" and not fast and rules.ticker and rules.missing_fields and not intake.needs_the_model(latest):
         # A Chinese message that named a stock but not the rest: the question to ask is
@@ -352,6 +381,7 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         intent = parse_intent(provider, messages, tickers, account_equity)
         if lang == "zh":
             intent = _rules_win(intent, rules)
+        intent, dropped_reason = _guard_model_reading(intent, rules, account_equity)
         parsed_by = provider.name
         result = {"intent": intent.model_dump(), "ticket": None, "report": None, "narrative": None, "report_text": None, "unverified_numbers": [], "provider": provider.name, "model": provider.model}
         if intent.kind != "analyze" or intent.missing_fields or not intent.ticker or not intent.notional_quote:
@@ -380,6 +410,12 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             # question from the one put, so it is undone here rather than trusted.
             intent = intent.model_copy(update={"lenses": []})
         ticket = intent_to_ticket(intent, account_equity)
+        if earnings_hold:
+            from dataclasses import replace
+
+            from nightwatch.decision.ticket import HorizonKind
+
+            ticket = replace(ticket, horizon_kind=HorizonKind.HOURS, horizon_hours=rules.horizon_hours)
         if ticket.stop_price is None and rules.stop_pct is not None and (rules.ticker or "").upper() == ticket.ticker:
             # "stop 2% below" is read by the rules as a distance; the model is not asked to
             # turn it into a price, because it would have to guess the entry to do it.
@@ -410,17 +446,22 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     # briefing is assembled from the report's own fields instead - instantly, and with
     # nothing to verify because nothing was written.
     # A trader who wrote in Chinese is answered in Chinese, from the same fields.
+    echo = reading.echo_line(
+        report, lang, carried=carried, earnings_hold=earnings_hold,
+        unused=reading.unused_parts(rules, ticket, latest, lang, earnings_note=earnings_note, earnings_applied=earnings_hold, dropped_reason=dropped_reason),
+    )
     if getattr(provider, "narrates", True) and lang == "en":
         narrative, text = narrate(provider, report)
         wrote = provider.name
     else:
-        narrative, text = intake.brief_short(report, lang), render_text(report)
+        narrative, text = intake.brief_short(report, lang, echo=echo, notes=tuple(rules.notes)), render_text(report)
         wrote = "rules"
-    # What the reader changed or ignored comes first, so it is not missed; it is written by
-    # the rules, so it is added after the numbers in the briefing have been checked.
+    # How the message was read and what the reader changed or ignored come first, so they are
+    # not missed; they are written by the rules, so they are added after the numbers in the
+    # model's briefing have been checked. (A rules briefing already carries them.)
     unverified = unverified_numbers(narrative, text) if wrote != "rules" else []
-    if rules.notes:
-        narrative = " ".join(rules.notes) + "\n\n" + narrative
+    if wrote != "rules":
+        narrative = "\n\n".join([echo, *rules.notes, narrative])
     said = narrative
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
