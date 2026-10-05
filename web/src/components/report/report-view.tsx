@@ -303,9 +303,14 @@ function WeekendNote({ report, lang }: { report: Report; lang: Lang }) {
 function PremiseNote({ report, lang }: { report: Report; lang: Lang }) {
   const L = tr(lang);
   if (!report.premise?.length) return null;
+  // Right under the verdict, not further down: a GO here covers the desk's limits, and the
+  // trader's own plan still has a problem the verdict alone would hide.
+  const passes = report.verdict.verdict === "GO" || report.verdict.verdict === "REDUCE_TO";
   return (
-    <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
-      <span className="font-medium text-foreground">{L("Check your plan: ", "请检查你的计划：")}</span>
+    <div role="note" className="mt-3 rounded-lg border-2 border-status-warning/60 bg-status-warning/10 px-3 py-2 text-sm">
+      <span className="font-medium text-foreground">
+        {passes ? L("The desk's limits pass, but check your own plan first: ", "交易台的各项限额通过了，但请先检查你自己的计划：") : L("Check your plan: ", "请检查你的计划：")}
+      </span>
       <span className="text-muted-foreground">{report.premise.join(" ")}</span>
     </div>
   );
@@ -473,6 +478,8 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
         ))}
       </ul>
 
+      <PremiseNote report={report} lang={lang} />
+
       <BookNote report={report} lang={lang} />
 
       {/* The four numbers, in money, because a percentage of a position is not a feeling. */}
@@ -516,7 +523,6 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       <LiquidationNote report={report} lang={lang} />
       <LeverageSafety report={report} lang={lang} onRerun={onRerun} />
       <WeekendNote report={report} lang={lang} />
-      <PremiseNote report={report} lang={lang} />
       <CorporateEventsNote report={report} lang={lang} />
       {report.forecast_id != null && report.ticket.thesis ? <ThesisCheckCard forecastId={report.forecast_id} thesis={report.ticket.thesis} lang={lang} /> : null}
       <PlanNote report={report} lang={lang} />
@@ -2004,8 +2010,8 @@ function TakenButton({ forecastId, lang, noGo }: { forecastId: number; lang: Lan
   const [state, setState] = useState<"idle" | "saving" | "taken" | "error">("idle");
   if (state === "taken") {
     return (
-      <p className="mt-4 text-sm text-status-good">
-        {L("Logged as taken. It now counts towards your loss limits, and will be scored when the horizon passes.", "已记为已成交。它现在计入你的亏损限额，持有期结束后会被评分。")}{" "}
+      <p role="status" className="mt-4 text-sm text-status-good">
+        {L("Marked as taken — it now counts toward your loss limits, and will be scored when the hold ends.", "已标记为已成交——它现在计入你的亏损限额，持有期结束后会被评分。")}{" "}
         <button type="button" className="underline underline-offset-2" onClick={() => { setState("saving"); api.markTaken(forecastId, false).then(() => setState("idle")).catch(() => setState("error")); }}>
           {L("Undo", "撤销")}
         </button>
@@ -2018,7 +2024,7 @@ function TakenButton({ forecastId, lang, noGo }: { forecastId: number; lang: Lan
         variant="secondary"
         size="sm"
         disabled={state === "saving"}
-        onClick={() => { setState("saving"); api.markTaken(forecastId, true).then(() => setState("taken")).catch(() => setState("error")); }}
+        onClick={() => { setState("taken"); api.markTaken(forecastId, true).catch(() => setState("error")); }}
       >
         {noGo ? L("I took it anyway", "我还是做了") : L("I took this trade", "我做了这笔交易")}
       </Button>
