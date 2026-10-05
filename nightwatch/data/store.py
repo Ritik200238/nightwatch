@@ -526,6 +526,18 @@ class Store:
         ).fetchone()
         return None if row is None else (from_epoch_ms(row[0]), float(row[1]))
 
+    def open_interest_hourly(self, venue: Venue, symbol: str, since: datetime) -> list[tuple[datetime, float]]:
+        """The first recorded open interest of each clock hour since ``since``, oldest first.
+
+        The ticker table is written every tick; one row an hour is all a 24 h change needs
+        and keeps a month of history to a few hundred rows in memory."""
+        rows = self._conn.execute(
+            "SELECT MIN(ts), open_interest FROM tickers WHERE venue=? AND symbol=? AND ts>=? AND open_interest IS NOT NULL "
+            "GROUP BY ts / 3600000 ORDER BY 1",
+            (venue.value, symbol, to_epoch_ms(since)),
+        ).fetchall()
+        return [(from_epoch_ms(r[0]), float(r[1])) for r in rows]
+
     # ----------------------------------------------------------------- earnings
 
     def upsert_earnings(self, events: Iterable[EarningsEvent]) -> int:
