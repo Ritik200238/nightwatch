@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 
+from nightwatch.analog import lens as lens_mod
 from nightwatch.analog.cohort import sample_baseline_times, summarize
 from nightwatch.analog.engine import AnalogEngine
 from nightwatch.analog.outcomes import compute_match_outcomes, outcomes_table, structural_horizons
@@ -43,6 +44,11 @@ def closed_window_starts(frame: pd.DataFrame, *, start: datetime, end: datetime,
                 out.append(ts)
                 last = ts
     return out
+
+
+def _weekend_cut(parts: list[tuple[str, pd.DataFrame]], hold_h: float, floor: int, applies: bool) -> list[tuple[str, pd.DataFrame]]:
+    """analyze()'s weekend hard-match: a weekend hold is searched against past weekend holds."""
+    return lens_mod.restrict_to_weekend_holds(parts, hold_h, min_rows=floor)[0] if applies else parts
 
 
 def replay_ticker(
@@ -80,7 +86,13 @@ def replay_ticker(
         if hz <= 0:
             continue
         ticket_h = max(1, int(round(hz)))
-        res = engine.search(hist.assign(ticker=ticker), snap.features, query_ts=snap.bar_ts, query_bucket=snap.labels.get("bucket"), query_ticker=ticker)
+        # The same path analyze() takes: a hold over a weekend is matched to past weekend holds
+        # before the search, so the journal scores what the product ships.
+        floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h
+        wk_query = bool(lens_mod.spans_weekend(pd.DatetimeIndex([pd.Timestamp(at)]), hz)[0])
+
+        own = _weekend_cut([(ticker, hist)], hz, floor, wk_query)[0][1]
+        res = engine.search(own.assign(ticker=ticker), snap.features, query_ts=snap.bar_ts, query_bucket=snap.labels.get("bucket"), query_ticker=ticker, hold_h=hz)
         scope = "same_ticker"
         if (not res.ok or res.n < ctx.analog_config.k) and ctx.tickers_with_data():
             from nightwatch.analog.engine import pooled_history
@@ -94,8 +106,8 @@ def replay_ticker(
                 except InsufficientData:
                     continue
                 parts.append((t, f.loc[f.index < pd.Timestamp(snap.bar_ts)]))
-            pooled = pooled_history(parts)
-            pres = engine.search(pooled, snap.features, query_ts=snap.bar_ts, query_bucket=snap.labels.get("bucket"), query_ticker=ticker)
+            pooled = pooled_history(_weekend_cut(parts, hz, floor, wk_query))
+            pres = engine.search(pooled, snap.features, query_ts=snap.bar_ts, query_bucket=snap.labels.get("bucket"), query_ticker=ticker, hold_h=hz)
             if pres.ok and (not res.ok or pres.n > res.n):
                 res, scope = pres, "pooled"
         quantiles: dict[str, float | None] = {k: None for k in ("p5", "p25", "p50", "p75", "p95")}
