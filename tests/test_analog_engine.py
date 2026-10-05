@@ -176,3 +176,28 @@ def test_matches_are_separate_episodes_and_no_week_is_most_of_the_sample():
     assert res.n_weeks == len(weeks)
     loose = AnalogEngine(cfg(k=30, max_per_week=0)).search(h, q, query_ts=h.index[-1] + timedelta(hours=1))
     assert max(Counter(pd.Timestamp(m.ts).isocalendar()[:2] for m in loose.matches).values()) > 3
+
+
+def test_hold_shape_keeps_only_moments_the_same_distance_from_their_next_open():
+    """An overnight asked at the 4pm close is matched to past 4pm closes, not to any hour that
+    looks alike; a hold that does not end at the open is left unrestricted."""
+    from nightwatch.analog.lens import hours_to_open
+
+    h = history(24 * 400)
+    q = {"a": 0.0, "b": 0.0, "c": 5.0, "d": 0.0}
+    query_ts = h.index[-1] + timedelta(hours=1)
+    at = pd.DatetimeIndex([query_ts + timedelta(hours=1)])
+    hold = float(hours_to_open(at)[0])
+    on = AnalogEngine(cfg(hold_shape_tol_h=1.5, k=20)).search(h, q, query_ts=query_ts, hold_h=hold)
+    assert on.ok
+    gaps = np.abs(hours_to_open(pd.DatetimeIndex([m.ts for m in on.matches])) - hold)
+    assert (gaps <= 1.5).all()
+    off = AnalogEngine(cfg(k=20)).search(h, q, query_ts=query_ts, hold_h=hold)
+    assert (np.abs(hours_to_open(pd.DatetimeIndex([m.ts for m in off.matches])) - hold) > 1.5).any()
+    odd = AnalogEngine(cfg(hold_shape_tol_h=1.5, k=20)).search(h, q, query_ts=query_ts, hold_h=hold + 7.0)
+    assert odd.ok and odd.n_candidates == off.n_candidates  # not an open-to-open hold: no restriction
+
+
+def test_vol_focused_config_is_the_validated_one():
+    c = AnalogConfig.vol_focused()
+    assert c.features == ("rv_24h", "rv_168h", "vol_pctl_90d") and c.k == 80 and not c.whiten and c.hold_shape_tol_h == 1.5

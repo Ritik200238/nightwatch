@@ -329,6 +329,32 @@ def restrict_to_weekend_holds(parts: Sequence[tuple[str, pd.DataFrame]], horizon
     return [(t, f) for t, f in kept if len(f)], WeekendHold(True, True, n_before, n_after)
 
 
+# One calendar for every token, so the answer for an hour is computed once and shared.
+_OPEN_CACHE: dict[int, float] = {}
+
+
+def hours_to_open(index: pd.DatetimeIndex) -> np.ndarray:
+    """Hours from each timestamp to the next US regular open (a pure calendar fact)."""
+    from nightwatch.analog.outcomes import structural_horizons
+
+    keys = (index.asi8 // 3_600_000_000_000).astype(np.int64)
+    out = np.empty(len(keys))
+    for i, (k, ts) in enumerate(zip(keys, index, strict=True)):
+        v = _OPEN_CACHE.get(int(k))
+        if v is None:
+            v = structural_horizons(ts.to_pydatetime())["next_open"]
+            _OPEN_CACHE[int(k)] = v
+        out[i] = v
+    return out
+
+
+def matches_open_hold(index: pd.DatetimeIndex, hold_h: float, tol_h: float) -> np.ndarray:
+    """Past moments that sit the same distance from the next open as the hold being asked
+    about, within ``tol_h``: the same stretch of the session cycle (a 4pm close before an
+    overnight, a Friday close before a weekend), not any hour that merely looks alike."""
+    return np.abs(hours_to_open(index) - float(hold_h)) <= tol_h
+
+
 # Conditions the desk applies without being asked. Only ones a study has shown the
 # unfiltered answer to be wrong for belong here, and only while that stays true: on
 # 100 past overnight holds with earnings due within three days, the unfiltered 5th

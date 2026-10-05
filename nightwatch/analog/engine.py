@@ -41,6 +41,7 @@ from nightwatch.features.snapshot import SEARCH_COLUMNS
 from nightwatch.time_utils import index_epoch_ns
 
 MAD_SCALE = 1.4826
+VOL_FOCUS_COLUMNS: tuple[str, ...] = ("rv_24h", "rv_168h", "vol_pctl_90d")
 # How a match's resemblance is described: its closest features, and those more than one
 # robust standard deviation away.
 ALIKE_N, DIFFERS_N, DIFFERS_Z = 3, 2, 1.0
@@ -67,6 +68,18 @@ class AnalogConfig:
     same_ticker: bool = False
     shrinkage: float = 0.10
     whiten: bool = True
+    # Match the *shape of the hold*: when the hold ends at the next US open, search only past
+    # moments that sat the same number of hours (+- this tolerance) from their own next open.
+    # None = off. See ``vol_focused`` and RETRIEVAL notes for why this is the shipped setting.
+    hold_shape_tol_h: float | None = None
+
+    @classmethod
+    def vol_focused(cls) -> AnalogConfig:
+        """The retrieval that held up out of sample (60/40 split by date, 5,871 overnight and
+        weekend holds): volatility state only, the same stretch of the session cycle, 80 episodes.
+        On the held-out 40% it beat the previous 24-feature search on the tail loss with a
+        date-clustered interval that excludes zero, and tied random hours (it does not beat them)."""
+        return cls(features=VOL_FOCUS_COLUMNS, k=80, whiten=False, hold_shape_tol_h=1.5)
 
 
 @dataclass(frozen=True)
@@ -121,6 +134,7 @@ class AnalogEngine:
         query_ts: datetime,
         query_bucket: str | None = None,
         query_ticker: str | None = None,
+        hold_h: float | None = None,
     ) -> AnalogResult:
         cfg = self.config
         used = tuple(f for f in cfg.features if f in history.columns and query.get(f) is not None and not _isnan(query[f]))
@@ -137,6 +151,8 @@ class AnalogEngine:
         # Hard filters.
         age_cut = pd.Timestamp(query_ts) - pd.Timedelta(hours=cfg.min_age_h)
         hist = hist[hist.index <= age_cut]
+        if cfg.hold_shape_tol_h is not None and hold_h is not None:
+            hist = _hold_shape(hist, query_ts, hold_h, cfg)
         if cfg.same_bucket and query_bucket is not None:
             hist = hist[hist["bucket"] == query_bucket]
         if cfg.same_ticker and query_ticker is not None:
@@ -245,6 +261,19 @@ class AnalogEngine:
 
 
 # -------------------------------------------------------------------------- helpers
+
+
+def _hold_shape(hist: pd.DataFrame, query_ts: datetime, hold_h: float, cfg: AnalogConfig) -> pd.DataFrame:
+    """Keep past moments at the same distance from their next open as the hold, when the hold
+    is one that ends at the next open and there are enough such moments to search; otherwise
+    the history is returned as it came (a custom-length hold has no 'same shape' to match)."""
+    from nightwatch.analog.lens import hours_to_open, matches_open_hold
+
+    at = pd.DatetimeIndex([pd.Timestamp(query_ts) + pd.Timedelta(hours=1)])
+    if abs(float(hours_to_open(at)[0]) - float(hold_h)) > cfg.hold_shape_tol_h:
+        return hist
+    kept = hist[matches_open_hold(hist.index, hold_h, cfg.hold_shape_tol_h)]
+    return kept if len(kept) >= cfg.min_matches * cfg.min_separation_h else hist
 
 
 def _week_key(ts_ns: np.ndarray) -> np.ndarray:
