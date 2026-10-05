@@ -15,7 +15,8 @@ const REMEMBERED = ["/sources", "/studies", "/calibration", "/misses", "/verify"
 
 export function isRemembered(path: string): boolean {
   const p = path.split("?")[0];
-  return REMEMBERED.includes(p);
+  // A stored report never changes once written, so a copy is as good as the original.
+  return REMEMBERED.includes(p) || /^\/reports\/\d+$/.test(p);
 }
 
 export function remember(path: string, data: unknown): void {
