@@ -123,3 +123,15 @@ def test_a_stop_at_the_invalidation_is_one_level_not_two_claims():
     rel = analyst.relations(r)
     assert any("essentially the same level" in x for x in rel)
     assert not any("closer than" in x for x in rel)
+
+
+def test_the_fact_sheet_reads_the_account_size_from_wherever_the_report_kept_it():
+    """The stress agent said "No account size was given" on a 200,000 account: the ticket held
+    none, but the engine had run with one."""
+    from nightwatch.api import analyst
+
+    r = {**REPORT, "ticket": {**REPORT["ticket"], "account_equity_quote": None}, "breaker": {"equity": 200000.0}}
+    sheet = analyst.fact_sheet(r)
+    assert "No account size was given" not in sheet and "200,000 USDT" in sheet
+    bare = {**REPORT, "ticket": {**REPORT["ticket"], "account_equity_quote": None}, "breaker": {}}
+    assert "No account size was given" in analyst.fact_sheet(bare)
