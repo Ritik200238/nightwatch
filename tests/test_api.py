@@ -283,7 +283,7 @@ def test_the_closed_hours_measurement_rides_on_studies_without_joining_the_corre
 
 def test_closed_hours_for_one_token_quotes_only_what_was_measured(client):
     r = client.get("/closed-hours/tsla").json()
-    assert r["ticker"] == "TSLA" and r["line"] and "while the US market was shut" in r["line"]
+    assert r["ticker"] == "TSLA" and r["line"] and "when the US market is shut" in r["line"]
     assert r["numbers"]["n_windows"] > 100
     none = client.get("/closed-hours/ZZZZ").json()
     assert none["line"] is None and none["numbers"] is None
