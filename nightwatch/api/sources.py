@@ -60,6 +60,50 @@ def options_row(cache: dict[str, tuple[datetime, Any]], failed: dict[str, dateti
     }
 
 
+def rwa_row(cache: dict[str, tuple[datetime, dict | None]]) -> dict[str, Any]:
+    """Bitget Wallet's tokenized-stock listing: cached 30 min per token, refreshed hourly."""
+    good = {k: ts for k, (ts, v) in cache.items() if v}
+    newest = max(good.values(), default=None)
+    return {
+        "key": "bitget_wallet_rwa", "label": "Bitget Wallet RWA listing",
+        "what": "Whether each tokenized stock is online, which session it trades in, any pause or alert text, and the per-order size limits (bitget-wallet-skill, no key needed)",
+        "cadence": "hourly in the background, cached 30 min per token", "last_update": newest.isoformat() if newest else None,
+        "rows": len(good), "latest": newest.isoformat() if newest else None,
+        "latest_label": f"{len(good)} tokens read" if cache else "none read yet",
+        "url": "https://github.com/bitget-wallet-ai-lab/bitget-wallet-skill",
+    }
+
+
+# What each feed is used for, and the strongest thing it can do to an answer. A report's own
+# "what each source did" says what it did that time.
+USED_FOR: dict[str, tuple[str, str, str]] = {
+    "bitget_bars": ("The token's history for the past-moments comparison, the stress presets and the order-book exit cost", "用于历史对比、压力情景和盘口平仓成本", "moves the size"),
+    "yahoo": ("The underlying stock's own history: closed-window gaps, earnings gaps and the basis", "用于正股自身历史：休市跳空、财报跳空和价差", "moves the size"),
+    "nasdaq": ("Whether a report lands inside the hold, which adds the earnings-gap presets", "判断持有期内是否有财报，从而加入财报跳空情景", "sets a preset"),
+    "corporate": ("Ex-dividend dates, splits and exchange notices inside the hold", "持有期内的除息、拆股和交易所公告", "raises a flag"),
+    "fred": ("Release times for the event calendar", "用于事件日历", "context only"),
+    "rss": ("Headlines beside the second opinion", "用于第二意见旁的新闻标题", "context only"),
+    "sec_edgar": ("Filings not yet priced, with what past filings of the same kind did", "用于尚未被消化的文件及同类文件的历史表现", "raises a flag"),
+    "bitget_oi": ("A crowded perp (open interest in its own top decile) raises a caution", "永续合约拥挤（未平仓量处于自身前 10%）时提示谨慎", "raises a flag"),
+    "cboe_options": ("The options-implied move becomes a severe stress preset: when it beats history the stress limit is sized on it", "期权隐含波动成为严重压力情景：超过历史时，压力上限按它设定", "moves the size"),
+    "bitget_mcp": ("Street context and an independent live quote; an outage or a price disagreement raises a warning", "分析师信息和独立实时报价；故障或价格分歧时给出警告", "raises a flag"),
+    "bitget_signal": ("RSI cross-checked against the desk's own, shown as context", "RSI 与自有 RSI 交叉核对，作为参考显示", "context only"),
+    "bitget_wallet_rwa": ("Tradable status, pause or alert text and per-order limits raise a caution when the order may not go through", "可交易状态、暂停或提醒、单笔限额；订单可能无法按期成交时提示谨慎", "raises a flag"),
+}
+
+
+def annotate_used_for(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add ``used_for``, ``used_for_zh`` and ``effect`` to every row."""
+    for r in rows:
+        key = r.get("key", "")
+        got = USED_FOR.get(key)
+        if got is None and key.startswith("bitget_"):
+            got = ("A Bitget US-stock catalogue entry, shown in the Research group", "显示在研究部分的 Bitget 美股数据条目", "context only")
+        if got:
+            r["used_for"], r["used_for_zh"], r["effect"] = got
+    return rows
+
+
 def street_row(cached: list[tuple[datetime, Any]], status: dict[str, Any] | None, now: datetime) -> dict[str, Any]:
     """The Bitget US-stock data row, honest about an outage.
 
