@@ -8,7 +8,7 @@ import { HealthPill } from "@/components/health-pill";
 import { LangToggle, useLang } from "@/lib/lang";
 import { fmtDateTimeL } from "@/lib/i18n";
 
-const LINK = "shrink-0 whitespace-nowrap rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:px-3 aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-foreground";
+const LINK = "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:px-3 aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-foreground";
 
 /** Studies and Journal live under Track record (tabs on those pages), so they keep it lit. */
 const TRACK_PATHS = ["/calibration", "/studies", "/journal"];
@@ -80,16 +80,16 @@ export function SiteFooter() {
         "研究工具。Nightwatch 不会下单，决定权在你。每个数字都由存储的市场数据计算得出，并标明来源。",
       )}
       </p>
-      <p>
-        <Link href="/status" className="underline underline-offset-2 hover:text-foreground">
+      <p className="flex flex-wrap items-center gap-x-1">
+        <Link href="/status" className="inline-flex min-h-10 items-center sm:min-h-0 underline underline-offset-2 hover:text-foreground">
           {tx("Status", "状态")}
         </Link>
         {" · "}
-        <Link href="/sources" className="underline underline-offset-2 hover:text-foreground">
+        <Link href="/sources" className="inline-flex min-h-10 items-center sm:min-h-0 underline underline-offset-2 hover:text-foreground">
           {tx("Data sources", "数据来源")}
         </Link>
         {" · "}
-        <Link href="/usage" className="underline underline-offset-2 hover:text-foreground">
+        <Link href="/usage" className="inline-flex min-h-10 items-center sm:min-h-0 underline underline-offset-2 hover:text-foreground">
           {tx("Usage", "用量")}
         </Link>
       </p>

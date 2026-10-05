@@ -30,7 +30,7 @@ export function ScenarioChips({ disabled, onPick, onContrast }: { disabled: bool
   return (
     <div>
       <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">{tx("Try one, no typing:", "点一个，不用打字：")}</p>
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <div className="flex flex-wrap gap-1.5">
         {SCENARIOS.map((s) => (
           <button
             key={s.label}
@@ -38,7 +38,7 @@ export function ScenarioChips({ disabled, onPick, onContrast }: { disabled: bool
             disabled={disabled}
             onClick={() => onPick(s.steps)}
             title={lang === "zh" ? s.labelZh : s.label}
-            className="shrink-0 whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-left text-[13px] hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap inline-flex min-h-10 items-center rounded-full border border-border px-3 py-1.5 text-left text-[13px] sm:min-h-0 hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
           >
             {lang === "zh" ? s.shortZh : s.short}
           </button>
@@ -49,7 +49,7 @@ export function ScenarioChips({ disabled, onPick, onContrast }: { disabled: bool
             disabled={disabled}
             onClick={onContrast}
             title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")}
-            className="shrink-0 whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-left text-[13px] hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap inline-flex min-h-10 items-center rounded-full border border-border px-3 py-1.5 text-left text-[13px] sm:min-h-0 hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
           >
             {tx("Same trade, different book", "同一笔交易，不同组合")}
           </button>
