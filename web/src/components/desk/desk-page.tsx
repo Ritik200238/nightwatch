@@ -341,7 +341,7 @@ function HeroProof() {
   const rate = Math.round((tk?.rate ?? 0) * 100);
   const target = Math.round((misses?.target_rate ?? 0.05) * 100);
   return (
-    <ul className="mt-3 flex min-h-8 flex-wrap gap-2" aria-label={tx("Proof", "证据")}>
+    <ul className="mt-3 hidden min-h-8 flex-wrap gap-2 sm:flex" aria-label={tx("Proof", "证据")}>
       {has ? (
         <>
           <li>
@@ -443,7 +443,8 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           </button>
         </li>
       </ul>
-      <ol className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2" aria-label={tx("How it works", "工作方式")}>
+      {/* Hidden on a phone: the example verdict below says the same thing, and these boxes pushed it a screen down. */}
+      <ol className="mt-4 hidden grid-cols-4 gap-2 sm:grid" aria-label={tx("How it works", "工作方式")}>
         {HERO_STEPS.map((st, i) => (
           <li key={st.en} className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 sm:px-3 sm:py-2">
             <p className="text-[13px] font-medium leading-tight">
