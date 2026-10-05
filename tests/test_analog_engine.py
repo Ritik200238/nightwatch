@@ -150,7 +150,6 @@ def test_a_slow_macro_field_is_not_offered_as_the_resemblance():
     """VIX percentile and the like are identical for any two hours of one fortnight, so
     "alike on VIX" says when a match happened, not why it resembles now."""
     h = history()
-    n = len(h)
     wk = h.index.isocalendar().week.to_numpy() + 53 * (h.index.year.to_numpy() - 2025)
     h["vix"] = pd.Series(wk).map(dict(zip(np.unique(wk), np.random.default_rng(3).normal(50, 20, len(np.unique(wk))), strict=True))).to_numpy()  # moves weekly
     now = h.index[-1] + timedelta(hours=200)

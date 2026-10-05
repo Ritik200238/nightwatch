@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import Enum
 
 import numpy as np
@@ -31,7 +32,7 @@ import pandas as pd
 
 from nightwatch.data.book_metrics import walk_book
 from nightwatch.data.models import EarningsEvent, OrderBookLevel, OrderBookSnapshot
-from nightwatch.time_utils import ET, Session
+from nightwatch.time_utils import ET, Session, classify_session
 
 
 class Severity(str, Enum):
@@ -220,12 +221,47 @@ class EmpiricalInputs:
     # built by research/build_crash_replays.py), and whose stock it is.
     ticker: str = ""
     crash_moves: dict = field(default_factory=dict)
+    # How many separate closed windows (nights, weekends, holidays) the hold spans. A 5 hour
+    # hold crosses one; a 173 hour hold from Monday crosses five. The gap presets are built
+    # from that many consecutive past windows, not from one.
+    closed_windows_in_hold: int = 1
+    # The history's own one-in-twenty loss over this hold (a negative percentage, the side's
+    # adverse tail). The stress step is never allowed to be milder than it.
+    analog_p5_loss_pct: float | None = None
 
     @property
     def vol_now(self) -> float:
         if self.horizon_h >= MULTI_DAY_H:
             return self.rv_24h_now or 0.0
         return max(self.rv_24h_now or 0.0, self.rv_168h_now or 0.0)
+
+
+def closed_windows_in_hold(as_of: datetime, horizon_h: float) -> int:
+    """How many distinct closed windows (nights, weekends, holidays) a hold from ``as_of``
+    for ``horizon_h`` hours touches. At least one: the desk only holds through closed time."""
+    ids: set[str] = set()
+    for k in range(int(max(horizon_h, 1.0)) + 1):
+        info = classify_session(as_of + timedelta(hours=k))
+        if info.is_closed and info.closed_window_id:
+            ids.add(info.closed_window_id)
+    return max(1, len(ids))
+
+
+def gap_distribution(r: np.ndarray, n_windows: int, *, min_obs: int = 20) -> tuple[np.ndarray, str]:
+    """The move across ``n_windows`` consecutive closed windows, from the token's own past.
+
+    One window: the measured close-to-open moves as they are. Several: the sum of every run
+    of ``n_windows`` consecutive past windows (a rolling, overlapping sum), so the tail is
+    the token's own worst-of-N rather than one window's. When too few runs exist to read a
+    5th percentile from, each window is scaled by sqrt(n), which assumes independent
+    windows and says so. Returned with the method used, for the report."""
+    n = max(1, int(n_windows))
+    if n == 1:
+        return r, "one closed window"
+    runs = r.size - n + 1
+    if runs >= min_obs:
+        return np.convolve(r, np.ones(n), mode="valid"), f"worst of {n} consecutive past closed windows, summed ({runs} runs)"
+    return r * np.sqrt(n), f"one window x sqrt({n}) (too few past runs of {n} windows to read a tail from)"
 
 
 def closed_window_returns(frame: pd.DataFrame) -> np.ndarray:
@@ -377,13 +413,15 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     sigma_h = inp.vol_now * np.sqrt(h / 8760.0) * 100.0 if inp.vol_now and h > 0 else None
 
     if inp.closed_window_ret_pct.size >= min_obs:
-        r = inp.closed_window_ret_pct
+        n_w = max(1, int(inp.closed_windows_in_hold))
+        r, how = gap_distribution(inp.closed_window_ret_pct, n_w, min_obs=min_obs)
+        span = f" across {n_w} closed windows" if n_w > 1 else ""
         for sev, p in ((Severity.MODERATE, 10), (Severity.SEVERE, 5), (Severity.EXTREME, 1)):
             move = float(np.percentile(r, 100 - p if up else p))
             presets.append(Scenario(
-                id=f"closed_window_gap_p{p}", name=f"Closed-window gap, {_ordinal(p)} percentile", severity=sev, horizon_h=h,
-                price_move_pct=move, probability_note=f"{p}% of {r.size} past closed windows were worse for this side",
-                calibration={"source": "spot close→open across closed windows", "n": int(r.size), "percentile": p},
+                id=f"closed_window_gap_p{p}", name=f"Closed-window gap{span}, {_ordinal(p)} percentile", severity=sev, horizon_h=h,
+                price_move_pct=move, probability_note=f"{p}% of {r.size} past {'runs of ' + str(n_w) + ' closed windows' if n_w > 1 else 'closed windows'} were worse for this side",
+                calibration={"source": "spot close→open across closed windows", "n": int(inp.closed_window_ret_pct.size), "percentile": p, "closed_windows": n_w, "method": how},
             ))
     if inp.earnings_gap_pct.size >= 4 and earnings_in_window(inp):
         g = inp.earnings_gap_pct
@@ -433,7 +471,31 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
             calibration={"source": "perp funding history", "p95_abs": float(inp.funding_rate_abs_p95)},
         ))
     presets += _replays(inp)
+    floor = _analog_floor(inp, presets)
+    if floor is not None:
+        presets.append(floor)
     return presets
+
+
+def _analog_floor(inp: EmpiricalInputs, presets: Sequence[Scenario]) -> Scenario | None:
+    """A severe preset equal to the history's own one-in-twenty loss, when every other
+    severe price move is milder than it.
+
+    The stress step and the analog step answer the same question over the same hold; on a
+    173 hour hold the stress table said -4.7% while the history beside it said -13.1%. The
+    size limit reads the worst severe preset, so a stress step milder than the history
+    would size the trade off the weaker of two numbers. This keeps it from ever being."""
+    p5 = inp.analog_p5_loss_pct
+    if p5 is None or p5 >= 0:
+        return None
+    adverse = [inp.adverse_sign * s.price_move_pct for s in presets if s.severity == Severity.SEVERE and s.price_move_pct]
+    if adverse and max(adverse) >= abs(p5):
+        return None
+    return Scenario(
+        id="analog_p5_floor", name="History's one in twenty, same hold", severity=Severity.SEVERE, horizon_h=inp.horizon_h,
+        price_move_pct=inp.adverse_sign * abs(p5), probability_note="the loss 1 in 20 similar past moments exceeded over this hold; the stress step is never milder than it",
+        calibration={"source": "analog cohort p5 over the ticket's hold", "p5_loss_pct": float(p5)},
+    )
 
 
 def impacts_table(impacts: Sequence[ScenarioImpact], scenarios: Sequence[Scenario]) -> pd.DataFrame:

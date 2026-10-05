@@ -241,3 +241,55 @@ def test_crash_replays_hurt_each_side_on_the_markets_worst_days():
     covid_inverse = next(p for p in inverse if p.id == "replay_covid_2020")
     assert covid_inverse.price_move_pct < 0 and "2020-03-13" in covid_inverse.probability_note  # hurt on the market's up day
     assert not [p for p in build_presets(EmpiricalInputs(**base, crash_moves={}))if p.id.startswith("replay_")]  # no table, no replays
+
+
+def _hold_inputs(h: float, windows: int, p5: float | None = None, **kw) -> EmpiricalInputs:
+    rng = np.random.default_rng(4)
+    closed = rng.normal(0.0, 1.5, 300)
+    return EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=np.array([]), abs_basis_closed_bps=np.array([]),
+                           rv_24h_now=0.4, horizon_h=h, closed_windows_in_hold=windows, analog_p5_loss_pct=p5, **kw)
+
+
+def test_closed_windows_in_hold_counts_nights_and_the_weekend():
+    from nightwatch.stress.scenarios import closed_windows_in_hold
+
+    mon_evening = datetime(2026, 10, 5, 22, 0, tzinfo=UTC)  # Monday 18:00 ET, market shut
+    assert closed_windows_in_hold(mon_evening, 5) == 1
+    assert closed_windows_in_hold(mon_evening, 24) == 2  # tonight, and Tuesday's evening
+    assert closed_windows_in_hold(mon_evening, 173) >= 5  # four nights, the weekend, and the Monday after
+
+
+def test_the_gap_preset_grows_with_the_number_of_closed_windows_in_the_hold():
+    """A 173 hour hold showed a 4.7% single-gap beside a -13% history tail."""
+    def gap(h, w):
+        by = {p.id: p for p in build_presets(_hold_inputs(h, w, adverse_sign=-1.0))}
+        return by["closed_window_gap_p5"]
+
+    g5, g24, g173 = gap(5, 1), gap(24, 2), gap(173, 6)
+    assert g5.calibration["closed_windows"] == 1 and g173.calibration["closed_windows"] == 6
+    assert g5.price_move_pct > g24.price_move_pct > g173.price_move_pct  # more negative = a worse fall
+    assert g173.price_move_pct < 1.8 * g5.price_move_pct  # grows like a worst-of-N, not N times a single gap
+    assert "6 closed windows" in g173.name and "past runs of 6" in g173.probability_note
+    assert "consecutive past closed windows" in g173.calibration["method"]
+
+
+def test_too_few_runs_fall_back_to_square_root_scaling_and_say_so():
+    from nightwatch.stress.scenarios import gap_distribution
+
+    r = np.linspace(-3, 3, 25)
+    out, how = gap_distribution(r, 6, min_obs=20)  # only 20 runs of 6? 25-6+1 = 20 -> rolling
+    assert "consecutive" in how
+    out, how = gap_distribution(r[:15], 6, min_obs=20)
+    assert "sqrt(6)" in how and np.allclose(out, r[:15] * np.sqrt(6))
+
+
+def test_the_stress_step_is_never_milder_than_the_history_tail_at_5h_24h_and_173h():
+    for h, w, p5 in ((5, 1, -1.2), (24, 2, -3.0), (173, 6, -13.1)):
+        presets = build_presets(_hold_inputs(h, w, p5, adverse_sign=-1.0))
+        severe = [-p.price_move_pct for p in presets if p.severity == Severity.SEVERE and p.price_move_pct]
+        assert max(severe) >= abs(p5) - 1e-9, (h, severe)
+    # A tail already covered by a stronger preset adds nothing.
+    assert "analog_p5_floor" not in {p.id for p in build_presets(_hold_inputs(24, 2, -0.1, adverse_sign=-1.0))}
+    # A short is floored on the rise.
+    short = {p.id: p for p in build_presets(_hold_inputs(173, 6, -13.1, adverse_sign=1.0))}
+    assert short["analog_p5_floor"].price_move_pct == 13.1

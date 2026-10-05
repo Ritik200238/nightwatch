@@ -57,6 +57,7 @@ from nightwatch.stress.scenarios import (
     apply_scenario,
     build_presets,
     closed_window_returns,
+    closed_windows_in_hold,
     crash_replays,
     earnings_gaps,
     earnings_in_window,
@@ -802,7 +803,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     # 4. Stress.
     t0 = time.perf_counter()
-    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings)
+    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary))
     timings["stress"] = _ms(t0)
     totals = [i.total_pnl_quote for i in stress.impacts if i.total_pnl_quote is not None]
     if totals:
@@ -1400,7 +1401,7 @@ def _floor_longer_holds(horizons: dict[str, HorizonReport]) -> None:
                 worst_up = (p95, name)
 
 
-def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str]) -> StressSection:
+def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec, snapshot: FeatureSnapshot, frame: pd.DataFrame, book: OrderBookSnapshot | None, taker_fee: float, horizon_h: float, entry_price: float, warnings: list[str], *, as_of: datetime | None = None, analog_p5: float | None = None) -> StressSection:
     daily = ctx.store.get_bars(Venue.YAHOO, spec.yahoo_ticker, Interval.D1)
     events = ctx.store.get_earnings(ticket.ticker)
     closed = closed_window_returns(frame)
@@ -1414,7 +1415,8 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
     inp = EmpiricalInputs(closed_window_ret_pct=closed, earnings_gap_pct=gaps, abs_basis_closed_bps=basis_closed, rv_24h_now=float(snapshot.features.get("rv_24h") or 0.0), rv_168h_now=float(snapshot.features.get("rv_168h") or 0.0), horizon_h=horizon_h, funding_rate_abs_p95=funding_p95,
                           hours_to_earnings=snapshot.features.get("hours_to_earnings"), hours_since_earnings=snapshot.features.get("hours_since_earnings"),
                           adverse_sign=-1.0 if ticket.closing_long else 1.0,
-                          ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {})
+                          ticker=ticket.ticker, crash_moves=crash_replays().get(ticket.ticker) or {},
+                          closed_windows_in_hold=closed_windows_in_hold(as_of, horizon_h) if as_of is not None else 1, analog_p5_loss_pct=analog_p5)
     presets = build_presets(inp)
     position = Position(ticket.ticker, ticket.side, ticket.notional_quote, entry_price, hedge_ratio=ticket.hedge_ratio or 0.0)
     impacts = [apply_scenario(position, p, book=book, taker_fee=taker_fee) for p in presets]
