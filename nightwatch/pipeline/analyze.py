@@ -130,7 +130,7 @@ class AnalysisContext:
     _factors_cache: dict[str, Any] = field(default_factory=dict)
     _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
     _street_pending: set[str] = field(default_factory=set)
-    _open_interest: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
+    _open_interest: dict[str, tuple[datetime, tuple[float, datetime] | None]] = field(default_factory=dict)
     # Cboe's delayed option quotes (nightwatch.data.cboe.CboeOptionsClient), reduced to one
     # at-the-money quote per expiry. Optional: without it the report has no implied move.
     options_client: Any = None
@@ -143,6 +143,10 @@ class AnalysisContext:
     _profiles: dict[str, tuple[datetime, dict[str, float]]] = field(default_factory=dict)
     _degraded: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     _tiers: dict[str, tuple[datetime, list[Any]]] = field(default_factory=dict)
+    _tiers_failed: dict[str, datetime] = field(default_factory=dict)
+    # Network fetches an analysis may need but must never sit through: one background thread
+    # per key, and the request waits for it only up to a short bound.
+    _inflight: dict[str, threading.Event] = field(default_factory=dict)
     # What followed a past hour, and how a cohort compared with random hours, depend only
     # on their inputs. "Compare ways" and every what-if rerun the same moment with one
     # thing changed, so most of these repeat exactly; recomputing them was most of the
@@ -192,23 +196,61 @@ class AnalysisContext:
                 _remember(self._baselines, key, hit, BASELINE_CACHE)
         return hit
 
-    def margin_tiers(self, perp_symbol: str | None) -> list[Any] | None:
+    def _fetch_within(self, key: str, work: Callable[[], None], wait_s: float) -> None:
+        """Run ``work`` on one background thread per ``key`` and wait for it at most ``wait_s``.
+
+        A Bitget call on the request path used to hold a chat for as long as the exchange took
+        to answer - with its retries, tens of seconds during an outage. The work still runs to
+        the end and fills its cache; the request just stops waiting for it."""
+        with self._memo_lock:
+            done = self._inflight.get(key)
+            if done is None:
+                done = self._inflight[key] = threading.Event()
+
+                def run() -> None:
+                    try:
+                        work()
+                    finally:
+                        done.set()
+                        with self._memo_lock:
+                            self._inflight.pop(key, None)
+
+                threading.Thread(target=run, name=f"fetch-{key}", daemon=True).start()
+        if wait_s > 0:
+            done.wait(wait_s)
+
+    def margin_tiers(self, perp_symbol: str | None, *, wait_s: float | None = None) -> list[Any] | None:
         """Bitget's margin tiers for a perp, cached for a day. None when there is no perp
-        client or the fetch fails; the leverage view then says it assumed a rate."""
+        client or no table yet; the leverage view then says it assumed a rate.
+
+        Never holds a request for long: a stale table is served at once while a fresh one is
+        fetched in the background, a missing one is waited for at most ``wait_s`` (the warm-up
+        normally has it before anyone asks), and a failed fetch is not retried for a few
+        minutes, so an exchange outage costs a leveraged chat nothing."""
         if not perp_symbol or self.perp_client is None:
             return None
+        now = utc_now()
         hit = self._tiers.get(perp_symbol)
-        if hit and utc_now() - hit[0] < timedelta(hours=24):
+        if hit and now - hit[0] < timedelta(hours=24):
             return hit[1]
+        failed = self._tiers_failed.get(perp_symbol)
+        if failed and now - failed < TIERS_RETRY:
+            return hit[1] if hit else None
         from nightwatch.execution.leverage import parse_tiers
 
-        try:
-            tiers = parse_tiers(self.perp_client.get_position_tiers(perp_symbol))
-        except Exception as exc:  # noqa: BLE001 - an assumed rate, said so, beats no answer
-            log.warning("margin tiers for %s unavailable: %s", perp_symbol, exc)
-            return hit[1] if hit else None
-        self._tiers[perp_symbol] = (utc_now(), tiers)
-        return tiers
+        def work() -> None:
+            try:
+                tiers = parse_tiers(self.perp_client.get_position_tiers(perp_symbol))
+            except Exception as exc:  # noqa: BLE001 - an assumed rate, said so, beats no answer
+                log.warning("margin tiers for %s unavailable: %s", perp_symbol, exc)
+                self._tiers_failed[perp_symbol] = utc_now()
+                return
+            self._tiers[perp_symbol] = (utc_now(), tiers)
+            self._tiers_failed.pop(perp_symbol, None)
+
+        self._fetch_within(f"tiers-{perp_symbol}", work, 0.0 if hit else (TIERS_WAIT_S if wait_s is None else wait_s))
+        hit = self._tiers.get(perp_symbol)
+        return hit[1] if hit else None
 
     def open_interest_for(self, perp_symbol: str | None, *, price: float | None = None, ttl: timedelta | None = None) -> dict | None:
         """Open interest on the token's perp, cached for a few minutes.
@@ -222,19 +264,31 @@ class AnalysisContext:
             return None
         now = utc_now()
         hit = self._open_interest.get(perp_symbol)
-        if hit and now - hit[0] <= ((ttl or OI_TTL) if hit[1] else OI_RETRY):
-            return hit[1]
         from nightwatch.features import open_interest as oi_mod
 
-        try:
-            contracts, ts = self.perp_client.get_open_interest(perp_symbol)
-            block = oi_mod.build(perp_symbol, contracts, ts, self.store, price=price)
-        except Exception as exc:  # noqa: BLE001 - context must never fail an analysis
-            log.warning("open interest for %s unavailable: %s", perp_symbol, exc)
-            self._open_interest[perp_symbol] = (now, None)
-            return None
-        self._open_interest[perp_symbol] = (now, block)
-        return block
+        def block_of(raw: tuple[float, datetime] | None) -> dict | None:
+            # The dollar figure needs the price of the analysis asking, so it is worked out here
+            # from the raw reading, not stored with it.
+            return oi_mod.build(perp_symbol, raw[0], raw[1], self.store, price=price) if raw else None
+
+        if hit and now - hit[0] <= ((ttl or OI_TTL) if hit[1] else OI_RETRY):
+            return block_of(hit[1])
+
+        def work() -> None:
+            try:
+                raw = self.perp_client.get_open_interest(perp_symbol)
+            except Exception as exc:  # noqa: BLE001 - context must never fail an analysis
+                log.warning("open interest for %s unavailable: %s", perp_symbol, exc)
+                self._open_interest[perp_symbol] = (utc_now(), None)
+                return
+            self._open_interest[perp_symbol] = (utc_now(), raw)
+
+        # A reading under half an hour old is served while a fresh one is fetched behind it;
+        # without one, the request waits a moment for the fetch and otherwise goes without.
+        usable = hit is not None and hit[1] is not None and now - hit[0] <= OI_STALE_MAX
+        self._fetch_within(f"oi-{perp_symbol}", work, 0.0 if usable else OI_WAIT_S)
+        got = self._open_interest.get(perp_symbol)
+        return block_of(got[1]) if got else None
 
     def options_chain_for(self, ticker: str, *, fetch: bool = False):  # noqa: ANN201
         """The cached options chain for a ticker: an ``OptionsChain``, ``"none"`` when the
@@ -1461,6 +1515,11 @@ OPTIONS_RETRY = timedelta(minutes=5)
 OPTIONS_STALE_MAX = timedelta(hours=24)
 OI_TTL = timedelta(minutes=5)
 OI_RETRY = timedelta(seconds=60)
+OI_STALE_MAX = timedelta(minutes=30)
+# How long a request waits for a Bitget lookup it needs (the rest of the fetch carries on behind it).
+OI_WAIT_S = 2.0
+TIERS_WAIT_S = 3.0
+TIERS_RETRY = timedelta(minutes=5)
 STREET_LAST_GOOD_MAX = timedelta(hours=24)
 
 

@@ -57,6 +57,8 @@ HEALTH_COUNTS_TTL_S = 600.0
 _health_counts: dict[int, dict[str, Any]] = {}
 # How often the idle API re-reads its cached frames so they are not swapped out.
 TOUCH_EVERY_S = 180.0
+# Open interest is read from cache for five minutes; refreshing a little sooner keeps it always warm.
+PERP_CONTEXT_EVERY_S = 240.0
 CALIBRATION_TTL_SEC = 120
 PAGE_CACHE_MAX = 200
 CALIBRATION_CACHE_MAX = 100
@@ -342,6 +344,27 @@ class AppState:
         for t in self.ctx.tickers_with_data():
             self.ctx.options_chain_for(t, fetch=True)
 
+    def refresh_perp_context(self) -> None:
+        """Bitget's margin tiers and open interest for every token's perpetual, ahead of time.
+
+        A leveraged chat needs both. Fetched on the request path they cost the trader the
+        exchange's answer time (and its retries during an outage) on top of the analysis; here
+        they are fetched with no one waiting, and the request reads the cache."""
+        for t in self.ctx.tickers_with_data():
+            try:
+                sym = self.ctx.spec(t).perp_symbol
+                if sym:
+                    self.ctx.margin_tiers(sym, wait_s=30.0)
+                    self.ctx.open_interest_for(sym, ttl=timedelta(seconds=1))
+            except Exception as exc:  # noqa: BLE001 - warming must never stop the warm loop
+                log.info("could not warm perp context for %s: %s", t, exc)
+
+    def perp_context_forever(self) -> None:
+        """Keep that cache fresh: tiers are good for a day, open interest for five minutes."""
+        while True:
+            self.refresh_perp_context()
+            threading.Event().wait(PERP_CONTEXT_EVERY_S)
+
     def warm_forever(self) -> None:
         """Warm now, then again just after every hour boundary.
 
@@ -411,6 +434,8 @@ class AppState:
                 log.warning("snapshot check failed: %s", exc)
 
     def start_warm(self) -> None:
+        if self.ctx.perp_client is not None:
+            threading.Thread(target=self.perp_context_forever, name="perp-context", daemon=True).start()
         self.warm_thread = threading.Thread(target=self.warm_forever, name="warm-frames", daemon=True)
         self.warm_thread.start()
         threading.Thread(target=self.watch_snapshot_forever, name="snapshot-watch", daemon=True).start()
