@@ -27,7 +27,7 @@ function resolveApiUrl(): string {
 
 export const API_URL = resolveApiUrl();
 
-import { SNAPSHOT_HEADER, snapshotFlag } from "./snapshot";
+import { SNAPSHOT_HEADER, classifyHealth, snapshotFlag } from "./snapshot";
 import { isRemembered, recall, remember } from "./record-cache";
 import { friendlyDetail, stillBusyMessage, type ErrLang } from "./errors";
 
@@ -1512,7 +1512,7 @@ export function peek<T>(path: string): T | null {
   return recall<T>(path)?.data ?? null;
 }
 
-export type Liveness = { state: "up" | "slow"; health: Health } | { state: "down" };
+export type Liveness = { state: "up" | "slow"; health: Health } | { state: "down"; savedAt?: string };
 
 /** One bounded check of the API: answers within ~6 s (up, or slow if it took over 3 s),
  *  one more try, then down. Never waits longer than about 16 s. */
@@ -1521,10 +1521,14 @@ export async function probeHealth(): Promise<Liveness> {
     const started = Date.now();
     try {
       const res = await once(`${API_URL}${withIdentity("/health")}`, undefined, ms);
-      if (res.ok) {
-        const health = (await res.json()) as Health;
-        return { state: Date.now() - started > 3_000 || ms > 6_000 ? "slow" : "up", health };
+      // A copy the proxy saved is not the box answering: never report it as up.
+      const v = classifyHealth(res.ok, res.headers.get(SNAPSHOT_HEADER), Date.now() - started);
+      if (v.state === "down") {
+        if (v.savedAt) return { state: "down", savedAt: v.savedAt };
+        continue;
       }
+      const health = (await res.json()) as Health;
+      return { state: ms > 6_000 ? "slow" : v.state, health };
     } catch {
       /* try once more */
     }

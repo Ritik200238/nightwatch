@@ -1,6 +1,6 @@
 // Run: node --experimental-strip-types src/lib/snapshot.test.mjs   (Node >= 22.6)
 import assert from "node:assert/strict";
-import { snapshotKey, shouldFallback, snapshotPost, snapshotGet, readableTimes, snapshotNoticeFor, isSnapshotAnswer } from "./snapshot.ts";
+import { classifyHealth, snapshotKey, shouldFallback, snapshotPost, snapshotGet, readableTimes, snapshotNoticeFor, isSnapshotAnswer } from "./snapshot.ts";
 
 const data = { generated_at: "T0", gets: { "/universe?core=true": [1], "/a?x=1&y=2": "ok" }, reports: { TSLA: { t: "TSLA" }, NVDA: { t: "NVDA" } } };
 assert.equal(snapshotKey("a", "?y=2&x=1"), "/a?x=1&y=2");
@@ -23,4 +23,9 @@ assert.ok(!readableTimes("saved from 2026-09-12T10:00:00+00:00, ok", "en-US").in
 assert.ok(readableTimes("from 2026-09-12T10:00:00Z.", "zh-CN").includes("2026"));
 assert.ok(snapshotNoticeFor("2026-09-12T10:00:00Z", "zh").startsWith("实时服务器"));
 assert.equal(readableTimes("no date here"), "no date here");
+// A saved /health is down, never up, and says when the copy is from.
+assert.deepEqual(classifyHealth(true, "2026-10-05T18:18:28Z", 200), { state: "down", savedAt: "2026-10-05T18:18:28Z" });
+assert.deepEqual(classifyHealth(false, null, 200), { state: "down" });
+assert.deepEqual(classifyHealth(true, null, 500), { state: "up" });
+assert.deepEqual(classifyHealth(true, null, 4000), { state: "slow" });
 console.log("snapshot tests ok");
