@@ -134,6 +134,14 @@ _HOLD_INTRO = re.compile(
     re.I,
 )
 _HELD_SEP = re.compile(r"(?:\s*(?:,|;|&|\band\b|\bplus\b|\balso\b|\bthen\b))*\s*", re.I)
+# "I hold 30k AAPL. Long 20k TSLA overnight": a bare "I hold" is a holding only when another
+# clause carries the trade - an explicit side verb. With no such clause, "I hold 20k TSLA"
+# is the trade itself (a hold), as before.
+_HOLD_PLAIN = re.compile(r"\b(?:i|we)(?:\s+am|'m)?\s+(?:hold(?:ing)?|got)\b|\b(?:i|we)'ve\s+got\b", re.I)
+_TRADE_SIDE = re.compile(
+    r"\b(?:long(?:ing)?(?!\s*[-\s]?(?:term|dated|er\b))|short(?:ing)?(?!\s*[-\s]?(?:term|dated|dur|er\b))|buy(?:ing)?|sell(?:ing)?|bullish|bearish)\b",
+    re.I,
+)
 _HELD_ITEM = re.compile(
     r"(?:(?P<lead>long|short)\s+)?(?:a\s+)?(?:position\s+(?:of|in)\s+)?(?:worth\s+)?"
     r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmbw])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
@@ -153,8 +161,12 @@ def read_positions(text: str, known_tickers: list[str]) -> tuple[list[tuple[str,
     """
     found: list[tuple[str, str, float]] = []
     chars = list(text)
-    for intro in _HOLD_INTRO.finditer(text):
-        pos, first, last_end = intro.end(), True, None
+    plain: list[tuple[int, int, int, int]] = []  # (start, end, first and last holding index) of the bare "I hold" clauses
+    strict = list(_HOLD_INTRO.finditer(text))
+    bare = [m for m in _HOLD_PLAIN.finditer(text) if not any(s.start() <= m.start() < s.end() for s in strict)]
+    for intro in sorted([*strict, *bare], key=lambda m: m.start()):
+        is_plain = intro in bare
+        pos, first, last_end, before = intro.end(), True, None, len(found)
         default_side = (intro.groupdict().get("side") or "long").lower()
         while True:
             sep = _HELD_SEP.match(text, pos)
@@ -178,7 +190,16 @@ def read_positions(text: str, known_tickers: list[str]) -> tuple[list[tuple[str,
             found.append((ticker, (m.group("lead") or (trail.group(1) if trail else None) or default_side).lower(), amount))
             pos, last_end, first = end, end, False
         if last_end is not None:
+            if is_plain:
+                plain.append((intro.start(), last_end, before, len(found)))
             chars[intro.start():last_end] = " " * (last_end - intro.start())
+    if plain:
+        rest = "".join(chars)
+        if not _TRADE_SIDE.search(rest):
+            # No other clause names a side, so "I hold 20k TSLA" is the trade, not a holding.
+            for a, b, lo, hi in reversed(plain):
+                chars[a:b] = text[a:b]
+                del found[lo:hi]
     return found, "".join(chars)
 
 
@@ -225,6 +246,9 @@ class RuleIntent:
     margin_quote: float | None = None
     # "over earnings", "过完 earnings 就走": a hold to the report, dated later from the calendar.
     through_earnings: bool = False
+    # The latest message said nothing the desk can use (no trade, no change, no follow-up), so
+    # nothing earlier in the conversation is to be re-run for it.
+    unrecognised: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -604,6 +628,21 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
 SAME_CUE = re.compile(r"\bsame\b|\bagain\b|\bas (?:before|earlier|last time)\b|\blike before\b|\bthat size\b|同样|同上|一样|跟刚才|和刚才|照旧|再来", re.I)
 
 
+NOT_UNDERSTOOD = {
+    "en": "I didn't catch a trade or a question about this one. Nothing was run. Try e.g. \"long 20k TSLA overnight\", \"what if it gaps down 10%?\" or \"halve it\".",
+    "zh": "我没看出这是一笔交易，也没看出是在问这笔交易的问题，所以没有运行任何东西。可以试试：“周末做多特斯拉 2万U”、“如果跳空下跌 10% 呢？”或“减半”。",
+}
+
+
+def said_nothing(p: RuleIntent, text: str) -> bool:
+    """True when a message carries no trade field, no change and no "same as before" cue."""
+    if SAME_CUE.search(text):
+        return False
+    fields = (p.ticker, p.side, p.notional_quote, p.account_equity_quote, p.horizon_kind, p.horizon_hours, p.stop_price, p.stop_pct,
+              p.leverage, p.target_price, p.thesis, p.invalidation, p.hedge_ratio, p.margin_quote, p.open_positions, p.negative_size, p.through_earnings)
+    return not any(f for f in fields)
+
+
 def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Build one ticket from every user message so far.
 
@@ -611,10 +650,12 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
     "25k" - and the latest message wins wherever it speaks.
     """
     merged = RuleIntent()
+    latest_said_nothing, last_text = False, ""
     for m in messages:
         if m.get("role") != "user" or not (m.get("content") or "").strip():
             continue
         latest = parse_message(m["content"], known_tickers, account_equity)
+        latest_said_nothing, last_text = said_nothing(latest, m["content"]), m["content"]
         # A stop is either a price or a distance; the later message replaces either kind.
         if latest.stop_price is not None:
             merged.stop_pct = merged.stop_dir = None
@@ -644,7 +685,13 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
         merged.notes, merged.negative_size = latest.notes, latest.negative_size
     if merged.account_equity_quote is None and account_equity:
         merged.account_equity_quote = account_equity
-    return _settle(merged)
+    done = _settle(merged)
+    if done.kind == "analyze" and latest_said_nothing:
+        # "asdf qwerty lorem" after a finished trade: nothing in it asks for a run, so the
+        # earlier ticket is not run again (and never with a side nobody said).
+        done.kind, done.unrecognised = "clarify", True
+        done.reply = NOT_UNDERSTOOD["zh" if _CJK.search(last_text) else "en"]
+    return done
 
 
 def stop_offset(pct: float | None, direction: str | None, side: str | None) -> float | None:
@@ -666,7 +713,7 @@ def intent_to_ticket(p: RuleIntent, account_equity: float | None) -> TradeTicket
         account_equity_quote=p.account_equity_quote or account_equity, horizon_kind=kind, horizon_hours=hours,
         stop_price=p.stop_price, target_price=p.target_price, thesis=p.thesis or "", invalidation=p.invalidation or "",
         stop_offset_pct=None if p.stop_price is not None else stop_offset(p.stop_pct, p.stop_dir, p.side),
-        hedge_ratio=p.hedge_ratio, leverage=p.leverage if p.leverage and p.leverage <= 125 else None,
+        hedge_ratio=p.hedge_ratio, leverage=min(p.leverage, 125.0) if p.leverage and p.leverage >= 1 else None,
         open_positions=tuple((t.upper(), side, float(n)) for t, side, n in p.open_positions),
         extra={"horizon_label": label} if label else {},
     )
@@ -1472,6 +1519,8 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         result["intent"]["kind"] = "clarify"
         result["reply"] = f"{intent.ticker} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'...' if len(tickers) > 20 else ''}."
         return result
+    # Above what Bitget allows at this size, the leverage is held at the cap and the reply says so.
+    desk_help.cap_leverage(state, intent, lang)
     from nightwatch.api import reading
 
     # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
@@ -1488,6 +1537,9 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.prefetch_take(report.forecast_id, payload, language_of(messages[-1].get("content", "") if messages else ""))
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
+    if assumed and (fresh := desk_help.reconciled_size_note(assumed, report, lang)):
+        intent.notes = [fresh if n == assumed["note"] else n for n in intent.notes]
+        assumed["note"] = fresh
     # How the message was read, and what could not be used, sit under the two-line headline.
     echo = reading.echo_line(
         report, lang, carried=carried, earnings_hold=earnings_hold,

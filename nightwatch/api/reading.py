@@ -147,7 +147,10 @@ def carried_fields(
             got.add("account_box")
     if merged.thesis and not alone.thesis and said_before("thesis"):
         got.add("reason")
-    if merged.notional_quote and not alone.notional_quote and messages is not None and said_before("notional_quote"):
+    # Only a size an earlier message really stated. One the desk chose itself (the largest it
+    # allows on the account) or computed from margin and leverage matches nothing said before.
+    if (merged.notional_quote and not alone.notional_quote and messages is not None
+            and any(e.notional_quote and abs(e.notional_quote - merged.notional_quote) < 0.5 for e in earlier)):
         got.add("size")
     return got
 

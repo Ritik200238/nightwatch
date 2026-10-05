@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from nightwatch.decision.zh import note_zh
+
 
 @dataclass(frozen=True)
 class Counterpoint:
@@ -23,6 +25,7 @@ class Counterpoint:
     text: str
     magnitude_quote: float | None  # what it is worth in money, for ranking
     source: str  # which part of the report it came from
+    text_zh: str = ""  # the same sentence in Chinese, from the same numbers; empty where there is none
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,9 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
         """The recommended-size figure for a loss that is ``frac`` of the position."""
         return f" (at the recommended {_q(rec)}: {_q(abs(rec * frac))})" if smaller else ""
 
+    def also_zh(frac: float) -> str:
+        return f"（按建议仓位 {_q(rec)}：{_q(abs(rec * frac))}）" if smaller else ""
+
     against: list[Counterpoint] = []
     supporting: list[Counterpoint] = []
 
@@ -64,7 +70,13 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
     if worst is not None:
         pct = worst[1].total_pct_of_notional
         money = abs(size * pct / 100.0)
-        against.append(Counterpoint("against", f"{worst[0].name} would cost {pct:+.1f}% of the position, about {_q(money)} USDT at {_q(size)}{also(pct / 100.0)}. {worst[0].probability_note}.", money, "stress presets"))
+        from nightwatch.api.intake import preset_zh
+
+        note = note_zh(worst[0].probability_note)
+        against.append(Counterpoint(
+            "against", f"{worst[0].name} would cost {pct:+.1f}% of the position, about {_q(money)} USDT at {_q(size)}{also(pct / 100.0)}. {worst[0].probability_note}.", money, "stress presets",
+            text_zh=(f"{preset_zh(worst[0].id, worst[0].name)}会让仓位亏 {pct:+.1f}%，按 {_q(size)} 的仓位约 {_q(money)} USDT{also_zh(pct / 100.0)}。{note}。" if note is not None else ""),
+        ))
 
     primary = report.analog.horizons.get(report.primary_horizon) if report.analog else None
     if primary and not primary.cohort.insufficient:
@@ -77,20 +89,26 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
             es5 = c.es5_pct if getattr(report.ticket, "closing_long", True) else None
             if es5 is not None and c.es5_n:
                 tail += f" When it did go past that, the average was {es5:+.1f}%, on {c.es5_n} episode{'s' if c.es5_n != 1 else ''}."
-            against.append(Counterpoint("against", tail, abs(size * (es5 if es5 is not None else p5) / 100.0), "analog cohort"))
+            tail_zh = f"二十次里有一次，与现在相似的时刻在持有期内亏损达到 {abs(p5):.1f}% 或更多，按 {_q(size)} 的仓位约 {_q(abs(size * p5 / 100.0))} USDT{also_zh(p5 / 100.0)}。"
+            if es5 is not None and c.es5_n:
+                tail_zh += f" 一旦跌破这条线，平均亏损为 {es5:+.1f}%，共 {c.es5_n} 次。"
+            against.append(Counterpoint("against", tail, abs(size * (es5 if es5 is not None else p5) / 100.0), "analog cohort", text_zh=tail_zh))
         wins = primary.pnl_win_rate
         if wins is not None and wins < 0.5:
-            against.append(Counterpoint("against", f"Only {wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort"))
+            against.append(Counterpoint("against", f"Only {wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort",
+                                        text_zh=f"这些时刻里只有 {wins:.0%} 朝这个仓位有利的方向走，共 {c.n} 次。"))
         elif wins is not None:
             supporting.append(Counterpoint("for", f"{wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort"))
         base = primary.baseline
         if base and base.permutation_p_value is not None and base.permutation_p_value > 0.2:
-            against.append(Counterpoint("against", f"The resemblance may be doing nothing: against random hours of the same kind the difference in mean outcome is {base.mean_diff_pct:+.2f}% with p = {base.permutation_p_value:.2f}.", None, "baseline test"))
+            against.append(Counterpoint("against", f"The resemblance may be doing nothing: against random hours of the same kind the difference in mean outcome is {base.mean_diff_pct:+.2f}% with p = {base.permutation_p_value:.2f}.", None, "baseline test",
+                                        text_zh=f"“相似”可能没起任何作用：与同类的随机小时相比，平均结果的差异为 {base.mean_diff_pct:+.2f}%，p = {base.permutation_p_value:.2f}。"))
 
     ex = report.execution
     if ex.exit_quote and ex.exit_quote.total_cost_bps is not None:
         cost = size * ex.exit_quote.total_cost_bps / 1e4
-        against.append(Counterpoint("against", f"Getting out costs {ex.exit_quote.total_cost_bps:.0f} bps on the live book, about {_q(cost)} USDT at {_q(size)}{also(ex.exit_quote.total_cost_bps / 1e4)}, before any adverse move.", cost, "order book"))
+        against.append(Counterpoint("against", f"Getting out costs {ex.exit_quote.total_cost_bps:.0f} bps on the live book, about {_q(cost)} USDT at {_q(size)}{also(ex.exit_quote.total_cost_bps / 1e4)}, before any adverse move.", cost, "order book",
+                                    text_zh=f"按实时盘口，平仓成本约 {ex.exit_quote.total_cost_bps:.0f} bps，按 {_q(size)} 的仓位约 {_q(cost)} USDT{also_zh(ex.exit_quote.total_cost_bps / 1e4)}，这还没算不利的价格波动。"))
     lh = getattr(ex, "liquidity_history", None)
     if lh:
         thin = [b for b in lh.buckets if not b.thin and (b.share_below_reference or 0) > 0.2]
@@ -100,11 +118,13 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
 
     mc = report.stress.monte_carlo
     if mc is not None:
-        against.append(Counterpoint("against", f"The simulation puts the chance of losing more than 5% at {mc.prob_loss_gt.get(5.0, 0):.0%}, with an expected shortfall of {mc.expected_shortfall_5_pct:+.1f}% in the worst twentieth.", abs(size * mc.expected_shortfall_5_pct / 100.0), "Monte Carlo"))
+        against.append(Counterpoint("against", f"The simulation puts the chance of losing more than 5% at {mc.prob_loss_gt.get(5.0, 0):.0%}, with an expected shortfall of {mc.expected_shortfall_5_pct:+.1f}% in the worst twentieth.", abs(size * mc.expected_shortfall_5_pct / 100.0), "Monte Carlo",
+                                    text_zh=f"模拟显示亏损超过 5% 的概率为 {mc.prob_loss_gt.get(5.0, 0):.0%}，最差二十分之一情形下的预期亏损为 {mc.expected_shortfall_5_pct:+.1f}%。"))
 
     port = getattr(report, "portfolio", None)
     if port and port.mean_correlation_to_book is not None and port.mean_correlation_to_book > 0.5:
-        against.append(Counterpoint("against", f"It moves with what you already hold (mean correlation {port.mean_correlation_to_book:.2f}), so it adds size rather than spreading risk.", None, "portfolio"))
+        against.append(Counterpoint("against", f"It moves with what you already hold (mean correlation {port.mean_correlation_to_book:.2f}), so it adds size rather than spreading risk.", None, "portfolio",
+                                    text_zh=f"它和你已有的持仓同涨同跌（平均相关性 {port.mean_correlation_to_book:.2f}），所以是在加大仓位，而不是分散风险。"))
 
     rm = getattr(report, "regimes", None)
     if rm and rm.current is not None:
@@ -113,26 +133,35 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
         if cur and calm and cur.next_ret_p5_pct is not None and calm.next_ret_p5_pct is not None and cur.id != calm.id:
             worse = cur.next_ret_p5_pct - calm.next_ret_p5_pct
             if worse < -0.25:
-                against.append(Counterpoint("against", f"This is not the calm state: its 5th percentile over the horizon is {abs(worse):.1f} points worse than the calmest one.", abs(size * worse / 100.0), "regime map"))
+                against.append(Counterpoint("against", f"This is not the calm state: its 5th percentile over the horizon is {abs(worse):.1f} points worse than the calmest one.", abs(size * worse / 100.0), "regime map",
+                                            text_zh=f"现在不是平静状态：持有期内它的第 5 百分位比最平静的状态差 {abs(worse):.1f} 个百分点。"))
 
     breached = [x for x in (report.lessons or []) if x.get("classification") == "worse_than_stress"]
     if breached:
-        against.append(Counterpoint("against", f"{len(breached)} of the recalled past calls in conditions like these finished below the level they were sized against.", None, "post-mortems"))
+        against.append(Counterpoint("against", f"{len(breached)} of the recalled past calls in conditions like these finished below the level they were sized against.", None, "post-mortems",
+                                    text_zh=f"回顾的过去类似条件下的结论中，有 {len(breached)} 个最终跌破了当时定仓位所依据的水平。"))
 
     lev = getattr(report, "leverage", None)
     if lev and lev.get("liquidation_distance_pct") is not None:
         margin = lev.get("margin_quote")
         hits, of, mc = lev.get("analog_hits"), lev.get("analog_of"), lev.get("mc_share")
         seen = []
+        seen_zh = []
         if of:
             seen.append(f"{hits} of {of} past moments like this reached it")
+            seen_zh.append(f"{of} 个相似的历史时刻中有 {hits} 个触及")
         if mc is not None:
             seen.append(f"{mc:.0%} of simulated paths do")
+            seen_zh.append(f"{mc:.0%} 的模拟路径触及")
         text = (
             f"At {round(lev['leverage'], 2):g}x the exchange closes the position {lev['liquidation_distance_pct']:.1f}% away and the whole "
             f"{_q(margin)} USDT of margin is gone, with no chance to ride the move back" + (f"; {' and '.join(seen)}." if seen else ".")
         )
-        against.append(Counterpoint("against", text, margin, "liquidation"))
+        text_zh = (
+            f"在 {round(lev['leverage'], 2):g} 倍杠杆下，价格朝不利方向移动 {lev['liquidation_distance_pct']:.1f}% 交易所就会平仓，"
+            f"{_q(margin)} USDT 的保证金全部损失，没有机会等价格回来" + (f"；{'，'.join(seen_zh)}。" if seen_zh else "。")
+        )
+        against.append(Counterpoint("against", text, margin, "liquidation", text_zh=text_zh))
 
     # The case for taking it, which matters when the answer was no.
     caps = sorted((c for c in report.sizing.caps if c.notional is not None), key=lambda c: c.notional)

@@ -154,6 +154,9 @@ _HOLD_INTRO = re.compile(
     r"|(?:我|咱)?(?:手上|手里)(?:还|已经|目前)?(?:持有|有|拿着)"
     r"|(?:现有|目前|当前)?持仓\s*[:：]"
 )
+# A bare "我持有" is a holding only when another clause carries the trade (做多/做空/买/卖).
+_HOLD_PLAIN = re.compile(r"(?:我|咱)(?:们)?(?:持有|拿着|持仓)")
+_TRADE_SIDE = re.compile(r"做多|做空|买入|买进|卖出|卖空|开多|开空|看多|看空|买|卖")
 _HELD_SEP = re.compile(r"(?:\s*(?:[,，、;；]|和|以及|还有|并且|另外|外加|加上|还|也))*\s*")
 _HELD_ITEM = re.compile(
     r"(?P<lead>做多|做空|多单|空单)?\s*(?P<num>[0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千]+)\s*(?P<scale>万|千|k|K|w|W)?\s*(?P<money>美元|美金|刀|USDT|usdt|U|u|块)?\s*(?:的)?\s*"
@@ -176,8 +179,12 @@ def read_positions(text: str, known: set[str]) -> tuple[list[tuple[str, str, flo
     """Holdings a Chinese message states, and the message with those clauses blanked out."""
     found: list[tuple[str, str, float]] = []
     chars = list(text)
-    for intro in _HOLD_INTRO.finditer(text):
-        pos, first, last_end = intro.end(), True, None
+    plain: list[tuple[int, int, int, int]] = []
+    strict = list(_HOLD_INTRO.finditer(text))
+    bare = [m for m in _HOLD_PLAIN.finditer(text) if not any(x.start() <= m.start() < x.end() for x in strict)]
+    for intro in sorted([*strict, *bare], key=lambda m: m.start()):
+        is_plain = intro in bare
+        pos, first, last_end, before = intro.end(), True, None, len(found)
         while True:
             sep = _HELD_SEP.match(text, pos)
             m = _HELD_ITEM.match(text, sep.end())
@@ -201,7 +208,13 @@ def read_positions(text: str, known: set[str]) -> tuple[list[tuple[str, str, flo
             found.append((ticker, side, value))
             pos, last_end, first = end, end, False
         if last_end is not None:
+            if is_plain:
+                plain.append((intro.start(), last_end, before, len(found)))
             chars[intro.start():last_end] = " " * (last_end - intro.start())
+    if plain and not _TRADE_SIDE.search("".join(chars)):
+        for a, b, lo, hi in reversed(plain):
+            chars[a:b] = text[a:b]
+            del found[lo:hi]
     return found, "".join(chars)
 
 

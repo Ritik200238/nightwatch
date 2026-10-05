@@ -16,6 +16,15 @@ const ZH: Record<string, { label: string; what: string; cadence: string }> = {
   cboe_options: { label: "Cboe 期权报价", what: "延迟约 15 分钟的标的期权链：平值隐含波动率给出市场预期的波动幅度，与本交易台自己的二十分之一损失并列显示", cadence: "后台每小时，每个代币缓存 30 分钟" },
   bitget_wallet_rwa: { label: "Bitget Wallet 代币化股票列表", what: "每只代币化股票是否在线、所在交易时段、暂停或提醒文字，以及单笔订单限额", cadence: "后台每小时，每个代币缓存 30 分钟" },
   bitget_mcp: { label: "Bitget 美股数据", what: "标的实时报价、分析师评级和目标价、内部人交易、市场恐慌与贪婪指数", cadence: "每个代币每小时，仅存于内存" },
+  bitget_equity_calendar: { label: "Bitget：财报日历", what: "公司自己公布的下次财报日期，以及盘前还是盘后发布，并与 Nasdaq 日历交叉核对", cadence: "每个代币每小时最多一次，仅存于内存" },
+  bitget_equity_fundamental_ratios: { label: "Bitget：估值比率", what: "最近一个报告期的市盈率、市净率、市销率、过去一年股息率和市值", cadence: "每个代币每小时最多一次，仅存于内存" },
+  bitget_equity_fundamental_dividends: { label: "Bitget：股息", what: "下一次除息日和金额，或最近一次已发放的股息", cadence: "每个代币每小时最多一次，仅存于内存" },
+  bitget_equity_estimates_consensus: { label: "Bitget：分析师一致预期", what: "分析师一致目标价及其最高值和最低值", cadence: "每个代币每小时最多一次，仅存于内存" },
+  bitget_equity_profile: { label: "Bitget：公司简介", what: "行业、板块、交易所、CEO 和员工人数", cadence: "每个代币每小时最多一次，仅存于内存" },
+  bitget_equity_price_quote: { label: "Bitget：实时报价", what: "标的股票的实时价格和前收盘价，价差和“代币与股票的差距”都依赖它", cadence: "每个代币每小时，仅存于内存" },
+  bitget_equity_estimates_price_target: { label: "Bitget：分析师评级和目标价", what: "各家机构最新的评级和目标价（近 90 天）", cadence: "每个代币每小时，仅存于内存" },
+  bitget_equity_ownership_insider_trading: { label: "Bitget：内部人交易", what: "近 90 天公开市场上的内部人买入和卖出", cadence: "每个代币每小时，仅存于内存" },
+  bitget_sentiment_market_fear_greed: { label: "Bitget：市场恐慌与贪婪", what: "美股市场情绪指数：现在、一周前和一个月前", cadence: "每个代币每小时，仅存于内存" },
   bitget_signal: { label: "Bitget 信号技能", what: "来自技术分析工具的 4 小时 RSI，仅在与本交易台自己的 RSI 一致时显示", cadence: "每个代币每小时，仅存于内存" },
 };
 
@@ -33,6 +42,16 @@ export function localLatest(label: string | null, zh: boolean): string | null {
     .replace(/^([\d,]+) tokens read$/, "已读取 $1 个代币")
     .replace(/^([\d,]+) tokens with current street data$/, "$1 个代币有最新的分析师数据")
     .replace(/^none (read|fetched) yet$/, "尚未读取")
+    .replace(/^unavailable/, "不可用")
+    .replace(/ since (\d\d:\d\d) UTC/, " 自 $1 UTC")
+    .replace(/\(HTTP (\d+)\)/, "（HTTP $1）")
+    .replace(/; ([\d,]+) tokens serve older data$/, "；$1 个代币用的是较早的数据")
+    .replace(/^([\d,]+) tokens with data; ([\d,]+) not answering$/, "$1 个代币有数据；$2 个没有响应")
+    .replace(/^([\d,]+) tokens with data$/, "$1 个代币有数据")
+    .replace(/^not answering for ([\d,]+) of ([\d,]+) tokens$/, "$2 个代币中有 $1 个没有响应")
+    .replace(/^not fetched yet$/, "尚未获取")
+    .replace(/^not delivered yet$/, "尚未返回数据")
+    .replace(/^answers, with nothing for these tokens$/, "服务有响应，但这些代币没有数据")
     .replace(/^furthest scheduled report$/, "最远的已排期财报")
     .replace(/^furthest dated event$/, "最远的已排期事件")
     .replace(/^furthest scheduled release$/, "最远的已排期发布")

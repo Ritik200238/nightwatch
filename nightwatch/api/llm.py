@@ -86,7 +86,10 @@ def _parse_system(tickers: list[str], account_equity: float | None) -> str:
         "Write `reply` in the language the trader wrote in. "
         + (f"The trader's account equity is {account_equity:,.0f} USDT unless they say otherwise. " if account_equity else "")
         + "Required to analyse: ticker, side, notional_quote. If any is missing, set kind='clarify', list them in missing_fields and ask for them in reply (one short question). "
-        "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words.\n\n"
+        "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words. "
+        "A clause that says what the trader already holds ('I hold 30k AAPL and 10k NVDA', 'I also hold ...', '我持有 ...') is their book, never the trade: "
+        "ticker, side and notional_quote come from the clause with a side verb (long, short, buy, sell, 做多, 做空), wherever it sits in the sentence. "
+        "'I hold 30k AAPL. Long 20k TSLA overnight' is a long of 20k TSLA, not of AAPL.\n\n"
         'The trader may also narrow which past moments count as comparable - "only earnings nights", '
         '"just weekends", "when it was volatile". Put the matching names in `lenses`, from this list and '
         "no other. Leave it empty unless they actually asked to narrow the comparison: describing their "
@@ -341,6 +344,12 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             "intent": {**rules.as_dict(), "reply": reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
             "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": reply, "parsed_by": "rules", "language": lang,
         }
+    if rules.unrecognised:
+        # Nothing in this message asks for a trade or a change; the model is not asked to find one.
+        return {
+            "intent": {**rules.as_dict(), "reply": rules.reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
+            "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": rules.reply, "parsed_by": "rules", "language": lang,
+        }
     # A token, a side and an account but no size: run the largest size the desk allows on
     # that account and say so, instead of sending the trader back to type one.
     from nightwatch.api import desk_help
@@ -356,6 +365,8 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             "intent": {**rules.as_dict(), "reply": reply}, "ticket": None, "report": None, "narrative": None, "report_text": None,
             "unverified_numbers": [], "provider": provider.name, "model": provider.model, "reply": reply, "parsed_by": "rules", "language": lang,
         }
+    # Above what Bitget allows at this size, the leverage is held at the cap and the reply says so.
+    desk_help.cap_leverage(state, rules, lang)
     from nightwatch.api import reading
 
     # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
@@ -449,6 +460,9 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     # briefing is assembled from the report's own fields instead - instantly, and with
     # nothing to verify because nothing was written.
     # A trader who wrote in Chinese is answered in Chinese, from the same fields.
+    if assumed and (fresh := desk_help.reconciled_size_note(assumed, report, lang)):
+        rules.notes = [fresh if n == assumed["note"] else n for n in rules.notes]
+        assumed["note"] = fresh
     echo = reading.echo_line(
         report, lang, carried=carried, earnings_hold=earnings_hold,
         unused=reading.unused_parts(rules, ticket, latest, lang, earnings_note=earnings_note, earnings_applied=earnings_hold, dropped_reason=dropped_reason),

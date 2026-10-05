@@ -338,6 +338,12 @@ function modeTitle(m: { title: string; title_zh?: string }, lang: Lang): string 
   return lang === "zh" && m.title_zh ? m.title_zh : m.title;
 }
 
+/** A failure-mode sentence in the reader's language: the server's Chinese twin when it sent one
+ *  (same numbers), otherwise its English. */
+function modeText(en: string, zh: string | undefined, lang: Lang): string {
+  return lang === "zh" && zh ? zh : en;
+}
+
 function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boolean; lang: Lang }) {
   const L = tr(lang);
   // Largest loss first whatever order the server stored: old reports were ranked by chance
@@ -371,10 +377,10 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
               <span className="text-foreground">{L("If: ", "如果：")}</span>
-              {m.trigger}. <span className="text-foreground">{L("Then: ", "那么：")}</span>
-              {m.mechanism}.
+              {modeText(m.trigger, m.trigger_zh, lang)}. <span className="text-foreground">{L("Then: ", "那么：")}</span>
+              {modeText(m.mechanism, m.mechanism_zh, lang)}.
             </p>
-            <p className="mt-1 text-[13px] text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${m.likelihood} · 来源：${sourceName(lang, m.source)}`)}</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">{L(`How often: ${m.likelihood} · from ${m.source}`, `发生频率：${modeText(m.likelihood, m.likelihood_zh, lang)} · 来源：${sourceName(lang, m.source)}`)}</p>
           </li>
         ))}
       </ol>
@@ -530,7 +536,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       {against ? (
         <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{L("The best case against it: ", "反对它的最有力理由：")}</span>
-          {against.text}
+          {lang === "zh" && against.text_zh ? against.text_zh : against.text}
         </p>
       ) : null}
 

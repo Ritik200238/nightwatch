@@ -25,6 +25,7 @@ import re
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
+from nightwatch.decision.zh import note_zh
 from nightwatch.features.phrases import earnings_ahead
 
 
@@ -53,6 +54,11 @@ class FailureMode:
     # The same loss at the recommended size, when that is smaller than the request. The
     # headline loss is always at the requested size, the size the rest of the report prices.
     loss_quote_at_recommended: float | None = None
+    # The same sentences in Chinese, built from the same numbers where the English is, so the
+    # page can be read in either language. Empty where the English has no Chinese twin.
+    trigger_zh: str = ""
+    mechanism_zh: str = ""
+    likelihood_zh: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -185,6 +191,17 @@ _SHORT = {
     "vol": "a move three times what current volatility implies",
 }
 
+_MECH_ZH = {
+    "gap": ("美股休市期间出现消息——公司公告、宏观数据、海外突发事件",
+            "股票开盘时以新价格重新定价，代币立即跟随；中间没有交易，止损来不及起作用"),
+    "earnings": ("公司在你的持有期内发布财报", "股票在下次开盘时因财报结果跳空，代币随之变动"),
+    "basis": ("只有代币在交易时，它偏离了股票的公允价值",
+              "夜间和周末代币价格由它自己较薄的盘口决定，可能出现溢价或折价，开盘后又会被抹平"),
+    "liquidity": ("你需要离场时盘口变薄——夜间、周末或交易繁忙时", "卖出会吃掉更深的盘口，所以平仓本身的成本比价格波动还高"),
+    "halt": ("你一整天都无法平仓，而价格朝不利方向走", "故障或停牌让你失去了减仓的机会"),
+    "vol": ("波动率从现在的水平骤升", "波动幅度达到当前波动率所隐含的两到三倍"),
+}
+
 _MECH = {
     "gap": (
         "News lands while the US market is shut - a company announcement, macro data, a shock abroad",
@@ -224,10 +241,13 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
         if s is None or i is None or i.total_pnl_quote is None:
             return
         trig, how = _MECH[mech]
+        trig_zh, how_zh = _MECH_ZH[mech]
         recent = (s.calibration or {}).get("recent") if isinstance(s.calibration, dict) else None
         if recent:
             how += f"; this company's last {len(recent)} reactions were " + ", ".join(f"{x:+.1f}%" for x in recent)
-        out.append(FailureMode(key, title, trig, how, i.total_pnl_quote, i.total_pct_of_notional, s.probability_note, "stress presets", _SHORT[mech], _preset_chance(sid)))
+            how_zh += f"；这家公司最近 {len(recent)} 次的反应分别为 " + "、".join(f"{x:+.1f}%" for x in recent)
+        out.append(FailureMode(key, title, trig, how, i.total_pnl_quote, i.total_pct_of_notional, s.probability_note, "stress presets", _SHORT[mech], _preset_chance(sid),
+                               trigger_zh=trig_zh, mechanism_zh=how_zh, likelihood_zh=note_zh(s.probability_note) or ""))
 
     # This trade's own chains first: what history did after the trader's own line broke,
     # the token snapping back to the stock, and this company's actual earnings reactions.
@@ -246,6 +266,10 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
     if replays:
         s, i = min(replays, key=lambda x: x[1].total_pnl_quote)
         crisis = s.name.replace("Replay: ", "")
+        from nightwatch.api.intake import preset_zh
+
+        crisis_zh = preset_zh(s.id, s.name).split("：", 1)[-1]
+        note = note_zh(s.probability_note)
         out.append(FailureMode(
             "replay", f"A repeat of the {crisis}",
             f"The market breaks the way it did in the {crisis}",
@@ -253,6 +277,9 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
             i.total_pnl_quote, i.total_pct_of_notional,
             f"{s.probability_note} - a named crisis, not a frequency", "crash replays",
             f"the {crisis} replayed on this position",
+            trigger_zh=f"大盘再次出现{crisis_zh}那样的崩溃",
+            mechanism_zh="这只股票的走势与那一天相同，代币在下次开盘时跟随",
+            likelihood_zh=f"{note} —— 这是一次具体的历史危机，不是发生频率" if note else "",
         ))
 
     # A stop that a gap can jump: judged against the worst measured gap.
@@ -273,15 +300,22 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
                 "stress presets + analogs",
                 f"a gap fills the stop well past {t.stop_price:,.2f}",
                 0.01,  # it is the 1-in-100 gap that jumps it
+                trigger_zh="开盘时的跳空幅度大于你的止损距离",
+                mechanism_zh=(f"止损会在跳空后的第一个价格成交，而不是 {t.stop_price:,.2f}；每 100 次出现 1 次的跳空（{worst_gap.price_move_pct:+.1f}%）"
+                              f"比你的止损（距现价 {stop_d:.1f}%）还多出 {gap_d - stop_d:.1f} 个百分点"),
+                likelihood_zh=f"在 {len(paths.paths)} 个相似的历史时刻中，有 {paths.stopped} 个触及了止损；越过止损之后多出的亏损约 {extra:,.0f} USDT",
             ))
 
     lev = getattr(r, "leverage", None)
     if lev and lev.get("liquidation_distance_pct") is not None:
         seen = []
+        seen_zh = []
         if lev.get("analog_of"):
             seen.append(f"{lev['analog_hits']} of {lev['analog_of']} past moments reached it")
+            seen_zh.append(f"{lev['analog_of']} 个相似的历史时刻中有 {lev['analog_hits']} 个触及")
         if lev.get("mc_share") is not None:
             seen.append(f"{lev['mc_share']:.0%} of simulated paths do")
+            seen_zh.append(f"{lev['mc_share']:.0%} 的模拟路径触及")
         out.append(FailureMode(
             "liquidation", "Liquidated",
             f"A move of {lev['liquidation_distance_pct']:.1f}% against you at any point in the hold",
@@ -291,6 +325,9 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
             "the exchange closes the position and the margin is gone",
             max(x for x in (lev.get("mc_share"), (lev["analog_hits"] / lev["analog_of"]) if lev.get("analog_of") else None) if x is not None)
             if (lev.get("mc_share") is not None or lev.get("analog_of")) else None,
+            trigger_zh=f"持有期内任何时刻朝不利方向移动 {lev['liquidation_distance_pct']:.1f}%",
+            mechanism_zh="保证金降到维持保证金要求时交易所会平掉仓位；保证金就此损失，无法再等价格回来",
+            likelihood_zh="；".join(seen_zh) or "未测量",
         ))
 
     # Nothing dramatic: the ordinary way a trade loses.
@@ -308,6 +345,9 @@ def failure_modes(r: Any) -> list[FailureMode]:  # noqa: ANN401, C901 - a list o
             f"{1 - wins:.0%} of {c.n} past moments like this ended {'down' if t.closing_long else 'up'}", "analog cohort",
             f"no event; the price just ends {way}",
             1 - wins,
+            trigger_zh="没有任何事件",
+            mechanism_zh=f"价格就是慢慢走{'低' if t.closing_long else '高'}，大多数与现在相似的时刻都是这样收场",
+            likelihood_zh=f"{c.n} 个相似的历史时刻中有 {1 - wins:.0%} 以{'下跌' if t.closing_long else '上涨'}收场",
         ))
 
     ranked = _rank(_cap_at_margin(out, lev))
@@ -328,13 +368,16 @@ def _own_chains(r: Any) -> list[FailureMode]:  # noqa: ANN401
         crossed, of, d = int(plan["crossed"]), int(plan["of"]), abs(float(plan["distance_pct"]))
         what = f"'{plan.get('invalidation')}'" if plan.get("invalidation") else "your invalidation"
         mech = f"{crossed} of {of} past moments like this crossed it inside the hold"
+        mech_zh = f"{of} 个相似的历史时刻中有 {crossed} 个在持有期内越过了它"
         if t.stop_price and paths is not None and paths.stop_pct is not None and abs(paths.stop_pct) > d and paths.stopped is not None:
             if paths.stopped <= crossed:
                 mech += f"; of those, {paths.stopped} went on to your stop and {crossed - paths.stopped} turned back before it"
+                mech_zh += f"；其中 {paths.stopped} 个继续跌到你的止损，{crossed - paths.stopped} 个在到止损之前掉头"
             else:
                 # The stop is judged on each bar's low and the line on closes, so more can
                 # hit the stop than closed past the line; "of those" would be impossible.
                 mech += f"; separately, {paths.stopped} of {of} hit your stop when judged on each bar's low"
+                mech_zh += f"；另外，按每根 K 线的最低价算，{of} 个里有 {paths.stopped} 个触及了你的止损"
         out.append(FailureMode(
             "invalidation", f"Your own line breaks: {what}",
             f"The price reaches your invalidation, {d:.1f}% away",
@@ -342,6 +385,9 @@ def _own_chains(r: Any) -> list[FailureMode]:  # noqa: ANN401
             -d / 100.0 * t.notional_quote, -d,
             f"{crossed} of {of} past moments like this ({crossed / of:.0%})", "your plan + analogs",
             f"{crossed} of {of} similar moments crossed your line", crossed / of,
+            trigger_zh=f"价格到达你设定的失效线，距现价 {d:.1f}%",
+            mechanism_zh=mech_zh + " —— 也就是说，按你自己的标准，这个想法被证明是错的",
+            likelihood_zh=f"{of} 个相似的历史时刻中有 {crossed} 个（{crossed / of:.0%}）",
         ))
     street = getattr(r, "street", None) or {}
     gap = street.get("token_vs_live_bps")
@@ -354,6 +400,9 @@ def _own_chains(r: Any) -> list[FailureMode]:  # noqa: ANN401
             -abs(gap) / 1e4 * t.notional_quote, -abs(gap) / 100.0,
             "the gap to the live price is measured now; how fully it closes is not", "Bitget live quote",
             "the token's premium to the stock closes at the open", None,
+            trigger_zh=f"代币现在比股票实时价格{'高' if gap > 0 else '低'} {abs(gap):.0f} bps",
+            mechanism_zh=f"下次开盘时，股票自己的价格重新决定水平，代币被拉向它，所以{'做多' if t.closing_long else '做空'}要把这段价差让出去",
+            likelihood_zh="与实时价格的价差现在已量出；它会收敛到什么程度没有测量",
         ))
     return out
 
@@ -381,7 +430,8 @@ def _cap_at_margin(modes: list[FailureMode], lev: dict | None) -> list[FailureMo
     for m in modes:
         if m.key != "liquidation" and m.loss_quote is not None and m.loss_quote < -margin:
             m = FailureMode(**{**asdict(m), "loss_quote": -margin, "loss_pct": -100.0 / float(lev["leverage"]), "capped": True,
-                               "mechanism": m.mechanism + f"; at {round(lev['leverage'], 2):g}x it is liquidated first, so the loss stops at the {margin:,.0f} USDT margin"})
+                               "mechanism": m.mechanism + f"; at {round(lev['leverage'], 2):g}x it is liquidated first, so the loss stops at the {margin:,.0f} USDT margin",
+                               "mechanism_zh": (m.mechanism_zh + f"；{round(lev['leverage'], 2):g} 倍杠杆下会先被强平，所以亏损止于 {margin:,.0f} USDT 的保证金") if m.mechanism_zh else ""})
         out.append(m)
     return out
 

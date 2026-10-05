@@ -233,3 +233,67 @@ def with_assumed_size(state: Any, intent: Any, tickers: list[str], account_equit
     note = assumed_size_note(size, basis, float(equity) if equity else None, lang, should_i=should_i)
     done.notes = [*done.notes, note]
     return done, {"notional_quote": size, "basis": basis, "account_equity_quote": equity or None, "note": note}
+
+
+# Bitget's own ceiling on any perpetual; the tier table says less for a large position.
+HARD_MAX_LEVERAGE = 125.0
+
+
+def leverage_cap(state: Any, ticker: str | None, notional: float | None) -> float:  # noqa: ANN401
+    """The most leverage Bitget allows on this stock's perpetual at this position size.
+
+    From the margin tiers the desk already fetches (cached for a day); with no tier table,
+    or no perpetual, only Bitget's overall ceiling is known and that is what is returned.
+    """
+    from nightwatch.execution.leverage import tier_for
+
+    if not ticker or not notional:
+        return HARD_MAX_LEVERAGE
+    try:
+        spec = state.ctx.spec(ticker.upper())
+        tiers = state.ctx.margin_tiers(spec.perp_symbol) if spec.perp_symbol else None
+    except Exception as exc:  # noqa: BLE001 - an unknown cap must not stop the answer
+        log.warning("leverage cap for %s unavailable: %s", ticker, exc)
+        tiers = None
+    tier = tier_for(tiers, float(notional)) if tiers else None
+    return min(HARD_MAX_LEVERAGE, tier.max_leverage) if tier else HARD_MAX_LEVERAGE
+
+
+def leverage_cap_note(asked: float, cap: float, lang: str) -> str:
+    if lang == "zh":
+        return f"Bitget 在这个仓位规模下最多允许 {cap:g} 倍杠杆，所以按 {cap:g} 倍计算，而不是你说的 {asked:g} 倍。"
+    return f"Bitget allows at most {cap:g}x on a position this size, so I ran it at {cap:g}x instead of the {asked:g}x you asked for."
+
+
+def cap_leverage(state: Any, intent: Any, lang: str) -> None:  # noqa: ANN401
+    """Hold a typed leverage at what Bitget allows for this position, and say so.
+
+    "500x long NVDA" is read as 500x, never dropped or refused: it is run at the cap with a
+    sentence that names both numbers. Nothing happens until the size is known, because the
+    cap depends on it."""
+    lev = getattr(intent, "leverage", None)
+    if not lev or lev <= 1 or not getattr(intent, "notional_quote", None) or not getattr(intent, "ticker", None):
+        return
+    cap = leverage_cap(state, intent.ticker, intent.notional_quote)
+    if lev > cap + 1e-9:
+        intent.notes = [*intent.notes, leverage_cap_note(float(lev), cap, lang)]
+        intent.leverage = cap
+
+
+def reconciled_size_note(assumed: dict[str, Any], report: Any, lang: str) -> str | None:  # noqa: ANN401
+    """The note for a desk-chosen size once the full run of that size disagrees with the search.
+
+    The size was found by a search at a probe position; the report is the full run of the size
+    itself (its own leverage tier, liquidation distance and caps), and may allow less. The
+    reply must carry one number, so it says which is which instead of quoting both as "allowed"."""
+    size = float(assumed.get("notional_quote") or 0.0)
+    rec = report.verdict.recommended_notional
+    if not size or rec is None or rec >= size - 1.0:
+        return None
+    equity = assumed.get("account_equity_quote")
+    on = (f"{_wan(float(equity))} 账户" if lang == "zh" else f"a {_k(float(equity))} account") if equity else ("参考仓位" if lang == "zh" else "the stand-in size")
+    if lang == "zh":
+        return (f"你没有给仓位，我先按 {on} 试了 {size:,.0f} USDT；但按这个仓位完整跑一遍（杠杆档位、强平距离和各项上限）后，"
+                f"最多只能到 {rec:,.0f} USDT，以后者为准。想用自己的仓位，直接告诉我。")
+    return (f"You didn't give a size, so I tried {size:,.0f} USDT on {on}. The full check of that size (its leverage tier, "
+            f"liquidation distance and caps) allows at most {rec:,.0f} USDT, and {rec:,.0f} is the number to use. Tell me your own size and I'll run that instead.")

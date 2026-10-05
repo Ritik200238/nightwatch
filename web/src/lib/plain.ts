@@ -188,7 +188,9 @@ export function plainReason(text: string, lang: "en" | "zh" = "en"): string {
           : "Plan is incomplete: your 'wrong if' line is missing";
     }
   }
-  if (label) return `${lang === "zh" ? label.zh : label.en}${lang === "zh" ? "：" : ": "}${lang === "zh" ? rest : sentence(rest)}`;
+  // The words after the rule name are the gate's own English clause; in Chinese they go through the same
+  // translation the gate list uses, so "position size: account equity not provided" is not half English.
+  if (label) return `${lang === "zh" ? label.zh : label.en}${lang === "zh" ? "：" : ": "}${lang === "zh" ? ruleReason(rest, "zh") : sentence(rest)}`;
   return sentence(t);
 }
 
