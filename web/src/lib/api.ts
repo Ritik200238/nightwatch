@@ -51,6 +51,8 @@ export interface TicketInput {
   record?: boolean;
   open_positions?: { ticker: string; side: Side; notional_quote: number }[];
   lenses?: string[];
+  /** The server's notes on how the sentence was read, e.g. horizon_label. */
+  extra?: Record<string, unknown>;
   /** False asks for the unfiltered answer even on a night the desk would narrow. */
   auto_lens?: boolean;
 }
@@ -1097,12 +1099,18 @@ export interface Report {
       distance_scale: number | null;
       /** Now, on the features the search used. */
       query?: Record<string, number>;
+      /** Slow, market-wide fields (VIX, curve, dollar) left out of every "alike on". */
+      broad_features?: string[];
+      /** Distinct calendar weeks the matches fall in. */
+      n_weeks?: number;
     };
     scope: "same_ticker" | "pooled";
     horizons: Record<string, HorizonReport>;
     matches_outcomes: MatchOutcome[];
     paths: ScenarioPaths | null;
     lens: LensResult | null;
+    /** A hold over a weekend, matched to past weekend holds; k_weekend of n_matches were one. */
+    weekend_hold?: { applies: boolean; restricted: boolean; n_before: number; n_after: number; note: string; k_weekend: number | null; n_matches: number | null } | null;
   } | null;
   stress: {
     presets: Scenario[];
@@ -1151,6 +1159,8 @@ export interface Report {
   /** Where the stated reason depends on an event the data can date, and does not match. */
   premise?: string[];
   weekend_only?: WeekendOnly | null;
+  /** Who turned the sentence into a ticket: "rules" when no model was needed. Chat reports only. */
+  read_by?: { parsed_by: string; provider?: string | null; model?: string | null } | null;
   /** US regular sessions around the hold (NYSE calendar), for the market-clock strip. */
   timeline?: { as_of: string; hold_end: string; market_open_at_as_of: boolean; next_open: string | null; sessions: { open: string; close: string }[] } | null;
   /** The chained journal receipt for this verdict; see /verify. */
@@ -1428,6 +1438,9 @@ export interface WeekendOnly {
   typical_h: number;
   today: string;
   hold_from_now_h: number;
+  /** "Over the weekend" asked early in the week was read as the coming Friday-to-Monday hold. */
+  scheduled?: boolean;
+  scheduled_h?: number;
 }
 
 /** The receipt chain over every live verdict, recomputed on request. */

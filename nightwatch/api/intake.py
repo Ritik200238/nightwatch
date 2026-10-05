@@ -640,7 +640,7 @@ def preset_zh(sid: str, name: str) -> str:
     import re as _re
 
     if (m := _re.fullmatch(r"closed_window_gap_p(\d+)", sid)):
-        return f"休市期间跳空（第 {m.group(1)} 百分位）"
+        return f"休市期间跳空（第 {m.group(1)} 百分位）" if "across" not in name else f"跨多个休市时段的跳空（第 {m.group(1)} 百分位）"
     if (m := _re.fullmatch(r"basis_blowout_p(\d+)", sid)):
         return f"代币偏离公允价值（休市时段第 {m.group(1)} 百分位）"
     if sid.startswith("replay_"):
@@ -651,7 +651,7 @@ def preset_zh(sid: str, name: str) -> str:
     return {
         "earnings_gap_worst": "财报跳空：历史最差", "earnings_gap_typical": "财报跳空：典型不利",
         "liquidity_drought": "流动性枯竭（盘口深度 ÷5）", "exchange_halt_24h": "24 小时无法平仓",
-        "funding_spike": "对冲腿资金费率飙升",
+        "funding_spike": "对冲腿资金费率飙升", "analog_p5_floor": "历史二十分之一的亏损（同一持有期）",
     }.get(sid, name)
 _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
