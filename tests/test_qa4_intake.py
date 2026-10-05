@@ -37,3 +37,22 @@ def test_a_bare_hold_with_no_other_trade_clause_is_still_the_trade():
     out = p("I hold 20k TSLA overnight")
     assert (out.ticker, out.side, out.notional_quote) == ("TSLA", "long", 20_000.0)
     assert out.open_positions == []
+
+
+def test_nonsense_after_a_complete_trade_is_not_a_re_run():
+    from nightwatch.api.intake import read_conversation
+
+    msgs = [{"role": "user", "content": "short 5k NVDA overnight"}, {"role": "user", "content": "asdf qwerty lorem"}]
+    out = read_conversation(msgs, TICKERS)
+    assert out.unrecognised and out.kind == "clarify" and "didn't catch a trade or a question" in out.reply
+    # a cue to reuse the last trade is a follow-up, not nonsense
+    again = read_conversation([*msgs[:1], {"role": "user", "content": "same again"}], TICKERS)
+    assert not again.unrecognised and again.kind == "analyze" and again.side == "short"
+
+
+def test_any_leverage_is_read_not_dropped():
+    out = p("500x long NVDA 5k overnight account 50k")
+    assert out.leverage == 500.0 and out.notional_quote == 5_000.0
+    from nightwatch.api.intake import intent_to_ticket
+
+    assert intent_to_ticket(out, None).leverage == 125.0
