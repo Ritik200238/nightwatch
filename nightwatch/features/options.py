@@ -1,10 +1,14 @@
 """What the listed options market implies for the length of this hold.
 
-Context beside the desk's own history, not an input to the size. The report puts two
+Context beside the desk's own history, and a floor under the size. The report puts two
 numbers side by side: how far the options market says the stock may move over the hold
 (a one-standard-deviation move), and how bad one night in twenty has been for this
 position in the desk's own history. When they disagree sharply that is worth a person's
-attention; neither moves the other.
+attention. The size takes the more cautious of the two: the implied move is also a severe
+stress preset (``options_implied_move``), so when it exceeds every severe move in the
+token's own history the stress limit is sized on it, and the report says so
+(``attach_sizing``). When it is milder it changes nothing: never less cautious than the
+history alone.
 
 Method (written so it can be audited)
 -------------------------------------
@@ -130,4 +134,21 @@ def attach_history(block: dict[str, Any], p5_pct: float | None) -> dict[str, Any
     """Set the desk's own 1-in-20 loss beside the implied move and write the line."""
     block["desk_p5_pct"] = p5_pct if p5_pct is not None and p5_pct < 0 else None
     block["line"] = line(block["implied_move_pct"], block["desk_p5_pct"])
+    return block
+
+
+def attach_sizing(block: dict[str, Any], preset: Any) -> dict[str, Any]:  # noqa: ANN401
+    """Say whether the options market's move is what the stress limit was sized on.
+
+    ``preset`` is the ``options_implied_move`` scenario, or None when there was none."""
+    cal = getattr(preset, "calibration", None) or {}
+    block["sizing_binding"] = bool(cal.get("binding"))
+    block["history_severe_pct"] = cal.get("history_severe_pct")
+    if block["sizing_binding"] and block["history_severe_pct"] is not None:
+        block["sizing_line"] = (f"The options market expects more than history: the stress limit is sized on ±{block['implied_move_pct']:.1f}% "
+                                f"(history's worst severe move for this side is {block['history_severe_pct']:.1f}%).")
+    elif block["sizing_binding"]:
+        block["sizing_line"] = f"The options market expects ±{block['implied_move_pct']:.1f}% and the stress limit is sized on it."
+    else:
+        block["sizing_line"] = None
     return block

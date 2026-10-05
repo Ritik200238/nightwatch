@@ -228,6 +228,9 @@ class EmpiricalInputs:
     # The history's own one-in-twenty loss over this hold (a negative percentage, the side's
     # adverse tail). The stress step is never allowed to be milder than it.
     analog_p5_loss_pct: float | None = None
+    # The options market's one-standard-deviation move over this hold, in percent (positive;
+    # nightwatch.features.options). None when no listed option covers the hold.
+    options_implied_move_pct: float | None = None
 
     @property
     def vol_now(self) -> float:
@@ -474,7 +477,32 @@ def build_presets(inp: EmpiricalInputs, *, min_obs: int = 20) -> list[Scenario]:
     floor = _analog_floor(inp, presets)
     if floor is not None:
         presets.append(floor)
+    opt = _options_implied(inp, presets)
+    if opt is not None:
+        presets.append(opt)
     return presets
+
+
+def _options_implied(inp: EmpiricalInputs, presets: Sequence[Scenario]) -> Scenario | None:
+    """A severe preset equal to the move the listed options market implies for the hold,
+    in the direction that hurts this position.
+
+    The size limit reads the worst severe preset, so adding this one can only make the limit
+    tighter or leave it as it was: when options expect less than the history's severe moves
+    the preset is milder than one already there and changes nothing, and when they expect
+    more it becomes the worst and the size follows it. ``binding`` records which."""
+    move = inp.options_implied_move_pct
+    if move is None or not move > 0:
+        return None
+    adverse = [inp.adverse_sign * s.price_move_pct for s in presets if s.severity == Severity.SEVERE and s.price_move_pct]
+    history = max(adverse) if adverse else None
+    return Scenario(
+        id="options_implied_move", name="Options-implied move over the hold", severity=Severity.SEVERE, horizon_h=inp.horizon_h,
+        price_move_pct=inp.adverse_sign * float(move),
+        probability_note="the one-standard-deviation move listed options imply for this hold, taken in the adverse direction",
+        calibration={"source": "Cboe delayed option quotes, at-the-money implied volatility", "implied_move_pct": float(move),
+                     "history_severe_pct": None if history is None else float(history), "binding": bool(history is None or move > history)},
+    )
 
 
 def _analog_floor(inp: EmpiricalInputs, presets: Sequence[Scenario]) -> Scenario | None:
