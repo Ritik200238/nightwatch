@@ -86,7 +86,10 @@ def _parse_system(tickers: list[str], account_equity: float | None) -> str:
         "Write `reply` in the language the trader wrote in. "
         + (f"The trader's account equity is {account_equity:,.0f} USDT unless they say otherwise. " if account_equity else "")
         + "Required to analyse: ticker, side, notional_quote. If any is missing, set kind='clarify', list them in missing_fields and ask for them in reply (one short question). "
-        "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words.\n\n"
+        "Never invent a stop, a size or a thesis the trader did not give. Keep reply under 40 words. "
+        "A clause that says what the trader already holds ('I hold 30k AAPL and 10k NVDA', 'I also hold ...', '我持有 ...') is their book, never the trade: "
+        "ticker, side and notional_quote come from the clause with a side verb (long, short, buy, sell, 做多, 做空), wherever it sits in the sentence. "
+        "'I hold 30k AAPL. Long 20k TSLA overnight' is a long of 20k TSLA, not of AAPL.\n\n"
         'The trader may also narrow which past moments count as comparable - "only earnings nights", '
         '"just weekends", "when it was volatile". Put the matching names in `lenses`, from this list and '
         "no other. Leave it empty unless they actually asked to narrow the comparison: describing their "

@@ -134,6 +134,14 @@ _HOLD_INTRO = re.compile(
     re.I,
 )
 _HELD_SEP = re.compile(r"(?:\s*(?:,|;|&|\band\b|\bplus\b|\balso\b|\bthen\b))*\s*", re.I)
+# "I hold 30k AAPL. Long 20k TSLA overnight": a bare "I hold" is a holding only when another
+# clause carries the trade - an explicit side verb. With no such clause, "I hold 20k TSLA"
+# is the trade itself (a hold), as before.
+_HOLD_PLAIN = re.compile(r"\b(?:i|we)(?:\s+am|'m)?\s+(?:hold(?:ing)?|got)\b|\b(?:i|we)'ve\s+got\b", re.I)
+_TRADE_SIDE = re.compile(
+    r"\b(?:long(?:ing)?(?!\s*[-\s]?(?:term|dated|er\b))|short(?:ing)?(?!\s*[-\s]?(?:term|dated|dur|er\b))|buy(?:ing)?|sell(?:ing)?|bullish|bearish)\b",
+    re.I,
+)
 _HELD_ITEM = re.compile(
     r"(?:(?P<lead>long|short)\s+)?(?:a\s+)?(?:position\s+(?:of|in)\s+)?(?:worth\s+)?"
     r"\$?\s*(?P<num>\d[\d,]*(?:\.\d+)?)\s*(?P<scale>[kmbw])?\b(?:\s*(?:usdt|usd|u|dollars?)\b)?\s*(?:of\s+|in\s+|worth\s+of\s+)?",
@@ -153,8 +161,12 @@ def read_positions(text: str, known_tickers: list[str]) -> tuple[list[tuple[str,
     """
     found: list[tuple[str, str, float]] = []
     chars = list(text)
-    for intro in _HOLD_INTRO.finditer(text):
-        pos, first, last_end = intro.end(), True, None
+    plain: list[tuple[int, int, int, int]] = []  # (start, end, first and last holding index) of the bare "I hold" clauses
+    strict = list(_HOLD_INTRO.finditer(text))
+    bare = [m for m in _HOLD_PLAIN.finditer(text) if not any(s.start() <= m.start() < s.end() for s in strict)]
+    for intro in sorted([*strict, *bare], key=lambda m: m.start()):
+        is_plain = intro in bare
+        pos, first, last_end, before = intro.end(), True, None, len(found)
         default_side = (intro.groupdict().get("side") or "long").lower()
         while True:
             sep = _HELD_SEP.match(text, pos)
@@ -178,7 +190,16 @@ def read_positions(text: str, known_tickers: list[str]) -> tuple[list[tuple[str,
             found.append((ticker, (m.group("lead") or (trail.group(1) if trail else None) or default_side).lower(), amount))
             pos, last_end, first = end, end, False
         if last_end is not None:
+            if is_plain:
+                plain.append((intro.start(), last_end, before, len(found)))
             chars[intro.start():last_end] = " " * (last_end - intro.start())
+    if plain:
+        rest = "".join(chars)
+        if not _TRADE_SIDE.search(rest):
+            # No other clause names a side, so "I hold 20k TSLA" is the trade, not a holding.
+            for a, b, lo, hi in reversed(plain):
+                chars[a:b] = text[a:b]
+                del found[lo:hi]
     return found, "".join(chars)
 
 
