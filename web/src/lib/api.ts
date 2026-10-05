@@ -1171,7 +1171,53 @@ export interface ChatStep {
   ms: number;
 }
 
+/** The small picture under a chat answer. Every number in it is a field of the answer or of
+ *  the report on screen; the backend builds it and the page only draws it. */
+export interface ShockCard {
+  kind: "shock";
+  ticker: string | null;
+  side: "long" | "short";
+  size: number;
+  /** The stock's move and the position's, in percent. */
+  move_pct: number;
+  pnl_pct: number;
+  pnl_quote: number;
+  p5_pct: number | null;
+  p5_quote: number | null;
+  worst_quote: number | null;
+  worst_name: string | null;
+  past: { p5_move_pct: number | null; p1_move_pct: number | null; windows: number | null; beyond: "1_in_20" | "1_in_100" | null } | null;
+}
+export interface CompareRow {
+  key: "verdict" | "size" | "p5" | "worst" | "worst_pct" | "exit";
+  unit: "verdict" | "usd" | "pct" | "bps";
+  before: string | number | null;
+  after: string | number | null;
+}
+export interface CompareCard {
+  kind: "compare";
+  ticker: string | null;
+  rows: CompareRow[];
+}
+export interface BaseRateCard {
+  kind: "base_rate";
+  ticker: string;
+  move_pct: number;
+  up: boolean;
+  weekend: boolean;
+  windows: { n: number; hits: number; share: number; since: string; biggest_pct: number } | null;
+  conditional: { n: number; hits: number; share: number } | null;
+}
+export interface WaysCard {
+  kind: "ways";
+  rows: { label: string; label_zh: string | null; verdict: string; size: number; hours: number; p5_pct: number | null; p5_quote: number | null; worst_quote: number | null; exit_bps: number | null }[];
+  pick: string | null;
+}
+export type ChatCard = ShockCard | CompareCard | BaseRateCard | WaysCard;
+
 export interface ChatResponse {
+  /** A compact picture of the answer's own numbers, where one helps. Absent otherwise. */
+  card?: ChatCard;
   intent: { kind: string; missing_fields: string[]; reply: string } & Record<string, unknown>;
   ticket: Record<string, unknown> | null;
   report: Report | null;
