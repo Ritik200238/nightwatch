@@ -947,6 +947,9 @@ export interface PlanCheck {
   already: boolean;
   note: string;
   thesis_mismatch: string;
+  /** The token's own one-in-twenty move over the hold, and whether the line is beyond it. */
+  reach_pct?: number | null;
+  too_far?: boolean;
 }
 
 /** Bitget signal skill's RSI beside the desk's own from Bitget candles. Context only. */

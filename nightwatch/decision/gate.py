@@ -89,6 +89,11 @@ class GateInputs:
     book_given: bool = False
     book_unknown: tuple[str, ...] = ()
     book_mean_correlation: float | None = None  # this trade against the rest of the book
+    # The trader's "wrong if" line, measured by plan_check: how far it is from the price, and the
+    # token's own one-in-twenty move over the hold (both in percent, as magnitudes). None when
+    # the line is not a price or a move the desk can measure.
+    invalidation_distance_pct: float | None = None
+    invalidation_reach_pct: float | None = None
 
 
 @dataclass(frozen=True)
@@ -125,8 +130,21 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
     entry = inputs.entry_price
 
     # 1. Written plan.
+    inv_d, inv_reach = inputs.invalidation_distance_pct, inputs.invalidation_reach_pct
+    too_far = inv_d is not None and inv_reach is not None and inv_d > inv_reach
     if ticket.thesis.strip() and ticket.invalidation.strip():
-        rules.append(RuleResult("written_plan", GateDecision.GO, "thesis and invalidation stated"))
+        # Why a far line still clears this rule: it asks whether a plan was written, and the
+        # size never leans on the line - with no stop the risk is sized on the one-in-twenty
+        # loss, so a line that cannot bind cannot make the trade look safer than the numbers
+        # say. What it can do is mislead the trader into thinking they are protected, so it is
+        # named as "too far to bind" in the reason and as an advisory on the verdict.
+        note = f" (but the invalidation is {inv_d:.0f}% away, too far to bind)" if too_far else ""
+        rules.append(RuleResult("written_plan", GateDecision.GO, "thesis and invalidation stated" + note))
+        if too_far:
+            advisories.append(
+                f"your 'wrong if' line is {inv_d:.0f}% away, farther than this token's own one-in-twenty move over the hold ({inv_reach:.1f}%): "
+                "it is too far to bind, so it does not limit the loss"
+            )
     else:
         missing = [k for k, v in (("thesis", ticket.thesis), ("invalidation", ticket.invalidation)) if not v.strip()]
         rules.append(RuleResult("written_plan", GateDecision.REVIEW_REQUIRED, f"missing {', '.join(missing)}"))
@@ -137,8 +155,15 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
         # A stop is the better discipline, but its absence is not a reason to give no
         # answer: the calibrated 5th percentile is a measured loss level and sizes the trade.
         if inputs.analog_p5_loss_pct is not None:
-            rules.append(RuleResult("stop", GateDecision.GO, f"no stop given; sized on the 5th percentile ({inputs.analog_p5_loss_pct:+.1f}%) instead"))
-            advisories.append(f"no stop given: risk is sized on the calibrated 5th percentile, {inputs.analog_p5_loss_pct:+.1f}% over the horizon")
+            # A "wrong if" line is an invalidation, not a stop order: say both, so the card never
+            # reads "no stop" next to a line the trader did give, nor takes the line for a stop.
+            if inv_d is not None:
+                line = f"; your 'wrong if' line is {inv_d:.0f}% away, but it is an invalidation, not a stop order"
+                lead = "no stop order"
+            else:
+                line, lead = "", "no stop given"
+            rules.append(RuleResult("stop", GateDecision.GO, f"{lead}; sized on the 5th percentile ({inputs.analog_p5_loss_pct:+.1f}%) instead{line}"))
+            advisories.append(f"{lead}: risk is sized on the calibrated 5th percentile, {inputs.analog_p5_loss_pct:+.1f}% over the horizon{line}")
         else:
             rules.append(RuleResult("stop", GateDecision.REVIEW_REQUIRED, "no stop price and no analog distribution to size on"))
     elif ticket.stop_is_on_correct_side(entry) is False:

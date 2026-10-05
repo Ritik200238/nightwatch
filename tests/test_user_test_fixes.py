@@ -116,3 +116,37 @@ def test_a_slow_turn_streams_comment_lines_so_no_proxy_calls_it_dead(client, mon
 def test_the_chinese_demo_chip_streams_to_a_chinese_answer(client):  # noqa: F811
     r = client.post("/chat/stream", json={"messages": [_u("周末做多特斯拉 2万U")]})
     assert "event: done" in r.text and "event: error" not in r.text
+
+
+# 5. A "wrong if" line is an invalidation, not a stop order, and a far one does not bind
+
+def test_judge_reach_flags_a_line_beyond_the_one_in_twenty_move():
+    from nightwatch.decision.plan_check import PlanCheck
+
+    far = PlanCheck(invalidation="below 170", kind="level", level=170.0, distance_pct=-28.0)
+    far.judge_reach(-4.0)
+    assert far.too_far and far.reach_pct == 4.0
+    near = PlanCheck(invalidation="below 230", kind="level", level=230.0, distance_pct=-3.0)
+    near.judge_reach(-4.0)
+    assert not near.too_far
+    assert PlanCheck(invalidation="a vibe", kind="untested").measured_pct() is None
+
+
+def test_a_far_invalidation_is_named_too_far_and_never_called_a_stop(client):  # noqa: F811
+    from nightwatch.decision.plan_check import describe, PlanCheck
+
+    base = {"ticker": "TSLA", "side": "long", "notional_quote": 5000, "account_equity_quote": 200000, "thesis": "momentum", "as_of": AS_OF.isoformat(), "record": False}
+    far = client.post("/analyze", json={**base, "invalidation": "wrong if it drops 60%"}).json()
+    assert far["plan_check"]["too_far"] is True
+    stop = next(r for r in far["gate"]["rules"] if r["rule"] == "stop")
+    assert "no stop order" in stop["reason"] and "60% away" in stop["reason"] and "not a stop order" in stop["reason"]
+    assert "no stop given" not in stop["reason"]
+    plan = next(r for r in far["gate"]["rules"] if r["rule"] == "written_plan")
+    assert plan["decision"] == "GO" and "too far to bind" in plan["reason"]
+    assert any("too far to bind" in a for a in far["gate"]["advisories"])
+    assert "too far to bind" in describe(PlanCheck(**far["plan_check"]))
+    # A line the token can actually reach is not flagged, and without one the old wording stands.
+    near = client.post("/analyze", json={**base, "invalidation": "wrong if it drops 1%"}).json()
+    assert near["plan_check"]["too_far"] is False
+    none = client.post("/analyze", json={**base, "invalidation": "when my gut says so"}).json()
+    assert next(r for r in none["gate"]["rules"] if r["rule"] == "stop")["reason"].startswith("no stop given")

@@ -223,9 +223,18 @@ function PlanNote({ report, lang }: { report: Report; lang: Lang }) {
       `你的失效条件 ${fmtPrice(c.level)} ${rel}当前价格——对这个方向来说，它更像目标价，而不是能证明你判断错误的位置。`,
     );
   }
+  // A line beyond the token's own one-in-twenty move over the hold is crossed in fewer than one
+  // past hold in twenty: it is an invalidation, not a stop order, and it does not limit the loss.
+  const tooFar = c.too_far && c.reach_pct != null;
+  if (tooFar) {
+    line = `${line ?? ""} ${L(
+      `That is too far to bind: it is beyond this token's own one-in-twenty move over the hold (${c.reach_pct!.toFixed(1)}%), so it is an invalidation, not a stop order, and it does not limit the loss.`,
+      `这条线太远，起不到约束作用：它比这只代币在持有期内二十分之一的波动（${c.reach_pct!.toFixed(1)}%）还远，不是止损单，也不会限制亏损。`,
+    )}`.trim();
+  }
   if (!line && !c.thesis_mismatch) return null;
   return (
-    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
+    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || tooFar || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
       <span className="font-medium text-foreground">{L("Your plan, checked: ", "对你的计划的检查：")}</span>
       <span className="text-muted-foreground">
         {line}

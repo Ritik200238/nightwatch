@@ -52,9 +52,26 @@ class PlanCheck:
     already: bool = False  # the line is already crossed at the current price
     note: str = ""
     thesis_mismatch: str = ""  # the reason reads the opposite way to the position
+    reach_pct: float | None = None  # the token's own one-in-twenty move over the hold, as a magnitude
+    too_far: bool = False  # the line is farther away than that move, so it would almost never bind
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def measured_pct(self) -> float | None:
+        """How far the line is, as a magnitude, when it is a price or a move the desk measured."""
+        if self.kind in ("level", "moving_average", "move") and self.distance_pct is not None and not self.already:
+            return abs(self.distance_pct)
+        return None
+
+    def judge_reach(self, p5_loss_pct: float | None) -> None:
+        """Set ``too_far``: a line beyond the token's one-in-twenty move over the hold is crossed
+        in fewer than one past hold in twenty, so as an exit it is not a line that binds."""
+        d = self.measured_pct()
+        if d is None or p5_loss_pct is None:
+            return
+        self.reach_pct = abs(p5_loss_pct)
+        self.too_far = d > self.reach_pct
 
 
 def _num(text: str) -> float:
@@ -171,6 +188,11 @@ def describe(c: PlanCheck, lang: str = "en") -> str:
         else:
             line += "。" if zh else "."
         bits.append(line)
+    if c.too_far and c.reach_pct is not None and c.measured_pct() is not None:
+        bits.append(
+            f"这条线太远，起不到约束作用：它比这只代币在持有期内二十分之一的波动（{c.reach_pct:.1f}%）还远，不是止损单，也不会限制亏损。" if zh
+            else f"That is too far to bind: it is beyond this token's own one-in-twenty move over the hold ({c.reach_pct:.1f}%), so it is an invalidation, not a stop order, and it does not limit the loss."
+        )
     if c.thesis_mismatch:
         bits.append("注意：你给出的理由看空，但仓位是做多——请核对方向。" if zh and "bearish" in c.thesis_mismatch else
                     "注意：你给出的理由看多，但仓位是做空——请核对方向。" if zh else f"Note: {c.thesis_mismatch}.")
