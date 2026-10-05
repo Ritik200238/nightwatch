@@ -301,6 +301,8 @@ def ticket_from(report: dict) -> TradeTicket | None:
             lenses=asked_lenses,
             auto_lens=bool(t.get("auto_lens", True)),
             open_positions=tuple((str(x[0]).upper(), str(x[1]), float(x[2])) for x in (t.get("open_positions") or ())),
+            stop_offset_pct=t.get("stop_offset_pct"),
+            extra=dict(t.get("extra") or {}),
         )
     except (TypeError, ValueError, IndexError):
         return None
@@ -374,7 +376,7 @@ def _verdict_zh(v: str) -> str:
     return VERDICT_ZH.get(v, v)
 
 
-def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answer:
+def compare(before: dict, after: dict, change: Change, lang: str = "en", *, what: str | None = None) -> Answer:
     """What changed between two reports of the same night, in the order a trader reads.
 
     Every number is copied from one of the two reports. The only judgement this function
@@ -382,7 +384,7 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en") -> Answ
     ``lang`` changes the words, never the numbers.
     """
     zh = lang == "zh"
-    what = (_describe_zh(change) if zh else change.describe()) or ("这个改动" if zh else "that change")
+    what = what or (_describe_zh(change) if zh else change.describe()) or ("这个改动" if zh else "that change")
     refused = _lens_note(after)
     if refused:
         text = f"这个问题我无法如实回答：{refused}。" if zh else f"I cannot answer that one honestly: {refused}."

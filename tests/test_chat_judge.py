@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from nightwatch.api import intake
+from nightwatch.api import intake, thesis_capture
 from nightwatch.api.app import create_app
 from nightwatch.config import Settings
 from tests.test_pipeline import AS_OF, seeded_store  # noqa: F401 - fixture
@@ -127,3 +127,82 @@ def test_the_chat_reply_for_a_too_big_trade_reads_as_one_answer(client):
     assert r["report"]["verdict"]["verdict"] == "NO_GO"
     head = r["reply"].split("\n")[0]
     assert "Too big: 20,000 is 40.0% of your account (limit 25%)" in head and "Size it at" not in r["reply"]
+
+
+# --- the reason the desk asks for, typed back, clears the review ---------------------------
+
+@pytest.mark.parametrize(("text", "thesis", "wrong"), [
+    ("because AI demand is accelerating, wrong if it closes below 170", "AI demand is accelerating", "it closes below 170"),
+    ("account 200k, because AI demand is accelerating, wrong if it closes below 170", "AI demand is accelerating", "it closes below 170"),
+    ("because AI demand is strong, wrong if it closes below 170, account 200k", "AI demand is strong", "it closes below 170"),
+    ("I'm wrong if the Fed hikes. because rates fall", "rates fall", "the Fed hikes"),
+    ("我觉得会涨因为AI需求强，跌破170就算错", "AI需求强", "跌破170"),
+    ("因为财报超预期，如果收盘跌破170就算错", "财报超预期", "收盘跌破170"),
+])
+def test_the_reason_and_the_wrong_if_line_are_cut_apart(text, thesis, wrong):
+    got = thesis_capture.read(text)
+    assert (got.thesis, got.invalidation) == (thesis, wrong)
+
+
+@pytest.mark.parametrize("text", ["why?", "ovr earnigns 🚀", "halve it", "what if it gaps down 10%", "my account is 100k"])
+def test_a_message_with_no_reason_reads_as_none(text):
+    assert not thesis_capture.read(text)
+
+
+def test_stray_words_are_not_a_reason():
+    assert not thesis_capture.reads_as_reason("ovr earnigns rocket")
+    assert not thesis_capture.reads_as_reason("🚀🚀")
+    assert thesis_capture.reads_as_reason("AI demand is accelerating")
+    assert thesis_capture.reads_as_reason("过完财报会涨")
+
+
+def _blockers(report):
+    return [(x["rule"], x["decision"]) for x in report["gate"]["rules"] if x["decision"] != "GO"]
+
+
+def test_the_reply_the_desk_asks_for_clears_a_review_for_a_missing_plan(client):
+    first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    assert _blockers(first["report"]) == [("written_plan", "REVIEW_REQUIRED")] and first["report"]["verdict"]["verdict"] == "REVIEW"
+    got = say(client, "because AI demand is accelerating, wrong if it closes below 280", ctx=first["report"]["forecast_id"])
+    assert got["answer_kind"] == "thesis_saved"
+    assert got["ticket"]["thesis"] == "AI demand is accelerating" and got["ticket"]["invalidation"] == "it closes below 280"
+    assert _blockers(got["report"]) == [] and got["report"]["verdict"]["verdict"] == "GO"
+    assert "moves from REVIEW" in got["reply"] and "to GO" in got["reply"]
+    # the trade is the same one at the same moment: nothing the engine computes moved
+    assert got["report"]["as_of"] == first["report"]["as_of"] and got["ticket"]["notional_quote"] == 5000
+    assert got["report"]["forecast_id"] < 0  # a re-run, not a journalled forecast
+
+
+def test_a_reason_and_an_account_size_in_one_message_both_land(client):
+    first = say(client, "long 5000 TSLA overnight, stop 300")
+    assert first["ticket"]["account_equity_quote"] is None
+    got = say(client, "account 200k, because AI demand is accelerating, wrong if it closes below 280", ctx=first["report"]["forecast_id"])
+    assert got["ticket"]["account_equity_quote"] == 200000 and got["ticket"]["thesis"] and got["ticket"]["invalidation"]
+    assert _blockers(got["report"]) == []
+
+
+def test_a_chinese_reason_clears_it_and_the_reply_is_chinese(client):
+    first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    got = say(client, "我觉得会涨因为AI需求强，跌破280就算错", ctx=first["report"]["forecast_id"])
+    assert got["ticket"]["thesis"] == "AI需求强" and got["ticket"]["invalidation"] == "跌破280"
+    assert _blockers(got["report"]) == [] and "已记在这笔交易上" in got["reply"]
+
+
+def test_only_a_reason_says_what_is_still_missing(client):
+    first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    got = say(client, "because AI demand is accelerating", ctx=first["report"]["forecast_id"])
+    assert got["report"]["verdict"]["verdict"] == "REVIEW" and "Still missing: what would prove you wrong" in got["reply"]
+
+
+def test_is_my_reason_right_uses_the_reason_in_the_same_message(client):
+    first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    got = say(client, "is my reason right? because they beat earnings and raised guidance", ctx=first["report"]["forecast_id"])
+    assert got["answer_kind"] == "thesis"
+    assert got["ticket"]["thesis"] == "they beat earnings and raised guidance"
+    assert "no written reason to check" not in got["reply"]
+
+
+def test_a_question_is_not_taken_for_a_reason(client):
+    first = say(client, "long 5000 TSLA overnight, account 200k, stop 300")
+    got = say(client, "is it because of earnings?", ctx=first["report"]["forecast_id"])
+    assert got.get("answer_kind") != "thesis_saved" and not (got.get("ticket") or {}).get("thesis")

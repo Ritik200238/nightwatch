@@ -540,6 +540,82 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
     }
 
 
+def _plan_missing(context: dict[str, Any]) -> bool:
+    """Whether the trade on screen is waiting on a written reason or a "wrong if" line."""
+    for r in (context.get("gate") or {}).get("rules") or []:
+        if r.get("rule") == "written_plan":
+            return r.get("decision") != "GO"
+    return False
+
+
+def _capture_reason(state: AppState, context: dict[str, Any], latest: str, tickers: list[str], account_equity: float | None, *, check: bool) -> dict[str, Any] | None:
+    """The reason and "wrong if" line a trader types, stored on the ticket and re-run.
+
+    The desk asks for "because ..., wrong if it closes below ...". Typed back, it used to be
+    read as an account size or a what-if and dropped, so the review never cleared. Here the
+    two phrases go onto the ticket of the trade on screen, which is run again at the same
+    moment (never journalled, like any what-if), and the reply says what moved - or what is
+    still missing. With ``check`` the reason is then held against the stored headlines.
+    """
+    import json
+    from dataclasses import replace as _replace
+
+    from nightwatch.api import intake, thesis_capture, whatif
+
+    reason = thesis_capture.read(latest)
+    base = whatif.ticket_from(context)
+    if not reason or base is None:
+        return None
+    lang = intake.language_of(latest)
+    zh = lang == "zh"
+    said = intake.parse_message(latest, tickers)
+    equity = said.account_equity_quote or base.account_equity_quote or account_equity
+    ticket = _replace(base, thesis=reason.thesis or base.thesis, invalidation=reason.invalidation or base.invalidation, account_equity_quote=equity)
+    with state.lock:
+        report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
+        payload = report.to_dict()
+    fid = state.keep_hypothetical(payload)
+
+    parts = []
+    if reason.thesis:
+        parts.append("你的理由" if zh else "your reason")
+    if reason.invalidation:
+        parts.append("你的『错在哪里』" if zh else 'your "wrong if" line')
+    if equity and equity != base.account_equity_quote:
+        parts.append(f"账户 {equity:,.0f} USDT" if zh else f"an account of {equity:,.0f} USDT")
+    what = ("、" if zh else ", ").join(parts[:-1]) + (" 和 " if zh else " and ") + parts[-1] if len(parts) > 1 else parts[0]
+    saved = []
+    if reason.thesis:
+        saved.append(f"理由：“{reason.thesis}”" if zh else f'reason: "{reason.thesis}"')
+    if reason.invalidation:
+        saved.append(f"错在：“{reason.invalidation}”" if zh else f'wrong if: "{reason.invalidation}"')
+    lead = ("已记在这笔交易上：" + "；".join(saved) + "。") if zh else ("Saved on this ticket - " + "; ".join(saved) + ".")
+    answer = whatif.compare(context, payload, whatif.Change(account_equity_quote=equity if equity != base.account_equity_quote else None), lang, what=what)
+    text = lead + ("" if zh else " ") + answer.text
+    still = [x for x in payload["gate"]["rules"] if x["rule"] == "written_plan" and x["decision"] != "GO"]
+    if still:
+        missing_thesis = not ticket.thesis.strip()
+        text += (
+            (" 还缺：你的理由（“因为……”）。" if missing_thesis else " 还缺：什么情况说明你错了（“如果收盘跌破……就算错”）。") if zh
+            else (' Still missing: your reason ("because ...").' if missing_thesis else ' Still missing: what would prove you wrong ("wrong if it closes below ...").')
+        )
+    kind = "thesis_saved"
+    if check and reason.thesis:
+        from nightwatch.decision import thesis_check as _tc
+
+        got = _thesis_check(state, fid, payload, lang)
+        text = text + "\n\n" + _tc.reply_text(got, lang)
+        kind = "thesis"
+    return {
+        "intent": {"kind": "what_if", "question": kind, "missing_fields": [], "reply": text},
+        "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
+        "report": payload, "report_text": None, "narrative": text, "unverified_numbers": [], "reply": text,
+        "mode": "what_if", "answer_kind": kind, "answered_about": context.get("forecast_id"),
+        "changed": {"thesis": bool(reason.thesis), "invalidation": bool(reason.invalidation), **({"account_equity_quote": equity} if equity and equity != base.account_equity_quote else {})},
+        "parsed_by": "rules", "written_by": "rules",
+    }
+
+
 def _who(request: Request) -> tuple[str, str, bool]:
     """(salted client hash, language, is-internal) for a request. Nothing here is stored
     raw: the browser's random id, or failing that the address, is hashed at once."""
@@ -1479,6 +1555,24 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # "thanks, that helps" is not the start of a trade.
         if latest and converse.is_ack(latest):
             return converse.ack_reply(context, language_of(latest))
+        # "because ..., wrong if it closes below ..." - the reply the desk itself asks for to
+        # clear a review. Stored on the ticket and the trade re-run, before anything can read
+        # it as an account size or a what-if. "Is my reason right? because ..." carries its own.
+        if context and latest:
+            from nightwatch.api import intake as _in
+            from nightwatch.api import thesis_capture
+            from nightwatch.decision import thesis_check as _tcheck
+
+            asks_check = bool(_tcheck.ASKS.search(latest))
+            if thesis_capture.read(latest) and (asks_check or (_plan_missing(context) and not latest.rstrip().endswith(("?", "？")))):
+                p = _in.parse_message(latest, list(s.ctx.tickers_with_data()))
+                if not (p.notional_quote or _in.is_a_new_idea(latest, context, list(s.ctx.tickers_with_data()))):
+                    try:
+                        got = _capture_reason(s, context, latest, list(s.ctx.tickers_with_data()), body.account_equity_quote, check=asks_check)
+                    except InsufficientData as exc:
+                        got = {"reply": f"I could not run that one: {exc}", "mode": "what_if", "intent": {"kind": "followup", "reply": str(exc), "missing_fields": []}}
+                    if got:
+                        return got
         # "What's the safest way to hold this?" - the same idea run several ways, side by side.
         from nightwatch.api import ways
 
