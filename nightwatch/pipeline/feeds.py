@@ -6,6 +6,13 @@ consulted, or how stale they were. Each row here is ``{kind, label, last_ts, row
 ``last_ts`` is the newest thing that feed held as of the analysis (never after it), and
 ``rows_used`` how many rows in the window the features read from it. A feed with nothing
 in it is still listed, with ``rows_used`` 0 and no ``last_ts``, so a gap is visible.
+
+``last_ts`` means different things for different feeds, and a reader who takes it for
+"how fresh is this feed" is misled: the Nasdaq row's is when that ticker's row was first
+seen, the FRED one is the latest release already out, a ticker's newest headline may be
+days old on a quiet name. So each row also says what ``last_ts`` is (``last_what``) and
+carries ``checked_at``, when the desk last pulled the feed, which is the number that
+answers "is this feed live".
 """
 from __future__ import annotations
 
@@ -43,6 +50,43 @@ def _bars(store: Store, venue: Venue, symbol: str, kind: str | None, at_ms: int,
     return int(n or 0), last
 
 
+# kind -> (what its last_ts is, [(sync task, venue)]) ; venue None = any, "-yahoo" = any but Yahoo
+_FEED_SYNC: dict[str, tuple[str, list[tuple[str, str | None]]]] = {
+    "bitget_candles": ("newest candle", [("bars", Venue.BITGET_SPOT.value), ("refresh", Venue.BITGET_SPOT.value)]),
+    "bitget_perp": ("newest candle or funding", [("bars", Venue.BITGET_UMCBL.value), ("refresh", Venue.BITGET_UMCBL.value)]),
+    "yahoo_bars": ("newest bar", [("bars", Venue.YAHOO.value), ("equity_refresh", None)]),
+    "nasdaq_earnings": ("row first seen", [("earnings_calendar", None)]),
+    "fred_macro": ("latest release already out", [("macro_calendar", None), ("macro_series", None)]),
+    "rss_news": ("newest headline", [("news", None)]),
+    "sec_edgar": ("latest filing", [("filings", None)]),
+    "corporate_events": ("row first seen", [("corporate_events", None)]),
+}
+
+
+def _checked_at(store: Store, tasks: list[tuple[str, str | None]], at_ms: int) -> int | None:
+    best = None
+    for task, venue in tasks:
+        sql, args = "SELECT MAX(finished_at) FROM sync_log WHERE task=? AND finished_at<=?", [task, at_ms]
+        if venue:
+            sql += " AND venue=?"
+            args.append(venue)
+        got = store._conn.execute(sql, args).fetchone()  # noqa: SLF001
+        if got and got[0] and (best is None or got[0] > best):
+            best = got[0]
+    return best
+
+
+def label_freshness(store: Store, rows: list[dict[str, Any]], at_ms: int) -> None:
+    """Add ``last_what`` and ``checked_at`` to every row whose feed the desk pulls."""
+    for r in rows:
+        spec = _FEED_SYNC.get(r.get("kind", ""))
+        if spec is None:
+            continue
+        r["last_what"] = spec[0]
+        ms = _checked_at(store, spec[1], at_ms)
+        r["checked_at"] = from_epoch_ms(ms).isoformat() if ms else None
+
+
 def feed_sources(store: Store, *, ticker: str, spot_symbol: str, perp_symbol: str | None, yahoo_ticker: str, as_of: datetime,
                  margin_tier_rows: int | None = None) -> list[dict[str, Any]]:
     """One row per feed, in the order a reader thinks of them."""
@@ -78,4 +122,8 @@ def feed_sources(store: Store, *, ticker: str, spot_symbol: str, perp_symbol: st
         out.append(_row("corporate_events", "Dividends, splits and Bitget notices", last, n))
     except Exception:  # noqa: BLE001 - provenance must never fail an analysis
         log.exception("feed provenance failed for %s", ticker)
+    try:
+        label_freshness(store, out, at_ms)
+    except Exception:  # noqa: BLE001 - a label must never fail an analysis
+        log.exception("feed freshness labels failed for %s", ticker)
     return out

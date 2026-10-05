@@ -140,6 +140,8 @@ CREATE TABLE IF NOT EXISTS sync_log (
     range_start INTEGER, range_end INTEGER, rows INTEGER NOT NULL,
     started_at INTEGER NOT NULL, finished_at INTEGER NOT NULL, note TEXT
 );
+-- "when was this feed last pulled" runs on every report; without it that scans every pull ever logged.
+CREATE INDEX IF NOT EXISTS sync_log_task ON sync_log (task, venue, finished_at);
 """
 
 
