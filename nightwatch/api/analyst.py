@@ -34,7 +34,7 @@ from nightwatch.features.phrases import earnings_ahead
 
 log = logging.getLogger(__name__)
 
-SECTION_IDS = ("desk", "checks", "market", "leverage", "failure mode", "premise", "history", "stop", "plan", "stress", "order book", "street", "filing", "caveat", "relations")
+SECTION_IDS = ("desk", "checks", "market", "leverage", "failure mode", "premise", "history", "stop", "plan", "stress", "order book", "street", "bitget", "filing", "caveat", "relations")
 
 _HEADINGS_EN = "The call\nWhat matters most tonight\nWhat would change my mind\nWhat I'd watch\n"
 _HEADINGS_ZH = "结论\n今晚最重要的\n什么会改变我的看法\n我会盯着什么\n"
@@ -202,6 +202,16 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
             lines.append(f"[street] Insiders, last 90 days: {sells} sale{'' if sells == 1 else 's'}, {buys} purchase{'' if buys == 1 else 's'}.")
         if s.get("mood_score") is not None:
             lines.append(f"[street] Market fear and greed: {s['mood_score']:.0f} ({s.get('mood_rating')}).")
+    b = r.get("bitget") or {}
+    for eid in ("equity_calendar", "equity_fundamental_ratios", "equity_fundamental_dividends", "equity_estimates_consensus"):
+        text = ((b.get("entries") or {}).get(eid) or {}).get("text")
+        if text:
+            lines.append(f"[bitget] {text}")
+    chk = b.get("earnings_check") or {}
+    if chk.get("status") == "differ":
+        lines.append(f"[bitget] Bitget and Nasdaq disagree on the next earnings date: {chk['bitget']} against {chk['nasdaq']}.")
+    elif chk.get("status") == "agree":
+        lines.append("[bitget] Bitget's and Nasdaq's earnings calendars give the same next report date.")
     for f in (r.get("filings") or [])[:2]:
         if f.get("market_moving") == "unread":
             lines.append(f"[filing] Fresh filing: a {f.get('form')} landed {f.get('hours_ago', 0):.0f}h ago; the model has not read it yet, so its impact is unknown.")
@@ -321,7 +331,7 @@ _TAG_ALIAS = {
     "交易台": "desk", "检查": "checks", "市场": "market", "杠杆": "leverage", "失效模式": "failure mode", "故障模式": "failure mode",
     "亏损方式": "failure mode", "前提": "premise", "历史": "history", "止损": "stop", "计划": "plan", "压力": "stress", "压力测试": "stress",
     "订单簿": "order book", "盘口": "order book", "市场观点": "street", "华尔街": "street", "文件": "filing", "公告": "filing",
-    "提示": "caveat", "注意": "caveat", "关系": "relations", "日历": "calendar",
+    "提示": "caveat", "bitget数据": "bitget", "注意": "caveat", "关系": "relations", "日历": "calendar",
 }
 
 

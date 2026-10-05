@@ -108,6 +108,11 @@ class AnalysisContext:
     # street and insider context and an independent quote. Optional: without it the
     # report simply has no street section.
     street_client: Any = None
+    # The rest of that catalogue (nightwatch.features.bitget_data.BitgetData): earnings
+    # calendar, valuation, dividends, consensus, profile. A cache plus a refresher that
+    # makes at most one call per ticker per entry per hour; an analysis only reads it.
+    bitget_data: Any = None
+    _bitget_pending: set[str] = field(default_factory=set)
     # Bitget's bitget-signal Skill backend (nightwatch.data.bitget_signal.BitgetSignalClient):
     # an RSI reading, shown only when it agrees with the desk's own candles. Context only.
     signal_client: Any = None
@@ -346,6 +351,26 @@ class AnalysisContext:
                 self._street_pending.discard(ticker)
 
         threading.Thread(target=run, name=f"street-{ticker}", daemon=True).start()
+
+    def refresh_bitget_later(self, ticker: str) -> None:
+        """Ask for this ticker's catalogue entries in the background, if any is due.
+
+        The refresher itself enforces one call per entry per hour, so a burst of analyses of
+        one ticker starts at most one pass, and a cold cache after a restart fills itself."""
+        bd = self.bitget_data
+        if bd is None or ticker in self._bitget_pending or not any(bd.due(ticker, eid, utc_now()) for eid in bd.entries):
+            return
+        self._bitget_pending.add(ticker)
+
+        def run() -> None:
+            try:
+                bd.refresh_ticker(ticker)
+            except Exception:  # noqa: BLE001 - an optional feed
+                log.exception("bitget data for %s failed", ticker)
+            finally:
+                self._bitget_pending.discard(ticker)
+
+        threading.Thread(target=run, name=f"bitget-{ticker}", daemon=True).start()
 
     def signal_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=1), fetch: bool = False) -> dict | None:
         """The checked bitget-signal reading for a ticker, from cache when fresh enough.
@@ -720,6 +745,9 @@ class AnalysisReport:
     # nightwatch.features.street.StreetView as a dict: analysts, insiders, market mood and
     # an independent quote, from Bitget's data. Context only; None for past moments.
     street: dict | None = None
+    # nightwatch.features.bitget_data.report_block: Bitget's earnings calendar (cross-checked
+    # against Nasdaq's), valuation, dividends and consensus. Context only; None for past moments.
+    bitget: dict | None = None
     # nightwatch.features.signal.build: Bitget's signal-skill RSI beside our own from
     # Bitget candles. Context only: not read by the gate or the size.
     signal: dict | None = None
@@ -1150,6 +1178,29 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
                 )
     timings["street"] = _ms(t0)
 
+    # The rest of Bitget's catalogue, from cache only (see AnalysisContext.refresh_bitget_later).
+    t0 = time.perf_counter()
+    bitget = None
+    if ctx.bitget_data is not None and abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        try:
+            from nightwatch.features import bitget_data as bd_mod
+
+            ctx.refresh_bitget_later(ticket.ticker)
+            nasdaq = [e.report_date.date() for e in ctx.store.get_earnings(ticket.ticker)]
+            bitget = bd_mod.report_block(ctx.bitget_data, ticket.ticker, nasdaq, now=utc_now())
+            if bitget:
+                for eid, d in bitget["entries"].items():
+                    sources.append({"kind": f"bitget_{eid}", "label": f"Bitget: {ctx.bitget_data.entries[eid].label}", "last_ts": d.get("fetched_at"), "rows_used": 1, "ticker": ticket.ticker, "fetched_at": d.get("fetched_at")})
+                chk = bitget.get("earnings_check")
+                if chk and chk["status"] == "differ":
+                    warnings.append(
+                        f"Bitget's calendar puts the next {ticket.ticker} earnings on {chk['bitget']} and Nasdaq's on {chk['nasdaq']} ({abs(chk['gap_days'])} day{'' if abs(chk['gap_days']) == 1 else 's'} apart); "
+                        f"one of them is an estimate, so check the date before a hold that spans either"
+                    )
+        except Exception:  # noqa: BLE001 - optional context must never break a verdict
+            log.exception("bitget catalogue for %s failed", ticket.ticker)
+    timings["bitget_data"] = _ms(t0)
+
     t0 = time.perf_counter()
     corporate = None
     try:
@@ -1191,7 +1242,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, bitget=bitget, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,
