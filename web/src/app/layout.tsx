@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SiteFooter, SiteHeader } from "@/components/site-nav";
 import { LangProvider } from "@/lib/lang";
+import { BusyBanner } from "@/components/busy-banner";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <LangProvider>
+          <BusyBanner />
           <header className="border-b border-border">
             <SiteHeader />
           </header>

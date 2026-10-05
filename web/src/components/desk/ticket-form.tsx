@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useLang } from "@/lib/lang";
 import { holdLabel } from "@/lib/plain";
+import { ticketProblems } from "@/lib/errors";
 import { api, type HorizonKind, type Lens, type Side, type TicketInput, type UniverseEntry } from "@/lib/api";
 
 interface Props {
@@ -156,18 +157,15 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
   const available = universe.filter((u) => u.has_data);
 
   function validate(): TicketInput | null {
-    const e: Errors = {};
-    const n = Number(notional);
+    const n = notional.trim() === "" ? NaN : Number(notional);
     const eq = equity.trim() ? Number(equity) : null;
     const st = stop.trim() ? Number(stop) : null;
     const hrs = hours.trim() ? Number(hours) : null;
     const lev = leverage.trim() ? Number(leverage) : null;
-    if (!ticker) e.ticker = tx("Pick a token.", "请选择代币。");
-    if (!(n > 0)) e.notional = tx("Enter a size in USDT.", "请输入 USDT 金额。");
-    if (eq != null && !(eq > 0)) e.equity = tx("Equity must be positive.", "账户资金必须大于 0。");
-    if (st != null && !(st > 0)) e.stop = tx("Stop must be a price.", "止损必须是一个价格。");
-    if (horizon === "hours" && !(hrs && hrs > 0)) e.hours = tx("Enter how many hours.", "请输入小时数。");
-    if (lev != null && !(lev >= 1 && lev <= 125)) e.leverage = tx("Leverage is between 1x and 125x.", "杠杆范围是 1 到 125 倍。");
+    // The same limits the API enforces, in plain words, before anything is sent. A stop on
+    // the wrong side of the price is caught by the API itself (it alone knows the price).
+    const e: Errors = ticketProblems({ ticker, side, notional: n, equity: eq, stop: st, hours: hrs, hoursNeeded: horizon === "hours", leverage: lev }, null, lang);
+    if (Number.isNaN(n) && !e.notional) e.notional = tx("Enter a size in USDT.", "请输入 USDT 金额。");
     setErrors(e);
     if (Object.keys(e).length) return null;
     return {
@@ -264,7 +262,8 @@ export function TicketForm({ universe, busy, onSubmit, initial }: Props) {
       {horizon === "hours" ? (
         <div className="space-y-1">
           <Label htmlFor="stop2">{tx("Stop price (optional)", "止损价（可选）")}</Label>
-          <Input id="stop2" type="number" inputMode="decimal" min={0} step="any" value={stop} onChange={(e) => setStop(e.target.value)} autoComplete="off" />
+          <Input id="stop2" type="number" inputMode="decimal" min={0} step="any" value={stop} onChange={(e) => setStop(e.target.value)} aria-invalid={!!errors.stop} autoComplete="off" />
+          {errors.stop ? <p className="text-xs text-destructive">{errors.stop}</p> : null}
         </div>
       ) : null}
       <div className="space-y-1">
