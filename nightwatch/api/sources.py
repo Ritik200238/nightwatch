@@ -23,6 +23,22 @@ def _one(store: Store, sql: str, args: tuple = ()) -> tuple:
     return row if row is not None else ()
 
 
+def open_interest_row(cache: dict[str, tuple[datetime, dict | None]]) -> dict[str, Any]:
+    """Perp open interest: fetched on demand per token (cached 5 min), so ``last_update``
+    is the newest pull and an idle desk legitimately shows an old one."""
+    good = {k: (ts, v) for k, (ts, v) in cache.items() if v}
+    newest = max((ts for ts, _ in good.values()), default=None)
+    failing = sorted(k for k, (_, v) in cache.items() if not v)
+    return {
+        "key": "bitget_oi", "label": "Bitget perp open interest",
+        "what": "Open interest on each token's USDT perpetual, and its change over 24 hours against the desk's own recorded readings",
+        "cadence": "on demand, cached 5 min per token", "last_update": newest.isoformat() if newest else None,
+        "rows": len(good), "latest": newest.isoformat() if newest else None,
+        "latest_label": (f"{len(good)} tokens read" + (f"; {len(failing)} not answering ({', '.join(failing[:3])})" if failing else "")) if cache else "none read yet",
+        "url": "https://www.bitget.com/api-doc/contract/market/Get-Open-Interest",
+    }
+
+
 def street_row(cached: list[tuple[datetime, Any]], status: dict[str, Any] | None, now: datetime) -> dict[str, Any]:
     """The Bitget US-stock data row, honest about an outage.
 

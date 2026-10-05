@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from nightwatch import __version__
 from nightwatch.api import followup, guard
 from nightwatch.api.locking import RequestFirstLock
-from nightwatch.api.sources import data_sources, street_row
+from nightwatch.api.sources import data_sources, open_interest_row, street_row
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
 from nightwatch.data.models import Venue
@@ -878,6 +878,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         cached = [(ts, v) for ts, v in s.ctx._street.values()]
         if s.ctx.street_client is not None:
             out.append(street_row(cached, s.ctx.street_status(), utc_now()))
+        if s.ctx.perp_client is not None:
+            out.append(open_interest_row(s.ctx._open_interest))
         if s.ctx.signal_client is not None:
             health = s.ctx.signal_health()
             shown = [(ts, v) for ts, v in s.ctx._signal.values() if v and v.get("agrees")]

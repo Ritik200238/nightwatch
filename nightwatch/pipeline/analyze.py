@@ -118,6 +118,7 @@ class AnalysisContext:
     _factors_cache: dict[str, Any] = field(default_factory=dict)
     _street: dict[str, tuple[datetime, Any]] = field(default_factory=dict)
     _street_pending: set[str] = field(default_factory=set)
+    _open_interest: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
     _signal: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
     _signal_pending: set[str] = field(default_factory=set)
     _signal_health: tuple[datetime, dict] | None = None
@@ -190,6 +191,32 @@ class AnalysisContext:
             return hit[1] if hit else None
         self._tiers[perp_symbol] = (utc_now(), tiers)
         return tiers
+
+    def open_interest_for(self, perp_symbol: str | None, *, price: float | None = None, ttl: timedelta | None = None) -> dict | None:
+        """Open interest on the token's perp, cached for a few minutes.
+
+        One small public request (about 0.1 s) per token per ``ttl``, so a busy minute of
+        analyses costs one call per token, not one per analysis. A failure is cached for a
+        minute as "nothing" so a down endpoint is not retried by every request, and never
+        raises: this is context for a leveraged trade, not part of the verdict.
+        """
+        if not perp_symbol or self.perp_client is None:
+            return None
+        now = utc_now()
+        hit = self._open_interest.get(perp_symbol)
+        if hit and now - hit[0] <= ((ttl or OI_TTL) if hit[1] else OI_RETRY):
+            return hit[1]
+        from nightwatch.features import open_interest as oi_mod
+
+        try:
+            contracts, ts = self.perp_client.get_open_interest(perp_symbol)
+            block = oi_mod.build(perp_symbol, contracts, ts, self.store, price=price)
+        except Exception as exc:  # noqa: BLE001 - context must never fail an analysis
+            log.warning("open interest for %s unavailable: %s", perp_symbol, exc)
+            self._open_interest[perp_symbol] = (now, None)
+            return None
+        self._open_interest[perp_symbol] = (now, block)
+        return block
 
     def street_for(self, ticker: str, *, max_age: timedelta = timedelta(hours=2), fetch: bool = True):  # noqa: ANN201
         """Street context for a ticker, from cache when fresh enough.
@@ -650,6 +677,10 @@ class AnalysisReport:
     # Ex-dividend dates, splits and Bitget notices around the hold, from the stored calendar
     # (nightwatch.features.corporate.build). Point in time; never fetched during an analysis.
     corporate_events: dict | None = None
+    # Open interest on the token's perp now and its change over 24 h, with the one plain line
+    # the leverage section shows (nightwatch.features.open_interest). Context only; None for
+    # past moments, tokens without a perp, or when Bitget did not answer.
+    open_interest: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
@@ -1063,6 +1094,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         if sig is not None and sig.get("agrees"):
             signal = sig
             sources.append({"kind": "bitget_signal", "label": "Bitget signal skill (technical analysis)", "last_ts": sig["fetched_at"], "rows_used": 1, "ticker": ticket.ticker, "fetched_at": sig["fetched_at"]})
+    # Open interest on the perp: live, so only for an analysis of now. Context for a
+    # leveraged trade; it never reaches the verdict.
+    open_interest = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S and spec.perp_symbol:
+        open_interest = ctx.open_interest_for(spec.perp_symbol, price=snapshot.prices.get("perp_close"))
+        if open_interest:
+            sources.append({"kind": "bitget_open_interest", "label": "Bitget perp open interest", "last_ts": open_interest["observed_at"], "rows_used": 1, "symbol": spec.perp_symbol})
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
     from nightwatch.pipeline.feeds import feed_sources
 
@@ -1072,11 +1110,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal, corporate_events=corporate,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, signal=signal, corporate_events=corporate, open_interest=open_interest,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,
     )
+    if report.leverage is not None and open_interest:
+        report.leverage["open_interest_line"] = open_interest["line"]
     # The case against whatever was just decided, from the report's own numbers.
     try:
         from nightwatch.decision.devil import build as build_second_opinion
@@ -1167,6 +1207,8 @@ FILING_LOOKBACK_H = 72.0
 STREET_FRESH_S = 6 * 3600
 # A cached street view older than this is served only as "last good", labelled with its age.
 STREET_LIVE_S = 2 * 3600
+OI_TTL = timedelta(minutes=5)
+OI_RETRY = timedelta(seconds=60)
 STREET_LAST_GOOD_MAX = timedelta(hours=24)
 
 

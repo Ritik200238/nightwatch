@@ -510,6 +510,20 @@ class Store:
             )
         return len(rows)
 
+    def open_interest_near(self, venue: Venue, symbol: str, target: datetime, *, tolerance: timedelta) -> tuple[datetime, float] | None:
+        """The recorded open interest closest to ``target``, within ``tolerance``, else None.
+
+        The recorder already writes every perp's ticker, open interest included, on each
+        tick, so a day-ago figure costs one primary-key range seek and no extra table.
+        """
+        t, tol = to_epoch_ms(target), int(tolerance.total_seconds() * 1000)
+        row = self._conn.execute(
+            "SELECT ts, open_interest FROM tickers WHERE venue=? AND symbol=? AND ts BETWEEN ? AND ? AND open_interest IS NOT NULL "
+            "ORDER BY ABS(ts - ?) LIMIT 1",
+            (venue.value, symbol, t - tol, t + tol, t),
+        ).fetchone()
+        return None if row is None else (from_epoch_ms(row[0]), float(row[1]))
+
     # ----------------------------------------------------------------- earnings
 
     def upsert_earnings(self, events: Iterable[EarningsEvent]) -> int:
