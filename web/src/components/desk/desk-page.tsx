@@ -20,6 +20,7 @@ import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
 import { ApiError, api, type MissesResponse, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 import { fmtDateL } from "@/lib/i18n";
+import { loadReportId, saveReportId } from "@/lib/desk-session";
 
 export default function DeskPage() {
   const { lang, setLang, tx } = useLang();
@@ -78,6 +79,32 @@ export default function DeskPage() {
     setHeroDraft("");
     setScript({ id: Date.now(), steps });
   }
+
+  // A refresh or the Back button brings back the report that was on screen, from its stored copy.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    if (new URLSearchParams(window.location.search).has("q")) return;
+    const id = loadReportId();
+    if (id == null) return;
+    setHeroUsed(true);
+    let live = true;
+    void api
+      .report(id)
+      .then((r) => {
+        if (!live) return;
+        setReport((cur) => cur ?? r);
+        setFromChat(true);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (report) saveReportId((report.forecast_id as number | null) ?? null);
+  }, [report]);
 
   // /?q=<text> runs that text once through the chat; repeat q for a follow-up question.
   useEffect(() => {
@@ -224,7 +251,7 @@ export default function DeskPage() {
             )}
           </TabsContent>
           <TabsContent value="chat" className="pt-3">
-            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} script={script} onReport={(r) => {
+            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} script={script} onRestore={() => setHeroUsed(true)} onReport={(r) => {
                 setContrast(null);
                 setReport(r);
                 setFromChat(true);

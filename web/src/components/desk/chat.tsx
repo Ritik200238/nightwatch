@@ -8,6 +8,7 @@ import { useLang } from "@/lib/lang";
 import { isoIn, isSnapshotAnswer, snapshotFlag, snapshotNoticeFor } from "@/lib/snapshot";
 import { plainText } from "@/lib/plain";
 import { startAgent, useAgent } from "@/lib/agent-run";
+import { loadChat, saveChat } from "@/lib/desk-session";
 import { GuardNote } from "@/components/report/guard-note";
 import { ChatCardView } from "./chat-card";
 import { Working } from "./working";
@@ -31,6 +32,8 @@ interface Props {
   busy: boolean;
   setBusy: (b: boolean) => void;
   onReport: (r: Report, lang: "en" | "zh") => void;
+  /** Called once when a conversation from this tab is brought back, so the page can leave its start screen. */
+  onRestore?: () => void;
   /** A canned run: each step is sent as if typed, once, in order. */
   script?: { id: number; steps: string[] } | null;
 }
@@ -96,7 +99,7 @@ const READ_FROM: Record<string, string> = {
   data: "the list of live sources",
 };
 
-export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) {
+export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, script }: Props) {
   const { lang, setLang, tx } = useLang();
   const [messages, setMessages] = useState<Msg[]>([]);
   // The report the conversation is currently about. Questions are answered from it.
@@ -131,6 +134,31 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  // A refresh or the Back button brings the conversation back from this tab's storage; the
+  // page reloads the report itself from /reports/<id>. A /?q= link starts a fresh conversation.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const saved = new URLSearchParams(window.location.search).has("q") ? null : loadChat<Msg>();
+    if (saved) {
+      let restored = saved.messages;
+      if (restored[restored.length - 1]?.role === "user") {
+        // The page went away while that message was being answered; say so instead of leaving it hanging.
+        restored = [...restored, { role: "assistant", content: tx("This page was reloaded while that message was being answered, so there is no answer to it. Send it again to run it.", "这条消息还没回答完页面就被刷新了，所以没有答案。请再发一次。") }];
+      }
+      messagesRef.current = restored;
+      setMessages(restored);
+      contextRef.current = saved.contextId;
+      setContextId(saved.contextId);
+      setSide(saved.side);
+      onRestore?.();
+    }
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (hydrated) saveChat<Msg>({ messages, contextId, side });
+  }, [hydrated, messages, contextId, side]);
 
   useEffect(() => {
     let cancelled = false;
