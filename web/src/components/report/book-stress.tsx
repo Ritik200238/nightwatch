@@ -3,7 +3,7 @@
 import { Pill } from "@/components/report/primitives";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { BookStress, RebalancePlan } from "@/lib/api";
-import { fmtUsd } from "@/lib/format";
+import { fmtLev, fmtUsd } from "@/lib/format";
 import { type Lang, tr } from "@/lib/i18n";
 
 const pct = (v: number) => `${v.toFixed(v >= 10 ? 0 : 1)}%`;
@@ -147,10 +147,10 @@ export function BookStressView({ stress, lang }: { stress: BookStress; lang: Lan
           {liq ? (
             <p>
               {L(
-                `The ${liq.leverage}x ${liq.ticker} leg is liquidated ${pct(liq.distance_pct)} against you${
+                `The ${fmtLev(liq.leverage)}x ${liq.ticker} leg is liquidated ${pct(liq.distance_pct)} against you${
                   liq.comes_before_limit == null ? "" : liq.comes_before_limit ? ", before the book reaches its limit" : ", after the book has already reached its limit"
                 }. At the end of the hold, history was past it in ${liq.windows_hit.toLocaleString()} of ${liq.windows.toLocaleString()} windows (touches along the way are counted in the leverage section).`,
-                `${liq.leverage} 倍的 ${liq.ticker} 仓位在不利方向 ${pct(liq.distance_pct)} 时被强平${
+                `${fmtLev(liq.leverage)} 倍的 ${liq.ticker} 仓位在不利方向 ${pct(liq.distance_pct)} 时被强平${
                   liq.comes_before_limit == null ? "" : liq.comes_before_limit ? "，早于组合触及上限" : "，晚于组合触及上限"
                 }。持有期结束时，历史上有 ${liq.windows_hit.toLocaleString()} / ${liq.windows.toLocaleString()} 个窗口越过了这一点（途中触及的次数见杠杆部分）。`,
               )}

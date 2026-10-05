@@ -4,16 +4,16 @@ import { oiLine } from "@/components/report/market-context";
 import { Pill } from "@/components/report/primitives";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { LadderRung, Report, TicketInput } from "@/lib/api";
-import { fmtPrice, fmtUsd } from "@/lib/format";
+import { fmtLev, fmtPrice, fmtUsd } from "@/lib/format";
 import { type Lang, tr } from "@/lib/i18n";
 
 /** How a rung reads, in words as well as colour: a reader who cannot tell the hues apart
  *  still gets "too risky" or "clear" from the pill. */
 function gateLook(gate: LadderRung["gate"], lang: Lang): { tone: "good" | "warning" | "critical"; label: string } {
   const L = tr(lang);
-  if (gate === "GO") return { tone: "good", label: L("Clear", "安全") };
-  if (gate === "NO_GO") return { tone: "critical", label: L("Too risky", "风险过高") };
-  return { tone: "warning", label: L("Review", "需复核") };
+  if (gate === "GO") return { tone: "good", label: L("Liquidation risk: clear", "强平风险：低") };
+  if (gate === "NO_GO") return { tone: "critical", label: L("Liquidation risk: too high", "强平风险：过高") };
+  return { tone: "warning", label: L("Liquidation risk: review", "强平风险：需复核") };
 }
 
 /** The sentence under the table: the highest leverage history calls safe and what holding
@@ -24,20 +24,20 @@ function safestLine(l: NonNullable<Report["leverage"]>, rungs: LadderRung[], lan
   const first = rungs[0].leverage;
   const last = rungs[rungs.length - 1].leverage;
   if (safest == null) {
-    return L(`No level from ${first}x to ${last}x came through clean: each was reached by a past moment, the 1-in-20 loss, or a stress preset.`, `从 ${first}x 到 ${last}x，没有一档是安全的：每一档都被过去的某个时刻、二十分之一的亏损或某个压力情景触及。`);
+    return L(`No level from ${fmtLev(first)}x to ${fmtLev(last)}x came through clean: each was reached by a past moment, the 1-in-20 loss, or a stress preset.`, `从 ${fmtLev(first)}x 到 ${fmtLev(last)}x，没有一档是安全的：每一档都被过去的某个时刻、二十分之一的亏损或某个压力情景触及。`);
   }
   const rung = rungs.find((r) => r.leverage === safest);
   const of = rung?.analog_of ?? 0;
   const extra = l.safest_extra_margin_quote;
   if (extra == null) {
     return L(
-      `${l.leverage}x is clear: none of ${of} past moments like this reached liquidation. The highest level that stays clear is ${safest}x.`,
-      `${l.leverage}x 是安全的：过去 ${of} 个类似时刻没有一个触及强平。仍然安全的最高杠杆是 ${safest}x。`,
+      `${fmtLev(l.leverage)}x has no liquidation risk: none of ${of} past moments like this reached liquidation. The highest level that stays clear is ${fmtLev(safest)}x.`,
+      `${fmtLev(l.leverage)}x 没有强平风险：过去 ${of} 个类似时刻没有一个触及强平。仍然安全的最高杠杆是 ${fmtLev(safest)}x。`,
     );
   }
   return L(
-    `Safer: at ${safest}x (${fmtUsd(rung?.margin_quote)} USDT margin, ${fmtUsd(extra)} more than now) none of ${of} past moments like this reached liquidation.`,
-    `更稳妥：${safest}x（保证金 ${fmtUsd(rung?.margin_quote)} USDT，比现在多 ${fmtUsd(extra)}），过去 ${of} 个类似时刻没有一个触及强平。`,
+    `Safer: at ${fmtLev(safest)}x (${fmtUsd(rung?.margin_quote)} USDT margin, ${fmtUsd(extra)} more than now) none of ${of} past moments like this reached liquidation.`,
+    `更稳妥：${fmtLev(safest)}x（保证金 ${fmtUsd(rung?.margin_quote)} USDT，比现在多 ${fmtUsd(extra)}），过去 ${of} 个类似时刻没有一个触及强平。`,
   );
 }
 
@@ -53,7 +53,7 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
     <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
       <p className="font-medium text-foreground">{L("Leverage safety", "杠杆安全")}</p>
       <p className="text-[13px] text-muted-foreground">
-        {L("The same position at each level, judged on the same past moments.", "同一个仓位在各个杠杆下的情况，用同样的历史时刻来衡量。")}
+        {L("The same position at each level, judged on the same past moments. This table judges liquidation risk only; the verdict above also weighs size, risk budget and exit cost.", "同一个仓位在各个杠杆下的情况，用同样的历史时刻来衡量。这张表只判断强平风险；上面的结论还要看仓位大小、风险预算和平仓成本。")}
         {onRerun ? L(" Click a row to re-run at that leverage.", " 点击一行，即可按该杠杆重新运行。") : ""}
       </p>
       {report.open_interest ? <p className="mt-1 text-[13px] text-foreground">{oiLine(report.open_interest, lang)}</p> : null}
@@ -89,13 +89,13 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
                         onRerun?.({ leverage: r.leverage });
                       }}
                       className="rounded px-1 text-left font-medium underline decoration-dotted underline-offset-4 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                      aria-label={L(`Re-run at ${r.leverage}x`, `按 ${r.leverage}x 重新运行`)}
+                      aria-label={L(`Re-run at ${fmtLev(r.leverage)}x`, `按 ${fmtLev(r.leverage)}x 重新运行`)}
                     >
-                      {r.leverage}x
+                      {fmtLev(r.leverage)}x
                     </button>
                   ) : (
                     <span>
-                      {r.leverage}x <span className="text-xs text-muted-foreground">{L("(yours)", "（你的）")}</span>
+                      {fmtLev(r.leverage)}x <span className="text-xs text-muted-foreground">{L("(yours)", "（你的）")}</span>
                     </span>
                   )}
                 </TableCell>

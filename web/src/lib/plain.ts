@@ -10,7 +10,7 @@ const ZH_VERDICT: Record<string, string> = { REDUCE_TO: "建议减仓", NO_GO: "
 const CAP_EN: Record<string, string> = {
   risk_budget: "risk budget",
   concentration: "concentration",
-  regime: "market state",
+  regime: "market-conditions",
   exit_liquidity: "exit liquidity",
   stress: "stress",
   book_tail: "book tail",
@@ -40,6 +40,77 @@ export function plainText(text: string, lang: "en" | "zh" = "en"): string {
   );
   t = t.replace(/\b(REDUCE_TO|NO_GO)\b/g, (m) => (lang === "zh" ? ZH_VERDICT[m] : m.replace("_", " ")));
   t = t.replace(/\b(risk_budget|exit_liquidity|book_tail)\b/g, (m) => (lang === "zh" ? CAP_ZH[m] : CAP_EN[m]));
+  // The engine's own shorthand, in the words a trader would use.
+  t = t.replace(/\banalog (?:5th-percentile|p5) loss\b/g, lang === "zh" ? "相似历史时刻的二十分之一亏损" : "one-in-twenty loss from past moments");
+  t = t.replace(/\bregime (cap|limit)\b/g, lang === "zh" ? "市场状态上限" : "market-conditions limit");
+  return t;
+}
+
+/** One gate rule's reason, which the server writes in English, in the reader's language.
+ *  English is only cleaned of shorthand; Chinese is translated from the fixed shapes the gate uses. */
+export function ruleReason(reason: string, lang: "en" | "zh" = "en"): string {
+  const t = plainText(reason, lang);
+  if (lang !== "zh") return t;
+  let m: RegExpExecArray | null;
+  const basis = (b: string) => (/^(?:distance to stop|stop distance)$/.test(b.trim()) ? "到止损的距离" : b.trim());
+  if ((m = /^thesis and invalidation stated(?: \(but the invalidation is (\d+)% away, too far to bind\))?$/.exec(t))) return m[1] ? `已写明理由和“错在哪里”（但这条线距现价 ${m[1]}%，太远，起不到约束作用）` : "已写明理由和“错在哪里”";
+  if ((m = /^missing (.+)$/.exec(t))) {
+    const parts = m[1].split(/,\s*/).map((p) => (p === "thesis" ? "理由" : p === "invalidation" ? "“错在哪里”" : p));
+    return `缺少${parts.join("和")}`;
+  }
+  if ((m = /^no stop (?:given|order); sized on the 5th percentile \(([+-][\d.]+)%\) instead(?:; your 'wrong if' line is (\d+)% away, but it is an invalidation, not a stop order)?$/.exec(t)))
+    return `没有止损单；按第 5 百分位（${m[1]}%）定仓位${m[2] ? `；你的“错在哪里”那条线距现价 ${m[2]}%，它是判断失效的条件，不是止损单` : ""}`;
+  if (t === "no stop price and no analog distribution to size on") return "没有止损价，也没有历史分布可用来定仓位";
+  if (t === "stop is on the wrong side of entry") return "止损设在了入场价的错误一侧";
+  if ((m = /^stop ([\d.]+)% away is tighter than ([\d.]+)% — inside normal hourly noise for this token$/.exec(t))) return `止损距现价 ${m[1]}%，比 ${m[2]}% 更近，落在这只代币正常的小时波动之内`;
+  if ((m = /^stop ([\d.]+)% away - check it is a price for this token$/.exec(t))) return `止损距现价 ${m[1]}%，请确认这是这只代币的价格`;
+  if ((m = /^stop ([\d.]+)% away is wider than ([\d.]+)%$/.exec(t))) return `止损距现价 ${m[1]}%，比 ${m[2]}% 更宽`;
+  if ((m = /^stop ([\d.]+)% from entry$/.exec(t))) return `止损距入场价 ${m[1]}%`;
+  if (t === "account equity not provided") return "没有提供账户规模";
+  if ((m = /^position is ([\d.]+)% of equity \(limit ([\d.]+)%\)$/.exec(t))) return `仓位占账户 ${m[1]}%（上限 ${m[2]}%）`;
+  if ((m = /^position is ([\d.]+)% of equity$/.exec(t))) return `仓位占账户 ${m[1]}%`;
+  if (t === "cannot compute risk: no stop and no analog distribution") return "无法计算风险：没有止损，也没有历史分布";
+  if ((m = /^risk ([\d,]+) \((.+)\) but equity unknown$/.exec(t))) return `风险 ${m[1]}（${basis(m[2])}），但不知道账户规模`;
+  if ((m = /^risk ([\d.]+)% of equity \((.+)\) exceeds ([\d.]+)%$/.exec(t))) return `风险占账户 ${m[1]}%（${basis(m[2])}），超过上限 ${m[3]}%`;
+  if ((m = /^risk ([\d.]+)% of equity \((.+)\)$/.exec(t))) return `风险占账户 ${m[1]}%（${basis(m[2])}）`;
+  if ((m = /^losing exit (.+) inside the (\d+)h cooldown$/.exec(t))) return `${m[1]} 有一笔亏损平仓，仍在 ${m[2]} 小时冷静期内`;
+  if (t === "no recent losing exit") return "最近没有亏损平仓";
+  if (t === "inputs complete") return "输入数据完整";
+  if ((m = /^minor flags: (.+)$/.exec(t))) return `轻微提示：${m[1]}`;
+  if ((m = /^analysis inputs degraded: (.+)$/.exec(t))) return `分析输入数据不完整：${m[1]}`;
+  if ((m = /^hostile regime \(size multiplier ([\d.]+)\); selective entries only$/.exec(t))) return `市场环境不利（仓位乘数 ${m[1]}），只做有选择的入场`;
+  if (t === "regime unknown: not enough history") return "无法判断市场状态：历史数据不足";
+  if ((m = /^regime (.+)$/.exec(t))) return `市场状态：${m[1]}`;
+  if (t === "the live book cannot absorb this size at any price") return "实时盘口在任何价格都接不住这个仓位";
+  if (t === "no order book available to cost the exit") return "没有盘口数据，无法估算平仓成本";
+  if ((m = /^exit would cost (\d+) bps \(limit (\d+)\)$/.exec(t))) return `平仓成本约 ${m[1]} bps（上限 ${m[2]}）`;
+  if ((m = /^exit costs (\d+) bps on the live book$/.exec(t))) return `按实时盘口，平仓成本约 ${m[1]} bps`;
+  if ((m = /^no stored history for (.+); the book's tail is measured without it$/.exec(t))) return `${m[1]} 没有历史数据；整体尾部风险不含它`;
+  if (t === "the book's history is measured; its limit is applied to the size") return "整体持仓的历史已计入；它的上限已用于仓位";
+  return breakerReason(t, "zh");
+}
+
+/** The report's caveats are written in English by the engine; the shapes it uses are fixed. */
+export function warningText(w: string, lang: "en" | "zh" = "en"): string {
+  const t = plainText(w, lang);
+  if (lang !== "zh") return t;
+  let m: RegExpExecArray | null;
+  const outage = (s: string) => s.replace(/ since (\d\d:\d\d) UTC/, " 自 $1 UTC").replace(/\(HTTP (\d+)\)/, "（HTTP $1）");
+  if ((m = /^Bitget's US-stock data \(analysts, insiders, live quote\) is unavailable(.*); this report has no street section$/.exec(t)))
+    return `Bitget 美股数据（分析师、内部人、实时报价）不可用${outage(m[1])}；本报告没有这部分内容`;
+  if ((m = /^Bitget's US-stock data \(analysts, insiders, live quote\) is last good (.+?) ago(.*); it is context, not live, and is left out of the live-price checks$/.exec(t)))
+    return `Bitget 美股数据（分析师、内部人、实时报价）最近一次有效数据在 ${m[1]} 前${outage(m[2])}；它只作背景参考，不是实时数据，也不参与实时价格检查`;
+  if (t === "no order book available: exit cost and liquidity caps are unknown") return "没有盘口数据：平仓成本和流动性上限未知";
+  if (t === "sensitivity sweep failed; the verdict above is unaffected") return "敏感性扫描失败；上面的结论不受影响";
+  if (t === "not enough hourly history for a Monte Carlo over the horizon") return "小时级历史不足，无法在持有期内做蒙特卡洛模拟";
+  if ((m = /^analog cohort for the (.+) horizon is below the minimum sample; verdict falls back to the stop for risk$/.exec(t))) return `${m[1]} 持有期的相似历史样本低于最低要求；结论改用止损来衡量风险`;
+  if ((m = /^analog search refused: (.+)$/.exec(t))) return `相似历史检索未运行：${m[1]}`;
+  if ((m = /^the native close fair value is built on \(([\d.]+)\) is ([+-]\d+) bps from Bitget's figure for the same close; one of them is wrong, so read the basis with care$/.exec(t)))
+    return `公允价值所用的原生收盘价（${m[1]}）与 Bitget 对同一收盘价的数字相差 ${m[2]} bps；其中一个有误，解读价差时请小心`;
+  if ((m = /^Bitget's calendar puts the next (\S+) earnings on (\S+) and Nasdaq's on (\S+) \((\d+) days? apart\); one of them is an estimate, so check the date before a hold that spans either$/.exec(t)))
+    return `Bitget 日历把 ${m[1]} 下次财报定在 ${m[2]}，纳斯达克定在 ${m[3]}（相差 ${m[4]} 天）；其中一个是估算，持有期跨越任一日期前请先核对`;
+  if ((m = /^The (\S+) perp looks crowded: (.+)\. A liquidation cascade has more to feed on; this did not change the size$/.exec(t)))
+    return `${m[1]} 永续合约看起来过于拥挤：${m[2]}。连环强平的燃料更多；这没有改变仓位`;
   return t;
 }
 
@@ -85,9 +156,9 @@ const RULE_LABEL: Record<string, { en: string; zh: string }> = {
  *  keeps its words with the first letter capitalised. */
 export function plainReason(text: string, lang: "en" | "zh" = "en"): string {
   const t = plainText(text, lang).trim();
-  const m = /^([a-z][a-z ]*?):\s*(.+)$/.exec(t);
+  const m = /^([a-z][a-z_ ]*?):\s*(.+)$/.exec(t);
   if (!m) return sentence(t);
-  const key = m[1].trim();
+  const key = m[1].trim().replace(/_/g, " ");
   const rest = m[2].trim();
   const label = RULE_LABEL[key];
   if (key === "market posture") {
@@ -106,8 +177,15 @@ export function plainReason(text: string, lang: "en" | "zh" = "en"): string {
     const miss = /^missing (.+)$/.exec(rest);
     if (miss) {
       const parts = miss[1].split(/,\s*/);
-      if (lang === "zh") return `计划不完整：缺少${parts.map((p) => (p === "thesis" ? "理由" : p === "invalidation" ? "失效条件" : p)).join("和")}`;
-      return `Plan is incomplete: add your ${parts.join(" and ")}`;
+      const both = parts.includes("thesis") && parts.includes("invalidation");
+      if (lang === "zh") {
+        return both ? "计划不完整：缺少你的理由和“错在哪里”那一句" : parts.includes("thesis") ? "计划不完整：缺少你的理由" : "计划不完整：缺少“错在哪里”那一句";
+      }
+      return both
+        ? "Plan is incomplete: your reason and 'wrong if' line are missing"
+        : parts.includes("thesis")
+          ? "Plan is incomplete: your reason is missing"
+          : "Plan is incomplete: your 'wrong if' line is missing";
     }
   }
   if (label) return `${lang === "zh" ? label.zh : label.en}${lang === "zh" ? "：" : ": "}${lang === "zh" ? rest : sentence(rest)}`;
@@ -116,8 +194,10 @@ export function plainReason(text: string, lang: "en" | "zh" = "en"): string {
 
 /** A sizing cap's explanation. The server writes it in English; the shapes it uses are fixed. */
 export function capDetail(detail: string, lang: "en" | "zh"): string {
-  if (lang !== "zh") return detail;
+  if (lang !== "zh") return plainText(detail, "en").replace(/\bregime multiplier\b/, "market-conditions multiplier");
   let m: RegExpExecArray | null;
+  if ((m = /^([\d.]+)% of equity at risk over a ([\d.]+)% (analog p5 loss|stop distance)$/.exec(detail)))
+    return `账户权益的 ${m[1]}% 作为风险，按${m[3] === "stop distance" ? "到止损的距离" : "相似历史时刻的二十分之一亏损"} ${m[2]}% 计算`;
   if ((m = /^worst severe preset ([+-]?[\d.]+)% of notional; (?:approximately )?the largest size (?:whose loss stays|within) (?:inside )?([\d.]+)% of equity$/.exec(detail)))
     return `最严重的压力情景为仓位的 ${m[1]}%；亏损不超过账户权益 ${m[2]}% 的最大仓位`;
   if ((m = /^largest size whose worst severe loss stays inside ([\d.]+)% of equity$/.exec(detail))) return `最严重压力情景的亏损不超过账户权益 ${m[1]}% 的最大仓位`;

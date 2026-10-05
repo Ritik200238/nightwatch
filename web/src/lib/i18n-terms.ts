@@ -101,9 +101,9 @@ export function sourceName(lang: Lang, s: string | null | undefined): string {
 /** The basis the gate measured risk on. */
 export function riskBasis(lang: Lang, b: string | null | undefined): string {
   if (!b) return "";
-  if (lang !== "zh") return b;
+  if (lang !== "zh") return b === "analog 5th-percentile loss" || b === "analog p5 loss" ? "one-in-twenty loss from past moments" : b;
   if (b === "distance to stop") return "到止损的距离";
-  if (b === "analog 5th-percentile loss") return "相似时刻第 5 百分位亏损";
+  if (b === "analog 5th-percentile loss" || b === "analog p5 loss") return "相似历史时刻的二十分之一亏损";
   return b;
 }
 
