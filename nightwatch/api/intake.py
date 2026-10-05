@@ -1005,6 +1005,76 @@ _NEEDS_ZH = {
 }
 
 
+# A recommended size below this share of the request, or below this many USDT, is not a size
+# anyone would trade: "NO GO ... size it at 56" read as a contradiction and a joke.
+SENSIBLE_SHARE = 0.05
+SENSIBLE_FLOOR = 100.0
+
+
+def sensible_floor(requested: float) -> float:
+    return max(SENSIBLE_FLOOR, SENSIBLE_SHARE * (requested or 0.0))
+
+
+def _too_big_reason(report: Any, zh: bool) -> str | None:  # noqa: ANN401
+    """Why the size is too big, in the gate's own numbers: "20,000 risks 1.05% of your account (limit 1%)".
+
+    Only the two size rules count here. A NO GO that comes from anything else (a hostile
+    regime, no exit) is not cured by a smaller size, and saying so would be wrong.
+    """
+    t = report.ticket
+    got: list[str] = []
+    for r in report.gate.rules:
+        if r.decision.value != "NO_GO":
+            continue
+        if r.rule not in ("position_size", "risk_budget"):
+            return None
+        if r.rule == "risk_budget":
+            m = re.search(r"risk ([\d.]+)% of equity.*exceeds ([\d.]+)%", r.reason)
+            if m:
+                got.append(f"风险占你账户的 {float(m.group(1)):.2f}%（上限 {float(m.group(2)):g}%）" if zh
+                           else f"risks {float(m.group(1)):.2f}% of your account (limit {float(m.group(2)):g}%)")
+        else:
+            m = re.search(r"position is ([\d.]+)% of equity \(limit ([\d.]+)%\)", r.reason)
+            if m:
+                got.append(f"占你账户的 {float(m.group(1)):.1f}%（上限 {float(m.group(2)):g}%）" if zh
+                           else f"is {float(m.group(1)):.1f}% of your account (limit {float(m.group(2)):g}%)")
+    if not got:
+        return None
+    n = f"{t.notional_quote:,.0f}"
+    return f"{n} " + ("，".join(got) if zh else " and ".join(got))
+
+
+def _size_clause(report: Any, zh: bool) -> str:  # noqa: ANN401
+    """The sentence after the verdict about size, without ever contradicting the verdict.
+
+    A verdict of NO GO next to "Size it at 18,913" read as two answers. A NO GO that is
+    only about size says so ("Too big: ... 18,913 fits."); a recommended size that is a
+    sliver of the request, or under a hundred USDT, is not offered at all - the reply says
+    no sensible size passes and names the limit that binds.
+    """
+    v, t = report.verdict, report.ticket
+    rec = v.recommended_notional
+    if rec is None or abs(rec - t.notional_quote) <= 1:
+        return ""
+    priced = [c for c in v.caps if c.notional is not None]
+    binding = min(priced, key=lambda c: c.notional) if priced else None
+    if rec < sensible_floor(t.notional_quote):
+        if binding is not None and binding.name == "exit_liquidity":
+            return (" 以目前的盘口，任何仓位的平仓成本都超过预算，现在不宜开仓。" if zh
+                    else " No size gets out within the exit-cost budget on the book right now, so there is nothing to size.")
+        reason = ""
+        if binding is not None:
+            name = CAP_ZH.get(binding.name, binding.name.replace("_", " ")) if zh else binding.name.replace("_", " ")
+            reason = f"（卡住的是{name}上限）" if zh else f" (the {name} limit binds)"
+        return f" 目前没有合适的仓位能通过限制{reason}。" if zh else f" No sensible size passes the limits right now{reason}."
+    if v.verdict.value == "NO_GO":
+        why = _too_big_reason(report, zh)
+        if why:
+            return f" 仓位过大：{why}。{rec:,.0f} 在限制之内。" if zh else f" Too big: {why}. {rec:,.0f} fits the size limits."
+        return f" 按各项上限，最多可到 {rec:,.0f}。" if zh else f" The most the caps allow is {rec:,.0f}."
+    return f" 建议仓位改为 {rec:,.0f}。" if zh else f" Size it at {rec:,.0f} instead."
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -1020,17 +1090,7 @@ def brief(report: Any, lang: str = "en") -> str:
         head = f"{VERDICT_ZH.get(v.verdict.value, v.verdict.value)}：{t.ticker} {side} {t.notional_quote:,.0f} USDT，{_horizon_phrase(report, lang)}。"
     else:
         head = f"{v.verdict.value.replace('_', ' ')} on {side} {t.notional_quote:,.0f} USDT of {t.ticker}, {_horizon_phrase(report, lang)}."
-    if v.recommended_notional is not None and v.recommended_notional < 1:
-        # "Size it at 0 instead" read as a contradiction next to a REVIEW. What it means is
-        # that no size clears a limit, so say which one.
-        priced_caps = [c for c in v.caps if c.notional is not None]
-        binding = min(priced_caps, key=lambda c: c.notional) if priced_caps else None
-        if binding is not None and binding.name == "exit_liquidity":
-            head += " 以目前的盘口，任何仓位的平仓成本都超过预算，现在不宜开仓。" if zh else " No size gets out within the exit-cost budget on the book right now, so there is nothing to size."
-        else:
-            head += " 目前没有任何仓位能通过限制。" if zh else " No size passes the limits right now."
-    elif v.recommended_notional is not None and abs(v.recommended_notional - t.notional_quote) > 1:
-        head += f" 建议仓位改为 {v.recommended_notional:,.0f}。" if zh else f" Size it at {v.recommended_notional:,.0f} instead."
+    head += _size_clause(report, zh)
     head = _needs_account_head(report, head, zh)
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."

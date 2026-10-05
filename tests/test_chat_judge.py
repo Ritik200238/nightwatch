@@ -81,3 +81,49 @@ def test_a_followup_with_leverage_and_margin_sets_both_never_the_account(client)
     assert t["leverage"] == 3 and t["notional_quote"] == 6000
     assert t["account_equity_quote"] in (None, first["ticket"].get("account_equity_quote"))
     assert got["changed"].get("leverage") == 3
+
+
+# --- a NO GO never sits beside "Size it at" ------------------------------------------------
+
+from types import SimpleNamespace as NS  # noqa: E402
+
+
+def _fake(verdict, rec, req, rules=(), caps=()):
+    return NS(
+        ticket=NS(notional_quote=req),
+        verdict=NS(verdict=NS(value=verdict), recommended_notional=rec, caps=[NS(name=n, notional=v, detail="") for n, v in caps]),
+        gate=NS(rules=[NS(rule=r, decision=NS(value=d), reason=why) for r, d, why in rules]),
+    )
+
+
+def test_a_no_go_for_size_says_too_big_and_what_fits_without_a_contradiction():
+    rep = _fake("NO_GO", 18913, 20000, [("risk_budget", "NO_GO", "risk 1.05% of equity (analog 5th-percentile loss) exceeds 1.0%")])
+    en = intake._size_clause(rep, False)
+    assert "Too big: 20,000 risks 1.05% of your account (limit 1%). 18,913 fits" in en and "Size it at" not in en
+    zh = intake._size_clause(rep, True)
+    assert "仓位过大" in zh and "1.05%" in zh and "18,913" in zh
+
+
+def test_a_no_go_from_something_other_than_size_does_not_claim_a_smaller_size_fits():
+    rep = _fake("NO_GO", 9000, 20000, [("market_posture", "NO_GO", "hostile")])
+    got = intake._size_clause(rep, False)
+    assert "Too big" not in got and "fits" not in got and "9,000" in got
+
+
+@pytest.mark.parametrize(("rec", "req"), [(56, 10000), (0.4, 5000), (400, 10000)])
+def test_a_sliver_of_a_size_is_not_offered(rec, req):
+    rep = _fake("NO_GO", rec, req, [("risk_budget", "NO_GO", "risk 3.0% of equity (x) exceeds 1.0%")], caps=[("stress", rec)])
+    en = intake._size_clause(rep, False)
+    assert "No sensible size passes the limits right now" in en and "stress limit binds" in en and "Size it at" not in en and "fits" not in en
+    assert "没有合适的仓位" in intake._size_clause(rep, True)
+
+
+def test_a_reduce_still_says_size_it_at():
+    assert "Size it at 9,000 instead" in intake._size_clause(_fake("REDUCE_TO", 9000, 20000), False)
+
+
+def test_the_chat_reply_for_a_too_big_trade_reads_as_one_answer(client):
+    r = say(client, "long 20000 TSLA overnight, account 50k")
+    assert r["report"]["verdict"]["verdict"] == "NO_GO"
+    head = r["reply"].split("\n")[0]
+    assert "Too big: 20,000 is 40.0% of your account (limit 25%)" in head and "Size it at" not in r["reply"]
