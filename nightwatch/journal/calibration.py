@@ -15,6 +15,11 @@ return. If the forecasts are honest, 5% of realisations fall below p5, 50% below
 * **Sharpness** – mean predicted p5–p95 width; a calibrated but useless forecast is
   wide, a useful one is narrow *and* calibrated.
 
+* **Night-clustered intervals** – every forecast on the same night shares that night's
+  market shock, so 2,800 forecasts are nowhere near 2,800 independent facts. Next to each
+  forecast-level interval (which assumes independence) we resample *whole nights* and
+  report that interval and the number of independent nights behind it.
+
 All statistics are derived from first principles (likelihood ratios against binomial
 and two-state Markov null models) and tested against hand-computed cases.
 """
@@ -40,6 +45,9 @@ class Coverage:
     ci_low: float
     ci_high: float
     within_ci: bool
+    n_nights: int | None = None  # distinct as-of nights behind n
+    night_ci_low: float | None = None  # bootstrap over whole nights; None when too few nights
+    night_ci_high: float | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +63,8 @@ class TailTest:
     conditional_stat: float | None
     conditional_p_value: float | None
     band: str  # green | amber | red | insufficient
+    n_nights: int | None = None
+    night_ci: tuple[float, float] | None = None  # breach-rate interval resampling whole nights
 
 
 @dataclass(frozen=True)
@@ -90,6 +100,64 @@ def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
     centre = (p + z**2 / (2 * n)) / denom
     half = z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2)) / denom
     return max(0.0, centre - half), min(1.0, centre + half)
+
+
+MIN_NIGHTS = 8  # under this a night bootstrap is not an interval worth printing
+N_BOOT = 2000
+
+
+def night_keys(as_of: object) -> np.ndarray:
+    """The night each forecast belongs to: its as-of date in UTC. Forecasts made on the
+    same date see the same overnight shock, which is what makes them one fact, not many."""
+    return pd.to_datetime(pd.Series(as_of), utc=True).dt.strftime("%Y-%m-%d").to_numpy()
+
+
+def count_nights(as_of: object) -> int:
+    return int(len(set(night_keys(as_of)))) if len(as_of) else 0  # type: ignore[arg-type]
+
+
+def night_bootstrap_ci(as_of: object, flags: np.ndarray, *, n_boot: int = N_BOOT, seed: int = 11, alpha: float = 0.05) -> tuple[float, float] | None:
+    """Percentile interval for a rate (``flags`` is 0/1 per forecast) resampling whole
+    nights with replacement. Every forecast of a drawn night comes with it, so same-night
+    correlation across tokens is kept instead of assumed away. ``None`` under MIN_NIGHTS."""
+    keys = night_keys(as_of)
+    f = np.asarray(flags, dtype=float)
+    if keys.size == 0 or keys.size != f.size:
+        return None
+    _, inv = np.unique(keys, return_inverse=True)
+    g = int(inv.max()) + 1
+    if g < MIN_NIGHTS:
+        return None
+    k = np.bincount(inv, weights=f, minlength=g)
+    m = np.bincount(inv, minlength=g).astype(float)
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, g, size=(n_boot, g))
+    rates = k[idx].sum(axis=1) / m[idx].sum(axis=1)
+    lo, hi = np.percentile(rates, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+    return float(lo), float(hi)
+
+
+def distinct_events(g: pd.DataFrame) -> dict[str, object]:
+    """Counts of repeated tickets on one outcome collapsed to one event.
+
+    ``g`` needs ``ticker``, ``r`` (realised %), a boolean ``miss``, and ``exit_ts`` when it
+    exists. One event is one ticker over one outcome window: four tickets on CRCL that all
+    settled on the same -6.6056% are one event, not four independent misses. The raw counts
+    stay beside these; this only says how many separate things happened."""
+    when = g["exit_ts"].astype(str) if "exit_ts" in g else g["as_of"].astype(str)
+    key = g["ticker"].astype(str) + "|" + when + "|" + g["r"].astype(float).round(2).astype(str)
+    events = int(key.nunique())
+    missed = int(key[g["miss"].astype(bool)].nunique())
+    lo, hi = wilson_interval(missed, events)
+    out: dict[str, object] = {
+        "distinct_events": events, "distinct_missed": missed,
+        "distinct_rate": missed / events if events else None, "distinct_ci": [lo, hi],
+    }
+    if "as_of" in g:
+        out["n_nights"] = count_nights(g["as_of"])
+        nci = night_bootstrap_ci(g["as_of"], g["miss"].to_numpy(dtype=float))
+        out["night_ci"] = list(nci) if nci else None
+    return out
 
 
 def proportion_of_failures(breaches: np.ndarray, expected_rate: float) -> tuple[float | None, float | None]:
@@ -144,9 +212,10 @@ def independence_test(breaches: np.ndarray) -> tuple[float | None, float | None]
     return stat, _chi2_sf(stat, 1)
 
 
-def tail_test(realised: np.ndarray, p5: np.ndarray, expected_rate: float = 0.05) -> TailTest:
+def tail_test(realised: np.ndarray, p5: np.ndarray, expected_rate: float = 0.05, as_of: object = None) -> TailTest:
     mask = ~(np.isnan(realised) | np.isnan(p5))
     r, q = realised[mask], p5[mask]
+    as_of_m = np.asarray(as_of)[mask] if as_of is not None else None
     n = int(r.size)
     breaches = (r < q).astype(int)
     x = int(breaches.sum())
@@ -163,7 +232,9 @@ def tail_test(realised: np.ndarray, p5: np.ndarray, expected_rate: float = 0.05)
     sd = math.sqrt(n * expected_rate * (1 - expected_rate))
     z = (x - expected) / sd if sd > 0 else 0.0
     band = "green" if z <= 1.0 else ("amber" if z <= 2.5 else "red")
-    return TailTest(n, x, expected_rate, x / n, pof_stat, pof_p, ind_stat, ind_p, cc_stat, cc_p, band)
+    nights = count_nights(as_of_m) if as_of_m is not None else None
+    night_ci = night_bootstrap_ci(as_of_m, breaches) if as_of_m is not None else None
+    return TailTest(n, x, expected_rate, x / n, pof_stat, pof_p, ind_stat, ind_p, cc_stat, cc_p, band, nights, night_ci)
 
 
 def pit_bucket(realised: float, row: pd.Series) -> str:
@@ -194,8 +265,10 @@ def calibrate(forecasts: pd.DataFrame) -> CalibrationReport:
         k = int((sub["ret_pct"] < sub[q]).sum())
         lo, hi = wilson_interval(k, m)
         nominal = NOMINAL[q]
-        coverage.append(Coverage(q, nominal, k / m if m else float("nan"), m, lo, hi, lo <= nominal <= hi if m else False))
-    tail = tail_test(df["ret_pct"].to_numpy(dtype=float), df["p5"].to_numpy(dtype=float)) if n else TailTest(0, 0, 0.05, float("nan"), None, None, None, None, None, None, "insufficient")
+        nci = night_bootstrap_ci(sub["as_of"], (sub["ret_pct"] < sub[q]).to_numpy()) if m and "as_of" in sub else None
+        coverage.append(Coverage(q, nominal, k / m if m else float("nan"), m, lo, hi, lo <= nominal <= hi if m else False,
+                                 count_nights(sub["as_of"]) if m and "as_of" in sub else None, nci[0] if nci else None, nci[1] if nci else None))
+    tail = tail_test(df["ret_pct"].to_numpy(dtype=float), df["p5"].to_numpy(dtype=float), as_of=df["as_of"].to_numpy() if "as_of" in df else None) if n else TailTest(0, 0, 0.05, float("nan"), None, None, None, None, None, None, "insufficient")
     hist: dict[str, int] = {}
     for _, row in df.iterrows():
         b = pit_bucket(float(row["ret_pct"]), row)
@@ -209,9 +282,12 @@ def render_calibration(rep: CalibrationReport) -> str:
     lines = [f"CALIBRATION — {rep.n_matured} matured forecasts" + (f" ({', '.join(f'{k}:{v}' for k, v in rep.by_ticker.items())})" if rep.by_ticker else "")]
     lines.append("  quantile   nominal   observed   n     95% interval      ok")
     for c in rep.coverage:
-        lines.append(f"  {c.quantile:>8}   {c.nominal:>7.0%}   {c.observed:>8.1%}   {c.n:<5} [{c.ci_low:.1%}, {c.ci_high:.1%}]   {'yes' if c.within_ci else 'NO'}")
+        nights = f"   nights [{c.night_ci_low:.1%}, {c.night_ci_high:.1%}] over {c.n_nights} nights" if c.night_ci_low is not None else ""
+        lines.append(f"  {c.quantile:>8}   {c.nominal:>7.0%}   {c.observed:>8.1%}   {c.n:<5} [{c.ci_low:.1%}, {c.ci_high:.1%}] (assumes independent forecasts)   {'yes' if c.within_ci else 'NO'}{nights}")
     t = rep.tail
     lines.append(f"  5% tail: {t.breaches} breaches in {t.n} (expected {t.expected_rate * t.n:.1f}) → band {t.band.upper()}")
+    if t.night_ci is not None:
+        lines.append(f"    resampling whole nights: [{t.night_ci[0]:.1%}, {t.night_ci[1]:.1%}] over {t.n_nights} independent nights")
     if t.pof_p_value is not None:
         lines.append(f"    failure-rate LR {t.pof_stat:.2f} (p={t.pof_p_value:.3f}) | independence LR {t.independence_stat:.2f} (p={t.independence_p_value:.3f}) | conditional LR {t.conditional_stat:.2f} (p={t.conditional_p_value:.3f})")
     lines.append(f"  PIT histogram: {rep.pit_histogram}")
