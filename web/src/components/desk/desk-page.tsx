@@ -38,6 +38,8 @@ export default function DeskPage() {
   const deepLinked = useRef(false);
   const [heroDraft, setHeroDraft] = useState("");
   const [heroUsed, setHeroUsed] = useState(false);
+  // True only while a ticket-form (or example) analysis is in flight, so the form can show its own progress.
+  const [formRunning, setFormRunning] = useState(false);
   // The account the trader typed in the form or picked from the ladder. Never a default: the
   // chat sends it with every message, and an invented account hides the account-size row.
   const [equity, setEquity] = useState<number | null>(null);
@@ -104,6 +106,7 @@ export default function DeskPage() {
 
   async function run(ticket: TicketInput, remember = true) {
     setBusy(true);
+    setFormRunning(true);
     setError(null);
     setLastTicket(ticket);
     // The built-in example carries its own account; that is the example's, not the trader's.
@@ -125,6 +128,7 @@ export default function DeskPage() {
       setError(e instanceof ApiError ? e.message : tx("The analysis failed.", "分析失败。"));
     } finally {
       setBusy(false);
+      setFormRunning(false);
     }
   }
 
@@ -195,7 +199,7 @@ export default function DeskPage() {
           <TabsContent value="form" className="pt-3">
             {universe ? (
               <div className="space-y-5">
-                <TicketForm universe={universe} busy={busy} onSubmit={run} />
+                <TicketForm universe={universe} busy={busy} working={formRunning} error={error} onRetry={lastTicket ? () => void run(lastTicket) : undefined} onSubmit={run} />
                 <div className="border-t border-border pt-4">
                   <OpenPositions universe={universe} positions={positions} onChange={setPositions} />
                 </div>
@@ -233,7 +237,7 @@ export default function DeskPage() {
 
       <section ref={resultRef} className="min-w-0 scroll-mt-4" aria-live="polite" aria-busy={busy}>
         {busy && !report ? <ReportSkeleton /> : null}
-        {error ? (
+        {error && tab !== "form" ? (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
             <p className="text-[13px] text-muted-foreground">{error}</p>
@@ -322,7 +326,7 @@ const HERO_CHIPS: { en: string; zh: string; short: string; shortZh: string; send
   { en: "周末做多特斯拉 2万U 安全吗？", zh: "周末做多特斯拉 2万U 安全吗？", short: "周末做多特斯拉", shortZh: "周末做多特斯拉", send: "周末做多 TSLA 2万U，安全吗？" },
 ];
 
-const CHIP = "inline-flex min-h-8 items-center rounded-full border border-border px-3 py-1 text-[13px] hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+const CHIP = "inline-flex min-h-10 items-center sm:min-h-8 rounded-full border border-border px-3 py-1 text-[13px] hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
 
 /** Three proof chips from the same live endpoints the track-record pages read. */
 function HeroProof() {
@@ -418,7 +422,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           {tx("Get the verdict", "获取结论")}
         </Button>
       </form>
-      <ul className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0 [&::-webkit-scrollbar]:hidden">
+      <ul className="mt-3 flex flex-wrap gap-2">
         {HERO_CHIPS.map((c) => (
           <li key={c.en} className="shrink-0">
             <button
