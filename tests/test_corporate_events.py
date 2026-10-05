@@ -298,3 +298,34 @@ def test_a_replay_before_the_declaration_does_not_see_it(seeded_store):  # noqa:
         s.upsert_corporate_events([ev(ticker="TSLA", date=(2026, 9, 14), source="yahoo_chart", observed=AS_OF + timedelta(days=30))])
     r = _analyse(seeded_store)
     assert all(e["source"] != "yahoo_chart" for e in r["corporate_events"]["in_hold"])
+
+
+def test_the_sync_builds_its_own_client_when_none_is_given(monkeypatch, tmp_path):
+    """The recorder calls sync_corporate_events(store, entries) with no client; it must not
+    silently fail every fetch (the first live sync stored 0 rows in 3 ms that way)."""
+    from types import SimpleNamespace
+
+    from nightwatch.data import corporate
+    from nightwatch.data.store import Store
+
+    made = []
+
+    class Fake:
+        def __init__(self, *a, **k):
+            made.append(self)
+
+        def splits_calendar(self, wanted):
+            return []
+
+        def announcements(self, wanted):
+            return []
+
+        def dividends(self, ticker):
+            return []
+
+        def yahoo_events(self, yahoo_ticker, ticker):
+            return []
+
+    monkeypatch.setattr(corporate, "CorporateEventsClient", Fake)
+    corporate.sync_corporate_events(Store(tmp_path / "nw.sqlite"), [SimpleNamespace(ticker="AAPL", yahoo_ticker="AAPL")])
+    assert len(made) == 1

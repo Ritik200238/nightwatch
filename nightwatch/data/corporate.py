@@ -223,6 +223,9 @@ def sync_corporate_events(store: Store, entries: Sequence[Any], client: Corporat
     ``entries`` are ``UniverseEntry`` (``ticker`` and ``yahoo_ticker`` are read).
     """
     began = utc_now()
+    # The recorder calls this without a client. It used to stay None, every fetch failed on
+    # the first attribute and was swallowed below, and the first live sync stored 0 rows.
+    client = client or CorporateEventsClient()
     wanted = {e.ticker.upper() for e in entries}
     n = 0
 
