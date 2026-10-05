@@ -241,6 +241,8 @@ class AppState:
         self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
         self.snapshot_heals = 0
         self.thesis_checks: dict[tuple[int, str], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
+        # The trade on screen re-run with the account the page sent, keyed by (report, account).
+        self.equity_runs: dict[tuple[int, float], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
 
     def prefetch_take(self, forecast_id: int | None, payload: dict[str, Any], lang: str = "en") -> None:
         """Start the analyst's take now, in the report's own language, so it is usually
@@ -555,6 +557,110 @@ def _what_if(state: AppState, context: dict[str, Any], question: str) -> dict[st
         "written_by": "rules",
         "provider": provider.name if provider else None,
         "model": provider.model if provider else None,
+    }
+
+
+def _with_account(state: AppState, context: dict[str, Any], equity: float) -> dict[str, Any] | None:
+    """The trade on screen judged against the account the page sent with the request.
+
+    A report made before the trader's account was known says "account equity not provided"
+    to every follow-up, although the request carries it. The same trade is re-run at the
+    same moment with that account (never journalled) and the follow-up is answered from it.
+    Cached per (report, account), so a run of questions pays for one analysis.
+    """
+    from dataclasses import replace as _replace
+
+    from nightwatch.api import whatif
+
+    fid = context.get("forecast_id")
+    key = (int(fid), float(equity)) if isinstance(fid, int) else None
+    if key is not None and key in state.equity_runs:
+        return state.equity_runs[key]
+    base = whatif.ticket_from(context)
+    if base is None:
+        return None
+    with state.lock:
+        report = analyze(state.ctx, _replace(base, account_equity_quote=float(equity)), as_of=whatif.as_of_of(context), record=False)
+        payload = report.to_dict()
+    state.keep_hypothetical(payload)
+    if key is not None:
+        state.equity_runs[key] = payload
+    return payload
+
+
+def _plan_missing(context: dict[str, Any]) -> bool:
+    """Whether the trade on screen is waiting on a written reason or a "wrong if" line."""
+    for r in (context.get("gate") or {}).get("rules") or []:
+        if r.get("rule") == "written_plan":
+            return r.get("decision") != "GO"
+    return False
+
+
+def _capture_reason(state: AppState, context: dict[str, Any], latest: str, tickers: list[str], account_equity: float | None, *, check: bool) -> dict[str, Any] | None:
+    """The reason and "wrong if" line a trader types, stored on the ticket and re-run.
+
+    The desk asks for "because ..., wrong if it closes below ...". Typed back, it used to be
+    read as an account size or a what-if and dropped, so the review never cleared. Here the
+    two phrases go onto the ticket of the trade on screen, which is run again at the same
+    moment (never journalled, like any what-if), and the reply says what moved - or what is
+    still missing. With ``check`` the reason is then held against the stored headlines.
+    """
+    import json
+    from dataclasses import replace as _replace
+
+    from nightwatch.api import intake, thesis_capture, whatif
+
+    reason = thesis_capture.read(latest)
+    base = whatif.ticket_from(context)
+    if not reason or base is None:
+        return None
+    lang = intake.language_of(latest)
+    zh = lang == "zh"
+    said = intake.parse_message(latest, tickers)
+    equity = said.account_equity_quote or base.account_equity_quote or account_equity
+    ticket = _replace(base, thesis=reason.thesis or base.thesis, invalidation=reason.invalidation or base.invalidation, account_equity_quote=equity)
+    with state.lock:
+        report = analyze(state.ctx, ticket, as_of=whatif.as_of_of(context), record=False)
+        payload = report.to_dict()
+    fid = state.keep_hypothetical(payload)
+
+    parts = []
+    if reason.thesis:
+        parts.append("你的理由" if zh else "your reason")
+    if reason.invalidation:
+        parts.append("你的『错在哪里』" if zh else 'your "wrong if" line')
+    if equity and equity != base.account_equity_quote:
+        parts.append(f"账户 {equity:,.0f} USDT" if zh else f"an account of {equity:,.0f} USDT")
+    what = ("、" if zh else ", ").join(parts[:-1]) + (" 和 " if zh else " and ") + parts[-1] if len(parts) > 1 else parts[0]
+    saved = []
+    if reason.thesis:
+        saved.append(f"理由：“{reason.thesis}”" if zh else f'reason: "{reason.thesis}"')
+    if reason.invalidation:
+        saved.append(f"错在：“{reason.invalidation}”" if zh else f'wrong if: "{reason.invalidation}"')
+    lead = ("已记在这笔交易上：" + "；".join(saved) + "。") if zh else ("Saved on this ticket - " + "; ".join(saved) + ".")
+    answer = whatif.compare(context, payload, whatif.Change(account_equity_quote=equity if equity != base.account_equity_quote else None), lang, what=what)
+    text = lead + ("" if zh else " ") + answer.text
+    still = [x for x in payload["gate"]["rules"] if x["rule"] == "written_plan" and x["decision"] != "GO"]
+    if still:
+        missing_thesis = not ticket.thesis.strip()
+        text += (
+            (" 还缺：你的理由（“因为……”）。" if missing_thesis else " 还缺：什么情况说明你错了（“如果收盘跌破……就算错”）。") if zh
+            else (' Still missing: your reason ("because ...").' if missing_thesis else ' Still missing: what would prove you wrong ("wrong if it closes below ...").')
+        )
+    kind = "thesis_saved"
+    if check and reason.thesis:
+        from nightwatch.decision import thesis_check as _tc
+
+        got = _thesis_check(state, fid, payload, lang)
+        text = text + "\n\n" + _tc.reply_text(got, lang)
+        kind = "thesis"
+    return {
+        "intent": {"kind": "what_if", "question": kind, "missing_fields": [], "reply": text},
+        "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
+        "report": payload, "report_text": None, "narrative": text, "unverified_numbers": [], "reply": text,
+        "mode": "what_if", "answer_kind": kind, "answered_about": context.get("forecast_id"),
+        "changed": {"thesis": bool(reason.thesis), "invalidation": bool(reason.invalidation), **({"account_equity_quote": equity} if equity and equity != base.account_equity_quote else {})},
+        "parsed_by": "rules", "written_by": "rules",
     }
 
 
@@ -1495,6 +1601,24 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # "thanks, that helps" is not the start of a trade.
         if latest and converse.is_ack(latest):
             return converse.ack_reply(context, language_of(latest))
+        # "because ..., wrong if it closes below ..." - the reply the desk itself asks for to
+        # clear a review. Stored on the ticket and the trade re-run, before anything can read
+        # it as an account size or a what-if. "Is my reason right? because ..." carries its own.
+        if context and latest:
+            from nightwatch.api import intake as _in
+            from nightwatch.api import thesis_capture
+            from nightwatch.decision import thesis_check as _tcheck
+
+            asks_check = bool(_tcheck.ASKS.search(latest))
+            if thesis_capture.read(latest) and (asks_check or (_plan_missing(context) and not latest.rstrip().endswith(("?", "？")))):
+                p = _in.parse_message(latest, list(s.ctx.tickers_with_data()))
+                if not (p.notional_quote or _in.is_a_new_idea(latest, context, list(s.ctx.tickers_with_data()))):
+                    try:
+                        got = _capture_reason(s, context, latest, list(s.ctx.tickers_with_data()), body.account_equity_quote, check=asks_check)
+                    except InsufficientData as exc:
+                        got = {"reply": f"I could not run that one: {exc}", "mode": "what_if", "intent": {"kind": "followup", "reply": str(exc), "missing_fields": []}}
+                    if got:
+                        return got
         # "What's the safest way to hold this?" - the same idea run several ways, side by side.
         from nightwatch.api import ways
 
@@ -1540,6 +1664,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             # desk runs one. The model names what changed and the engine does the rest.
             # No key needed: the rules read most what-ifs, and the model is asked only
             # when they cannot (in which case no key simply means no re-run).
+            #
+            # A request that carries the trader's account while the report on screen was made
+            # without one: judge the same trade against it, so "why?" does not say the account
+            # was not provided when the page sent it.
+            equity_used: float | None = None
+            on_screen = (context.get("ticket") or {}).get("account_equity_quote")
+            if body.account_equity_quote and not said_account and not on_screen:
+                try:
+                    rerun = _with_account(s, context, body.account_equity_quote)
+                except Exception as exc:  # noqa: BLE001 - the report on screen still answers
+                    log.warning("could not apply the account to the report on screen: %s", exc)
+                    rerun = None
+                if rerun is not None:
+                    context, equity_used = rerun, float(body.account_equity_quote)
             try:
                 hypothetical = _what_if(s, context, latest)
             except InsufficientData as exc:
@@ -1568,6 +1706,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                     payload.update(followup_turn(context, latest, found))
                 except Exception as exc:  # noqa: BLE001 - the rules answer already stands
                     log.warning("model follow-up fell back to rules: %s", exc)
+            if equity_used:
+                # Say it, and hand the page the report this answer was read from.
+                note = f"按你的账户 {equity_used:,.0f} USDT 重新判断：" if chinese else f"Judged against your account of {equity_used:,.0f} USDT, which the report on screen did not have: "
+                payload["reply"] = payload["intent"]["reply"] = note + payload["reply"]
+                payload["report"] = context
             return payload
 
         try:

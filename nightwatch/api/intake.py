@@ -77,6 +77,13 @@ _WEEKEND = re.compile(r"\b(?:through|over|across|for|into)\s+the\s+weekend\b|\b(
 # close is said. Monday is the weekend rule's, which already means the open after it.
 _WEEKDAY = re.compile(r"\b(?:until|till|to|through|into|by)\s+(?:next\s+)?(tues|wednes|thurs|fri)day(?:'s)?(?:\s+(open|close))?", re.I)
 _DAY_INDEX = {"tues": 1, "wednes": 2, "thurs": 3, "fri": 4}
+# "over earnings", "ovr earnigns" (typed fast), "through the next report", "过完 earnings 就走": a hold
+# that runs to the report. Dated from the earnings calendar when the ticket is built.
+THROUGH_EARNINGS = re.compile(
+    r"\b(?:through|thru|over|ovr|past|into|across|until after|till after)\s+(?:the\s+)?(?:next\s+)?(?:earn\w{2,7}|report|results)\b"
+    r"|过财报|拿过财报|过完\s*(?:earnings|财报)|过\s*(?:earnings|财报)|(?:earnings|财报)\s*(?:之后|以后|后)\s*(?:就\s*)?(?:走|出|卖|平|离场)",
+    re.I,
+)
 _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bsession\s+end\b", re.I)
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
@@ -213,13 +220,18 @@ class RuleIntent:
     # price, so it was left out"), and whether a negative size was refused.
     notes: list[str] = field(default_factory=list)
     negative_size: bool = False
+    # The money the trader says they put up ("2k margin"), kept apart from the account and
+    # from the position: position = margin x leverage.
+    margin_quote: float | None = None
+    # "over earnings", "过完 earnings 就走": a hold to the report, dated later from the calendar.
+    through_earnings: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "kind": self.kind, "ticker": self.ticker, "side": self.side, "notional_quote": self.notional_quote,
             "account_equity_quote": self.account_equity_quote, "horizon_kind": self.horizon_kind,
             "horizon_hours": self.horizon_hours, "stop_price": self.stop_price, "stop_pct": self.stop_pct, "stop_dir": self.stop_dir,
-            "leverage": self.leverage,
+            "leverage": self.leverage, "margin_quote": self.margin_quote, "through_earnings": self.through_earnings,
             "target_price": self.target_price,
             "thesis": self.thesis, "invalidation": self.invalidation, "hedge_ratio": self.hedge_ratio,
             "open_positions": [list(p) for p in self.open_positions],
@@ -415,6 +427,34 @@ def _sanitize(out: RuleIntent, text: str, zh: bool) -> None:
                          else f"A hold of {was:,.0f} hours is longer than the history can speak to, so I capped it at 30 days (720 hours).")
 
 
+def _apply_margin(out: RuleIntent, zh: bool) -> None:
+    """The money put up and the leverage fix the position: size = margin x leverage.
+
+    "3x with 2k margin" is a 6,000 USDT position, and "10k with 2k margin" is 5x. The
+    margin is never the account. Where a size, a margin and a leverage disagree, the margin
+    and the leverage win and the reply says so, so a number the trader typed is never
+    dropped without a word.
+    """
+    m = out.margin_quote
+    if not m or m <= 0:
+        return
+    if out.leverage and out.leverage >= 1:
+        position = m * out.leverage
+        said = out.notional_quote
+        if said and abs(said - position) > max(1.0, 0.01 * position):
+            out.notes.append(
+                f"你给的仓位 {said:,.0f} 与 {m:,.0f} 保证金 × {out.leverage:g} 倍 = {position:,.0f} 不一致，按保证金和杠杆算 {position:,.0f} USDT。" if zh
+                else f"You said {said:,.0f} USDT, but {m:,.0f} margin at {out.leverage:g}x is {position:,.0f}, so I used {position:,.0f} (margin times leverage)."
+            )
+        out.notional_quote = position
+    elif out.notional_quote and out.notional_quote > m:
+        lev = out.notional_quote / m
+        if lev <= 125:
+            out.leverage = round(lev, 2)
+            out.notes.append(f"{out.notional_quote:,.0f} 的仓位配 {m:,.0f} 保证金，等于 {lev:.3g} 倍杠杆。" if zh
+                             else f"{out.notional_quote:,.0f} USDT on {m:,.0f} margin is {lev:.3g}x leverage.")
+
+
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Read one message into a ticket. Nothing is invented; what is absent is asked for."""
     out = RuleIntent()
@@ -458,8 +498,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
 
     # Size is the money left over once the labelled numbers are accounted for.
     lev = _LEVERAGE.search(text)
-    margin = _MARGIN.search(text) if lev else None
-    spent = [m.span() for m in (stop, target, equity, lev, margin) if m]  # "100x" is not a size
+    margin = _MARGIN.search(text)
+    spent = [m.span() for m in (stop, target, equity, lev, margin) if m]  # "100x" is not a size, nor is the margin
     for m in _MONEY.finditer(text):
         if any(s <= m.start() < e for s, e in spent):
             continue
@@ -506,11 +546,9 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     if lev:
         value = float(lev.group(1) or lev.group(2))
         out.leverage = value if value >= 1 else None
-        if margin and out.leverage:
-            # The trader named the margin: the position is the margin times the leverage.
-            amount, scale = (margin.group(1), margin.group(2)) if margin.group(1) else (margin.group(3), margin.group(4))
-            put_up = float(amount.replace(",", "")) * (_SCALE[scale.lower()] if scale else 1.0)
-            out.notional_quote = put_up * out.leverage
+    if margin and not _MARGIN_MOVE.search(text):
+        amount, scale = (margin.group(1), margin.group(2)) if margin.group(1) else (margin.group(3), margin.group(4))
+        out.margin_quote = float(amount.replace(",", "")) * (_SCALE[scale.lower()] if scale else 1.0)
 
     pct = _HEDGE_PCT.search(text)
     if pct:
@@ -521,6 +559,16 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     thesis, invalid = _THESIS.search(text), _INVALID.search(text)
     out.thesis = thesis.group(1).strip() if thesis else None
     out.invalidation = invalid.group(1).strip() if invalid else None
+    if not _CJK.search(text):
+        # "because momentum, wrong if it closes below 290": the reason must not swallow the
+        # line that says what would prove it wrong, nor the account tacked on after it.
+        from nightwatch.api import thesis_capture
+
+        said = thesis_capture.read(text)
+        if said.thesis:
+            out.thesis = said.thesis
+        if said.invalidation:
+            out.invalidation = said.invalidation
     if _CJK.search(text):
         # A Chinese message: read it with the Chinese rules, filling only what the
         # English rules did not find (a ticker written as TSLA reads the same either way).
@@ -533,6 +581,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
             if getattr(out, key) in (None, "") or (key in zh_wins and value not in (None, "")):
                 setattr(out, key, value)
     _sanitize(out, text, bool(_CJK.search(text)))
+    _apply_margin(out, bool(_CJK.search(text)))
+    out.through_earnings = bool(THROUGH_EARNINGS.search(text))
     if out.negative_size and out.notional_quote:
         out.negative_size = False  # another amount in the message is the size; the negative one is dropped
     _settle(out)
@@ -965,6 +1015,76 @@ _NEEDS_ZH = {
 }
 
 
+# A recommended size below this share of the request, or below this many USDT, is not a size
+# anyone would trade: "NO GO ... size it at 56" read as a contradiction and a joke.
+SENSIBLE_SHARE = 0.05
+SENSIBLE_FLOOR = 100.0
+
+
+def sensible_floor(requested: float) -> float:
+    return max(SENSIBLE_FLOOR, SENSIBLE_SHARE * (requested or 0.0))
+
+
+def _too_big_reason(report: Any, zh: bool) -> str | None:  # noqa: ANN401
+    """Why the size is too big, in the gate's own numbers: "20,000 risks 1.05% of your account (limit 1%)".
+
+    Only the two size rules count here. A NO GO that comes from anything else (a hostile
+    regime, no exit) is not cured by a smaller size, and saying so would be wrong.
+    """
+    t = report.ticket
+    got: list[str] = []
+    for r in report.gate.rules:
+        if r.decision.value != "NO_GO":
+            continue
+        if r.rule not in ("position_size", "risk_budget"):
+            return None
+        if r.rule == "risk_budget":
+            m = re.search(r"risk ([\d.]+)% of equity.*exceeds ([\d.]+)%", r.reason)
+            if m:
+                got.append(f"风险占你账户的 {float(m.group(1)):.2f}%（上限 {float(m.group(2)):g}%）" if zh
+                           else f"risks {float(m.group(1)):.2f}% of your account (limit {float(m.group(2)):g}%)")
+        else:
+            m = re.search(r"position is ([\d.]+)% of equity \(limit ([\d.]+)%\)", r.reason)
+            if m:
+                got.append(f"占你账户的 {float(m.group(1)):.1f}%（上限 {float(m.group(2)):g}%）" if zh
+                           else f"is {float(m.group(1)):.1f}% of your account (limit {float(m.group(2)):g}%)")
+    if not got:
+        return None
+    n = f"{t.notional_quote:,.0f}"
+    return f"{n} " + ("，".join(got) if zh else " and ".join(got))
+
+
+def _size_clause(report: Any, zh: bool) -> str:  # noqa: ANN401
+    """The sentence after the verdict about size, without ever contradicting the verdict.
+
+    A verdict of NO GO next to "Size it at 18,913" read as two answers. A NO GO that is
+    only about size says so ("Too big: ... 18,913 fits."); a recommended size that is a
+    sliver of the request, or under a hundred USDT, is not offered at all - the reply says
+    no sensible size passes and names the limit that binds.
+    """
+    v, t = report.verdict, report.ticket
+    rec = v.recommended_notional
+    if rec is None or abs(rec - t.notional_quote) <= 1:
+        return ""
+    priced = [c for c in v.caps if c.notional is not None]
+    binding = min(priced, key=lambda c: c.notional) if priced else None
+    if rec < sensible_floor(t.notional_quote):
+        if binding is not None and binding.name == "exit_liquidity":
+            return (" 以目前的盘口，任何仓位的平仓成本都超过预算，现在不宜开仓。" if zh
+                    else " No size gets out within the exit-cost budget on the book right now, so there is nothing to size.")
+        reason = ""
+        if binding is not None:
+            name = CAP_ZH.get(binding.name, binding.name.replace("_", " ")) if zh else binding.name.replace("_", " ")
+            reason = f"（卡住的是{name}上限）" if zh else f" (the {name} limit binds)"
+        return f" 目前没有合适的仓位能通过限制{reason}。" if zh else f" No sensible size passes the limits right now{reason}."
+    if v.verdict.value == "NO_GO":
+        why = _too_big_reason(report, zh)
+        if why:
+            return f" 仓位过大：{why}。{rec:,.0f} 在限制之内。" if zh else f" Too big: {why}. {rec:,.0f} fits the size limits."
+        return f" 按各项上限，最多可到 {rec:,.0f}。" if zh else f" The most the caps allow is {rec:,.0f}."
+    return f" 建议仓位改为 {rec:,.0f}。" if zh else f" Size it at {rec:,.0f} instead."
+
+
 def brief(report: Any, lang: str = "en") -> str:
     """The report as a short briefing, assembled from its own fields.
 
@@ -980,17 +1100,7 @@ def brief(report: Any, lang: str = "en") -> str:
         head = f"{VERDICT_ZH.get(v.verdict.value, v.verdict.value)}：{t.ticker} {side} {t.notional_quote:,.0f} USDT，{_horizon_phrase(report, lang)}。"
     else:
         head = f"{v.verdict.value.replace('_', ' ')} on {side} {t.notional_quote:,.0f} USDT of {t.ticker}, {_horizon_phrase(report, lang)}."
-    if v.recommended_notional is not None and v.recommended_notional < 1:
-        # "Size it at 0 instead" read as a contradiction next to a REVIEW. What it means is
-        # that no size clears a limit, so say which one.
-        priced_caps = [c for c in v.caps if c.notional is not None]
-        binding = min(priced_caps, key=lambda c: c.notional) if priced_caps else None
-        if binding is not None and binding.name == "exit_liquidity":
-            head += " 以目前的盘口，任何仓位的平仓成本都超过预算，现在不宜开仓。" if zh else " No size gets out within the exit-cost budget on the book right now, so there is nothing to size."
-        else:
-            head += " 目前没有任何仓位能通过限制。" if zh else " No size passes the limits right now."
-    elif v.recommended_notional is not None and abs(v.recommended_notional - t.notional_quote) > 1:
-        head += f" 建议仓位改为 {v.recommended_notional:,.0f}。" if zh else f" Size it at {v.recommended_notional:,.0f} instead."
+    head += _size_clause(report, zh)
     head = _needs_account_head(report, head, zh)
     if v.hedge_ratio:
         head += f" 用永续合约对冲 {v.hedge_ratio:.0%}。" if zh else f" Hedge {v.hedge_ratio:.0%} with the perp."
@@ -1172,19 +1282,47 @@ _SHORT_KEEP_EN = ("Why:", "Check your plan:", "History:", "For a firm GO", "To c
 _SHORT_KEEP_ZH = ("未通过的检查", "历史：", "要给出明确结论", "要通过复核")
 
 
-def brief_short(report: Any, lang: str = "en") -> str:
-    """The first reply in chat: the answer and the one thing that matters, then an offer.
+def next_step(report: Any, zh: bool) -> str:  # noqa: ANN401
+    """The one thing to do next, as the second line of the headline."""
+    v, t = report.verdict, report.ticket
+    plan_missing = any(r.rule == "written_plan" and r.decision.value != "GO" for r in report.gate.rules)
+    equity_missing = t.account_equity_quote is None and any(r.rule == "position_size" and r.decision.value != "GO" for r in report.gate.rules)
+    rec = v.recommended_notional
+    if plan_missing:
+        return ("下一步：告诉我你为什么做这笔交易、什么情况说明你错了，例如“因为……，如果收盘跌破……就算错”。" if zh
+                else 'Next: tell me why you want it and what would prove you wrong, e.g. "because ..., wrong if it closes below ...".')
+    if equity_missing:
+        return "下一步：告诉我你的账户规模，例如“账户 20万U”。" if zh else 'Next: tell me your account size, e.g. "account 200k".'
+    if v.verdict.value in ("NO_GO", "REDUCE_TO") and rec is not None and rec >= sensible_floor(t.notional_quote) and rec < t.notional_quote - 1:
+        return f"下一步：把仓位降到 {rec:,.0f} 或更低，或者问我“为什么？”。" if zh else f'Next: size it at {rec:,.0f} or less, or ask "why?".'
+    if v.verdict.value == "GO":
+        return "下一步：下单前先问我“如果跌 10% 呢？”。" if zh else 'Next: before you place it, ask "what if it gaps down 10%?".'
+    return "下一步：问我“为什么？”，看是什么拦住了它。" if zh else 'Next: ask "why?" to see what is holding it back.'
+
+
+def brief_short(report: Any, lang: str = "en", *, echo: str | None = None, notes: tuple[str, ...] | list[str] = ()) -> str:
+    """The first reply in chat: a two-line headline, then what matters, then an offer.
 
     The full briefing ran to ten paragraphs and a judge called it a wall of text. The chat
-    now leads with the verdict and size, why when it is not a go, leverage, the plan check,
-    the single most likely-and-costly way the trade loses, the history in one line and
-    anything the trader still has to say - and invites the follow-ups that open the rest.
-    Every line is one the full briefing prints; the page below still shows everything.
+    now opens with two lines - the verdict with the one number that matters, and the one
+    thing to do next - then, after a blank line, how the desk read the message (``echo``),
+    why when it is not a go, leverage, the plan check, the single most likely-and-costly way
+    the trade loses, the history in one line and anything the trader still has to say, and
+    invites the follow-ups that open the rest. Every line is one the full briefing prints;
+    the page below still shows everything. A sentence the headline already says is not
+    repeated further down.
     """
     zh = lang == "zh"
     full = brief(report, lang).split("\n\n")
     keep = _SHORT_KEEP_ZH if zh else _SHORT_KEEP_EN
-    out = [full[0]]
+    head = full[0]
+    # A REVIEW waiting on the account already reads as two lines (what to do, then the ladder).
+    asks_account = head.startswith(("REVIEW: tell the desk", "需复核（REVIEW）：请告诉系统"))
+    nxt = next_step(report, zh)
+    out = [head if asks_account else head + "\n" + nxt]
+    for extra in (echo, *notes):
+        if extra:
+            out.append(extra)
     bk = book_line(report, lang)
     if bk:
         out.append(bk)
@@ -1200,6 +1338,15 @@ def brief_short(report: Any, lang: str = "en") -> str:
         out.append(_leverage_line(lev, lang))
     modes = [m for m in (getattr(report, "failure_modes", None) or []) if m.get("loss_quote") is not None]
     picked = {p: next((x for x in full[1:] if x.startswith(p)), None) for p in keep}
+    # What the second line already says is not said again below it.
+    if not asks_account:
+        said = keep[-1] if nxt.startswith(("Next: tell me why", "下一步：告诉我你为什么")) else keep[-2] if nxt.startswith(("Next: tell me your account", "下一步：告诉我你的账户")) else None
+        if said:
+            picked[said] = None
+    if "Too big:" in head or "仓位过大" in head:
+        # The headline already carries the size rules' numbers; "Why:" keeps only the rest.
+        rest = [r for r in report.verdict.reasons if not r.startswith(("written plan", "Size held at", "position size", "risk budget"))]
+        picked["Why:"] = ("Why: " + "; ".join(rest[:3]) + ".") if rest and not zh else None
     for p in keep[:2] if not zh else keep[:1]:
         if picked.get(p):
             out.append(picked[p])
@@ -1278,6 +1425,11 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
         result["intent"]["kind"] = "clarify"
         result["reply"] = f"{intent.ticker} is not in the tokenized-stock universe I have data for. Available: {', '.join(tickers[:20])}{'...' if len(tickers) > 20 else ''}."
         return result
+    from nightwatch.api import reading
+
+    # "over earnings" is a hold to the report, dated from the calendar before the ticket is built.
+    earnings_hold, earnings_note = reading.apply_earnings_hold(state, intent, lang)
+    carried = reading.carried_fields(latest, tickers, intent)
     ticket = intent_to_ticket(intent, account_equity)
     with state.lock:
         report = analyze(state.ctx, ticket)
@@ -1289,9 +1441,12 @@ def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
                 state.prefetch_take(report.forecast_id, payload, language_of(messages[-1].get("content", "") if messages else ""))
             except Exception as exc:  # noqa: BLE001 - a keepsake must not fail the turn
                 log.warning("could not store the chat report: %s", exc)
-    narrative = brief_short(report, lang)
-    if assumed:
-        narrative = assumed["note"] + "\n\n" + narrative
+    # How the message was read, and what could not be used, sit under the two-line headline.
+    echo = reading.echo_line(
+        report, lang, carried=carried, earnings_hold=earnings_hold,
+        unused=reading.unused_parts(intent, ticket, latest, lang, earnings_note=earnings_note, earnings_applied=earnings_hold),
+    )
+    narrative = brief_short(report, lang, echo=echo, notes=tuple(intent.notes))
     result.update({
         "ticket": json.loads(json.dumps(ticket.__dict__, default=str)),
         "report": payload,

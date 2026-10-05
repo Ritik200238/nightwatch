@@ -58,6 +58,11 @@ _ACCOUNT = re.compile(
 )
 
 
+# "保证金2000", "2千U保证金": the money put up, never the position and never the account.
+_MARGIN = re.compile(
+    r"保证金\s*(?:是|为|有|:|：)?\s*([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K|w|W)?"
+    r"|([0-9][0-9,]*(?:\.[0-9]+)?|[零〇一二两三四五六七八九十百千万]+)\s*(万|千|k|K|w|W)?\s*(?:美元|美金|刀|USDT|usdt|U|u|块)?\s*(?:的)?保证金"
+)
 _PRICE_CONTEXT = re.compile(r"止损|止盈|价|跌破|突破|涨到|跌到|目标|%|％")
 _BARE_AFTER_NAME = re.compile(
     "(?:" + "|".join(sorted(map(re.escape, ALIASES_ZH), key=len, reverse=True)) + r"|(?<![A-Za-z])[A-Za-z]{2,5}(?![A-Za-z]))\s*([0-9][0-9,]*(?:\.[0-9]+)?)(?![0-9.]*\s*(?:天|小时|点|个|号|月|日|倍))"
@@ -242,6 +247,14 @@ def read(text: str, known: set[str]) -> dict[str, object]:
                 value *= 1_000
             out["account_equity_quote"] = value
         spent.append(account.span())
+    margin = _MARGIN.search(text)
+    if margin:
+        raw, scale = (margin.group(1), margin.group(2)) if margin.group(1) else (margin.group(3), margin.group(4))
+        value = chinese_number(raw)
+        if value is not None:
+            value *= 10_000 if scale in ("万", "w", "W") else 1_000 if scale in ("千", "k", "K") else 1
+            out["margin_quote"] = value
+        spent.append(margin.span())
     thesis, invalid = _THESIS.search(text), _INVALID.search(text)
     if thesis:
         spent.append(thesis.span())
