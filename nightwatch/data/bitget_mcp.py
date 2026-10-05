@@ -49,7 +49,11 @@ COOLDOWN_S = 60.0
 
 
 class BitgetMcpError(RuntimeError):
-    """The service answered, but not with data."""
+    """The service answered, but not with data. ``status`` is the HTTP status of the failing backend, if known."""
+
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 def _payload(text: str) -> dict[str, Any] | None:
@@ -95,7 +99,7 @@ class BitgetMcpClient:
     def _failed(self, exc: Exception) -> None:
         with self._state:
             self._failures += 1
-            self._last_status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            self._last_status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else getattr(exc, "status", None)
             self._last_error = f"HTTP {self._last_status}" if self._last_status else (type(exc).__name__ if not isinstance(exc, BitgetMcpError) else str(exc)[:120])
             if self._failures >= DOWN_AFTER:
                 self._down_since = self._down_since or utc_now()
@@ -172,6 +176,12 @@ class BitgetMcpClient:
         except (httpx.HTTPError, BitgetMcpError) as exc:
             log.info("bitget mcp %s %s failed: %s", entry_id, params, exc)
             self._failed(exc)
+            return []
+        if not doc.get("success") and isinstance(doc.get("status_code"), int) and doc["status_code"] >= 500:
+            # The MCP front end answered but its data backend did not (observed 2026-10-05: every
+            # do_query returned success=false with the backend's own 503 page for over an hour
+            # while the guide call kept working). That is an outage, not "no data".
+            self._failed(BitgetMcpError(f"backend HTTP {doc['status_code']}", doc["status_code"]))
             return []
         self._succeeded()
         if not doc.get("success"):
