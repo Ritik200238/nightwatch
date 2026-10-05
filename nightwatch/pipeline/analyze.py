@@ -116,6 +116,12 @@ class AnalysisContext:
     # Bitget's bitget-signal Skill backend (nightwatch.data.bitget_signal.BitgetSignalClient):
     # an RSI reading, shown only when it agrees with the desk's own candles. Context only.
     signal_client: Any = None
+    # Bitget Wallet's tokenized-stock listing (nightwatch.data.bitget_rwa.BitgetRwaClient):
+    # tradable status, pause or alert text, per-order size limits. Cached, refreshed in the
+    # background, never waited on.
+    rwa_client: Any = None
+    _rwa: dict[str, tuple[datetime, dict | None]] = field(default_factory=dict)
+    _rwa_pending: set[str] = field(default_factory=set)
     sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
@@ -412,6 +418,42 @@ class AnalysisContext:
                 self._signal_pending.discard(ticker)
 
         threading.Thread(target=run, name=f"signal-{ticker}", daemon=True).start()
+
+    def rwa_for(self, ticker: str, *, max_age: timedelta = timedelta(minutes=30), fetch: bool = False) -> dict | None:
+        """The cached Bitget Wallet listing for a ticker. An analysis passes ``fetch=False``:
+        a miss returns what is cached (up to a day old) and asks for a background refresh."""
+        if self.rwa_client is None:
+            return None
+        hit = self._rwa.get(ticker)
+        if hit and utc_now() - hit[0] <= max_age:
+            return hit[1]
+        if fetch:
+            return self._fetch_rwa(ticker) or (hit[1] if hit else None)
+        self.refresh_rwa_later(ticker)
+        return hit[1] if hit and utc_now() - hit[0] <= timedelta(days=1) else None
+
+    def _fetch_rwa(self, ticker: str) -> dict | None:
+        try:
+            info = self.rwa_client.stock_info(ticker)
+        except Exception:  # noqa: BLE001 - context must never fail an analysis
+            log.exception("bitget rwa for %s failed", ticker)
+            return None
+        if info is not None:
+            self._rwa[ticker] = (utc_now(), info)
+        return info
+
+    def refresh_rwa_later(self, ticker: str) -> None:
+        if self.rwa_client is None or ticker in self._rwa_pending:
+            return
+        self._rwa_pending.add(ticker)
+
+        def run() -> None:
+            try:
+                self._fetch_rwa(ticker)
+            finally:
+                self._rwa_pending.discard(ticker)
+
+        threading.Thread(target=run, name=f"rwa-{ticker}", daemon=True).start()
 
     def signal_health(self, *, max_age: timedelta = timedelta(hours=1)) -> dict | None:
         """{answering, tried, checked_at} from cache; a stale or missing value triggers a
@@ -785,6 +827,9 @@ class AnalysisReport:
     # For every source used: what it supplied and whether it changed the answer
     # (nightwatch.pipeline.effects), built from the decisions above, not from narrative.
     source_effects: list[dict] = field(default_factory=list)
+    # Bitget Wallet's listing of the token (nightwatch.features.rwa_status): tradable status,
+    # pause or alert text, per-order limits. A caution only; it never moves the size.
+    rwa_listing: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out = _serialise(self)
@@ -1243,6 +1288,18 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     if options:
         sources.append({"kind": "cboe_options", "label": "Cboe options quotes", "last_ts": options["quote_ts"] or options["fetched_at"], "rows_used": options["n_strikes"], "ticker": ticket.ticker,
                         "fetched_at": options["fetched_at"]})
+    rwa_listing = None
+    if abs((utc_now() - as_of).total_seconds()) <= STREET_FRESH_S:
+        try:
+            from nightwatch.features import rwa_status
+
+            rwa_listing = rwa_status.build(ctx.rwa_for(ticket.ticker), ticket.notional_quote, ticket.side.value == "long")
+        except Exception:  # noqa: BLE001 - optional context must never break a verdict
+            log.exception("bitget rwa listing for %s failed", ticket.ticker)
+        if rwa_listing:
+            sources.append({"kind": "bitget_wallet_rwa", "label": "Bitget Wallet RWA listing", "last_ts": rwa_listing["fetched_at"], "rows_used": 1, "ticker": ticket.ticker, "fetched_at": rwa_listing["fetched_at"]})
+            for f in rwa_listing["flags"]:
+                warnings.append(f"{f[0].upper()}{f[1:]}; this did not change the size")
     timings["total"] = int((time.perf_counter() - t_start) * 1000)
     from nightwatch.pipeline.feeds import feed_sources
 
@@ -1252,7 +1309,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     report = AnalysisReport(
         ticket=ticket, as_of=as_of, horizon_h=horizon_h, primary_horizon=primary, snapshot=snapshot, analog=analog,
-        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, bitget=bitget, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options,
+        stress=stress, execution=execution, gate=gate, sizing=sizing, verdict=verdict, sensitivity=sensitivity, lessons=lessons, breaker=breaker, portfolio=portfolio, regimes=regimes, sources=sources, warnings=warnings, timings_ms=timings, filings=filings, street=street, bitget=bitget, signal=signal, corporate_events=corporate, open_interest=open_interest, options=options, rwa_listing=rwa_listing,
         plan_check=plan.to_dict() if plan else None,
         entry_plan=entry_plan.to_dict() if entry_plan else None,
         leverage=lev_view.to_dict() if lev_view else None,

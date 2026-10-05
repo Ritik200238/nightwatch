@@ -164,6 +164,15 @@ def build(report: Any) -> list[dict[str, Any]]:  # noqa: ANN401
                 row(src, PRESET, sup, ("The options market expects more than history, so it is now the worst severe stress preset; another limit still bound the size.", "期权市场预期的波动超过历史，因此它成为最坏的严重压力情景；但另有其他上限更紧。"))
             else:
                 row(src, CONTEXT, sup, ("Within history's severe moves, so the size is the same with or without it.", "未超过历史上的严重波动，有无它仓位都一样。"))
+        elif kind == "bitget_wallet_rwa":
+            rw = report.rwa_listing or {}
+            mx = rw.get("tx_max_usd") or 0
+            sup = (f"Bitget Wallet's listing: {rw.get('status') or 'status unknown'}, {rw.get('session_title') or 'session unknown'}, per-order limit up to {mx:,.0f} USDT.",
+                   f"Bitget Wallet 上架信息：{rw.get('status') or '状态未知'}，{rw.get('session_title') or '时段未知'}，单笔上限 {mx:,.0f} USDT。")
+            if rw.get("flags"):
+                row(src, FLAG, sup, ("; ".join(rw["flags"]) + ". A caution on the report; the size is unchanged.", "上架信息触发了提示（暂停、提醒或超出单笔限额），报告已警告；仓位未变。"))
+            else:
+                row(src, CONTEXT, sup, ("Tradable and the size fits its per-order limits; nothing raised.", "可交易，且仓位在单笔限额内；未触发提示。"))
         elif kind == "corporate_events":
             ce = report.corporate_events or {}
             if ce.get("in_hold"):
