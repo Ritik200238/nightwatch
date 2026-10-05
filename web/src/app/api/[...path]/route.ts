@@ -17,7 +17,12 @@ import { snapshot } from "@/snapshot";
 import { SNAPSHOT_HEADER, shouldFallback, snapshotGet, snapshotPost } from "@/lib/snapshot";
 
 const GET_TIMEOUT_MS = 12_000;
-const POST_TIMEOUT_MS = 60_000;
+const POST_TIMEOUT_MS = 110_000; // under maxDuration; a busy backend answered one chat in 105 s
+// A signal passed to fetch() also cuts the response body when it fires. The chat stream's body
+// legitimately runs for the whole turn (a busy backend takes 50-100 s), so it gets its own
+// limit, just under maxDuration: with the 60 s one, every turn that took longer was cut off
+// mid-answer and the browser reported "the connection dropped".
+const STREAM_TIMEOUT_MS = 115_000;
 
 export const dynamic = "force-dynamic"; // every call is live data
 export const maxDuration = 120; // an analysis takes seconds; a cold backend can take longer
@@ -144,7 +149,7 @@ async function forwardStream(req: NextRequest, path: string[], body: string) {
           body,
           cache: "no-store",
           redirect: "manual",
-          signal: AbortSignal.timeout(POST_TIMEOUT_MS),
+          signal: AbortSignal.timeout(STREAM_TIMEOUT_MS),
         }),
       false,
     );

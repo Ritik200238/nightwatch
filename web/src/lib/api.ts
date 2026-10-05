@@ -1460,6 +1460,7 @@ export const api = {
     accountEquity: number | null | undefined,
     contextForecastId: number | null | undefined,
     onStep: (s: ChatStep) => void,
+    lang: "en" | "zh" = "en",
   ): Promise<ChatResponse> => {
     const again = () =>
       request<ChatResponse>("/chat", {
@@ -1507,7 +1508,7 @@ export const api = {
     } catch (e) {
       if (e instanceof ApiError) throw e;
     }
-    if (started) throw new ApiError("The connection dropped before the answer arrived. Please send it again.", 503);
+    if (started) throw new ApiError(lang === "zh" ? "连接在答案送达前中断了，请再发一次。" : "The connection dropped before the answer arrived. Please send it again.", 503);
     return again(); // cut before anything ran
   },
   calibration: (ticker?: string, kind?: string) => {
