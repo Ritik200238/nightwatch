@@ -494,7 +494,7 @@ def _a_shock(r: dict, q: str) -> Answer | None:
         lev = r.get("leverage")
         if lev and lev.get("liquidation_distance_pct") is not None:
             d = lev["liquidation_distance_pct"]
-            bits.append(f"At {lev['leverage']:g}x that {'liquidates the position - the whole ' + _usd(lev['margin_quote']) + ' of margin' if size >= d else f'stays short of liquidation, {d:.1f}% away'}.")
+            bits.append(f"At {round(lev['leverage'], 2):g}x that {'liquidates the position - the whole ' + _usd(lev['margin_quote']) + ' of margin' if size >= d else f'stays short of liquidation, {d:.1f}% away'}.")
         # How rare, against what this token's own closed windows did.
         presets = {p["id"]: p for p in ((r.get("stress") or {}).get("presets") or [])}
         p1, p5 = presets.get("closed_window_gap_p1"), presets.get("closed_window_gap_p5")

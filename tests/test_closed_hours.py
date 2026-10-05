@@ -253,7 +253,7 @@ def test_stock_days_ignores_a_live_partial_bar():
 def test_report_line_quotes_only_what_was_measured():
     res = q2(beta=1.0, seed=5)
     line = ch.report_line(res, "T0")
-    assert line and "while the US market was shut" in line and "weekends" in line and "n=" in line
+    assert line and "when the US market is shut" in line and "weekends" in line and "n=" in line
     assert ch.report_line(res, "NOPE") is None
 
 

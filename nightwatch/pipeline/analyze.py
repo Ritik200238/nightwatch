@@ -1040,6 +1040,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     # 6. Gate, sizing, verdict.
     t0 = time.perf_counter()
     p5 = _primary_p5(analog, primary)
+    if plan is not None:
+        plan.judge_reach(p5)
     leverage_rule = None
     if lev_view is not None:
         from nightwatch.execution import leverage as lev_mod
@@ -1116,6 +1118,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         leverage_rule=leverage_rule,
         book_model=book_built[0] if book_built else None, book_unknown=book_built[2] if book_built else (),
         book_mean_correlation=portfolio.mean_correlation_to_book if portfolio else None,
+        invalidation_distance_pct=plan.measured_pct() if plan else None,
+        invalidation_reach_pct=plan.reach_pct if plan else None,
     )
     ev = dc.evaluate(
         ticket, impacts=stress.impacts,

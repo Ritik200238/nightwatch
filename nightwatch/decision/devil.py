@@ -129,7 +129,7 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
         if mc is not None:
             seen.append(f"{mc:.0%} of simulated paths do")
         text = (
-            f"At {lev['leverage']:g}x the exchange closes the position {lev['liquidation_distance_pct']:.1f}% away and the whole "
+            f"At {round(lev['leverage'], 2):g}x the exchange closes the position {lev['liquidation_distance_pct']:.1f}% away and the whole "
             f"{_q(margin)} USDT of margin is gone, with no chance to ride the move back" + (f"; {' and '.join(seen)}." if seen else ".")
         )
         against.append(Counterpoint("against", text, margin, "liquidation"))

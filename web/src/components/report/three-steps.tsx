@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Histogram } from "@/components/charts/histogram";
 import { fmtPct, fmtRatio, fmtUsd } from "@/lib/format";
 import { presetName } from "@/lib/i18n-terms";
-import { fmtDateL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
+import { fmtDateL, fmtHoursL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 import { plainReason } from "@/lib/plain";
 import type { Report } from "@/lib/api";
 
@@ -43,14 +43,14 @@ function whoDecided(report: Report): { step: Driver; en: string; zh: string } {
   return { step: 0, en: "no limit cut the size", zh: "没有任何上限削减仓位" };
 }
 
-function StepCard({ n, title, active, children }: { n: 1 | 2 | 3; title: string; active: boolean; children: ReactNode }) {
+function StepCard({ n, title, active, children, lang }: { n: 1 | 2 | 3; title: string; active: boolean; children: ReactNode; lang: Lang }) {
   return (
     <li className={`min-w-0 rounded-lg border px-3 py-3 ${active ? "border-primary bg-primary/5" : "border-border bg-muted/20"}`}>
       <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden>
           {n}
         </span>
-        <span className="sr-only">{`Step ${n}: `}</span>
+        <span className="sr-only">{lang === "zh" ? `第 ${n} 步：` : `Step ${n}: `}</span>
         {title}
       </h3>
       <div className="space-y-2 text-[13px] leading-relaxed">{children}</div>
@@ -76,7 +76,7 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
   const closest = [...matches].sort((x, y) => y.similarity - x.similarity).slice(0, 3);
   const side = t.side === "short" ? L("short", "做空") : L("long", "做多");
   const label = typeof t.extra?.horizon_label === "string" ? t.extra.horizon_label : null;
-  const hold = label ?? (report.horizon_h >= 48 ? `${(report.horizon_h / 24).toFixed(1)} d` : `${report.horizon_h.toFixed(0)} h`);
+  const hold = label ? `${label} (${Math.round(report.horizon_h)} h)` : fmtHoursL(report.horizon_h, lang);
   const said = `${side} ${Math.round(t.notional_quote).toLocaleString("en-US")} ${t.ticker}, ${hold}`;
   const by = report.read_by?.parsed_by;
   const modelName = by && by !== "rules" ? by.charAt(0).toUpperCase() + by.slice(1) : null;
@@ -112,7 +112,7 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
         <span className="ml-2 font-normal text-muted-foreground">{L("Step 1 → Step 2 → Step 3 → Verdict", "第 1 步 → 第 2 步 → 第 3 步 → 结论")}</span>
       </p>
       <ol className="grid gap-3 lg:grid-cols-3">
-        <StepCard n={1} title={L("Similar past moments", "相似的历史时刻")} active={false}>
+        <StepCard lang={lang} n={1} title={L("Similar past moments", "相似的历史时刻")} active={false}>
           <p>
             <span className="font-medium">{modelName ? L(`Read by ${modelName}: `, `由 ${modelName} 解读：`) : by === "rules" ? L("Read by rules (no model needed): ", "由规则解读（无需模型）：") : L("Read as: ", "解读为：")}</span>
             {said}
@@ -151,7 +151,7 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
           )}
         </StepCard>
 
-        <StepCard n={2} title={L("What happened after", "之后发生了什么")} active={decided.step === 2}>
+        <StepCard lang={lang} n={2} title={L("What happened after", "之后发生了什么")} active={decided.step === 2}>
           {cohort && !cohort.insufficient ? (
             <>
               <p>
@@ -179,7 +179,7 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
           )}
         </StepCard>
 
-        <StepCard n={3} title={L("Stress tests", "压力测试")} active={decided.step === 3}>
+        <StepCard lang={lang} n={3} title={L("Stress tests", "压力测试")} active={decided.step === 3}>
           <p>
             <span className="tabular font-semibold">{report.stress.presets.length}</span> {L("presets run on your size", "个预设情景按你的仓位运行")}
             {windows > 1 ? L(`; gaps span the ${windows} closed windows in your hold`, `；跳空按持有期内的 ${windows} 个休市时段计算`) : ""}

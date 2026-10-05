@@ -38,7 +38,9 @@ export default function DeskPage() {
   const deepLinked = useRef(false);
   const [heroDraft, setHeroDraft] = useState("");
   const [heroUsed, setHeroUsed] = useState(false);
-  const [equity, setEquity] = useState<number | null>(200000);
+  // The account the trader typed in the form or picked from the ladder. Never a default: the
+  // chat sends it with every message, and an invented account hides the account-size row.
+  const [equity, setEquity] = useState<number | null>(null);
   const { positions, setPositions } = useOpenPositions();
   const heroUp = !report && !heroUsed;
   const exampleReport = (snapshot?.reports.TSLA as unknown as Report | undefined) ?? null;
@@ -100,11 +102,12 @@ export default function DeskPage() {
     };
   }
 
-  async function run(ticket: TicketInput) {
+  async function run(ticket: TicketInput, remember = true) {
     setBusy(true);
     setError(null);
     setLastTicket(ticket);
-    setEquity(ticket.account_equity_quote ?? null);
+    // The built-in example carries its own account; that is the example's, not the trader's.
+    if (remember) setEquity(ticket.account_equity_quote ?? null);
     setFromChat(false);
     scrollIntoViewOnSmall(resultRef.current);
     try {
@@ -143,7 +146,7 @@ export default function DeskPage() {
         onExample={() => {
           setHeroUsed(true);
           setHeroDraft("");
-          void run(demoTicket());
+          void run(demoTicket(), false);
         }}
         exampleDisabled={busy || !universe}
         onForm={() => {
@@ -260,7 +263,7 @@ export default function DeskPage() {
                 // The same trade at the same moment, with one thing changed. A report from
                 // chat has no form ticket behind it, so its own ticket is the base.
                 const base = lastTicket ?? (report.ticket as unknown as TicketInput);
-                void run({ ...base, ...patch, as_of: report.as_of });
+                void run({ ...base, ...patch, as_of: report.as_of }, patch.account_equity_quote !== undefined);
               }}
             />
           </div>
@@ -272,7 +275,7 @@ export default function DeskPage() {
               <p className="text-sm text-muted-foreground" suppressHydrationWarning>
                 {tx(`Example from ${readableTime(snapshot!.generated_at)} — press to run it live now`, `示例，生成于 ${fmtDateL(snapshot!.generated_at, "zh")} — 点击立即实时运行`)}
               </p>
-              <Button size="sm" disabled={busy || !universe} onClick={() => void run(demoTicket())}>
+              <Button size="sm" disabled={busy || !universe} onClick={() => void run(demoTicket(), false)}>
                 {tx("Run this trade live", "实时运行这笔交易")}
               </Button>
             </div>
@@ -295,7 +298,7 @@ export default function DeskPage() {
             <Button
               className="mt-2 h-auto max-w-full whitespace-normal py-2 text-center"
               disabled={busy}
-              onClick={() => void run(demoTicket())}
+              onClick={() => void run(demoTicket(), false)}
             >
               {tx("See it on a real trade: $20k of TSLA held to the next open", "看一笔真实交易：持有 2 万美元 TSLA 到下次开盘")}
             </Button>
@@ -338,7 +341,7 @@ function HeroProof() {
   const rate = Math.round((tk?.rate ?? 0) * 100);
   const target = Math.round((misses?.target_rate ?? 0.05) * 100);
   return (
-    <ul className="mt-3 flex min-h-8 flex-wrap gap-2" aria-label={tx("Proof", "证据")}>
+    <ul className="mt-3 hidden min-h-8 flex-wrap gap-2 sm:flex" aria-label={tx("Proof", "证据")}>
       {has ? (
         <>
           <li>
@@ -440,7 +443,8 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           </button>
         </li>
       </ul>
-      <ol className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2" aria-label={tx("How it works", "工作方式")}>
+      {/* Hidden on a phone: the example verdict below says the same thing, and these boxes pushed it a screen down. */}
+      <ol className="mt-4 hidden grid-cols-4 gap-2 sm:grid" aria-label={tx("How it works", "工作方式")}>
         {HERO_STEPS.map((st, i) => (
           <li key={st.en} className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 sm:px-3 sm:py-2">
             <p className="text-[13px] font-medium leading-tight">

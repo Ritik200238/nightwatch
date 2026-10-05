@@ -195,6 +195,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         accountEquity,
         contextRef.current,
         (s) => setSteps((prev) => (prev.some((p) => p.stage === s.stage) ? prev : [...prev, s])),
+        chatLang,
       );
       // A saved example served while the live server is down is a chat message only: it
       // must never replace the report on screen, which belongs to the trader's own trade.
@@ -214,7 +215,16 @@ export function Chat({ accountEquity, busy, setBusy, onReport, script }: Props) 
         if (id != null && res.mode !== "what_if") void followWithTake(id, chatLang);
       }
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : tx("Something went wrong.", "出错了。");
+      // The error text follows the language the trader wrote in, not the page's last setting.
+      const zhNow = HAS_ZH.test(content) || lang === "zh";
+      const msg =
+        e instanceof ApiError
+          ? zhNow && e.status === 0
+            ? "无法连接到 Nightwatch 服务，请稍后再发一次。"
+            : zhNow && (e.status === 502 || e.status === 503) && /^[ -~]+$/.test(e.message)
+              ? "服务暂时没有响应，请稍后再发一次。"
+              : e.message
+          : tx("Something went wrong.", "出错了。");
       setError(msg);
       commit(next);
     } finally {

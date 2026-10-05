@@ -132,6 +132,9 @@ class DecisionContext:
     book_model: BookModel | None = field(default=None, compare=False, repr=False)
     book_unknown: tuple[str, ...] = ()
     book_mean_correlation: float | None = None
+    # The "wrong if" line's distance and the token's one-in-twenty move over the hold, from plan_check.
+    invalidation_distance_pct: float | None = None
+    invalidation_reach_pct: float | None = None
     _book_caps: dict[tuple, tuple[float, str] | None] = field(default_factory=dict, compare=False, repr=False)
     _stress_caps: dict[tuple, float | None] = field(default_factory=dict, compare=False, repr=False)
 
@@ -244,6 +247,7 @@ class DecisionContext:
                 breaker_state=self.breaker_state, breaker_reason=self.breaker_reason, now=self.now,
                 leverage_rule=self.leverage_rule if ticket.leveraged else None,
                 book_given=bool(ticket.open_positions), book_unknown=self.book_unknown, book_mean_correlation=self.book_mean_correlation,
+                invalidation_distance_pct=self.invalidation_distance_pct, invalidation_reach_pct=self.invalidation_reach_pct,
             ),
             self.gate_policy,
         )

@@ -147,7 +147,7 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
         lines.append(f"[market] Market state: {labels['regime_label']}" + (f", size multiplier {mult:.2f}" if isinstance(mult, int | float) else "") + ".")
     lev = r.get("leverage") or {}
     if lev.get("liquidation_distance_pct") is not None:
-        lines.append(f"[leverage] Leverage {lev['leverage']:g}x: liquidated about {lev['liquidation_distance_pct']:.1f}% away"
+        lines.append(f"[leverage] Leverage {round(lev['leverage'], 2):g}x: liquidated about {lev['liquidation_distance_pct']:.1f}% away"
                      + (f"; {lev['analog_hits']} of {lev['analog_of']} past moments reached it" if lev.get("analog_of") else "") + ".")
     modes = [m for m in (r.get("failure_modes") or []) if m.get("loss_quote") is not None]
     if modes:

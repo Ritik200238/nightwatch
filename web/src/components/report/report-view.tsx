@@ -31,8 +31,8 @@ import { Pill, Section, SourceChip, SourceLegend, Stat } from "@/components/repo
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type ClosedHoursLine, type Report, type TicketInput } from "@/lib/api";
-import { fmtBps, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
-import { breakerReason, capDetail, plainReason, plainText } from "@/lib/plain";
+import { fmtBps, fmtLev, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
+import { breakerReason, capDetail, plainReason, plainText, ruleReason, warningText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
 import { fmtDateL, fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
@@ -223,9 +223,18 @@ function PlanNote({ report, lang }: { report: Report; lang: Lang }) {
       `你的失效条件 ${fmtPrice(c.level)} ${rel}当前价格——对这个方向来说，它更像目标价，而不是能证明你判断错误的位置。`,
     );
   }
+  // A line beyond the token's own one-in-twenty move over the hold is crossed in fewer than one
+  // past hold in twenty: it is an invalidation, not a stop order, and it does not limit the loss.
+  const tooFar = c.too_far && c.reach_pct != null;
+  if (tooFar) {
+    line = `${line ?? ""} ${L(
+      `That is too far to bind: it is beyond this token's own one-in-twenty move over the hold (${c.reach_pct!.toFixed(1)}%), so it is an invalidation, not a stop order, and it does not limit the loss.`,
+      `这条线太远，起不到约束作用：它比这只代币在持有期内二十分之一的波动（${c.reach_pct!.toFixed(1)}%）还远，不是止损单，也不会限制亏损。`,
+    )}`.trim();
+  }
   if (!line && !c.thesis_mismatch) return null;
   return (
-    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
+    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || tooFar || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
       <span className="font-medium text-foreground">{L("Your plan, checked: ", "对你的计划的检查：")}</span>
       <span className="text-muted-foreground">
         {line}
@@ -248,21 +257,21 @@ function LiquidationNote({ report, lang }: { report: Report; lang: Lang }) {
   let bad = true;
   if (!l.perp_symbol) {
     line = L(
-      `Bitget lists no perpetual for ${report.ticket.ticker}, so ${l.leverage}x is not available; everything below is the spot trade.`,
-      `Bitget 没有上线 ${report.ticket.ticker} 的永续合约，所以无法使用 ${l.leverage}x 杠杆；下面的一切都按现货交易计算。`,
+      `Bitget lists no perpetual for ${report.ticket.ticker}, so ${fmtLev(l.leverage)}x is not available; everything below is the spot trade.`,
+      `Bitget 没有上线 ${report.ticket.ticker} 的永续合约，所以无法使用 ${fmtLev(l.leverage)}x 杠杆；下面的一切都按现货交易计算。`,
     );
   } else if (!l.allowed) {
-    line = L(`${l.leverage}x is more than the ${l.max_leverage_at_size}x Bitget allows at this size.`, `${l.leverage}x 超过了 Bitget 在这个仓位下允许的 ${l.max_leverage_at_size}x。`);
+    line = L(`${fmtLev(l.leverage)}x is more than the ${l.max_leverage_at_size}x Bitget allows at this size.`, `${fmtLev(l.leverage)}x 超过了 Bitget 在这个仓位下允许的 ${l.max_leverage_at_size}x。`);
   } else if (l.liquidation_price == null || l.liquidation_distance_pct == null) {
-    line = L(`${l.leverage}x noted, but with no entry price the liquidation level is unknown.`, `已记录 ${l.leverage}x，但没有入场价，所以强平价格未知。`);
+    line = L(`${fmtLev(l.leverage)}x noted, but with no entry price the liquidation level is unknown.`, `已记录 ${fmtLev(l.leverage)}x，但没有入场价，所以强平价格未知。`);
   } else {
     const seen: string[] = [];
     if (l.analog_of) seen.push(L(`${l.analog_hits} of ${l.analog_of} past moments like this reached it inside the hold`, `过去 ${l.analog_of} 个类似时刻中有 ${l.analog_hits} 个在持有期内触及强平价`));
     if (l.mc_share != null) seen.push(L(`${fmtRatio(l.mc_share)} of simulated paths do`, `${fmtRatio(l.mc_share)} 的模拟路径会触及强平价`));
     if (l.presets_hit.length) seen.push(L(`${l.presets_hit.length} stress preset${l.presets_hit.length > 1 ? "s" : ""} liquidate it`, `${l.presets_hit.length} 个压力情景会将其强平`));
     line = L(
-      `${l.leverage}x: about ${fmtUsd(l.margin_quote)} USDT of margin, liquidated near ${fmtPrice(l.liquidation_price)} (${l.liquidation_distance_pct.toFixed(1)}% away). ${seen.join("; ")}.`,
-      `${l.leverage}x：保证金约 ${fmtUsd(l.margin_quote)} USDT，价格接近 ${fmtPrice(l.liquidation_price)} 时强平（距当前 ${l.liquidation_distance_pct.toFixed(1)}%）。${seen.join("；")}。`,
+      `${fmtLev(l.leverage)}x: about ${fmtUsd(l.margin_quote)} USDT of margin, liquidated near ${fmtPrice(l.liquidation_price)} (${l.liquidation_distance_pct.toFixed(1)}% away). ${seen.join("; ")}.`,
+      `${fmtLev(l.leverage)}x：保证金约 ${fmtUsd(l.margin_quote)} USDT，价格接近 ${fmtPrice(l.liquidation_price)} 时强平（距当前 ${l.liquidation_distance_pct.toFixed(1)}%）。${seen.join("；")}。`,
     );
     bad = (l.analog_hits ?? 0) > 0 || l.presets_hit.length > 0 || (l.mc_share ?? 0) >= 0.05;
   }
@@ -291,7 +300,12 @@ function WeekendNote({ report, lang }: { report: Report; lang: Lang }) {
     <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
       <span className="font-medium text-foreground">{L("Which weekend: ", "指的是哪个周末：")}</span>
       <span className="text-muted-foreground">
-        {L(
+        {w.scheduled && w.scheduled_h != null
+          ? L(
+              `today is ${w.today}, so "over the weekend" is read as the coming weekend: Friday's close to Monday's open (${Math.round(w.scheduled_h)} h), judged on today's conditions. Over ${report.ticket.ticker}'s last ${w.n} weekends, 1 in 20 lost more than ${(-w.p5_pct).toFixed(1)}% and the worst was ${w.worst_pct.toFixed(1)}% (raw history, not calibrated). Ask again on Friday for the full check of that weekend.`,
+              `今天是 ${w.today}，所以“过周末”按即将到来的周末来算：周五收盘到周一开盘（${Math.round(w.scheduled_h)} 小时），用今天的行情状态来判断。${report.ticket.ticker} 过去 ${w.n} 个周末里，二十分之一的情况亏损超过 ${(-w.p5_pct).toFixed(1)}%，最差的一次是 ${w.worst_pct.toFixed(1)}%（原始历史数据，未经校准）。周五再问我一次，可以得到那个周末的完整检查。`,
+            )
+          : L(
           `today is ${w.today}, so holding from now is ${(w.hold_from_now_h / 24).toFixed(1)} days, to Monday's open - longer than any hold we have scored. Buying on Friday instead: over ${report.ticket.ticker}'s last ${w.n} weekends, 1 in 20 lost more than ${(-w.p5_pct).toFixed(1)}% from Friday's close to Monday's open, and the worst was ${w.worst_pct.toFixed(1)}% (raw history, not calibrated). Run it again on Friday for the full check.`,
           `今天是 ${w.today}，从现在持有到周一开盘约 ${(w.hold_from_now_h / 24).toFixed(1)} 天，比我们评估过的任何持有期都长。改成周五买入的话：${report.ticket.ticker} 过去 ${w.n} 个周末里，二十分之一的情况从周五收盘到周一开盘亏损超过 ${(-w.p5_pct).toFixed(1)}%，最差的一次是 ${w.worst_pct.toFixed(1)}%（原始历史数据，未经校准）。周五再运行一次，可以得到完整的检查。`,
         )}
@@ -532,7 +546,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
           </p>
           <ul className="space-y-1 text-muted-foreground">
             {report.warnings.map((w) => (
-              <li key={w}>{w}</li>
+              <li key={w}>{warningText(w, lang)}</li>
             ))}
           </ul>
         </div>
@@ -1072,7 +1086,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
                 )}
                 <span>
                   <span className="font-medium">{tl(lang, "rule", r.rule)}</span>
-                  <span className="text-muted-foreground"> — {r.reason}</span>
+                  <span className="text-muted-foreground"> — {ruleReason(r.reason, lang)}</span>
                 </span>
               </li>
             ))}
@@ -1630,10 +1644,10 @@ function ClosedHoursNote({ report, lang }: { report: Report; lang: Lang }) {
   return (
     <p className="mt-4 text-[13px] text-muted-foreground">
       {L(
-        `This token made ${n.closed_share_pct.toFixed(0)}%${band} of its price movement (by variance) while the US market was shut, which is ${n.time_share_pct.toFixed(0)}% of the clock (n=${n.n_windows.toLocaleString()} windows).${
+        `Over its history, ${n.closed_share_pct.toFixed(0)}%${band} of this token's price movement (by variance) came in the hours when the US market is shut, and those hours are ${n.time_share_pct.toFixed(0)}% of the clock (n=${n.n_windows.toLocaleString()} windows). This describes the past, not whether the market is open right now.${
           kept != null && n.n_weekends ? ` Across ${n.n_weekends} weekends, Monday's stock open kept ${(100 * kept).toFixed(0)}%${keptBand} of the token's Friday-to-Monday-04:00 move on average; a figure under 100% is partly noise in the token's price.` : ""
         } `,
-        `该代币在美国市场休市期间完成了其价格波动（按方差）的 ${n.closed_share_pct.toFixed(0)}%${band}，而休市占时间的 ${n.time_share_pct.toFixed(0)}%（n=${n.n_windows.toLocaleString()} 个窗口）。${
+        `回看历史，该代币价格波动（按方差）的 ${n.closed_share_pct.toFixed(0)}%${band} 发生在美股休市的时段，而这些时段占全部时间的 ${n.time_share_pct.toFixed(0)}%（n=${n.n_windows.toLocaleString()} 个窗口）。这说的是过去，不代表现在是否开市。${
           kept != null && n.n_weekends ? `在 ${n.n_weekends} 个周末里，周一股票开盘平均保留了代币从周五到周一 04:00 涨跌的 ${(100 * kept).toFixed(0)}%${keptBand}；低于 100% 的部分原因是代币价格本身的噪声。` : ""
         }`,
       )}

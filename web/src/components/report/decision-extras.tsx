@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Histogram } from "@/components/charts/histogram";
 import { api, type MissesResponse, type Report, type VerifyResponse } from "@/lib/api";
 import { fmtPct, fmtUsd } from "@/lib/format";
-import { presetName } from "@/lib/i18n-terms";
+import { presetName, stateWord } from "@/lib/i18n-terms";
 import { useAgent } from "@/lib/agent-run";
 import { SourceChip } from "@/components/report/primitives";
 import { fmtTimeL, type Lang, tr } from "@/lib/i18n";
@@ -95,7 +95,7 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
   const a = report.analog;
   const items: { key: string; label: string }[] = [];
   if (report.execution.exit_quote || bookTs) {
-    items.push({ key: "book", label: `${L("Bitget order book", "Bitget 订单簿")} (${report.execution.book_source}${age != null ? `, ${age}s ${L("old", "前")}` : ""})${ms(tm.book)}` });
+    items.push({ key: "book", label: `${L("Bitget order book", "Bitget 订单簿")} (${stateWord(lang, report.execution.book_source)}${age != null ? `, ${age}s ${L("old", "前")}` : ""})${ms(tm.book)}` });
   }
   items.push({ key: "candles", label: `${L("Bitget candles + features", "Bitget K 线与特征")} (${L("bar", "K 线")} ${fmtTimeL(report.snapshot.bar_ts, lang)})${ms(tm.snapshot)}` });
   if (report.street) items.push({ key: "street", label: `${L("Bitget US-stock MCP", "Bitget 美股 MCP")}${ms(tm.street)}` });

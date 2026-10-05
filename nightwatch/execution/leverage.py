@@ -244,7 +244,7 @@ def gate_rule(view: LeverageView | None, p5_loss_pct: float | None) -> tuple[str
     if view.perp_symbol is None:
         return "NO_GO", "no Bitget perpetual for this stock, so it cannot be held with leverage"
     if not view.allowed:
-        return "NO_GO", f"{view.leverage:g}x is above the {view.max_leverage_at_size:g}x Bitget allows at this size"
+        return "NO_GO", f"{round(view.leverage, 2):g}x is above the {view.max_leverage_at_size:g}x Bitget allows at this size"
     d = view.liquidation_distance_pct
     if d is None:
         return "REVIEW_REQUIRED", "liquidation price unknown: no entry price"

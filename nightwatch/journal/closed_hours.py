@@ -800,8 +800,8 @@ def report_line(result: dict[str, Any], ticker: str) -> str | None:
     p = (result.get("per_token") or {}).get(ticker)
     if not p:
         return None
-    s = (f"This token made {p['closed_share_pct']:.0f}% of its price movement (by variance) while the US market was shut, "
-         f"which is {p['time_share_pct']:.0f}% of the clock (n={p['n_windows']} windows)")
+    s = (f"Over its history, {p['closed_share_pct']:.0f}% of this token's price movement (by variance) came in the hours when the US market is shut, "
+         f"and those hours are {p['time_share_pct']:.0f}% of the clock (n={p['n_windows']} windows)")
     if p.get("weekend_slope_open") is not None:
         s += f"; across {p['n_weekends']} weekends, Monday's stock open kept {100 * p['weekend_slope_open']:.0f}% of the token's weekend move on average"
     return s + "."

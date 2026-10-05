@@ -32,7 +32,7 @@ export const STRINGS = {
       NO_GO: "a hard limit refuses it as asked, and the reason says which one",
     },
     cap: {
-      regime: "Regime",
+      regime: "Market conditions",
       risk_budget: "Risk Budget",
       concentration: "Concentration",
       exit_liquidity: "Exit Liquidity",
@@ -215,11 +215,11 @@ export function fmtHoursL(h: number | null | undefined, lang: Lang): string {
   if (h == null || Number.isNaN(h)) return "—";
   if (lang !== "zh") {
     if (h >= 720) return "> 30 d";
-    if (h >= 48) return `${(h / 24).toFixed(1)} d`;
+    if (h >= 48) return `${Math.round(h)} h (${(h / 24).toFixed(1)} d)`;
     return `${h.toFixed(h < 10 ? 1 : 0)} h`;
   }
   if (h >= 720) return "> 30 天";
-  if (h >= 48) return `${(h / 24).toFixed(1)} 天`;
+  if (h >= 48) return `${Math.round(h)} 小时（${(h / 24).toFixed(1)} 天）`;
   return `${h.toFixed(h < 10 ? 1 : 0)} 小时`;
 }
 

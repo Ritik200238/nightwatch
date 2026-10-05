@@ -47,7 +47,8 @@ export function fmtPrice(v: number | null | undefined): string {
 export function fmtHours(h: number | null | undefined): string {
   if (h == null || Number.isNaN(h)) return "—";
   if (h >= 720) return "> 30 d";
-  if (h >= 48) return `${(h / 24).toFixed(1)} d`;
+  // Hours first and always: the chat, the card and the steps quote the same hold in hours.
+  if (h >= 48) return `${Math.round(h)} h (${(h / 24).toFixed(1)} d)`;
   return `${h.toFixed(h < 10 ? 1 : 0)} h`;
 }
 
@@ -80,4 +81,10 @@ const BUCKET_LABELS: Record<string, string> = {
 
 export function bucketLabel(b: string): string {
   return BUCKET_LABELS[b] ?? titleCase(b);
+}
+
+/** A leverage as a trader says it: 4.444444444444445 -> "4.44", 5 -> "5". */
+export function fmtLev(x: number | null | undefined): string {
+  if (x == null || Number.isNaN(x)) return "—";
+  return String(Math.round(x * 100) / 100);
 }
