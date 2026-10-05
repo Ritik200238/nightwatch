@@ -31,9 +31,16 @@ def _numbers(text: str) -> list[str]:
     return sorted(n.replace(",", "") for n in NUMBERS.findall(text))
 
 
-def test_every_failure_mode_has_a_chinese_twin_with_the_same_numbers(client):
-    body = {"ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000, "stop_price": 300, "leverage": 5,
-            "thesis": "momentum", "invalidation": "closes below 290", "as_of": AS_OF.isoformat(), "record": False}
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"side": "long", "stop_price": 300, "leverage": 5, "thesis": "momentum", "invalidation": "closes below 290"},
+        {"side": "short", "stop_price": 420, "thesis": "stretched", "invalidation": "closes above 430"},
+        {"side": "long"},
+    ],
+)
+def test_every_failure_mode_has_a_chinese_twin_with_the_same_numbers(client, extra):
+    body = {"ticker": "TSLA", "notional_quote": 20000, "account_equity_quote": 200000, "as_of": AS_OF.isoformat(), "record": False, **extra}
     report = client.post("/analyze", json=body).json()
     modes = report["failure_modes"]
     assert modes
