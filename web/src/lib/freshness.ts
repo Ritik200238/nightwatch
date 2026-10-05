@@ -1,7 +1,7 @@
 import type { DataSource } from "./api";
 
 /** How old a feed may be before it is called stale, per source key (hours). */
-export const FRESH_H: Record<string, number> = { bitget_bars: 1, yahoo: 3, nasdaq: 24, fred: 24, rss: 6, sec_edgar: 12, bitget_mcp: 3, bitget_signal: 3 };
+export const FRESH_H: Record<string, number> = { bitget_bars: 1, yahoo: 3, nasdaq: 24, fred: 24, rss: 6, sec_edgar: 12, bitget_mcp: 3, bitget_signal: 3, bitget_oi: 24, cboe_options: 3 };
 
 export function ageHours(iso: string | null | undefined): number | null {
   return iso ? (Date.now() - new Date(iso).getTime()) / 3_600_000 : null;
@@ -21,6 +21,7 @@ export function sourceAgeIso(r: DataSource): string | null {
 }
 
 export function isFresh(r: DataSource): boolean {
+  if (r.status === "unavailable") return false; // a cache that is still warm is not a feed that is up
   const h = ageHours(sourceAgeIso(r));
   return h != null && h <= (FRESH_H[r.key] ?? 24);
 }

@@ -412,6 +412,24 @@ class BitgetPublicClient:
             observed_at=observed,
         )
 
+    # ------------------------------------------------------------- open interest
+
+    def get_open_interest(self, symbol: str) -> tuple[float, datetime]:
+        """Open interest now, in contracts of the base asset, and the exchange's timestamp.
+
+        ``/api/v3/market/open-interest`` is public and keyless (checked 2026-10-05 for
+        TSLAUSDT: ``data = {"list": [{"symbol": ..., "openInterest": "38321.82"}], "ts": ...}``).
+        Raises ``UpstreamError`` when the symbol has no row, so a caller never reads a
+        missing figure as zero.
+        """
+        if not self.is_perp:
+            raise ValueError("open interest exists only for perpetuals")
+        data = self._get("/api/v3/market/open-interest", {"category": "USDT-FUTURES", "symbol": symbol}) or {}
+        for row in data.get("list") or []:
+            if row.get("symbol") == symbol and _f(row.get("openInterest")) is not None:
+                return float(row["openInterest"]), from_epoch_ms(int(data["ts"])) if data.get("ts") else utc_now()
+        raise UpstreamError(f"bitget open interest for {symbol}: no row in {str(data)[:200]}", payload=data)
+
     def get_funding_history(self, symbol: str, start: datetime, end: datetime) -> list[FundingRate]:
         if not self.is_perp:
             raise ValueError("funding exists only for perpetuals")

@@ -7,7 +7,7 @@ import { api, type DataSource } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 
 /** How stale a feed is allowed to look before its dot changes colour, per source. */
-const FRESH_H: Record<string, number> = { bitget_bars: 1, yahoo: 3, nasdaq: 24, fred: 24, rss: 6, sec_edgar: 12 };
+const FRESH_H: Record<string, number> = { bitget_bars: 1, yahoo: 3, nasdaq: 24, fred: 24, rss: 6, sec_edgar: 12, bitget_mcp: 3, bitget_oi: 24, cboe_options: 3 };
 
 function ageHours(iso: string | null): number | null {
   if (!iso) return null;
@@ -54,7 +54,7 @@ export function Sources() {
 
   const stale = rows?.filter((r) => {
     const h = ageHours(r.last_update);
-    return h == null || h > (FRESH_H[r.key] ?? 24);
+    return r.status === "unavailable" || h == null || h > (FRESH_H[r.key] ?? 24);
   }).length;
 
   return (
@@ -70,7 +70,7 @@ export function Sources() {
         <ul className="mt-3 space-y-2">
           {rows.map((r) => {
             const h = ageHours(r.last_update);
-            const ok = h != null && h <= (FRESH_H[r.key] ?? 24);
+            const ok = r.status !== "unavailable" && h != null && h <= (FRESH_H[r.key] ?? 24);
             return (
               <li key={r.key} className="rounded-lg border border-border bg-background/40 px-3 py-2 text-xs">
                 <div className="flex items-center justify-between gap-2">
@@ -85,10 +85,14 @@ export function Sources() {
                   </span>
                 </div>
                 <p className="mt-1 text-muted-foreground">{r.what}</p>
-                <p className="mt-1 text-muted-foreground">
-                  {r.rows.toLocaleString()} {tx("rows", "行")} · {r.cadence}
-                  {r.latest ? ` · ${r.latest_label ?? tx("newest", "最新")}: ${fmtTime(r.latest)}` : ""}
-                </p>
+                {r.status === "unavailable" ? (
+                  <p className="mt-1 font-medium text-destructive">{zh ? "Bitget 美股数据：服务当前不可用，显示的是最近一次有效数据" : r.latest_label}</p>
+                ) : (
+                  <p className="mt-1 text-muted-foreground">
+                    {r.rows.toLocaleString()} {tx("rows", "行")} · {r.cadence}
+                    {r.latest ? ` · ${r.latest_label ?? tx("newest", "最新")}: ${fmtTime(r.latest)}` : ""}
+                  </p>
+                )}
               </li>
             );
           })}

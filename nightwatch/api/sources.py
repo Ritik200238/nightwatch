@@ -23,6 +23,72 @@ def _one(store: Store, sql: str, args: tuple = ()) -> tuple:
     return row if row is not None else ()
 
 
+def open_interest_row(cache: dict[str, tuple[datetime, dict | None]]) -> dict[str, Any]:
+    """Perp open interest: fetched on demand per token (cached 5 min), so ``last_update``
+    is the newest pull and an idle desk legitimately shows an old one."""
+    good = {k: (ts, v) for k, (ts, v) in cache.items() if v}
+    newest = max((ts for ts, _ in good.values()), default=None)
+    failing = sorted(k for k, (_, v) in cache.items() if not v)
+    return {
+        "key": "bitget_oi", "label": "Bitget perp open interest",
+        "what": "Open interest on each token's USDT perpetual, and its change over 24 hours against the desk's own recorded readings",
+        "cadence": "on demand, cached 5 min per token", "last_update": newest.isoformat() if newest else None,
+        "rows": len(good), "latest": newest.isoformat() if newest else None,
+        "latest_label": (f"{len(good)} tokens read" + (f"; {len(failing)} not answering ({', '.join(failing[:3])})" if failing else "")) if cache else "none read yet",
+        "url": "https://www.bitget.com/api-doc/contract/market/Get-Open-Interest",
+    }
+
+
+def options_row(cache: dict[str, tuple[datetime, Any]], failed: dict[str, datetime]) -> dict[str, Any]:
+    """Cboe option quotes: how many tokens have a chain cached, how many have no listed
+    options (an ETF of ETFs, say), and how many pulls are failing."""
+    chains = {k: ts for k, (ts, v) in cache.items() if v not in (None, "none")}
+    none = sorted(k for k, (_, v) in cache.items() if v == "none")
+    newest = max(chains.values(), default=None)
+    parts = [f"{len(chains)} tokens with an options chain"]
+    if none:
+        parts.append(f"{len(none)} with no listed options")
+    if failed:
+        parts.append(f"{len(failed)} not answering")
+    return {
+        "key": "cboe_options", "label": "Cboe options quotes",
+        "what": "Delayed (about 15 min) option chains for each token's underlying: the at-the-money implied volatility gives the market's expected move over a hold, shown beside the desk's own 1-in-20 loss",
+        "cadence": "hourly in the background, cached 30 min per ticker", "last_update": newest.isoformat() if newest else None,
+        "rows": len(chains), "latest": newest.isoformat() if newest else None,
+        "latest_label": "; ".join(parts) if cache else "none fetched yet",
+        "url": "https://www.cboe.com/delayed_quotes/",
+    }
+
+
+def street_row(cached: list[tuple[datetime, Any]], status: dict[str, Any] | None, now: datetime) -> dict[str, Any]:
+    """The Bitget US-stock data row, honest about an outage.
+
+    Counts only views that hold something (a blank view is a failed or empty pull, not a
+    token "with current street data"), and when the service is failing says so, with when
+    it started and the HTTP status, instead of calling the cache current.
+    """
+    from nightwatch.features.street import last_good_label, outage_clause
+
+    held = [(ts, v) for ts, v in cached if v is not None and not v.empty]
+    newest = max((ts for ts, _ in held), default=None)
+    down = bool(status) and status.get("ok") is False
+    if down:
+        label = f"Bitget US-stock data: unavailable{outage_clause(status)}"
+        if newest:
+            label += f"; {len(held)} tokens serve data that is {last_good_label(int((now - newest).total_seconds())).replace('last good ', '')}"
+    else:
+        label = f"{len(held)} tokens with current street data"
+    return {
+        "key": "bitget_mcp", "label": "Bitget US-stock data",
+        "what": "Live quote for the underlying, analyst ratings and targets, insider trades, market fear & greed (bitget-mcp-server)",
+        "cadence": "hourly per token, in memory only", "last_update": newest.isoformat() if newest else None,
+        "rows": len(held), "latest": newest.isoformat() if newest else None,
+        "latest_label": label, "url": "https://agent.bitget.com/mcp",
+        "status": "unavailable" if down else ("ok" if held else "no data yet"),
+        "down_since": status.get("down_since") if down else None, "http_status": status.get("http_status") if down else None,
+    }
+
+
 def data_sources(store: Store) -> list[dict[str, Any]]:
     c = store._conn
     last = {task: ms for task, ms in c.execute("SELECT task, MAX(finished_at) FROM sync_log GROUP BY task").fetchall()}

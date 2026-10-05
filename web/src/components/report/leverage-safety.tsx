@@ -1,5 +1,6 @@
 "use client";
 
+import { oiLine } from "@/components/report/market-context";
 import { Pill } from "@/components/report/primitives";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { LadderRung, Report, TicketInput } from "@/lib/api";
@@ -55,6 +56,7 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
         {L("The same position at each level, judged on the same past moments.", "同一个仓位在各个杠杆下的情况，用同样的历史时刻来衡量。")}
         {onRerun ? L(" Click a row to re-run at that leverage.", " 点击一行，即可按该杠杆重新运行。") : ""}
       </p>
+      {report.open_interest ? <p className="mt-1 text-[13px] text-foreground">{oiLine(report.open_interest, lang)}</p> : null}
       <Table className="mt-1">
         <TableHeader>
           <TableRow>
