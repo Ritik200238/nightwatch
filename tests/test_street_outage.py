@@ -210,3 +210,25 @@ def test_a_fresh_view_from_a_healthy_service_is_live(seeded_store, monkeypatch):
     s = r["street"]
     assert s and s["stale"] is False and s["age_label"] is None
     assert not any("US-stock data" in w for w in r["warnings"])
+
+
+def test_a_backend_503_inside_a_successful_mcp_reply_is_an_outage_not_no_data():
+    """Observed 2026-10-05: the MCP front end kept answering, but every do_query carried the
+    data backend's own 503 page with success=false. That used to count as the service being
+    up with nothing to say, which cached a blank street view as "no analyst coverage"."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body["method"] == "initialize":
+            return httpx.Response(200, headers={"mcp-session-id": "s"}, text="data: {}\n")
+        if body["method"] == "notifications/initialized":
+            return httpx.Response(202)
+        doc = {"success": False, "status_code": 503, "data": "<html>503</html>", "error": None}
+        msg = {"jsonrpc": "2.0", "id": body["id"], "result": {"content": [{"type": "text", "text": json.dumps(doc)}]}}
+        return httpx.Response(200, text="event: message\ndata: " + json.dumps(msg) + "\n\n")
+
+    c = BitgetMcpClient(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert c.query("equity_price_quote", symbol="TSLA") == []
+    assert c.status()["ok"] is None, "one failure is not yet an outage"
+    c.query("equity_price_quote", symbol="TSLA")
+    s = c.status()
+    assert s["ok"] is False and s["http_status"] == 503
