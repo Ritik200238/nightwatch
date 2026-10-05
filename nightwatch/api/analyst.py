@@ -107,6 +107,23 @@ def _loss_p5(h: dict[str, Any]) -> float | None:
     return h.get("p5_adjusted") if h.get("p5_adjusted") is not None else c.get("p5")
 
 
+def account_equity(r: dict[str, Any]) -> float | None:
+    """The account size this report was run with, from wherever the report kept it.
+
+    The ticket carries it when the trader gave it, but a report built on the chat path or
+    re-run from a stored copy can hold it only in the breaker state the engine used. Reading
+    just the ticket made the stress agent say "no account size was given" on a 200,000 account.
+    """
+    t = r.get("ticket") or {}
+    for v in (t.get("account_equity_quote"), (r.get("breaker") or {}).get("equity"), ((r.get("ticket") or {}).get("extra") or {}).get("account_equity_quote") if isinstance(t.get("extra"), dict) else None):
+        try:
+            if v and float(v) > 0:
+                return float(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
     """The report's decision-relevant facts, compact enough to keep the model quick.
 
@@ -126,8 +143,11 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
         f"[desk] Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
         f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
     ]
-    if not t.get("account_equity_quote"):
+    equity = account_equity(r)
+    if equity is None:
         lines.append("[desk] No account size was given, so the size limits that depend on it were not checked.")
+    else:
+        lines.append(f"[desk] Account size used for the size limits: {equity:,.0f} USDT.")
     # The actual reasons, so the take cannot guess one. On a live test it wrote "REVIEW
     # because the regime cap binds, meaning conditions are fragile" when the regime was
     # favourable and the review was for a missing account size.
@@ -258,7 +278,7 @@ def relations(r: dict[str, Any], lang: str = "en") -> list[str]:
         if abs(abs(inv_pct) - abs(stop_pct)) < SAME_LEVEL_PCT:
             # A take once said both "they sit at the same distance" and "the stop is closer".
             out.append("The stop and the invalidation sit at essentially the same level, so crossing one is hitting the other.")
-        elif abs(inv_pct) < abs(stop_pct):
+        elif abs(inv_pct) < abs(stop_pct) and stopped <= crossed:
             back = crossed - stopped
             out.append(
                 "The invalidation is closer than the stop, so every past moment that hit the stop crossed the invalidation first: "
@@ -516,7 +536,7 @@ def mind_line(report: dict[str, Any], lang: str = "en") -> str:
     bps = (((report.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"))
     cap = str((report.get("sizing") or {}).get("binding_cap") or "")
     failed = [x for x in ((report.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
-    if not t.get("account_equity_quote") and word != "GO":
+    if account_equity(report) is None and word != "GO":
         return ("如果给出账户规模，本台就能检查与之挂钩的仓位上限，目前的复核结论可能随之改变。" if zh
                 else "If you give the desk your account size, it can check the size limits that depend on it, and the review could clear.")
     if bps is not None and ("exit" in cap or "liquidity" in cap) and (v.get("recommended_notional") or 0) < (t.get("notional_quote") or 0):

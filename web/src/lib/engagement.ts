@@ -1,6 +1,8 @@
 /** The small calls behind feedback, the usage page and re-checks. */
 import { API_URL } from "@/lib/api";
 import { withIdentity } from "@/lib/identity";
+import { friendlyDetail, stillBusyMessage } from "@/lib/errors";
+import { isRemembered, remember } from "@/lib/record-cache";
 
 export class EngagementError extends Error {
   constructor(
@@ -12,23 +14,37 @@ export class EngagementError extends Error {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${withIdentity(path)}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
-  } catch {
-    throw new EngagementError("Cannot reach the Nightwatch API.", 0);
+  const lang = typeof localStorage !== "undefined" && (() => { try { return localStorage.getItem("nightwatch.lang") === "zh"; } catch { return false; } })() ? "zh" : "en";
+  const isRead = (init?.method ?? "GET").toUpperCase() === "GET";
+  let res: Response | null = null;
+  // Bounded, with one retry for a read, so a slow box ends in a plain message not a spinner.
+  for (let attempt = 0; attempt < (isRead ? 2 : 1); attempt++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), isRead ? 25_000 : 40_000);
+    try {
+      res = await fetch(`${API_URL}${withIdentity(path)}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, signal: ctl.signal });
+      if (!(isRead && [502, 503, 504].includes(res.status))) break;
+    } catch {
+      /* retry once below */
+    } finally {
+      clearTimeout(timer);
+    }
+    await new Promise((r) => setTimeout(r, 1_500));
   }
+  if (!res) throw new EngagementError(stillBusyMessage(lang), 0);
   if (!res.ok) {
-    let detail = res.statusText;
+    let detail: unknown = res.statusText;
     try {
       const b = await res.json();
-      detail = typeof b.detail === "string" ? b.detail : detail;
+      detail = b.detail ?? b;
     } catch {
       /* keep statusText */
     }
-    throw new EngagementError(detail, res.status);
+    throw new EngagementError(friendlyDetail(detail, res.status, lang), res.status);
   }
-  return (await res.json()) as T;
+  const data = (await res.json()) as T;
+  if (isRead && isRemembered(path)) remember(path, data);
+  return data;
 }
 
 export interface Usage {

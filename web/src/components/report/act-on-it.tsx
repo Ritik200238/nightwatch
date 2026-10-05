@@ -6,6 +6,29 @@ import type { Report } from "@/lib/api";
 import { fmtUsd } from "@/lib/format";
 import { fmtHoursL, type Lang, t as tLabel, tr } from "@/lib/i18n";
 
+/** Copy to the clipboard; false when the browser refuses (no permission, not a secure page). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 /** The spot market this report is about, as Bitget names it.
  *
  *  Taken from the order-book source rather than guessed from the ticker, because the
@@ -14,6 +37,12 @@ import { fmtHoursL, type Lang, t as tLabel, tr } from "@/lib/i18n";
 function spotSymbol(report: Report): string | null {
   const book = report.sources.find((s) => s.kind === "orderbook");
   return (book?.symbol as string | undefined) ?? null;
+}
+
+/** A short cannot be opened on the spot token page: it is held on the USDT perpetual. */
+function perpSymbol(report: Report): string | null {
+  const r = report as unknown as { leverage?: { perp_symbol?: string | null } | null; hedge?: { perp_symbol?: string } | null };
+  return r.leverage?.perp_symbol ?? r.hedge?.perp_symbol ?? (report.ticket.ticker ? `${report.ticket.ticker.toUpperCase()}USDT` : null);
 }
 
 /** The verdict as something you could hand to a broker.
@@ -54,14 +83,15 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
   const symbol = spotSymbol(report);
   if (!symbol) return null;
   const refused = report.verdict.verdict === "NO_GO";
+  const short = report.ticket.side === "short";
+  const perp = short ? perpSymbol(report) : null;
 
   async function copy() {
     const text = ticketText(report, symbol as string, lang);
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
+      setTimeout(() => setCopied(false), 2500);
+    } else {
       window.prompt(L("Copy this ticket", "复制此下单单据"), text);
     }
   }
@@ -69,13 +99,13 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <a
-        href={`https://www.bitget.com/spot/${symbol}`}
+        href={perp ? `https://www.bitget.com/futures/usdt/${perp}` : `https://www.bitget.com/spot/${symbol}`}
         target="_blank"
         rel="noreferrer"
         className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-        {L(`Open ${symbol} on Bitget`, `在 Bitget 打开 ${symbol}`)}
+        {perp ? L(`Open ${perp} (perpetual) on Bitget`, `在 Bitget 打开 ${perp}（永续合约）`) : L(`Open ${symbol} on Bitget`, `在 Bitget 打开 ${symbol}`)}
       </a>
       {refused ? (
         <span className="text-[13px] text-muted-foreground">{L("The desk says no to this one, so it will not hand you the ticket.", "系统对这一笔的结论是不建议做，所以不会给你下单单据。")}</span>
@@ -89,6 +119,7 @@ export function ActOnIt({ report, lang = "en" }: { report: Report; lang?: Lang }
           {copied ? L("Ticket copied", "单据已复制") : L("Copy the sized ticket", "复制按建议仓位生成的单据")}
         </button>
       )}
+      <span role="status" aria-live="polite" className="text-[13px] font-medium text-status-good">{copied ? L("Copied to the clipboard", "已复制到剪贴板") : ""}</span>
       <span className="text-[13px] text-muted-foreground">{L("Nightwatch never places an order.", "Nightwatch 从不替你下单。")}</span>
       {!refused ? <EntryPlanNote report={report} symbol={symbol} lang={lang} /> : null}
     </div>
@@ -147,9 +178,12 @@ function EntryPlanNote({ report, symbol, lang }: { report: Report; symbol: strin
         <button
           type="button"
           onClick={() => {
-            void navigator.clipboard?.writeText(prompt).then(() => {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
+            void copyText(prompt).then((ok) => {
+              if (!ok) window.prompt(L("Copy this prompt", "复制此提示词"), prompt);
+              else {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2500);
+              }
             });
           }}
           className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -158,6 +192,9 @@ function EntryPlanNote({ report, symbol, lang }: { report: Report; symbol: strin
           {copied ? <Check className="h-3 w-3 text-status-good" aria-hidden /> : <Copy className="h-3 w-3" aria-hidden />}
           {copied ? L("Prompt copied", "提示词已复制") : L("Copy a dry-run prompt for Bitget Agent Hub", "复制 Bitget Agent Hub 的模拟（dry-run）提示词")}
         </button>
+      ) : null}
+      {prompt && copied ? (
+        <p role="status" aria-live="polite" className="mt-1 text-xs font-medium text-status-good">{L("Copied to the clipboard", "已复制到剪贴板")}</p>
       ) : null}
     </div>
   );

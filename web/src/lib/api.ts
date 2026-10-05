@@ -28,6 +28,8 @@ function resolveApiUrl(): string {
 export const API_URL = resolveApiUrl();
 
 import { SNAPSHOT_HEADER, snapshotFlag } from "./snapshot";
+import { isRemembered, recall, remember } from "./record-cache";
+import { friendlyDetail, stillBusyMessage, type ErrLang } from "./errors";
 
 export type Side = "long" | "short";
 export type HorizonKind = "next_open" | "window_end" | "hours";
@@ -1366,6 +1368,8 @@ export interface Coverage {
 
 export interface SinceFreeze {
   frozen_at: string;
+  /** False while the freeze date is still ahead: the method is scheduled, not yet frozen. */
+  in_force?: boolean;
   git_tag: string | null;
   git_commit: string | null;
   note: string | null;
@@ -1419,26 +1423,113 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let res: Response;
+/** The page's language, read where the React context is not reachable. */
+function pageLang(): ErrLang {
   try {
-    res = await fetch(`${API_URL}${withIdentity(path)}`, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) } });
+    return typeof localStorage !== "undefined" && localStorage.getItem("nightwatch.lang") === "zh" ? "zh" : "en";
   } catch {
-    throw new ApiError("Cannot reach the Nightwatch API. Is the backend running?", 0);
+    return "en";
   }
+}
+
+/** Per-attempt cap on a client call. A busy box answers slowly rather than never, so the
+ *  caps are generous; they only stop a request hanging for ever. */
+const READ_TIMEOUT_MS = 50_000;
+const WRITE_TIMEOUT_MS = 90_000;
+const RETRY_PAUSE_MS = 1_500;
+
+/** True while a call is being retried, so the page can say the desk is busy. */
+export const busyNotice = {
+  on: false,
+  listeners: new Set<() => void>(),
+  get: () => busyNotice.on,
+  subscribe(l: () => void) {
+    busyNotice.listeners.add(l);
+    return () => void busyNotice.listeners.delete(l);
+  },
+  set(v: boolean) {
+    if (busyNotice.on === v) return;
+    busyNotice.on = v;
+    busyNotice.listeners.forEach((f) => f());
+  },
+};
+
+async function once(url: string, init: RequestInit | undefined, ms: number): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const lang = pageLang();
+  const url = `${API_URL}${withIdentity(path)}`;
+  const isRead = (init?.method ?? "GET").toUpperCase() === "GET";
+  const ms = isRead ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS;
+  let res: Response | null = null;
+  // One retry with a short backoff. A read is safe to repeat on a timeout or a 502-504.
+  // A write is repeated only when nothing reached the server (the fetch failed fast),
+  // never after a timeout, because an analysis is journaled and must not run twice.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const started = Date.now();
+    try {
+      res = await once(url, init, ms);
+      if (!(isRead && [502, 503, 504].includes(res.status)) || attempt === 1) break;
+    } catch (e) {
+      const timedOut = (e as { name?: string })?.name === "AbortError" || Date.now() - started >= ms - 50;
+      if (attempt === 1 || (!isRead && timedOut)) {
+        busyNotice.set(false);
+        throw new ApiError(stillBusyMessage(lang), 0);
+      }
+    }
+    busyNotice.set(true);
+    await new Promise((r) => setTimeout(r, RETRY_PAUSE_MS));
+  }
+  busyNotice.set(false);
+  if (!res) throw new ApiError(stillBusyMessage(lang), 0);
   // The proxy sets this header when the box is down and it answered from a saved copy.
   snapshotFlag.set(res.headers.get(SNAPSHOT_HEADER));
   if (!res.ok) {
-    let detail = res.statusText;
+    let detail: unknown = res.statusText;
     try {
       const body = await res.json();
-      detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail ?? body);
+      detail = body.detail ?? body;
     } catch {
       /* keep statusText */
     }
-    throw new ApiError(detail, res.status);
+    throw new ApiError(friendlyDetail(detail, res.status, lang), res.status);
   }
-  return (await res.json()) as T;
+  const data = (await res.json()) as T;
+  if (isRead && isRemembered(path) && !res.headers.get(SNAPSHOT_HEADER)) remember(path, data);
+  return data;
+}
+
+/** The last good answer for a record page, shown at once while the fresh one loads. */
+export function peek<T>(path: string): T | null {
+  return recall<T>(path)?.data ?? null;
+}
+
+export type Liveness = { state: "up" | "slow"; health: Health } | { state: "down" };
+
+/** One bounded check of the API: answers within ~6 s (up, or slow if it took over 3 s),
+ *  one more try, then down. Never waits longer than about 16 s. */
+export async function probeHealth(): Promise<Liveness> {
+  for (const ms of [6_000, 10_000]) {
+    const started = Date.now();
+    try {
+      const res = await once(`${API_URL}${withIdentity("/health")}`, undefined, ms);
+      if (res.ok) {
+        const health = (await res.json()) as Health;
+        return { state: Date.now() - started > 3_000 || ms > 6_000 ? "slow" : "up", health };
+      }
+    } catch {
+      /* try once more */
+    }
+  }
+  return { state: "down" };
 }
 
 export const api = {

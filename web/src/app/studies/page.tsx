@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
 import { Term } from "@/components/term";
-import { api, type StudiesResponse, type Study } from "@/lib/api";
+import { api, peek, type StudiesResponse, type Study } from "@/lib/api";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 import { ClosedHoursSection } from "./closed-hours";
@@ -277,6 +277,8 @@ export default function StudiesPage() {
   const [lensLabels, setLensLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    const c = peek<StudiesResponse>("/studies");
+    if (c) setRep(c);
     api
       .studies()
       .then(setRep)

@@ -220,3 +220,24 @@ def test_worst_adverse_agrees_exactly_with_the_liquidated_count(side):
         assert out is not None and len(out.paths) == n_matches
         by_paths = sum(1 for p in out.paths if p.worst_adverse_pct is not None and p.worst_adverse_pct >= d)
         assert by_paths == out.liquidated, (side, d)
+
+
+def test_a_stop_on_the_wrong_side_is_not_counted_as_hit():
+    """A long with its stop above entry was "hit" by every path from the first bar: 80 of 80."""
+    import pandas as pd
+
+    from nightwatch.analog import paths as p
+
+    idx = pd.date_range("2026-01-01", periods=80, freq="h", tz="UTC")
+    frame = pd.DataFrame({"spot_close": 100.0, "spot_low": 99.0, "spot_high": 101.0}, index=idx)
+
+    class M:
+        ticker, distance, distance_percentile = "TSLA", 0.1, 0.1
+        ts = idx[0].to_pydatetime()
+
+    wrong = p.build([M()], {"TSLA": frame}, horizon_h=6, side="long", stop_price=120.0, entry_price=100.0)
+    assert wrong is not None and wrong.stop_pct is None and wrong.stopped == 0
+    right = p.build([M()], {"TSLA": frame}, horizon_h=6, side="long", stop_price=99.5, entry_price=100.0)
+    assert right.stop_pct == pytest.approx(-0.5) and right.stopped == 1
+    short_wrong = p.build([M()], {"TSLA": frame}, horizon_h=6, side="short", stop_price=80.0, entry_price=100.0)
+    assert short_wrong.stop_pct is None

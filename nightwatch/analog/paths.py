@@ -202,6 +202,11 @@ def build(
     stop_pct = None
     if stop_price and entry_price and entry_price > 0:
         stop_pct = (stop_price / entry_price - 1.0) * 100.0
+        # A stop on the wrong side of entry (above a long, below a short) is "hit" by every
+        # path from the first bar, which printed "80 of 80 would have hit it". It is not a
+        # stop at all, so it is not counted; the gate already says so in words.
+        if (side == "long" and stop_pct >= 0) or (side == "short" and stop_pct <= 0):
+            stop_pct = None
     liq_pct = None
     if liquidation_price and entry_price and entry_price > 0:
         liq_pct = (liquidation_price / entry_price - 1.0) * 100.0

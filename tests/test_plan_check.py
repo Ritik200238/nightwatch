@@ -85,3 +85,16 @@ def test_no_plan_and_no_mismatch_is_nothing_to_say():
 def test_the_chinese_description_carries_the_same_numbers():
     c = run("close below 100")
     assert "4.8%" in pc.describe(c) and "4.8%" in pc.describe(c, "zh")
+
+
+def test_crossings_and_stop_hits_use_the_same_measure():
+    """"3 of 80 crossed it; of those 80 went on to the stop" was impossible. Both counts now
+    read each path's worst point, so the stop's hits can never exceed the line's crossings."""
+    from types import SimpleNamespace
+
+    from nightwatch.decision.plan_check import _paths_crossing
+
+    mk = lambda adverse: SimpleNamespace(values=(0.0, -1.0), worst_adverse_pct=adverse)  # noqa: E731
+    paths = SimpleNamespace(paths=[mk(4.0), mk(2.0), mk(0.5)])
+    assert _paths_crossing(paths, -1.5, downward=True) == (2, 3)
+    assert _paths_crossing(paths, -3.0, downward=True) == (1, 3)

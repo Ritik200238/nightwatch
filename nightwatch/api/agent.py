@@ -20,6 +20,7 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +32,12 @@ log = logging.getLogger(__name__)
 
 MAX_CALLS = 5
 TIME_BUDGET_S = 45.0
+# One slow call must not eat the whole budget: a live run took 83 s for two checks. Each model
+# call and each tool call gets its own cap, and the run as a whole ends by HARD_STOP_S with
+# whatever it has found so far.
+MODEL_TIMEOUT_S = 25.0
+TOOL_TIMEOUT_S = 30.0
+HARD_STOP_S = 70.0
 MAX_TOKENS = 900
 RESULT_CHARS = 1200  # what is fed back to the model per tool call
 
@@ -104,6 +111,32 @@ def _summarise_report(p: dict[str, Any]) -> str:
         a, b = min(rows, key=lambda x: x[1]["total_pnl_quote"])
         bits.append(f"worst stress {a['name']} {_usd(b['total_pnl_quote'])} USDT")
     return ", ".join(bits)
+
+
+def _within(fn: Callable[[], Any], timeout_s: float) -> Any:  # noqa: ANN401
+    """Run ``fn`` and give up on it after ``timeout_s`` seconds (raises TimeoutError).
+
+    The abandoned call is left to finish on its own thread; it cannot be killed, but the run
+    no longer waits for it."""
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="agent-call")
+    try:
+        return pool.submit(fn).result(timeout=max(1.0, timeout_s))
+    except FuturesTimeout as exc:
+        raise TimeoutError(f"no answer within {timeout_s:.0f} s") from exc
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
+def partial_final(run: Any, report: dict[str, Any], lang: str) -> dict[str, Any]:  # noqa: ANN401
+    """The conclusion when time ran out: what was checked, the desk's own verdict, and no
+    model-written number. The steps above it carry the results."""
+    done = [x for x in run.steps if not x.get("refused") and not str(x.get("result_summary", "")).startswith("error")]
+    n = len(done)
+    if lang == "zh":
+        summary = f"时间用完了，只完成了 {n} 项检查；各项结果见上方步骤。" if n else "时间用完了，没有完成任何检查。"
+    else:
+        summary = f"Time ran out after {n} check{'s' if n != 1 else ''}; each result is in the steps above." if n else "Time ran out before any check finished."
+    return {"summary": summary, "findings": [], "verdict_restated": analyst._fixed_reconcile(report, lang), "partial": True}  # noqa: SLF001
 
 
 class NoOpCall(ValueError):
@@ -269,9 +302,15 @@ class Run:
         return d
 
 
+def _words(text: str) -> str:
+    """Verdict codes as words: NO_GO -> NO GO, REDUCE_TO -> REDUCE TO."""
+    return text.replace("NO_GO", "NO GO").replace("REDUCE_TO", "REDUCE TO")
+
+
 def _final(obj: dict[str, Any], report: dict[str, Any], sheet: str, lang: str) -> tuple[dict[str, Any], int]:
     removed = 0
     summary, n, _ = analyst.verify_tagged(analyst._as_text(obj.get("summary")), sheet)  # noqa: SLF001
+    summary = _words(summary)
     removed += n
     findings = []
     raw = obj.get("findings")
@@ -279,7 +318,7 @@ def _final(obj: dict[str, Any], report: dict[str, Any], sheet: str, lang: str) -
         clean, n, _ = analyst.verify_tagged(analyst._as_text(item), sheet)  # noqa: SLF001
         removed += n
         if clean:
-            findings.append(clean)
+            findings.append(_words(clean))
     restated = analyst._reconcile(analyst._as_text(obj.get("verdict_restated")), report, sheet, lang)  # noqa: SLF001
     return {"summary": summary, "findings": findings, "verdict_restated": restated}, removed
 
@@ -305,7 +344,10 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
                          + "\n".join(transcript) + "\n")
             user += ("\nNo more tool calls are allowed. Reply with the final JSON now.\n" if wrap_up
                      else f"\nYou have {max_calls - calls} tool call(s) left. Reply with one JSON object.\n")
-            raw = provider.write(system=system, user=user, max_tokens=MAX_TOKENS)
+            left = HARD_STOP_S - (time.time() - t0)
+            if left <= 3:
+                raise TimeoutError("out of time")
+            raw = _within(lambda u=user: provider.write(system=system, user=u, max_tokens=MAX_TOKENS), min(MODEL_TIMEOUT_S, left))
             obj = analyst.parse_reply(raw) if raw else None
             if obj is None:
                 bad += 1
@@ -332,7 +374,7 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
                 text, ok = f"unknown tool '{name}'; use one of {', '.join(TOOLS)}", False
             else:
                 try:
-                    text, ok = TOOLS[name](state, report, args), True
+                    text, ok = _within(lambda fn=TOOLS[name], a=args: fn(state, report, a), min(TOOL_TIMEOUT_S, max(5.0, HARD_STOP_S - 10 - (time.time() - t0)))), True
                 except NoOpCall as exc:
                     text, ok = f"error: {exc}", False
                     if free_refusals < MAX_FREE_REFUSALS:
@@ -353,7 +395,11 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
                               **({"refused": True} if refused else {})})
     except Exception as exc:  # noqa: BLE001 - a failed agent keeps the steps it completed
         log.exception("stress-test agent failed")
-        run.status, run.error = "failed", str(exc)[:200]
+        if run.steps and (isinstance(exc, TimeoutError) or time.time() - t0 > budget_s):
+            # Out of time with checks done: answer with those rather than with an error.
+            run.final, run.status = partial_final(run, report, lang), "done"
+        else:
+            run.status, run.error = "failed", str(exc)[:200]
     return run
 
 

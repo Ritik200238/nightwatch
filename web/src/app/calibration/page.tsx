@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
 import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, type CalibrationReport } from "@/lib/api";
+import { api, peek, type CalibrationReport } from "@/lib/api";
+import { AsOf } from "@/components/as-of";
 import { useLang } from "@/lib/lang";
 import { fmtPct, fmtRatio } from "@/lib/format";
 
@@ -38,7 +39,8 @@ export default function CalibrationPage() {
 
   async function load() {
     setError(null);
-    setRep(null);
+    // The last answer shows at once; the fresh one replaces it when it arrives.
+    setRep(peek<CalibrationReport>(kind === "all" ? "/calibration" : `/calibration?kind=${kind}`));
     try {
       setRep(await api.calibration(undefined, kind === "all" ? undefined : kind));
     } catch (e) {
@@ -80,6 +82,7 @@ export default function CalibrationPage() {
           </div>
         }
       />
+      <AsOf path={kind === "all" ? "/calibration" : `/calibration?kind=${kind}`} />
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
@@ -464,12 +467,15 @@ function PlainWords({ adj }: { adj: NonNullable<CalibrationReport["adjusted"]> }
 function SinceFreezeBlock({ f }: { f: NonNullable<CalibrationReport["since_freeze"]> }) {
   const { tx } = useLang();
   const day = f.frozen_at.slice(0, 10);
+  // Before the date, "frozen" would be a claim about the future: say it is scheduled.
+  const ahead = new Date(f.frozen_at).getTime() > Date.now();
+  const pretty = new Date(f.frozen_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
   return (
     <Section
-      title={tx("Scored after the method was frozen", "方法冻结之后才评分的预测")}
+      title={ahead ? tx("Scored after the method freeze", "方法冻结之后才评分的预测") : tx("Scored after the method was frozen", "方法冻结之后才评分的预测")}
       subtitle={tx(
-        `The tail adjustment was designed while looking at the history it is scored on above, so that number is optimistic by an unknown amount. Method frozen ${day} (git tag ${f.git_tag ?? "?"}). Only forecasts made after it count here, so nothing in this group could have shaped the method.`,
-        `尾部调整是在看着上面所评分的历史时设计的，所以那个数字偏乐观的程度未知。方法于 ${day} 冻结（git 标签 ${f.git_tag ?? "?"}）。这里只统计冻结之后做出的预测，所以这一组不可能影响过方法本身。`,
+        `The tail adjustment was designed while looking at the history it is scored on above, so that number is optimistic by an unknown amount. ${ahead ? `Method freeze scheduled for ${pretty} (00:00 UTC); forecasts from then on are scored separately.` : `Method frozen on ${pretty}`} (git tag ${f.git_tag ?? "?"}). Only forecasts made after it count here, so nothing in this group could have shaped the method.`,
+        `尾部调整是在看着上面所评分的历史时设计的，所以那个数字偏乐观的程度未知。${ahead ? `方法冻结定于 ${day}（UTC 00:00）；从那时起做出的预测将单独评分。` : `方法于 ${day} 冻结`}（git 标签 ${f.git_tag ?? "?"}）。这里只统计冻结之后做出的预测，所以这一组不可能影响过方法本身。`,
       )}
     >
       {f.n ? (

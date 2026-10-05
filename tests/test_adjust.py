@@ -180,3 +180,16 @@ def test_narrow_forecasts_get_an_absolute_floor():
     assert (rows["c_lo"] > 0).mean() > 0.9  # the margin is in force out of sample too
     ev = evaluate_expanding(df)
     assert ev is not None and ev.c_lo_last is not None and ev.c_lo_last > 1.0
+
+
+def test_the_freeze_is_scheduled_until_its_date_arrives():
+    """The page said "Method frozen 2026-10-07" two days early; a freeze in the future is a plan."""
+    import pandas as pd
+
+    from nightwatch.journal import freeze
+
+    f = {"frozen_at": "2026-10-07T00:00:00+00:00", "git_tag": "t"}
+    assert freeze.in_force(f, pd.Timestamp("2026-10-05", tz="UTC")) is False
+    assert freeze.in_force(f, pd.Timestamp("2026-10-07", tz="UTC")) is True
+    out = freeze.holdout(pd.DataFrame(), f, pd.Timestamp("2026-10-05", tz="UTC"))
+    assert out["in_force"] is False and out["n"] == 0

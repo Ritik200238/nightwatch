@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang";
-import { api, type Health } from "@/lib/api";
+import { probeHealth, type Health } from "@/lib/api";
 import { fmtTimeL } from "@/lib/i18n";
 
 /** Backend liveness + data freshness, polled every 30s. */
@@ -15,10 +15,14 @@ export function HealthPill() {
     let cancelled = false;
     const load = async () => {
       try {
-        const h = await api.health();
+        // Bounded (about 16 s), so the pill always settles instead of showing "checking" for ever.
+        const h = await probeHealth();
         if (!cancelled) {
-          setHealth(h);
-          setError(null);
+          if (h.state === "down") setError("offline");
+          else {
+            setHealth(h.health);
+            setError(null);
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "offline");

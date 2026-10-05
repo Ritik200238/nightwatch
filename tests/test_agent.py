@@ -233,3 +233,33 @@ def test_a_result_summary_uses_words_not_identifiers():
     text = agent._summarise_report(payload)
     assert "REDUCE TO" in text and "REDUCE_TO" not in text
     assert "loss_p5_pct" not in text and "one-in-twenty loss -4.2%" in text
+
+
+def test_a_slow_tool_ends_in_a_partial_conclusion_not_a_long_wait(monkeypatch):
+    """Live, two checks took 83 s. A tool that never returns is cut at its own cap and the run
+    answers with what it already has."""
+    monkeypatch.setattr(agent, "TOOL_TIMEOUT_S", 1.0)
+    monkeypatch.setitem(agent.TOOLS, "explain", lambda s, r, a: "Worst case is 2,147 USDT.")
+    monkeypatch.setitem(agent.TOOLS, "safest_ways", lambda s, r, a: time.sleep(5) or "late")
+    t0 = time.time()
+    run = _run([_call("explain", {"kind": "worst"}), _call("safest_ways"), TimeoutError("model too slow")])
+    assert time.time() - t0 < 4
+    assert run.status == "done" and run.final and run.final.get("partial") is True
+    assert "1 check" in run.final["summary"]
+    assert run.steps[1]["result_summary"].startswith("error")
+
+
+def test_the_hard_stop_returns_what_was_found(monkeypatch):
+    monkeypatch.setattr(agent, "HARD_STOP_S", 0.0)
+    monkeypatch.setitem(agent.TOOLS, "explain", lambda s, r, a: "ok")
+    run = agent.Run()
+    run.steps.append({"n": 1, "tool": "explain", "result_summary": "Worst case.", "args": {}})
+    # No time left at the first model call: with a step already done the answer is partial.
+    agent.run_agent(Script([DONE]), FakeState(), REPORT, run)
+    assert run.status == "done" and run.final["partial"] is True
+
+
+def test_verdict_codes_are_words_in_the_conclusion():
+    final, _ = agent._final({"summary": "The desk says NO_GO.", "findings": ["REDUCE_TO the half."], "verdict_restated": ""}, REPORT, "", "en")
+    assert "NO_GO" not in final["summary"] and "NO GO" in final["summary"]
+    assert "REDUCE TO" in final["findings"][0] or final["findings"] == []

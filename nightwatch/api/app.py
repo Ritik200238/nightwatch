@@ -1112,6 +1112,13 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         known = s.ctx.tickers_with_data()
         if ticket.ticker not in set(known):
             raise HTTPException(404, f"{ticket.ticker} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
+        # A stop on the wrong side of the price is a typo, not a plan: say so now, in a
+        # sentence, instead of after a minute of analysis that cannot use it.
+        if ticket.stop_price:
+            ref = ticket.entry_price or s.ctx.latest_spot_close(ticket.ticker, body.as_of)
+            if ref and ticket.stop_is_on_correct_side(ref) is False:
+                way, rel = ("long", "below") if ticket.closing_long else ("short", "above")
+                raise HTTPException(422, f"A stop for a {way} must be {rel} the current price ({ref:,.2f}). You entered {ticket.stop_price:,.2f}.")
         try:
             with s.lock:
                 report = analyze(s.ctx, ticket, as_of=body.as_of, record=body.record)

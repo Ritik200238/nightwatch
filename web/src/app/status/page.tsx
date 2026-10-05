@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { api, type Anchor, type CalibrationReport, type DataSource, type Health, type VerifyResponse } from "@/lib/api";
+import { api, probeHealth, type Liveness, type Anchor, type CalibrationReport, type DataSource, type Health, type VerifyResponse } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
 import { PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
+import { AsOf } from "@/components/as-of";
+import { localSource } from "@/lib/source-zh";
 
 type Load<T> = { data: T | null; error: boolean };
 
@@ -47,7 +49,8 @@ const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-6)}`;
 export default function StatusPage() {
   const { tx, lang } = useLang();
   const zh = lang === "zh";
-  const health = useLoad<Health>(() => api.health());
+  // One bounded check (about 16 s at most) that always ends as up, slow or down.
+  const health = useLoad<Liveness>(() => probeHealth());
   const sources = useLoad<DataSource[]>(() => api.sources());
   const verify = useLoad<VerifyResponse>(() => api.verify());
   const anchors = useLoad<{ anchors: Anchor[] }>(() => api.anchors());
@@ -63,14 +66,17 @@ export default function StatusPage() {
     <div className={`${PROOF_WIDTH} space-y-4`}>
       <PageHead title={tx("Status", "状态")} intro={tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
-      <Card title="API" ok={health.error ? false : health.data ? health.data.ok : null}>
-        {health.data ? (
+      <AsOf path="/sources" />
+      <Card title="API" ok={health.data ? health.data.state === "up" : null}>
+        {health.data && health.data.state !== "down" ? (
           <p>
-            {tx("Up", "运行中")} · v{health.data.version} · {health.data.bars.toLocaleString()} {tx("candles", "根 K 线")} · {health.data.orderbook_snapshots.toLocaleString()} {tx("order-book snapshots", "个盘口快照")} · {health.data.tickers_with_data} {tx("tokens with data", "个有数据的代币")}
-            {health.data.llm ? ` · ${tx("analyst model", "分析师模型")} ${health.data.llm.ready ? tx("ready", "就绪") : tx("not ready", "未就绪")}` : ""}
+            {health.data.state === "slow" ? tx("Up but slow", "运行中，但响应较慢") : tx("Up", "运行中")} · v{health.data.health.version} · {health.data.health.bars.toLocaleString()} {tx("candles", "根 K 线")} · {health.data.health.orderbook_snapshots.toLocaleString()} {tx("order-book snapshots", "个盘口快照")} · {health.data.health.tickers_with_data} {tx("tokens with data", "个有数据的代币")}
+            {health.data.health.llm ? ` · ${tx("analyst model", "分析师模型")} ${health.data.health.llm.ready ? tx("ready", "就绪") : tx("not ready", "未就绪")}` : ""}
           </p>
+        ) : health.data ? (
+          <p>{tx("Not answering right now. Saved copies of the public pages are still shown.", "暂时没有响应。公开页面仍显示已保存的副本。")}</p>
         ) : (
-          <p>{health.error ? tx("Cannot reach the API.", "无法连接 API。") : tx("Checking…", "检查中…")}</p>
+          <p>{tx("Checking (up to 15 seconds)…", "检查中（最多 15 秒）…")}</p>
         )}
       </Card>
 
@@ -81,7 +87,7 @@ export default function StatusPage() {
               <li key={r.key} className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2">
                   <Dot ok={isFresh(r)} />
-                  {r.label}
+                  {localSource(r, zh).label}
                 </span>
                 <span className="text-[13px]">
                   {fmtAge(sourceAgeIso(r), zh)} · {isFresh(r) ? tx("ok", "正常") : tx("stale", "过期")}

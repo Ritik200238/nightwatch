@@ -6,6 +6,21 @@ import { LoadingRecord, PageHead, PROOF_WIDTH } from "@/components/proof-page";
 import { engagement, type Usage } from "@/lib/engagement";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
+import { peek } from "@/lib/api";
+
+/** The kinds of answer the chat gives, in words. An unknown key still reads as words. */
+const KIND: Record<string, [string, string]> = {
+  what_if: ["What-if", "假设情景"], thesis_saved: ["Plan saved", "已保存计划"], thesis: ["Plan", "计划"], plain: ["Plain explanation", "通俗解释"], menu: ["Menu of questions", "问题菜单"],
+  corporate: ["Company events", "公司事件"], worst: ["Worst case", "最坏情况"], technicals: ["Chart levels", "技术位"], street: ["Analyst views", "分析师观点"], size: ["Size", "仓位大小"],
+  history: ["History", "历史"], hedge: ["Hedge", "对冲"], gate: ["Risk gate", "风控关卡"], stop: ["Stop", "止损"], shock: ["Shock", "冲击情景"], regime: ["Market mood", "市场状态"],
+  lessons: ["Lessons", "经验教训"], exit: ["Getting out", "退出"], decide: ["Decide", "决策"], data: ["Data", "数据"], why: ["Why", "原因"], trust: ["Trust", "可信度"],
+  premise: ["Premise check", "前提检查"], now: ["Right now", "此刻"], moments: ["Past moments", "历史时刻"], against: ["Against the trade", "反方观点"], ack: ["Acknowledged", "已确认"], book: ["Whole book", "整体持仓"],
+};
+function kindLabel(k: string, lang: "en" | "zh"): string {
+  const hit = KIND[k];
+  if (hit) return lang === "zh" ? hit[1] : hit[0];
+  return k.replace(/_/g, " ");
+}
 
 /** What the desk knows about its own use. Counts only: no accounts, no addresses. */
 export default function UsagePage() {
@@ -15,6 +30,8 @@ export default function UsagePage() {
 
   useEffect(() => {
     let cancelled = false;
+    const c = peek<Usage>("/usage");
+    if (c) setU(c);
     void engagement
       .usage()
       .then((r) => !cancelled && setU(r))
@@ -64,7 +81,7 @@ export default function UsagePage() {
           <ul className="space-y-1 text-sm">
             {kinds.map(([k, n]) => (
               <li key={k} className="flex justify-between gap-4">
-                <span>{k}</span>
+                <span>{kindLabel(k, lang)}</span>
                 <span className="font-mono">{n}</span>
               </li>
             ))}

@@ -329,8 +329,12 @@ def _own_chains(r: Any) -> list[FailureMode]:  # noqa: ANN401
         what = f"'{plan.get('invalidation')}'" if plan.get("invalidation") else "your invalidation"
         mech = f"{crossed} of {of} past moments like this crossed it inside the hold"
         if t.stop_price and paths is not None and paths.stop_pct is not None and abs(paths.stop_pct) > d and paths.stopped is not None:
-            back = max(crossed - paths.stopped, 0)
-            mech += f"; of those, {paths.stopped} went on to your stop and {back} turned back before it"
+            if paths.stopped <= crossed:
+                mech += f"; of those, {paths.stopped} went on to your stop and {crossed - paths.stopped} turned back before it"
+            else:
+                # The stop is judged on each bar's low and the line on closes, so more can
+                # hit the stop than closed past the line; "of those" would be impossible.
+                mech += f"; separately, {paths.stopped} of {of} hit your stop when judged on each bar's low"
         out.append(FailureMode(
             "invalidation", f"Your own line breaks: {what}",
             f"The price reaches your invalidation, {d:.1f}% away",

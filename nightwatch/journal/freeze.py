@@ -30,7 +30,13 @@ def load_freeze() -> dict[str, Any]:
     return json.loads(RECORD_PATH.read_text(encoding="utf-8"))
 
 
-def holdout(rows: pd.DataFrame, freeze: dict[str, Any] | None = None) -> dict[str, Any]:
+def in_force(freeze: dict[str, Any] | None = None, now: pd.Timestamp | None = None) -> bool:
+    """Has the freeze date arrived? Before it, "frozen" would be a claim about the future."""
+    f = freeze or load_freeze()
+    return (now if now is not None else pd.Timestamp.now(tz="UTC")) >= pd.Timestamp(f["frozen_at"])
+
+
+def holdout(rows: pd.DataFrame, freeze: dict[str, Any] | None = None, now: pd.Timestamp | None = None) -> dict[str, Any]:
     """Breach rate of the adjusted 5% line on forecasts made at or after the freeze.
 
     ``rows`` is ``adjust.expanding_rows`` output (columns ``as_of``, ``r``, ``a5``, ``a95``).
@@ -44,6 +50,7 @@ def holdout(rows: pd.DataFrame, freeze: dict[str, Any] | None = None) -> dict[st
         "note": f.get("note"), "n": 0, "breaches": 0, "rate": None, "wilson_ci": None,
         "n_nights": 0, "night_ci": None, "hi_breaches": 0, "hi_rate": None,
         "label": "scored after the method was frozen",
+        "in_force": in_force(f, now),
     }
     if rows is None or rows.empty:
         return out

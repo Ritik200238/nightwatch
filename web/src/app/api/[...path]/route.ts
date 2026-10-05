@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
 import { snapshot } from "@/snapshot";
 import { SNAPSHOT_HEADER, shouldFallback, snapshotGet, snapshotPost } from "@/lib/snapshot";
 
-const GET_TIMEOUT_MS = 12_000;
+const GET_TIMEOUT_MS = 20_000; // a busy box answers in 15-25 s; cutting at 12 s made slow-but-fine calls look dead
 const POST_TIMEOUT_MS = 110_000; // under maxDuration; a busy backend answered one chat in 105 s
 // A signal passed to fetch() also cuts the response body when it fires. The chat stream's body
 // legitimately runs for the whole turn (a busy backend takes 50-100 s), so it gets its own
@@ -50,7 +50,7 @@ function upstreamHeaders(req: NextRequest): Record<string, string> {
   return h;
 }
 
-const BACKOFF_MS = [1500, 4000, 9000]; // ~15s of cover: a container restart takes about that
+const BACKOFF_MS = [1500, 4000]; // two retries: a read that is merely slow gets a second and third chance
 
 /** A connection the backend refused outright. Nothing was delivered, so nothing can have
  *  been applied, which makes it the one failure a write may safely be retried on. */
@@ -129,7 +129,7 @@ async function forward(req: NextRequest, path: string[], body?: string) {
       },
     });
   } catch {
-    return saved() ?? Response.json({ detail: "Cannot reach the Nightwatch API from the server. Is the backend running?" }, { status: 502 });
+    return saved() ?? Response.json({ detail: "The desk is busy right now. Please try again in a minute." }, { status: 502 });
   }
 }
 
