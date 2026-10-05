@@ -282,6 +282,53 @@ def apply_to_parts(parts: Sequence[tuple[str, pd.DataFrame]], names: list[str] |
     return [(t, f) for t, f in kept if len(f)], LensResult(lenses, n_before, n_after, applied=True)
 
 
+# --------------------------------------------------------------------------- hold shape
+
+
+def spans_weekend(index: pd.DatetimeIndex, horizon_h: float) -> np.ndarray:
+    """For a hold starting at each timestamp and lasting ``horizon_h`` hours: does it run
+    over a Saturday or Sunday (New York time)? A start already inside the weekend counts."""
+    from nightwatch.time_utils import ET
+
+    start = index.tz_convert(ET)
+    end = (index + pd.Timedelta(hours=float(horizon_h))).tz_convert(ET)
+    d0 = start.normalize()
+    days = np.asarray((end.normalize() - d0).days)
+    wd = np.asarray(d0.weekday)
+    return (wd >= 5) | (((5 - wd) % 7) <= days)
+
+
+@dataclass(frozen=True)
+class WeekendHold:
+    """How a hold over a weekend was matched against past holds over weekends."""
+
+    applies: bool  # the ticket's own hold crosses a weekend
+    restricted: bool  # the searched history was cut to past holds that crossed one
+    n_before: int
+    n_after: int
+    note: str = ""
+    k_weekend: int | None = None  # of the final matches, how many were weekend holds
+    n_matches: int | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(self.__dict__)
+
+
+def restrict_to_weekend_holds(parts: Sequence[tuple[str, pd.DataFrame]], horizon_h: float, *, min_rows: int) -> tuple[list[tuple[str, pd.DataFrame]], WeekendHold]:
+    """Keep only the past moments whose own hold, of the same length, crossed a weekend.
+
+    A weekend hold's path is a different object from a weekday one: 27 of 40 "similar"
+    moments for a TSLA weekend hold were US-session hours whose next 173 hours are mostly
+    trading days. Matching the shape of the hold is a hard filter, applied before ranking
+    like a lens. Below ``min_rows`` it is not applied and the report says so."""
+    n_before = sum(len(f) for _, f in parts)
+    kept = [(t, f[spans_weekend(f.index, horizon_h)]) for t, f in parts]
+    n_after = sum(len(f) for _, f in kept)
+    if n_after < min_rows:
+        return list(parts), WeekendHold(True, False, n_before, n_after, note=f"only {n_after} past moments had a hold that crossed a weekend, too few to search; matches are not restricted to weekend holds")
+    return [(t, f) for t, f in kept if len(f)], WeekendHold(True, True, n_before, n_after)
+
+
 # Conditions the desk applies without being asked. Only ones a study has shown the
 # unfiltered answer to be wrong for belong here, and only while that stays true: on
 # 100 past overnight holds with earnings due within three days, the unfiltered 5th

@@ -521,6 +521,10 @@ class AnalogSection:
     # Which named conditions narrowed the search, what they cost in evidence, and
     # whether they could be honoured at all. nightwatch.analog.lens.LensResult.
     lens: Any = None
+    # How a hold over a weekend was matched against past weekend holds, and how many of the
+    # final matches were one. nightwatch.analog.lens.WeekendHold; None for a hold that
+    # crosses no weekend.
+    weekend_hold: Any = None
 
 
 @dataclass
@@ -1196,11 +1200,27 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     # question. The floor keeps a filter from leaving too little to search at all.
     floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h
 
+    # A hold over a weekend is matched to past holds over a weekend, not to any hour that
+    # happens to look like now: the same hard-match idea as a lens, on the shape of the hold.
+    # "Over the weekend" asked early in the week is a scheduled Friday-to-Monday hold, which
+    # the clock from now would not show as one.
+    scheduled = str((ticket.extra or {}).get("horizon_label", "")).startswith("the coming weekend") if isinstance(ticket.extra, dict) else False
+    wk_query = scheduled or bool(lens_mod.spans_weekend(pd.DatetimeIndex([ensure_utc(as_of)]), horizon_h)[0])
+    weekend_state: dict[str, Any] = {}
+
+    def weekend_cut(parts: list[tuple[str, pd.DataFrame]], scope: str) -> list[tuple[str, pd.DataFrame]]:
+        if not wk_query:
+            return parts
+        kept, state = lens_mod.restrict_to_weekend_holds(parts, horizon_h, min_rows=floor)
+        weekend_state[scope] = state
+        return kept
+
     def search_with(names: tuple[str, ...]) -> tuple[Any, str, Any, list[str]]:
         notes: list[str] = []
         searchable, lens_result = lens_mod.apply(frame, list(names), min_rows=floor)
         if lens_result.refused:
             notes.append(lens_result.refused)
+        searchable = weekend_cut([(ticket.ticker, searchable)], "same_ticker")[0][1]
 
         result = engine.search(searchable.assign(ticker=ticket.ticker), snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
         scope = "same_ticker"
@@ -1232,6 +1252,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
                 # where a narrow question becomes answerable at all. Narrowing each part before
                 # stacking gives the same rows without building the whole haystack first.
                 pooled_parts, pooled_lens = lens_mod.apply_to_parts(pooled_parts, list(names), min_rows=floor)
+                pooled_parts = weekend_cut(pooled_parts, "pooled")
                 pooled = pooled_history(pooled_parts)
                 pooled_result = engine.search(pooled, snapshot.features, query_ts=snapshot.bar_ts, query_bucket=query_bucket, query_ticker=ticket.ticker)
                 # A pooled cohort that honours the lens beats a same-ticker one that ignores
@@ -1281,9 +1302,15 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         )
         notes.append(lens_result.refused)
     warnings.extend(notes)
+    weekend_hold = weekend_state.get(scope) if wk_query else None
+    if weekend_hold is not None and result.ok and result.matches:
+        k = int(lens_mod.spans_weekend(pd.DatetimeIndex([pd.Timestamp(m.ts) for m in result.matches]), horizon_h).sum())
+        weekend_hold = replace(weekend_hold, k_weekend=k, n_matches=result.n)
+        if weekend_hold.note:
+            warnings.append(weekend_hold.note)
     if not result.ok:
         warnings.append(f"analog search refused: {result.reason}")
-        return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[], lens=lens_result)
+        return AnalogSection(result=result, scope=scope, horizons={}, matches_outcomes=[], lens=lens_result, weekend_hold=weekend_hold)
 
     # The ticket's own horizon length is applied uniformly to every analog (that is the
     # cohort the verdict uses); the structural horizons are each analog's *own* next
@@ -1355,7 +1382,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
         result.matches, frames, horizon_h=float(ticket_h), side=ticket.side.value,
         stop_price=ticket.stop_price, entry_price=entry_price, liquidation_price=liquidation_price,
     )
-    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result)
+    return AnalogSection(result=result, scope=scope, horizons=horizons, matches_outcomes=outcomes, paths=scenario_paths, lens=lens_result, weekend_hold=weekend_hold)
 
 
 def _cautious_of(narrowed: AnalogSection, plain: AnalogSection | None) -> list[str]:

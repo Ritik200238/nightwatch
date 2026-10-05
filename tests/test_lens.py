@@ -378,3 +378,24 @@ def test_pooled_availability_reports_hours_and_events_per_condition():
     f2 = f1.copy()
     a = lens.pooled_availability({"A": f1, "B": f2}, 36)
     assert a["fomc_soon"] == {"hours": 60, "episodes": 1}
+
+
+def test_a_hold_over_a_weekend_is_matched_to_past_holds_over_a_weekend():
+    import numpy as np
+    import pandas as pd
+
+    from nightwatch.analog import lens as lens_mod
+
+    idx = pd.date_range("2026-03-02", periods=24 * 7 * 12, freq="1h", tz="UTC")
+    spans = lens_mod.spans_weekend(idx, 66)
+    et = idx.tz_convert("America/New_York")
+    # Monday morning for 66 h ends Wednesday evening: no weekend. Thursday noon for 66 h crosses it.
+    assert not spans[(et.weekday == 0) & (et.hour == 9)].any()
+    assert spans[(et.weekday == 3) & (et.hour == 12)].all()
+    assert spans[et.weekday >= 5].all()  # starting inside the weekend counts
+    frame = pd.DataFrame({"x": np.arange(len(idx))}, index=idx)
+    kept, state = lens_mod.restrict_to_weekend_holds([("TSLA", frame)], 66, min_rows=100)
+    assert state.restricted and 0 < state.n_after < state.n_before and len(kept[0][1]) == state.n_after
+    # Too few rows: not restricted, and it says why.
+    same, state = lens_mod.restrict_to_weekend_holds([("TSLA", frame)], 66, min_rows=10**6)
+    assert not state.restricted and len(same[0][1]) == len(frame) and "too few" in state.note
