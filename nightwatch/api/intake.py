@@ -77,6 +77,13 @@ _WEEKEND = re.compile(r"\b(?:through|over|across|for|into)\s+the\s+weekend\b|\b(
 # close is said. Monday is the weekend rule's, which already means the open after it.
 _WEEKDAY = re.compile(r"\b(?:until|till|to|through|into|by)\s+(?:next\s+)?(tues|wednes|thurs|fri)day(?:'s)?(?:\s+(open|close))?", re.I)
 _DAY_INDEX = {"tues": 1, "wednes": 2, "thurs": 3, "fri": 4}
+# "over earnings", "ovr earnigns" (typed fast), "through the next report", "过完 earnings 就走": a hold
+# that runs to the report. Dated from the earnings calendar when the ticket is built.
+THROUGH_EARNINGS = re.compile(
+    r"\b(?:through|thru|over|ovr|past|into|across|until after|till after)\s+(?:the\s+)?(?:next\s+)?(?:earn\w{2,7}|report|results)\b"
+    r"|过财报|拿过财报|过完\s*(?:earnings|财报)|过\s*(?:earnings|财报)|(?:earnings|财报)\s*(?:之后|以后|后)\s*(?:就\s*)?(?:走|出|卖|平|离场)",
+    re.I,
+)
 _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bsession\s+end\b", re.I)
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
@@ -213,13 +220,18 @@ class RuleIntent:
     # price, so it was left out"), and whether a negative size was refused.
     notes: list[str] = field(default_factory=list)
     negative_size: bool = False
+    # The money the trader says they put up ("2k margin"), kept apart from the account and
+    # from the position: position = margin x leverage.
+    margin_quote: float | None = None
+    # "over earnings", "过完 earnings 就走": a hold to the report, dated later from the calendar.
+    through_earnings: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "kind": self.kind, "ticker": self.ticker, "side": self.side, "notional_quote": self.notional_quote,
             "account_equity_quote": self.account_equity_quote, "horizon_kind": self.horizon_kind,
             "horizon_hours": self.horizon_hours, "stop_price": self.stop_price, "stop_pct": self.stop_pct, "stop_dir": self.stop_dir,
-            "leverage": self.leverage,
+            "leverage": self.leverage, "margin_quote": self.margin_quote, "through_earnings": self.through_earnings,
             "target_price": self.target_price,
             "thesis": self.thesis, "invalidation": self.invalidation, "hedge_ratio": self.hedge_ratio,
             "open_positions": [list(p) for p in self.open_positions],
@@ -415,6 +427,34 @@ def _sanitize(out: RuleIntent, text: str, zh: bool) -> None:
                          else f"A hold of {was:,.0f} hours is longer than the history can speak to, so I capped it at 30 days (720 hours).")
 
 
+def _apply_margin(out: RuleIntent, zh: bool) -> None:
+    """The money put up and the leverage fix the position: size = margin x leverage.
+
+    "3x with 2k margin" is a 6,000 USDT position, and "10k with 2k margin" is 5x. The
+    margin is never the account. Where a size, a margin and a leverage disagree, the margin
+    and the leverage win and the reply says so, so a number the trader typed is never
+    dropped without a word.
+    """
+    m = out.margin_quote
+    if not m or m <= 0:
+        return
+    if out.leverage and out.leverage >= 1:
+        position = m * out.leverage
+        said = out.notional_quote
+        if said and abs(said - position) > max(1.0, 0.01 * position):
+            out.notes.append(
+                f"你给的仓位 {said:,.0f} 与 {m:,.0f} 保证金 × {out.leverage:g} 倍 = {position:,.0f} 不一致，按保证金和杠杆算 {position:,.0f} USDT。" if zh
+                else f"You said {said:,.0f} USDT, but {m:,.0f} margin at {out.leverage:g}x is {position:,.0f}, so I used {position:,.0f} (margin times leverage)."
+            )
+        out.notional_quote = position
+    elif out.notional_quote and out.notional_quote > m:
+        lev = out.notional_quote / m
+        if lev <= 125:
+            out.leverage = round(lev, 2)
+            out.notes.append(f"{out.notional_quote:,.0f} 的仓位配 {m:,.0f} 保证金，等于 {lev:.3g} 倍杠杆。" if zh
+                             else f"{out.notional_quote:,.0f} USDT on {m:,.0f} margin is {lev:.3g}x leverage.")
+
+
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Read one message into a ticket. Nothing is invented; what is absent is asked for."""
     out = RuleIntent()
@@ -458,8 +498,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
 
     # Size is the money left over once the labelled numbers are accounted for.
     lev = _LEVERAGE.search(text)
-    margin = _MARGIN.search(text) if lev else None
-    spent = [m.span() for m in (stop, target, equity, lev, margin) if m]  # "100x" is not a size
+    margin = _MARGIN.search(text)
+    spent = [m.span() for m in (stop, target, equity, lev, margin) if m]  # "100x" is not a size, nor is the margin
     for m in _MONEY.finditer(text):
         if any(s <= m.start() < e for s, e in spent):
             continue
@@ -506,11 +546,9 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
     if lev:
         value = float(lev.group(1) or lev.group(2))
         out.leverage = value if value >= 1 else None
-        if margin and out.leverage:
-            # The trader named the margin: the position is the margin times the leverage.
-            amount, scale = (margin.group(1), margin.group(2)) if margin.group(1) else (margin.group(3), margin.group(4))
-            put_up = float(amount.replace(",", "")) * (_SCALE[scale.lower()] if scale else 1.0)
-            out.notional_quote = put_up * out.leverage
+    if margin and not _MARGIN_MOVE.search(text):
+        amount, scale = (margin.group(1), margin.group(2)) if margin.group(1) else (margin.group(3), margin.group(4))
+        out.margin_quote = float(amount.replace(",", "")) * (_SCALE[scale.lower()] if scale else 1.0)
 
     pct = _HEDGE_PCT.search(text)
     if pct:
@@ -533,6 +571,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
             if getattr(out, key) in (None, "") or (key in zh_wins and value not in (None, "")):
                 setattr(out, key, value)
     _sanitize(out, text, bool(_CJK.search(text)))
+    _apply_margin(out, bool(_CJK.search(text)))
+    out.through_earnings = bool(THROUGH_EARNINGS.search(text))
     if out.negative_size and out.notional_quote:
         out.negative_size = False  # another amount in the message is the size; the negative one is dropped
     _settle(out)

@@ -30,6 +30,7 @@ from datetime import datetime
 
 from nightwatch.analog import lens as lens_mod
 from nightwatch.api.followup import Answer, _median, _p5, _pct, _primary, _usd
+from nightwatch.api.intake import THROUGH_EARNINGS as _THROUGH_EARNINGS  # one reading of "over earnings" for chat and what-ifs
 from nightwatch.decision.ticket import HorizonKind, Side, TradeTicket
 
 # Fields a what-if may touch. Anything outside this set is not a what-if the desk knows
@@ -72,6 +73,8 @@ def looks_like_a_what_if(question: str, *, tickers: tuple[str, ...] = (), curren
 
     if intake.margin_adjustment(question) is not None:
         return True  # "add 500 more margin": the same position at another leverage
+    if intake.parse_message(question, list(tickers)).margin_quote:
+        return True  # "3x with 2k margin": the same trade, sized by its margin
     if _SIZE_FACTOR.search(question) or intake._LEVERAGE.search(question) or intake._WEEKDAY.search(question) or _THROUGH_EARNINGS.search(question):
         return True
     for x in lens_mod.LENSES:
@@ -176,7 +179,6 @@ class Change:
 
 # "hold it through the next earnings": the hours to the open after the report, which
 # covers a report before the open and one after the close.
-_THROUGH_EARNINGS = re.compile(r"\b(?:through|over|past|into|across|until after|till after)\s+(?:the\s+)?(?:next\s+)?(?:earnings|report|results)\b|过财报|拿过财报", re.I)
 AFTER_REPORT_OPEN_H = 33.5  # from 00:00 ET on the report date to the next day's 09:30 open
 
 
@@ -237,6 +239,17 @@ def rule_change(question: str, ticket: dict, tickers: list[str], features: dict 
     # cushion, so the leverage is what changes - notional / (margin + added) - and the
     # size does not. An explicit multiple in the same sentence ("add margin, use 3x") wins.
     margin_delta = intake.margin_adjustment(question) if leverage is None else None
+    # "3x with 2k margin": the position is the margin times the leverage; "2k margin" alone
+    # over the size on screen sets the leverage. Never the account.
+    if parsed.margin_quote and intake.margin_adjustment(question) is None:
+        if parsed.leverage and parsed.leverage >= 1:
+            size = parsed.margin_quote * parsed.leverage
+            if parsed.leverage > 1 and abs(size - float(ticket.get("notional_quote") or 0.0)) <= 1:
+                size = None
+            leverage = parsed.leverage if parsed.leverage != ticket.get("leverage") else None
+        elif ticket.get("notional_quote") and float(ticket["notional_quote"]) > parsed.margin_quote:
+            leverage = min(125.0, float(ticket["notional_quote"]) / parsed.margin_quote)
+        equity = None if equity == parsed.margin_quote else equity
     if margin_delta:
         zh = intake.language_of(question) == "zh"
         notional, current = float(ticket.get("notional_quote") or 0.0), float(ticket.get("leverage") or 0.0)
