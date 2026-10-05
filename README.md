@@ -60,15 +60,17 @@ curl -fsSL https://raw.githubusercontent.com/Ritik200238/nightwatch/main/skills/
 
 ## Proof
 
-Figures as of 3 Oct 2026.
+Figures as of 5 Oct 2026.
 
 | Claim | How you can check it yourself |
 |---|---|
-| Every live verdict is on the record, unedited | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the receipt chain (896 checked, no break, as of 4 Oct 2026); [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) has the daily Bitcoin timestamps (5 of 5 in Bitcoin; check a `.ots` proof at opentimestamps.org) |
-| The one-in-twenty loss (the 5th percentile) holds out of sample | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed from the journal: 2,796 scored forecasts, raw breach rate 7.4% (red), 4.8% with factors fitted only on earlier forecasts (green), as of 4 Oct 2026; the page recomputes live, so the last digit moves |
-| We publish our misses and our mistakes | [`/wrong`](https://nightwatch-gules.vercel.app/wrong): 124 of 2,301 replays and 8 of 451 live tickets went past the line (as of 4 Oct 2026) |
+| Every live verdict is on the record, unedited | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the receipt chain (1,190 checked, no break, as of 5 Oct 2026); [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) has the daily Bitcoin timestamps (6 of 6 in Bitcoin; check a `.ots` proof at opentimestamps.org) |
+| The one-in-twenty loss (the 5th percentile) holds out of sample | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed from the journal: 2,818 scored forecasts, raw breach rate 7.4% (red), 4.8% with factors fitted only on earlier forecasts (green), as of 5 Oct 2026; the page recomputes live, so the last digit moves |
+| We publish our misses and our mistakes | [`/wrong`](https://nightwatch-gules.vercel.app/wrong): 124 of 2,301 replays and 8 of 473 live tickets went past the line (as of 5 Oct 2026) |
 | Eleven studies of the method, corrected for the nine that are formal tests | [`/studies`](https://nightwatch-gules.vercel.app/studies) |
 | Not verified by us | real-trader adoption; directional edge (measured: none) |
+
+**Method freeze and how to read the intervals.** The tail adjustment was designed while looking at the same replayed history it is scored on, so its headline rate is optimistic by an unknown amount. The method is frozen at git tag `method-freeze-1` (record: `nightwatch/journal/method_freeze.json`, in force from 6 Oct 2026), and `/calibration` counts forecasts made after it separately as "scored after the method was frozen"; nothing in that group could have shaped the method. Forecasts made on one night share that night's market move, so every rate on `/calibration` and `/wrong` carries two intervals: the forecast-level one (assumes every forecast is independent, too narrow) and one that resamples whole nights, with the night count beside it. Trust the second. These figures are refreshed from the live API with `nightwatch proof-sync`.
 
 ## How it works
 

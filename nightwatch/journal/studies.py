@@ -756,6 +756,94 @@ def study_analogs_beat_random_hours(forecasts: pd.DataFrame) -> Study:
     )
 
 
+def study_adjusted_analogs_beat_adjusted_baseline(forecasts: pd.DataFrame) -> Study:
+    """Does the retrieval add value once the tail fix is applied to both sides?
+
+    The shipped 5% line is a rescaling of the analog tail, so a raw analog-versus-random
+    comparison cannot say whether the *retrieval* or the *rescaling* is doing the work. Here
+    the random-hours distribution each forecast also stored goes through exactly the same
+    expanding-window adjustment (same code, same refit cadence, fitted only on earlier
+    outcomes) and the two adjusted tails are scored on the same forecasts. If they tie, the
+    tail is a scale problem and the retrieval is not what makes it honest."""
+    from nightwatch.journal.adjust import expanding_rows
+    from nightwatch.journal.calibration import MIN_NIGHTS, count_nights
+
+    key = "adjusted_analogs_beat_adjusted_baseline"
+    title = "Do the analogs still beat random hours once both get the same tail fix?"
+    question = (
+        "The 1-in-20 line we ship is the analog tail rescaled to hit 5%. Put the random-hours distribution through the identical "
+        "rescaling. If it comes out as calibrated and as narrow, the retrieval added nothing and the rescaling did all the work."
+    )
+    cols = ("p5", "p50", "p95")
+    need = [*cols, *(f"base_{c}" for c in cols), "ret_pct", "horizon_end", "as_of"]
+    missing = [c for c in need if c not in forecasts]
+    d = forecasts.dropna(subset=need).copy() if not missing else pd.DataFrame()
+    if len(d) and "id" not in d:
+        d["id"] = np.arange(len(d))
+    base = d.copy()
+    for c in cols:
+        if len(base):
+            base[c] = base[f"base_{c}"]
+    a = expanding_rows(d) if len(d) else pd.DataFrame()
+    b = expanding_rows(base) if len(base) else pd.DataFrame()
+    j = a.merge(b[["id", "a5", "a95"]], on="id", suffixes=("", "_b")) if not a.empty and not b.empty else pd.DataFrame()
+    method = (
+        "Both the analog tail and the random-hours tail are fitted by the same expanding-window procedure (each forecast scored with a "
+        "factor learned only from outcomes that had already matured) and scored on the same forecasts. The measure is the sum of the "
+        "5% pinball loss on the lower line and the 95% pinball loss on the upper line, so a tail that is calibrated only because it is "
+        "wide pays for the width. Error bars resample whole nights, and a token-clustered t is reported beside them."
+    )
+    if len(j) < 100 or count_nights(j["as_of"]) < MIN_NIGHTS:
+        return Study(
+            key=key, title=title, question=question, method=method,
+            finding=f"Only {len(j)} forecasts carry both an adjusted analog and an adjusted random-hours tail; not enough to compare.",
+            consequence="Nothing changes until there is enough history to run it.", verdict=UNCLEAR, n=int(len(j)), stats={},
+        )
+    j["as_of"] = pd.to_datetime(j["as_of"], utc=True)
+    r = j["r"].to_numpy(float)
+    loss_a = _pinball(r, j["a5"].to_numpy(float), 0.05) + _pinball(r, j["a95"].to_numpy(float), 0.95)
+    loss_b = _pinball(r, j["a5_b"].to_numpy(float), 0.05) + _pinball(r, j["a95_b"].to_numpy(float), 0.95)
+    j["diff"] = loss_b - loss_a  # positive: the analogs scored better
+    per = j.groupby("ticker")["diff"].mean()
+    night = j["as_of"].dt.strftime("%Y-%m-%d")
+    g_sum = j.groupby(night)["diff"].sum()
+    g_cnt = j.groupby(night)["diff"].count()
+    rng = np.random.default_rng(5)
+    idx = rng.integers(0, len(g_sum), size=(2000, len(g_sum)))
+    boot = g_sum.to_numpy()[idx].sum(axis=1) / g_cnt.to_numpy()[idx].sum(axis=1)
+    lo_ci, hi_ci = (float(x) for x in np.percentile(boot, [2.5, 97.5]))
+    t = _t(per.to_numpy())
+    cov_a, cov_b = float((r < j["a5"].to_numpy(float)).mean()), float((r < j["a5_b"].to_numpy(float)).mean())
+    w_a, w_b = float((j["a95"] - j["a5"]).mean()), float((j["a95_b"] - j["a5_b"]).mean())
+    mean = float(j["diff"].mean())
+    nights = int(len(g_sum))
+    verdict = YES if lo_ci > 0 and t > T_CONVINCING else NO if hi_ci < 0 else UNCLEAR
+    shared = (
+        f"On {len(j)} forecasts over {nights} nights, the adjusted analog tail went below the outcome {cov_a:.1%} of the time at a mean "
+        f"width of {w_a:.2f}%, and the adjusted random-hours tail {cov_b:.1%} at {w_b:.2f}%. The analogs' combined tail loss was "
+        f"{mean:+.4f} better per forecast (night-bootstrap 95% interval [{lo_ci:+.4f}, {hi_ci:+.4f}]; clustered t={t:+.2f}, "
+        f"{int((per > 0).sum())} of {len(per)} tokens)."
+    )
+    if verdict == YES:
+        finding = f"Yes. {shared} The interval excludes zero, so the retrieval adds measurable value beyond the rescaling."
+        consequence = "The retrieval claim stands, with this interval attached; the rescaling is still needed because the raw tail was too narrow."
+    elif verdict == NO:
+        finding = f"No. {shared} The random-hours tail is the better one after the same fix."
+        consequence = "The claim that retrieval makes the tail better is withdrawn: the rescaling is the product, the retrieval is not."
+    else:
+        finding = (
+            f"Not shown. {shared} The interval contains zero, so on this history the retrieval cannot be separated from picking hours at "
+            "random once both are put through the same tail fix. What makes the 1-in-20 line honest is the rescaling, not the resemblance."
+        )
+        consequence = "The report keeps saying what the data supports: the tail is calibrated by the adjustment, and resemblance is not shown to add to it."
+    return Study(
+        key=key, title=title, question=question, method=method, finding=finding, consequence=consequence, verdict=verdict, n=int(len(j)),
+        stats={"mean_advantage": mean, "clustered_t": t, "tokens": float(len(per)), "tokens_positive": float((per > 0).sum()),
+               "boot_ci_low": lo_ci, "boot_ci_high": hi_ci, "nights": float(nights),
+               "analog_lo_coverage": cov_a, "baseline_lo_coverage": cov_b, "analog_width": w_a, "baseline_width": w_b},
+    )
+
+
 # --------------------------------------------------------------------------- runner
 
 def study_the_model_spots_a_big_night(outcomes: pd.DataFrame) -> Study:
@@ -856,6 +944,7 @@ ORDER = (
     "closer_is_not_tighter",
     "weighting_does_not_help",
     "analogs_beat_random_hours",
+    "adjusted_analogs_beat_adjusted_baseline",
     "pooling_beats_own_history",
     "narrowing_gives_a_truer_tail",
     "distance_does_not_warn",
@@ -907,6 +996,7 @@ def run_all(ctx: Any, forecasts: pd.DataFrame, *, evidence: Evidence | None = No
             ("one_factor_hid_two_errors", lambda: study_one_factor_hid_two_errors(forecasts)),
             ("online_calibration_adds_nothing", lambda: study_online_calibration_adds_nothing(forecasts)),
             ("analogs_beat_random_hours", lambda: study_analogs_beat_random_hours(forecasts)),
+            ("adjusted_analogs_beat_adjusted_baseline", lambda: study_adjusted_analogs_beat_adjusted_baseline(forecasts)),
         ]
     reads = filing_outcomes(ctx, getattr(ctx, "store", None))
     if not reads.empty:

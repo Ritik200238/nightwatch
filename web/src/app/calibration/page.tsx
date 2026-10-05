@@ -117,6 +117,12 @@ export default function CalibrationPage() {
                     {tx(`Raw history breaches more often than it should (${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)} against a 5% target); that is why every verdict uses the adjusted line, which is on target (${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}).`, `原始历史突破坏情形的频率高于应有水平（${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}，目标 5%）；所以每个结论都用调整后的线，它已达标（${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}）。`)}
                   </p>
                 ) : null}
+                <p className="col-span-2 text-[13px] text-muted-foreground sm:col-span-4">
+                  {tx(
+                    `Treating every forecast as independent, the 95% interval on that rate is ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}. That assumes ${rep.adjusted.n_evaluated.toLocaleString()} separate facts, but forecasts made on the same night share that night's market move.${rep.adjusted.adj_lo_night_ci ? ` Resampling whole nights instead (${rep.adjusted.n_nights} independent nights) gives ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}, which is the interval to trust.` : ""}`,
+                    `把每个预测都当作相互独立，该比例的 95% 区间为 ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}。这假设有 ${rep.adjusted.n_evaluated.toLocaleString()} 个独立事实，但同一夜的预测共享该夜的市场波动。${rep.adjusted.adj_lo_night_ci ? ` 改为按整夜重抽样（${rep.adjusted.n_nights} 个独立夜晚）得到 ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}，应以此区间为准。` : ""}`,
+                  )}
+                </p>
                 <Stat label={tx("Inside the 5th-95th band", "落在第 5–95 百分位区间内")} value={fmtPct(rep.adjusted.adj_band_coverage * 100, 1, false)} hint={tx(`target 90% · raw ${fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}`, `目标 90% · 原始 ${fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}`)} />
                 {rep.adjusted.bands
                   .filter((b) => b.band !== "pooled")
@@ -125,12 +131,14 @@ export default function CalibrationPage() {
                       key={b.band}
                       label={bandL(b.band)}
                       value={fmtPct(b.adj_lo_coverage * 100, 1, false)}
-                      hint={tx(`below the 5th percentile · ${b.n.toLocaleString()} forecasts · ${b.adj_tail_band}`, `低于第 5 百分位 · ${b.n.toLocaleString()} 个预测 · ${tb(b.adj_tail_band)}`)}
+                      hint={tx(`below the 5th percentile · ${b.n.toLocaleString()} forecasts on ${b.n_nights ?? "?"} nights · ${b.adj_tail_band}`, `低于第 5 百分位 · ${b.n.toLocaleString()} 个预测，${b.n_nights ?? "?"} 个夜晚 · ${tb(b.adj_tail_band)}`)}
                     />
                   ))}
               </div>
             </Section>
           ) : null}
+
+          {rep.since_freeze ? <SinceFreezeBlock f={rep.since_freeze} /> : null}
 
           {rep.adjusted ? (
             <Section
@@ -242,7 +250,7 @@ export default function CalibrationPage() {
               {tx("What the analog search says on its own, before the tail adjustment. The desk does not size on this; it is here because the adjustment above is only as honest as the number it corrects, and hiding the uncorrected one would make that impossible to check.", "相似时刻搜索自己给出的结果，尚未做尾部调整。交易台不按这个定仓位；它放在这里，是因为上面的调整只有与被修正的数字一样诚实才有意义，而藏起未修正的数字就无法检验这一点。")}
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Stat label={tx("Breaches below p5", "跌破 p5 的次数")} value={`${rep.tail.breaches} / ${rep.tail.n}`} hint={tx(`expected ${(rep.tail.expected_rate * rep.tail.n).toFixed(1)}`, `预期 ${(rep.tail.expected_rate * rep.tail.n).toFixed(1)}`)} tone={bandTone === "muted" ? undefined : bandTone} />
+              <Stat label={tx("Breaches below p5", "跌破 p5 的次数")} value={`${rep.tail.breaches} / ${rep.tail.n}`} hint={tx(`expected ${(rep.tail.expected_rate * rep.tail.n).toFixed(1)}${rep.tail.n_nights ? ` · ${rep.tail.n_nights} nights` : ""}${rep.tail.night_ci ? ` · nights-resampled [${fmtPct(rep.tail.night_ci[0] * 100, 1, false)}, ${fmtPct(rep.tail.night_ci[1] * 100, 1, false)}]` : ""}`, `预期 ${(rep.tail.expected_rate * rep.tail.n).toFixed(1)}${rep.tail.n_nights ? ` · ${rep.tail.n_nights} 个夜晚` : ""}${rep.tail.night_ci ? ` · 按夜重抽样 [${fmtPct(rep.tail.night_ci[0] * 100, 1, false)}, ${fmtPct(rep.tail.night_ci[1] * 100, 1, false)}]` : ""}`)} tone={bandTone === "muted" ? undefined : bandTone} />
               <Stat label={tx("Failure-rate test", "失败率检验")} value={rep.tail.pof_p_value != null ? `p = ${rep.tail.pof_p_value.toFixed(3)}` : "—"} hint={rep.tail.pof_stat != null ? `LR ${rep.tail.pof_stat.toFixed(2)}` : tx("needs ≥ 20 forecasts", "至少需要 20 个预测")} />
               <Stat label={tx("Independence test", "独立性检验")} value={rep.tail.independence_p_value != null ? `p = ${rep.tail.independence_p_value.toFixed(3)}` : "—"} hint={tx("do breaches cluster?", "突破是否扎堆出现？")} />
               <Stat label={tx("Sharpness", "锐度")} value={rep.mean_width_p5_p95 != null ? `${rep.mean_width_p5_p95.toFixed(2)}%` : "—"} hint={tx(`mean p5–p95 width · |err p50| ${rep.mean_abs_error_p50?.toFixed(2) ?? "—"}%`, `p5–p95 平均宽度 · |p50 误差| ${rep.mean_abs_error_p50?.toFixed(2) ?? "—"}%`)} />
@@ -449,6 +457,42 @@ function PlainWords({ adj }: { adj: NonNullable<CalibrationReport["adjusted"]> }
       <Term k="p5">p5</Term>
       {tx(`). We wrote down ${adj.n_evaluated.toLocaleString()} of those before knowing what would happen, then checked. The real outcome was worse than the bad case ${fmtPct(lo, 1, false)} of the time, against the 5% it should be. ${verdict} Before the correction the raw history was worse than its own bad case ${fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time, which is why the desk corrects it.`, `）。我们在不知道结果之前写下了 ${adj.n_evaluated.toLocaleString()} 个这样的坏情形，然后去核对。实际结果比坏情形更差的比例是 ${fmtPct(lo, 1, false)}，而它本应是 5%。${verdict}修正之前，原始历史比它自己的坏情形更差的比例是 ${fmtPct(adj.raw_lo_coverage * 100, 1, false)}，这就是交易台要做修正的原因。`)}
     </PlainBox>
+  );
+}
+
+/** Forecasts made after the method was frozen: out of sample by construction. */
+function SinceFreezeBlock({ f }: { f: NonNullable<CalibrationReport["since_freeze"]> }) {
+  const { tx } = useLang();
+  const day = f.frozen_at.slice(0, 10);
+  return (
+    <Section
+      title={tx("Scored after the method was frozen", "方法冻结之后才评分的预测")}
+      subtitle={tx(
+        `The tail adjustment was designed while looking at the history it is scored on above, so that number is optimistic by an unknown amount. Method frozen ${day} (git tag ${f.git_tag ?? "?"}). Only forecasts made after it count here, so nothing in this group could have shaped the method.`,
+        `尾部调整是在看着上面所评分的历史时设计的，所以那个数字偏乐观的程度未知。方法于 ${day} 冻结（git 标签 ${f.git_tag ?? "?"}）。这里只统计冻结之后做出的预测，所以这一组不可能影响过方法本身。`,
+      )}
+    >
+      {f.n ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat label={tx("Forecasts scored", "已评分预测")} value={f.n.toLocaleString()} hint={tx(`${f.n_nights} independent nights`, `${f.n_nights} 个独立夜晚`)} />
+          <Stat label={tx("Below the 5th percentile", "低于第 5 百分位")} value={`${f.breaches} (${fmtPct((f.rate ?? 0) * 100, 1, false)})`} hint={tx("target 5%", "目标 5%")} />
+          <Stat
+            label={tx("If forecasts were independent", "若预测相互独立")}
+            value={f.wilson_ci ? `${fmtPct(f.wilson_ci[0] * 100, 1, false)} to ${fmtPct(f.wilson_ci[1] * 100, 1, false)}` : "—"}
+            hint={tx("assumes independence; too narrow", "假设独立，区间偏窄")}
+          />
+          <Stat
+            label={tx("Resampling whole nights", "按整夜重抽样")}
+            value={f.night_ci ? `${fmtPct(f.night_ci[0] * 100, 1, false)} to ${fmtPct(f.night_ci[1] * 100, 1, false)}` : "—"}
+            hint={f.night_ci ? tx(`${f.n_nights} independent nights`, `${f.n_nights} 个独立夜晚`) : tx("too few nights for an interval yet", "夜晚太少，暂无区间")}
+          />
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {tx("No forecast made after the freeze has finished its holding period yet, so there is nothing to score. This fills in by itself, one night at a time; a few nights prove little, so read the night count before the rate.", "冻结之后做出的预测还没有一个走完持有期，所以暂时没有可评分的内容。它会自行逐夜增加；几个夜晚说明不了什么，请先看夜晚数再看比例。")}
+        </p>
+      )}
+    </Section>
   );
 }
 

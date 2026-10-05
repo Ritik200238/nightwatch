@@ -75,7 +75,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from nightwatch.journal.calibration import tail_test, wilson_interval
+from nightwatch.journal.calibration import count_nights, night_bootstrap_ci, tail_test, wilson_interval
 from nightwatch.time_utils import ensure_utc
 
 K_MIN, K_MAX = 0.5, 6.0
@@ -263,6 +263,8 @@ class BandEvaluation:
     k_lo: float
     k_hi: float
     c_lo: float = 0.0
+    n_nights: int | None = None
+    adj_lo_night_ci: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -284,6 +286,11 @@ class AdjustedEvaluation:
     adj_lo_ci: tuple[float, float]
     bands: list[BandEvaluation] = field(default_factory=list)
     c_lo_last: float | None = None
+    # Whole-night bootstrap: forecasts on one night share its shock, so lo_ci/adj_lo_ci
+    # above (Wilson, which assumes independent forecasts) are narrower than the data allow.
+    n_nights: int | None = None
+    raw_lo_night_ci: tuple[float, float] | None = None
+    adj_lo_night_ci: tuple[float, float] | None = None
 
 
 def expanding_rows(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, refit_every: int = 25, banded: bool = True) -> pd.DataFrame:
@@ -376,6 +383,7 @@ def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, r
             raw_width=float((g["p95"] - g["p5"]).mean()), adj_width=float((g["a95"] - g["a5"]).mean()),
             adj_tail_band=tail_test(g["r"].to_numpy(float), g["a5"].to_numpy(float)).band,
             k_lo=float(g["k_lo"].iloc[-1]), k_hi=float(g["k_hi"].iloc[-1]), c_lo=float(g["c_lo"].iloc[-1]),
+            n_nights=count_nights(g["as_of"]), adj_lo_night_ci=night_bootstrap_ci(g["as_of"], (g["r"] < g["a5"]).to_numpy()),
         )
         for name, g in e.groupby("band", sort=True)
     ] if "band" in e and e["band"].nunique() > 1 else []
@@ -387,6 +395,9 @@ def evaluate_expanding(forecasts: pd.DataFrame, *, min_fit_n: int = MIN_FIT_N, r
         k_lo_last=float(e["k_lo"].iloc[-1]), k_hi_last=float(e["k_hi"].iloc[-1]),
         lo_ci=wilson_interval(int((e["r"] < e["p5"]).sum()), n), adj_lo_ci=wilson_interval(int((e["r"] < e["a5"]).sum()), n),
         bands=bands, c_lo_last=float(e["c_lo"].iloc[-1]),
+        n_nights=count_nights(e["as_of"]),
+        raw_lo_night_ci=night_bootstrap_ci(e["as_of"], (e["r"] < e["p5"]).to_numpy()),
+        adj_lo_night_ci=night_bootstrap_ci(e["as_of"], (e["r"] < e["a5"]).to_numpy()),
     )
 
 

@@ -129,3 +129,16 @@ def test_the_report_payload_carries_chinese_names_for_failure_modes_and_presets(
     assert out["failure_modes"][0]["title_zh"] == "24 小时无法平仓" and "title_zh" not in out["failure_modes"][1]
     assert out["stress"]["presets"][0]["name_zh"].startswith("休市期间跳空")
     assert "2020" in out["stress"]["presets"][1]["name_zh"]
+
+
+def test_stress_assumptions_say_what_the_replays_and_the_spike_do_not_model(seeded_store):  # noqa: F811
+    from types import SimpleNamespace
+
+    r = _report(seeded_store, thesis="t", invalidation="i")
+    r.stress = SimpleNamespace(presets=[SimpleNamespace(id="replay_covid_2020"), SimpleNamespace(id="vol_spike_x2")], monte_carlo=object())
+    by_topic = {a.topic: a for a in story.assumptions(r)}
+    assert "did not exist" in by_topic["crash replays"].text and by_topic["crash replays"].kind == "caveat"
+    assert "weekend" in by_topic["volatility spike"].text
+    assert "not yet scored" in by_topic["monte carlo"].text
+    r.stress = SimpleNamespace(presets=[], monte_carlo=None)
+    assert not {"crash replays", "volatility spike", "monte carlo"} & {a.topic for a in story.assumptions(r)}

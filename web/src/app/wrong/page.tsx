@@ -134,7 +134,10 @@ export default function WrongPage() {
               <Stat
                 label={tx("Went past the line", "突破了该线")}
                 value={live ? `${live.missed} (${fmtPct(live.rate * 100, 1, false)})` : "—"}
-                hint={tx("target about 5%", "目标约 5%")}
+                hint={tx(
+                  `target about 5% · ${live?.distinct_missed != null ? `${live.distinct_missed} distinct events of ${live.distinct_events} (repeat tickets on one outcome counted once)` : "raw tickets"}`,
+                  `目标约 5% · ${live?.distinct_missed != null ? `${live.distinct_missed} 个独立事件，共 ${live.distinct_events} 个（同一结果上的重复单只算一次）` : "原始单数"}`,
+                )}
                 tone={live && live.rate > 0.075 ? "critical" : undefined}
               />
               <Stat label={tx("Replayed forecasts scored", "已评分的重演预测")} value={replay ? replay.scored.toLocaleString() : "0"} hint={tx("the past, run as if live", "把过去当作实时来运行")} />

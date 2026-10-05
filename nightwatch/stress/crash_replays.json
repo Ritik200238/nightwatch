@@ -1189,8 +1189,9 @@
      "gap_down": "2024-08-05",
      "gap_up": "2024-07-31"
     },
-    "name": "August 2024 carry-trade unwind",
-    "start": "2024-07-16"
+    "name": "July-August 2024 tech rotation and carry-trade unwind",
+    "start": "2024-07-16",
+    "note": "The window opens on 16 Jul, the day the rotation out of tech began, about three weeks before the 5 Aug unwind. The 'up' day it picks (16 Jul) is therefore a pre-unwind day, not a rebound, and some stocks fell on it. Moves are the native stock's, from before the token existed."
    },
    "covid_2020": {
     "end": "2020-03-23",
@@ -1225,6 +1226,7 @@
     "name": "April 2025 tariff shock",
     "start": "2025-04-02"
    }
-  }
+  },
+  "note": "Every move here is the native US stock's daily move on the day SPY was most extreme inside the window. The rTokens did not exist in any window but April 2025, so token-specific effects (basis, thin night books) are not replayed. The five windows were chosen after the fact."
  }
 }

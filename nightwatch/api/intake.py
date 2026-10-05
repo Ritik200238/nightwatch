@@ -695,7 +695,7 @@ def preset_zh(sid: str, name: str) -> str:
         return f"代币偏离公允价值（休市时段第 {m.group(1)} 百分位）"
     if sid.startswith("replay_"):
         return "历史危机重演：" + {"covid_2020": "2020 年新冠暴跌", "banks_2023": "2023 年 3 月银行危机", "rates_2022": "2022 年通胀冲击",
-                               "carry_2024": "2024 年 8 月套息交易平仓", "tariffs_2025": "2025 年 4 月关税冲击"}.get(sid[7:], name)
+                               "carry_2024": "2024 年 7–8 月科技股轮动与套息交易平仓", "tariffs_2025": "2025 年 4 月关税冲击"}.get(sid[7:], name)
     if (m := _re.fullmatch(r"vol_spike_x(\d+)", sid)):
         return f"波动率骤升 ×{m.group(1)}"
     return {

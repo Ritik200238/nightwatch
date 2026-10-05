@@ -1148,16 +1148,20 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         rep = calibrate(df)
         from dataclasses import asdict
 
-        from nightwatch.journal.adjust import evaluate_expanding
+        from nightwatch.journal.adjust import evaluate_expanding, expanding_rows
+        from nightwatch.journal.freeze import holdout
         from nightwatch.journal.skill import compare_skill
         from nightwatch.journal.walkforward import by_period
 
         adjusted = evaluate_expanding(df) if not df.empty else None
+        frozen = holdout(expanding_rows(df)) if not df.empty else holdout(pd.DataFrame())
         skill = compare_skill(df) if not df.empty else None
         walk = by_period(df) if not df.empty else None
         out = {
             "matured_now": matured, **asdict(rep), "adjusted": asdict(adjusted) if adjusted else None,
             "skill": asdict(skill) if skill else None, "walk_forward": asdict(walk) if walk else None,
+            "since_freeze": frozen,
+            "independence_note": "Forecasts on the same night share that night's market move, so a forecast-level interval assumes more independent evidence than exists. Each rate also carries an interval from resampling whole nights (as-of date, UTC) and the number of nights behind it.",
         }
         if matured:
             s.calibration_cache.clear()  # new outcomes invalidate every view
@@ -1236,18 +1240,19 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             return cached[1]
         from nightwatch.journal import receipts
         from nightwatch.journal.adjust import expanding_rows
+        from nightwatch.journal.calibration import distinct_events
 
         with s.lock:
             mature_and_learn(s.journal, spot_symbol_for={e.ticker: e.spot_symbol for e in s.entries})
             df = s.journal.forecasts(matured_only=True)
             rows = expanding_rows(df) if not df.empty else pd.DataFrame()
-            meta = df.set_index("id")[["kind", "side", "notional", "horizon_h", "verdict", "recommended_notional"]] if not df.empty else pd.DataFrame()
+            meta = df.set_index("id")[["kind", "side", "notional", "horizon_h", "verdict", "recommended_notional", "exit_ts"]] if not df.empty else pd.DataFrame()
             out_rows, totals = [], {}
             if not rows.empty:
                 rows = rows.join(meta, on="id")
                 rows["miss"] = rows["r"] < rows["a5"]
                 for kind, g in rows.groupby("kind"):
-                    totals[str(kind)] = {"scored": int(len(g)), "missed": int(g["miss"].sum()), "rate": float(g["miss"].mean())}
+                    totals[str(kind)] = {"scored": int(len(g)), "missed": int(g["miss"].sum()), "rate": float(g["miss"].mean()), **distinct_events(g)}
                 for _, x in rows[(rows["kind"] == "ticket") & rows["miss"]].sort_values("as_of", ascending=False).iterrows():
                     rc = receipts.receipt(s.store._conn, int(x["id"]))
                     out_rows.append({

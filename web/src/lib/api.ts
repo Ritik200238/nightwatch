@@ -403,6 +403,8 @@ export interface BandEvaluation {
   k_lo: number;
   k_hi: number;
   c_lo?: number;
+  n_nights?: number | null;
+  adj_lo_night_ci?: [number, number] | null;
 }
 
 export interface AdjustedEvaluation {
@@ -423,6 +425,11 @@ export interface AdjustedEvaluation {
   lo_ci: [number, number];
   adj_lo_ci: [number, number];
   bands: BandEvaluation[];
+  /** Distinct as-of nights behind n_evaluated. Forecasts on one night share its shock. */
+  n_nights?: number | null;
+  /** Breach-rate intervals from resampling whole nights; lo_ci/adj_lo_ci assume independent forecasts. */
+  raw_lo_night_ci?: [number, number] | null;
+  adj_lo_night_ci?: [number, number] | null;
 }
 
 export interface QuantileSkill {
@@ -1304,6 +1311,25 @@ export interface Coverage {
   ci_low: number;
   ci_high: number;
   within_ci: boolean;
+  n_nights?: number | null;
+  night_ci_low?: number | null;
+  night_ci_high?: number | null;
+}
+
+export interface SinceFreeze {
+  frozen_at: string;
+  git_tag: string | null;
+  git_commit: string | null;
+  note: string | null;
+  label: string;
+  n: number;
+  breaches: number;
+  rate: number | null;
+  wilson_ci: [number, number] | null;
+  n_nights: number;
+  night_ci: [number, number] | null;
+  hi_breaches: number;
+  hi_rate: number | null;
 }
 
 export interface CalibrationReport {
@@ -1322,7 +1348,11 @@ export interface CalibrationReport {
     conditional_stat: number | null;
     conditional_p_value: number | null;
     band: "green" | "amber" | "red" | "insufficient";
+    n_nights?: number | null;
+    night_ci?: [number, number] | null;
   };
+  since_freeze?: SinceFreeze;
+  independence_note?: string;
   pit_histogram: Record<string, number>;
   mean_width_p5_p95: number | null;
   mean_abs_error_p50: number | null;
@@ -1534,7 +1564,21 @@ export interface Miss {
 }
 
 export interface MissesResponse {
-  totals: Record<string, { scored: number; missed: number; rate: number }>;
+  totals: Record<
+    string,
+    {
+      scored: number;
+      missed: number;
+      rate: number;
+      /** Repeated tickets on one ticker and outcome count once here. */
+      distinct_events?: number;
+      distinct_missed?: number;
+      distinct_rate?: number | null;
+      distinct_ci?: [number, number];
+      n_nights?: number;
+      night_ci?: [number, number] | null;
+    }
+  >;
   misses: Miss[];
   target_rate: number;
 }

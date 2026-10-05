@@ -346,6 +346,16 @@ def cmd_calibration(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def cmd_proof_sync(args: argparse.Namespace, settings: Settings) -> int:  # noqa: ARG001
+    """Rewrite the figures in README.md and docs/submission.md from the live API."""
+    from nightwatch import proof_sync
+
+    changed = proof_sync.run(base=args.base, check=args.check)
+    verb = "would change" if args.check else "updated"
+    print(f"proof-sync {verb}: " + ("; ".join(changed) if changed else "nothing, the figures already match the live API"))
+    return 0
+
+
 def cmd_studies(args: argparse.Namespace, settings: Settings) -> int:
     """Re-run every study of the retrieval and store what came back.
 
@@ -560,6 +570,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--points", type=int, default=40, help="replay points per ticker for the match-level sweep")
     sp.add_argument("--dry-run", action="store_true", help="print the results without storing them")
     sp.set_defaults(func=cmd_studies)
+
+    sp = sub.add_parser("proof-sync", help="rewrite the quoted figures in README.md and docs/submission.md from the live API")
+    sp.add_argument("--base", default="https://nightwatch-gules.vercel.app/api", help="API root to read the figures from")
+    sp.add_argument("--check", action="store_true", help="report what would change without writing")
+    sp.set_defaults(func=cmd_proof_sync)
     return p
 
 
