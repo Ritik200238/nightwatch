@@ -117,6 +117,29 @@ def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
             "the future is assumed to resemble them only as much as the calibration page shows it has.",
             "caveat",
         ))
+    stress = getattr(r, "stress", None)
+    ids = {x.id for x in stress.presets} if stress is not None else set()
+    if any(i.startswith("replay_") for i in ids):
+        out.append(Assumption(
+            "crash replays",
+            f"The crash replays apply {t.ticker}'s own stock move from those crises to today's token. The token did not exist then (only the April 2025 shock overlaps its life), "
+            "so basis, thin night books and listing effects were not part of what was replayed. The five windows were picked after the fact.",
+            "caveat",
+        ))
+    if any(i.startswith("vol_spike") for i in ids):
+        out.append(Assumption(
+            "volatility spike",
+            "The 2σ and 3σ spike scales volatility by the square root of the hours held over a 24-hour, seven-day year, which counts weekend and overnight hours as if they traded like the day. "
+            "Over a weekend that is not true; read the sigma label as approximate.",
+            "caveat",
+        ))
+    if stress is not None and getattr(stress, "monte_carlo", None) is not None:
+        out.append(Assumption(
+            "monte carlo",
+            "The Monte Carlo band redraws blocks of this token's own past hourly returns and adds up the hours held. It uses only hours the token traded, with no volatility scaling "
+            "for weekends or news, and it is recorded but not yet scored against outcomes the way the 1-in-20 line is.",
+            "caveat",
+        ))
     fund = _FUNDS.get(t.ticker.upper())
     if fund:
         out.append(Assumption("instrument", fund, "caveat"))
