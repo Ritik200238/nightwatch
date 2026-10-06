@@ -819,6 +819,15 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             items.append(item)
         return JSONResponse({"detail": items}, status_code=422)
 
+    @app.exception_handler(OverflowError)
+    async def _id_out_of_range(request: Request, exc: OverflowError) -> JSONResponse:  # noqa: ARG001
+        """An id too big for the database (``/reports/99999999999999999999``) is a record that
+        does not exist, not a server fault. Anything else that overflows is still a 500."""
+        if "SQLite" in str(exc):
+            return JSONResponse({"detail": "No such record."}, status_code=404)
+        log.exception("overflow while answering %s", request.url.path)
+        return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+
     app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("NIGHTWATCH_CORS", "*").split(","), allow_methods=["*"], allow_headers=["*"])
 
     limiter = guard.RateLimiter()

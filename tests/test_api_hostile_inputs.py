@@ -64,3 +64,19 @@ def test_a_normal_request_still_works(client):
     r = client.post("/analyze", json={**GOOD, "horizon_kind": "hours", "horizon_hours": 72})
     assert r.status_code == 200, r.text
     assert json.loads(r.text)["horizon_h"] == 72
+
+
+@pytest.mark.parametrize("method,path,body", [
+    ("get", "/reports/99999999999999999999", None),
+    ("get", "/verify/99999999999999999999", None),
+    ("get", "/thesis-check/99999999999999999999", None),
+    ("get", "/plan/99999999999999999999", None),
+    ("get", "/tripwire/suggest/99999999999999999999", None),
+    ("post", "/forecasts/99999999999999999999/taken", {}),
+    ("post", "/feedback", {"forecast_id": 99999999999999999999, "useful": True}),
+    ("post", "/watch", {"forecast_id": 99999999999999999999}),
+])
+def test_an_id_too_big_for_the_database_is_a_404_not_a_500(client, method, path, body):
+    r = client.get(path) if method == "get" else client.post(path, json=body)
+    assert r.status_code == 404, (path, r.status_code, r.text)
+    assert "Traceback" not in r.text and "SQLite" not in r.text
