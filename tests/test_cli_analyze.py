@@ -35,3 +35,18 @@ def test_a_bad_ticket_prints_an_error_not_a_traceback(argv, capsys, tmp_path, mo
     monkeypatch.setenv("NIGHTWATCH_LIVE_BOOK", "0")
     code = cmd_analyze(build_parser().parse_args([*argv, "--offline"]), Settings(data_dir=tmp_path, db_filename="x.sqlite", core_tickers=("TSLA",)))
     assert code == 2 and capsys.readouterr().err.startswith("error:")
+
+
+def test_proof_sync_check_fails_when_a_figure_is_stale(monkeypatch):
+    """`--check` that always exits 0 cannot gate anything: stale figures must be a non-zero exit."""
+    from nightwatch import proof_sync
+    from nightwatch.cli import cmd_proof_sync
+
+    args = build_parser().parse_args(["proof-sync", "--check"])
+    monkeypatch.setattr(proof_sync, "run", lambda **kw: ["README.md: README receipts"])
+    assert cmd_proof_sync(args, None) == 1
+    monkeypatch.setattr(proof_sync, "run", lambda **kw: [])
+    assert cmd_proof_sync(args, None) == 0
+    # Without --check it writes and succeeds.
+    monkeypatch.setattr(proof_sync, "run", lambda **kw: ["README.md: README receipts"])
+    assert cmd_proof_sync(build_parser().parse_args(["proof-sync"]), None) == 0

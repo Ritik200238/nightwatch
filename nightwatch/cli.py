@@ -369,7 +369,8 @@ def cmd_proof_sync(args: argparse.Namespace, settings: Settings) -> int:  # noqa
     changed = proof_sync.run(base=args.base, check=args.check)
     verb = "would change" if args.check else "updated"
     print(f"proof-sync {verb}: " + ("; ".join(changed) if changed else "nothing, the figures already match the live API"))
-    return 0
+    # Like every other --check: a pending change is a failure, so it can gate a pipeline.
+    return 1 if args.check and changed else 0
 
 
 def cmd_studies(args: argparse.Namespace, settings: Settings) -> int:
