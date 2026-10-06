@@ -16,6 +16,11 @@ export interface OpenPosition {
 }
 
 const STORAGE_KEY = "nightwatch.positions";
+/** The same limits the server holds: a size from 1 to 10,000,000 USDT, and the first twelve
+ *  positions are the ones judged, so a thirteenth would be accepted and then ignored. */
+export const MIN_SIZE = 1;
+export const MAX_SIZE = 10_000_000;
+export const MAX_POSITIONS = 12;
 
 /**
  * What the trader already holds.
@@ -31,7 +36,17 @@ export function useOpenPositions() {
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) setPositions(JSON.parse(raw) as OpenPosition[]);
+      if (raw) {
+        // A stored list is whatever an older version, or a person, left there: keep only rows the server would accept.
+        const parsed: unknown = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setPositions(
+            (parsed as OpenPosition[])
+              .filter((p) => p && typeof p.ticker === "string" && p.ticker && (p.side === "long" || p.side === "short") && Number.isFinite(p.notional_quote) && p.notional_quote >= MIN_SIZE && p.notional_quote <= MAX_SIZE)
+              .slice(0, MAX_POSITIONS),
+          );
+        }
+      }
     } catch {
       /* a blocked or corrupt store just means an empty book */
     }
@@ -62,11 +77,27 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
   const [ticker, setTicker] = useState(available[0]?.ticker ?? "NVDA");
   const [side, setSide] = useState<Side>("long");
   const [size, setSize] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
 
   function add() {
     const n = Number(size);
-    if (!(n > 0) || !ticker) return;
-    onChange([...positions, { ticker, side, notional_quote: n }]);
+    if (!ticker) return;
+    if (!Number.isFinite(n) || n < MIN_SIZE || n > MAX_SIZE) {
+      setProblem(tx(`Size must be between ${MIN_SIZE} and ${MAX_SIZE.toLocaleString()} USDT.`, `仓位须在 ${MIN_SIZE} 到 ${MAX_SIZE.toLocaleString()} USDT 之间。`));
+      return;
+    }
+    // The same token and side again is the same position, made bigger, not a second row.
+    const at = positions.findIndex((p) => p.ticker === ticker && p.side === side);
+    if (at < 0 && positions.length >= MAX_POSITIONS) {
+      setProblem(tx(`Up to ${MAX_POSITIONS} positions are judged. Remove one first.`, `最多评估 ${MAX_POSITIONS} 个持仓，请先移除一个。`));
+      return;
+    }
+    if (at >= 0 && positions[at].notional_quote + n > MAX_SIZE) {
+      setProblem(tx(`That would take ${ticker} past ${MAX_SIZE.toLocaleString()} USDT.`, `加上后 ${ticker} 将超过 ${MAX_SIZE.toLocaleString()} USDT。`));
+      return;
+    }
+    setProblem(null);
+    onChange(at >= 0 ? positions.map((p, i) => (i === at ? { ...p, notional_quote: p.notional_quote + n } : p)) : [...positions, { ticker, side, notional_quote: n }]);
     setSize("");
   }
 
@@ -121,7 +152,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
           </Label>
           <Select value={side} onValueChange={(v) => setSide((v as Side) ?? "long")}>
             <SelectTrigger id="pos-side">
-              <SelectValue />
+              <SelectValue>{side === "short" ? tx("short", "做空") : tx("long", "做多")}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="long">{tx("long", "做多")}</SelectItem>
@@ -137,10 +168,16 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
             id="pos-size"
             type="number"
             inputMode="decimal"
-            min={0}
+            min={MIN_SIZE}
+            max={MAX_SIZE}
             step="any"
             value={size}
-            onChange={(e) => setSize(e.target.value)}
+            onChange={(e) => {
+              setSize(e.target.value);
+              setProblem(null);
+            }}
+            aria-invalid={problem ? true : undefined}
+            aria-describedby={problem ? "pos-problem" : undefined}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -154,6 +191,11 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
           {tx("Add", "添加")}
         </Button>
       </div>
+      {problem ? (
+        <p id="pos-problem" role="alert" className="text-[13px] text-destructive">
+          {problem}
+        </p>
+      ) : null}
     </section>
   );
 }
