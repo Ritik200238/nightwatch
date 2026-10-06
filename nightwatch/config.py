@@ -24,12 +24,28 @@ def _env_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(s.strip().upper() for s in raw.split(",") if s.strip())
 
 
-# The names we backfill first and record order books for. Chosen for liquidity and
-# because they are the tokens a retail trader is most likely to hold overnight.
+# The names we backfill first and record order books for. Originally 24 tickers
+# chosen for liquidity; expanded to the ranked shortlist in UNIVERSE_CANDIDATES.md
+# (S&P 500 constituents + well-known ETFs, cross-referenced against Bitget's live
+# R-token list and spot-checked against Yahoo Finance). Override with the
+# NIGHTWATCH_CORE_TICKERS env var (comma-separated) instead of editing this tuple
+# if you want a different set without a code change — Settings.core_tickers already
+# reads that env var first. A 100+-entry tuple is kept here, not split into a JSON/
+# YAML file, because it is small, rarely edited, and type-checked at import time;
+# revisit if this grows past a few hundred entries.
 DEFAULT_CORE_TICKERS: tuple[str, ...] = (
     "TSLA", "NVDA", "AAPL", "MSFT", "AMZN", "GOOGL", "META", "NFLX", "AMD", "PLTR",
     "MSTR", "HOOD", "COIN", "BABA", "CRCL", "AVGO", "TSM", "INTC", "MU", "SMCI",
-    "SPY", "QQQ", "TQQQ", "SQQQ",
+    "SPY", "QQQ", "TQQQ", "SQQQ", "ABBV", "ABNB", "ABT", "ADBE", "ADSK", "AMGN",
+    "ANET", "ARKK", "AXP", "BA", "BAC", "BKNG", "BLK", "BMY", "C", "CHTR",
+    "CMCSA", "CMG", "COP", "COST", "CRM", "CSCO", "CVS", "CVX", "DE", "DELL",
+    "DHR", "DIA", "DIS", "DUK", "EOG", "F", "FTNT", "GE", "GILD", "GLD",
+    "GM", "GS", "HD", "HON", "HPQ", "IBM", "INTU", "IWM", "JNJ", "JPM",
+    "KO", "LLY", "LMT", "LOW", "MA", "MCD", "MDLZ", "MDT", "MO", "MRK",
+    "MS", "NEE", "NKE", "NOW", "NSC", "ORCL", "PANW", "PEP", "PFE", "PG",
+    "PM", "PYPL", "QCOM", "RTX", "SBUX", "SCHW", "SLB", "SLV", "SMH", "T",
+    "TGT", "TLT", "TMO", "TMUS", "TXN", "UBER", "UNH", "V", "VZ", "WFC",
+    "WMT", "XOM",
 )
 
 
