@@ -2186,7 +2186,7 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
                     <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{verdictLabel(lang, p.verdict)}</Pill>
                   </span>
                   <span className="col-span-2 text-muted-foreground sm:col-span-1">
-                    {p.binding_cap ? L(`${tl(lang, "cap", p.binding_cap)} binds`, `${tl(lang, "cap", p.binding_cap)}是限制项`) : ""}
+                    {p.binding_cap && (p.recommended_notional == null || p.recommended_notional < p.notional - 1) ? L(`${tl(lang, "cap", p.binding_cap)} binds`, `${tl(lang, "cap", p.binding_cap)}是限制项`) : ""}
                     {p.exit_cost_bps != null ? L(` · exit ${fmtBps(p.exit_cost_bps, 0)}`, ` · 平仓 ${fmtBps(p.exit_cost_bps, 0)}`) : ""}
                     {p.risk_pct_of_equity != null ? L(` · risk ${p.risk_pct_of_equity.toFixed(2)}% of equity`, ` · 风险占权益 ${p.risk_pct_of_equity.toFixed(2)}%`) : ""}
                   </span>
