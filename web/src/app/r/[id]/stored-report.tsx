@@ -141,8 +141,8 @@ export function StoredReport({ id }: { id: string }) {
         <p className="font-medium">{tx("A saved report, not a live one", "这是保存的报告，不是实时的")}</p>
         <p className="text-[13px] text-muted-foreground">
           {tx(
-            `This is forecast #${id} exactly as the desk argued it on ${fmtDateTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.`,
-            `这是预测 #${id}，与交易台在 ${fmtDateTimeL(report.as_of, lang)} 给出的内容完全一致，此后页面上的任何内容都没有重新计算。`,
+            `This is ${id.startsWith("-") ? "a what-if run" : `forecast #${id}`} exactly as the desk argued it on ${fmtDateTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.`,
+            `这是${id.startsWith("-") ? "一次假设情景" : `预测 #${id}`}，与交易台在 ${fmtDateTimeL(report.as_of, lang)} 给出的内容完全一致，此后页面上的任何内容都没有重新计算。`,
           )}{" "}
           <Link href={rerunHref(report)} className="underline underline-offset-2">
             {tx("Run the same trade now", "现在重新运行同一笔交易")}

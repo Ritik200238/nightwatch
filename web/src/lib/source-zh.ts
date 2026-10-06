@@ -49,6 +49,8 @@ export function localLatest(label: string | null, zh: boolean): string | null {
     .replace(/^([\d,]+) tokens with data; ([\d,]+) not answering$/, "$1 个代币有数据；$2 个没有响应")
     .replace(/^([\d,]+) tokens with data$/, "$1 个代币有数据")
     .replace(/^not answering for ([\d,]+) of ([\d,]+) tokens$/, "$2 个代币中有 $1 个没有响应")
+    .replace(/^([\d,]+) tokens with an options chain$/, "$1 个代币有期权链")
+    .replace(/^([\d,]+) of ([\d,]+) tools answering$/, "$2 个工具中有 $1 个有响应")
     .replace(/^not fetched yet$/, "尚未获取")
     .replace(/^not delivered yet$/, "尚未返回数据")
     .replace(/^answers, with nothing for these tokens$/, "服务有响应，但这些代币没有数据")

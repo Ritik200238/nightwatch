@@ -139,7 +139,7 @@ export default function TonightPage() {
           </>
         ) : null}
 
-        {!report && !busy ? (
+        {!report && !busy && !error ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-8 text-center">
             <Moon className="h-6 w-6 text-muted-foreground" aria-hidden />
             <p className="font-medium">{tx("Nothing on the watch yet", "还没有盯任何持仓")}</p>
@@ -162,7 +162,7 @@ export default function TonightPage() {
               title={report.market_is_open ? tx("Until the close", "到收盘为止") : tx("Until the next open", "到下次开盘为止")}
               subtitle={
                 report.window_end
-                  ? tx(`${report.hours.toFixed(0)} hours, to ${fmtTimeL(report.window_end, lang)}. ${report.market_is_open ? "The regular session is open, so this is what you would be carrying into the close." : "Everything below is measured over exactly this window."}`, `${report.hours.toFixed(0)} 小时，到 ${fmtTimeL(report.window_end, lang)}。${report.market_is_open ? "常规交易时段正在进行，所以这是你带到收盘的仓位。" : "下面的一切都恰好按这个时间窗口计算。"}`)
+                  ? tx(`${Math.round(report.hours)} ${Math.round(report.hours) === 1 ? "hour" : "hours"}, to ${fmtTimeL(report.window_end, lang)}. ${report.market_is_open ? "The regular session is open, so this is what you would be carrying into the close." : "Everything below is measured over exactly this window."}`, `${report.hours.toFixed(0)} 小时，到 ${fmtTimeL(report.window_end, lang)}。${report.market_is_open ? "常规交易时段正在进行，所以这是你带到收盘的仓位。" : "下面的一切都恰好按这个时间窗口计算。"}`)
                   : undefined
               }
               action={

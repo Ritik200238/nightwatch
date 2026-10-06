@@ -51,7 +51,7 @@ export function SiteHeader() {
     {/* On a phone the brand and the controls share the first row and the four tabs get a row of
         their own, so none is cut off; from sm up it is one row. */}
     <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 md:px-6 lg:px-8">
-      <Link href="/" className="order-1 shrink-0 rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none sm:mr-3">
+      <Link href="/" className="order-1 inline-flex min-h-10 shrink-0 items-center rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none sm:mr-3">
         Nightwatch
       </Link>
       <nav aria-label={tx("Primary", "主导航")} className="order-3 flex w-full basis-full items-center gap-x-1 overflow-x-auto [scrollbar-width:none] sm:order-2 sm:w-auto sm:min-w-0 sm:flex-1 sm:basis-auto [&::-webkit-scrollbar]:hidden">

@@ -14,6 +14,8 @@ const KIND: Record<string, [string, string]> = {
   corporate: ["Company events", "公司事件"], worst: ["Worst case", "最坏情况"], technicals: ["Chart levels", "技术位"], street: ["Analyst views", "分析师观点"], size: ["Size", "仓位大小"],
   history: ["History", "历史"], hedge: ["Hedge", "对冲"], gate: ["Risk gate", "风控关卡"], stop: ["Stop", "止损"], shock: ["Shock", "冲击情景"], regime: ["Market mood", "市场状态"],
   lessons: ["Lessons", "经验教训"], exit: ["Getting out", "退出"], decide: ["Decide", "决策"], data: ["Data", "数据"], why: ["Why", "原因"], trust: ["Trust", "可信度"],
+  model: ["Free-form answer (model)", "自由回答（模型）"], rules: ["Rule-based answer", "规则回答"], ways: ["Ways to change the trade", "调整交易的办法"], unknown_ticker: ["Unknown token", "未知代币"],
+  override: ["Override", "手动覆盖"], base_rate: ["Base rate", "基础概率"], compare: ["Comparison", "对比"], followup: ["Follow-up", "追问"], clarify: ["Clarifying question", "澄清问题"], options: ["Options market", "期权市场"],
   premise: ["Premise check", "前提检查"], now: ["Right now", "此刻"], moments: ["Past moments", "历史时刻"], against: ["Against the trade", "反方观点"], ack: ["Acknowledged", "已确认"], book: ["Whole book", "整体持仓"],
 };
 function kindLabel(k: string, lang: "en" | "zh"): string {
