@@ -1459,7 +1459,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         return asdict(summarise(s.store, spec.spot_symbol))
 
     @app.get("/lessons")
-    def lessons(ticker: str | None = None, limit: int = Query(20, le=200)) -> dict[str, Any]:
+    def lessons(ticker: str | None = None, limit: int = Query(20, ge=1, le=200)) -> dict[str, Any]:
         s = st()
         book = LessonBook(s.journal)
         rows = s.journal._conn.execute(
@@ -1477,7 +1477,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         }
 
     @app.get("/forecasts")
-    def forecasts(ticker: str | None = None, kind: str | None = None, limit: int = Query(100, le=1000)) -> list[dict[str, Any]]:
+    def forecasts(ticker: str | None = None, kind: str | None = None, limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, Any]]:
         s = st()
         df = s.journal.forecasts(ticker=ticker.upper() if ticker else None, kind=kind)
         df = df.tail(limit)

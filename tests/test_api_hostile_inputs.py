@@ -98,3 +98,10 @@ def test_holdings_that_could_not_be_measured_are_said_not_silently_dropped(clien
     book = next(x for x in rep["gate"]["rules"] if x["rule"] == "book_tail")
     assert "no stored history for NVDA" in book["reason"] and "is measured; its limit" not in book["reason"]
     assert rep["portfolio"] is None
+
+
+@pytest.mark.parametrize("path", ["/forecasts?limit=-1", "/forecasts?limit=0", "/lessons?limit=-1", "/lessons?limit=0"])
+def test_a_list_limit_below_one_is_refused_not_read_as_no_limit(client, path):
+    """A negative limit used to mean 'everything': tail(-1) of the whole journal, or SQL LIMIT -1."""
+    assert client.get(path).status_code == 422
+    assert client.get(path.replace("-1", "1").replace("=0", "=1")).status_code == 200
