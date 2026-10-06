@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from nightwatch.decision.ticket import HorizonKind, TradeTicket
+from nightwatch.decision.ticket import MAX_HOLD_HOURS, HorizonKind, TradeTicket
 from nightwatch.stress.scenarios import Side
 
 log = logging.getLogger(__name__)
@@ -425,8 +425,8 @@ def _settle(out: RuleIntent) -> RuleIntent:
 # separator) and "stop -3%" (not a size) are left alone.
 _NEG_SIZE = re.compile(r"(?<![\w.%])[-−]\$?(\d[\d,]*(?:\.\d+)?)\s*([kmbw])?(?![\w%])", re.I)
 _LEVEL_WORD = re.compile(r"(?:stop|target|tp|止损|止盈|目标)\W*$", re.I)
-# The longest hold the history can speak to: past it the window runs out of data.
-MAX_HOLD_HOURS = 720.0
+# The longest hold is defined once, on the ticket (nightwatch.decision.ticket.MAX_HOLD_HOURS).
+
 
 NEGATIVE_SIZE_REPLY = {
     "en": 'A position size cannot be negative. Tell me the size as a positive amount (e.g. "5k") and the side as long or short.',

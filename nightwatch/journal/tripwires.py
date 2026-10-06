@@ -67,6 +67,7 @@ PER_HOUR = 10
 MAX_ARMED = 20  # per visitor, at once
 EXPIRES = timedelta(days=30)
 LABELS = ("stop", "invalidation", "liquidation", "p5", "custom")
+MAX_LEVEL_RATIO = 10.0  # a line further than this from the report's price is almost surely a typo
 
 # fetch(ticker, since_ms) -> [(bar_ts_ms, low, high), ...]; the last may be the live ticker.
 Fetch = Callable[[str, int], Sequence[tuple[int, float, float]]]
@@ -173,6 +174,10 @@ def create(
     ref = _ref_price(report)
     if ref and abs(level - ref) / ref < 1e-6:
         raise BadLevel("that price is the entry price itself")
+    if ref and not ref / MAX_LEVEL_RATIO <= level <= ref * MAX_LEVEL_RATIO:
+        # A dropped or doubled digit (33302 for 333.02) arms a line that can never be reached and
+        # looks like protection; say so instead of accepting it.
+        raise BadLevel(f"that price is more than {MAX_LEVEL_RATIO:g} times away from {ref:,.2f}, the price this report was taken at; check the digits")
     dup = conn.execute(
         "SELECT id FROM tripwires WHERE forecast_id=? AND client=? AND status='armed' AND ABS(level-?)<1e-9", (forecast_id, client, float(level))
     ).fetchone()

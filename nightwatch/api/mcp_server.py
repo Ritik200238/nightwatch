@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Stress-test a trade",
         "description": (
             "Stress-test a proposed position in a tokenized US stock before it is opened. Returns a sized verdict "
-            "(GO, REDUCE, HEDGE, REVIEW or NO_GO), what followed the most similar past moments over the same holding "
+            "(GO, REDUCE_TO, HEDGE, REVIEW or NO_GO), what followed the most similar past moments over the same holding "
             "period, the worst preset stress tests, the live cost of exiting, and the caveats. Use conditions to "
             "compare only against a kind of night, e.g. ['earnings_soon'] - see list_conditions."
         ),
@@ -90,6 +91,12 @@ TOOLS: list[dict[str, Any]] = [
 ]
 
 
+MAX_HOLDINGS = 12
+MAX_BATCH = 10
+MAX_BATCH_ANALYSES = 3
+MAX_TEXT = 4000
+
+
 class ToolError(ValueError):
     """A call the desk understood and could not answer, said to the caller as a result."""
 
@@ -109,10 +116,39 @@ def _text_result(text: str, structured: dict[str, Any] | None = None, *, is_erro
     return out
 
 
+def _number(args: dict[str, Any], key: str, *, required: bool = False, low: float | None = None, high: float | None = None,
+            positive: bool = True, exclusive_high: bool = False) -> float | None:
+    """A numeric argument, or a ToolError a calling model can read and fix.
+
+    JSON numbers and numeric strings are taken (models often quote them); a bool, NaN or
+    infinity is not a number, and a value past the same bounds the HTTP API enforces is
+    refused here rather than reaching the engine."""
+    if args.get(key) is None:
+        if required:
+            raise ToolError(f"{key} is required and must be a number")
+        return None
+    v = args[key]
+    if isinstance(v, bool) or not isinstance(v, int | float | str):
+        raise ToolError(f"{key} must be a number")
+    try:
+        x = float(v)
+    except ValueError as exc:
+        raise ToolError(f"{key} must be a number") from exc
+    if not math.isfinite(x):
+        raise ToolError(f"{key} must be a finite number")
+    if positive and x <= 0:
+        raise ToolError(f"{key} must be greater than 0")
+    if low is not None and x < low:
+        raise ToolError(f"{key} must be at least {low:g}")
+    if high is not None and (x >= high if exclusive_high else x > high):
+        raise ToolError(f"{key} must be at most {high:g}")
+    return x
+
+
 def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
     from nightwatch.analog import lens as lens_mod
     from nightwatch.api.intake import brief
-    from nightwatch.decision.ticket import HorizonKind, TradeTicket
+    from nightwatch.decision.ticket import MAX_HOLD_HOURS, MAX_NOTIONAL, MAX_PRICE, HorizonKind, TradeTicket, stop_side_problem
     from nightwatch.features.snapshot import InsufficientData
     from nightwatch.pipeline.analyze import analyze
     from nightwatch.stress.scenarios import Side
@@ -124,36 +160,51 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
     side = str(args.get("side") or "long").lower()
     if side not in ("long", "short"):
         raise ToolError("side must be 'long' or 'short'")
-    try:
-        notional = float(args["notional_usdt"])
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ToolError("notional_usdt is required and must be a number") from exc
+    notional = _number(args, "notional_usdt", required=True, high=MAX_NOTIONAL)
+    equity = _number(args, "account_equity_usdt", high=MAX_NOTIONAL * 100)
+    stop = _number(args, "stop_price", high=MAX_PRICE, exclusive_high=True)
+    leverage = _number(args, "leverage", low=1.0, high=125.0, positive=False)
     hold = str(args.get("hold") or "next_open")
     if hold not in ("next_open", "window_end", "hours"):
         raise ToolError("hold must be next_open, window_end or hours")
-    hours = args.get("hours")
-    if hold == "hours" and not (isinstance(hours, int | float) and hours > 0):
+    hours = _number(args, "hours", high=MAX_HOLD_HOURS) if args.get("hours") is not None else None
+    if hold == "hours" and hours is None:
         raise ToolError("hours must be a positive number when hold is 'hours'")
+    raw_holdings = args.get("holdings") or []
+    if not isinstance(raw_holdings, list):
+        raise ToolError("holdings must be a list of {ticker, side, notional_usdt}")
+    if len(raw_holdings) > MAX_HOLDINGS:
+        # Dropping the rest would quietly measure a different book than the one described.
+        raise ToolError(f"at most {MAX_HOLDINGS} holdings can be measured; {len(raw_holdings)} were given")
     held: list[tuple[str, str, float]] = []
-    for h in list(args.get("holdings") or [])[:12]:
+    for h in raw_holdings:
         try:
-            ht, hs, hn = str(h["ticker"]).upper().strip(), str(h["side"]).lower(), float(h["notional_usdt"])
-        except (KeyError, TypeError, ValueError) as exc:
+            ht, hs, hn = str(h["ticker"]).upper().strip(), str(h["side"]).lower(), _number(h, "notional_usdt", required=True, high=MAX_NOTIONAL)
+        except (KeyError, TypeError) as exc:
             raise ToolError("each holding needs ticker, side and notional_usdt") from exc
-        if hs not in ("long", "short") or hn <= 0:
+        if hs not in ("long", "short"):
             raise ToolError("each holding needs side long or short and a positive notional_usdt")
         held.append((ht, hs, hn))
+    thesis, invalidation = str(args.get("thesis") or ""), str(args.get("invalidation") or "")
+    if len(thesis) > MAX_TEXT or len(invalidation) > MAX_TEXT:
+        raise ToolError(f"thesis and invalidation are limited to {MAX_TEXT} characters each")
+    conditions = args.get("conditions") or []
+    if not isinstance(conditions, list):
+        raise ToolError("conditions must be a list of names from list_conditions")
     try:
         ticket = TradeTicket(
             ticker=ticker, side=Side(side), open_positions=tuple(held), notional_quote=notional,
-            account_equity_quote=args.get("account_equity_usdt"),
-            horizon_kind=HorizonKind(hold), horizon_hours=float(hours) if hold == "hours" else None,
-            stop_price=args.get("stop_price"), thesis=str(args.get("thesis") or ""), invalidation=str(args.get("invalidation") or ""),
-            leverage=float(args["leverage"]) if args.get("leverage") else None,
-            lenses=tuple(x.name for x in lens_mod.resolve(list(args.get("conditions") or []))),
+            account_equity_quote=equity,
+            horizon_kind=HorizonKind(hold), horizon_hours=hours if hold == "hours" else None,
+            stop_price=stop, thesis=thesis, invalidation=invalidation,
+            leverage=leverage,
+            lenses=tuple(x.name for x in lens_mod.resolve([str(c) for c in conditions])),
         )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
+    problem = stop_side_problem(ticket, state.ctx.latest_spot_close(ticker, None))
+    if problem:
+        raise ToolError(problem)
     try:
         with state.lock:
             report = analyze(state.ctx, ticket, record=False)
@@ -226,6 +277,8 @@ def handle(state: Any, message: Any) -> dict[str, Any] | None:  # noqa: ANN401
     method, msg_id, params = message["method"], message.get("id"), message.get("params") or {}
     if msg_id is None:
         return None  # notifications/initialized and friends need no reply
+    if not isinstance(params, dict):
+        return _err(msg_id, -32602, "params must be an object")
     if method == "initialize":
         asked = params.get("protocolVersion")
         return _ok(msg_id, {
@@ -243,8 +296,11 @@ def handle(state: Any, message: Any) -> dict[str, Any] | None:  # noqa: ANN401
         handler = HANDLERS.get(name)
         if handler is None:
             return _err(msg_id, -32602, f"unknown tool: {name}")
+        arguments = params.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            return _ok(msg_id, _text_result("arguments must be an object", is_error=True))
         try:
-            return _ok(msg_id, handler(state, params.get("arguments") or {}))
+            return _ok(msg_id, handler(state, arguments))
         except ToolError as exc:
             # A refusal the caller's model should read and act on, not a protocol fault.
             return _ok(msg_id, _text_result(str(exc), is_error=True))
@@ -261,6 +317,14 @@ def handle_body(state: Any, raw: bytes) -> tuple[int, Any]:  # noqa: ANN401
     except json.JSONDecodeError:
         return 400, _err(None, -32700, "parse error")
     if isinstance(body, list):
+        if not body:
+            return 400, _err(None, -32600, "invalid request: an empty batch")
+        # The rate limit counts HTTP requests, and one request can carry any number of messages.
+        # Each stress_test is a full analysis that holds the desk's lock for seconds, so a batch
+        # of a thousand of them would be a single "request" that stalls everyone else.
+        heavy = sum(1 for m in body if isinstance(m, dict) and m.get("method") == "tools/call" and isinstance(m.get("params"), dict) and m["params"].get("name") == "stress_test")
+        if len(body) > MAX_BATCH or heavy > MAX_BATCH_ANALYSES:
+            return 400, _err(None, -32600, f"invalid request: a batch holds at most {MAX_BATCH} messages and {MAX_BATCH_ANALYSES} stress_test calls")
         replies = [r for r in (handle(state, m) for m in body) if r is not None]
         return (200, replies) if replies else (202, None)
     reply = handle(state, body)

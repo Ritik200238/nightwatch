@@ -6,6 +6,7 @@ guessed; the gate turns them into REVIEW_REQUIRED so the trader fills them in.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -13,6 +14,13 @@ from enum import Enum
 from nightwatch.analog.outcomes import structural_horizons
 from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import ensure_utc
+
+# The longest hold the history can speak to: past it the window runs out of data, and an
+# absurd one (1e9 hours) overflows the clock arithmetic.
+MAX_HOLD_HOURS = 720.0
+# Bounds every entry point (HTTP API, MCP) holds a request to, so they refuse the same things.
+MAX_NOTIONAL = 10_000_000
+MAX_PRICE = 1e9
 
 
 class HorizonKind(str, Enum):
@@ -54,12 +62,14 @@ class TradeTicket:
     extra: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.notional_quote <= 0:
+        if not math.isfinite(self.notional_quote) or self.notional_quote <= 0:
             raise ValueError("notional must be positive")
-        if self.account_equity_quote is not None and self.account_equity_quote <= 0:
+        if self.account_equity_quote is not None and (not math.isfinite(self.account_equity_quote) or self.account_equity_quote <= 0):
             raise ValueError("account equity must be positive")
         if self.horizon_kind == HorizonKind.HOURS and (self.horizon_hours is None or self.horizon_hours <= 0):
             raise ValueError("horizon_hours required for an explicit-hours horizon")
+        if self.horizon_kind == HorizonKind.HOURS and self.horizon_hours > MAX_HOLD_HOURS:
+            raise ValueError(f"a hold can be at most {MAX_HOLD_HOURS:g} hours (30 days)")
         if self.stop_offset_pct is not None and not 0 < abs(self.stop_offset_pct) < 100:
             raise ValueError("a stop distance must be between 0% and 100%")
         if self.leverage is not None and not 1.0 <= self.leverage <= 125.0:
@@ -102,3 +112,17 @@ class TradeTicket:
         if self.stop_price is None:
             return None
         return self.stop_price < entry if self.side == Side.LONG else self.stop_price > entry
+
+
+def stop_side_problem(ticket: TradeTicket, ref_price: float | None) -> str | None:
+    """One sentence when the stop sits on the wrong side of the price, else None.
+
+    A stop that is above a long (or below a short) is a typo, not a plan; every entry point
+    says so at once instead of after an analysis that cannot use it."""
+    if not ticket.stop_price:
+        return None
+    ref = ticket.entry_price or ref_price
+    if ref and ticket.stop_is_on_correct_side(ref) is False:
+        way, rel = ("long", "below") if ticket.closing_long else ("short", "above")
+        return f"A stop for a {way} must be {rel} the current price ({ref:,.2f}). You entered {ticket.stop_price:,.2f}."
+    return None

@@ -57,6 +57,10 @@ def test_a_trade_streams_its_stages_then_the_same_payload_as_chat(client):
         assert s["en"] and s["zh"]
     done = got[-1][1]
     assert done["report"]["ticket"]["ticker"] == "TSLA"
+    # A step label is shown to the reader, so it carries the verdict as words, never the code
+    # name ("NO_GO"), and the Chinese label is in Chinese.
+    decision = next(s for s in steps if s["stage"] == "decision")
+    assert "_" not in decision["en"] and not any(c in decision["zh"] for c in "_ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     # The numbers in the labels are the stage's own.
     stress = next(s for s in steps if s["stage"] == "stress")
     assert f"Ran {len(done['report']['stress']['presets'])} stress presets" in stress["en"]

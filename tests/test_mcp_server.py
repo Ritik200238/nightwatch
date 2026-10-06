@@ -112,3 +112,64 @@ def test_holdings_give_the_agent_the_whole_book(state):
     assert b["limit"] == 4_000.0 and isinstance(b["crash_replays"], list)
     bad = rpc(state, "tools/call", {"name": "stress_test", "arguments": {"ticker": "TSLA", "side": "long", "notional_usdt": 1, "holdings": [{"ticker": "X", "side": "up", "notional_usdt": 5}]}})["result"]
     assert bad["isError"] is True
+
+
+def _call(state, **arguments):  # noqa: ANN001, ANN202
+    return rpc(state, "tools/call", {"name": "stress_test", "arguments": {"ticker": "TSLA", "side": "long", "notional_usdt": 20000, **arguments}})["result"]
+
+
+@pytest.mark.parametrize("bad", [
+    {"notional_usdt": 1e30}, {"notional_usdt": float("nan")}, {"notional_usdt": True}, {"notional_usdt": [1]}, {"notional_usdt": -5},
+    {"account_equity_usdt": float("inf")}, {"account_equity_usdt": {"a": 1}}, {"account_equity_usdt": 1e30},
+    {"hold": "hours", "hours": 1e9}, {"hold": "hours", "hours": -1}, {"hold": "hours"},
+    {"stop_price": -5}, {"stop_price": 1e300}, {"stop_price": "abc"},
+    {"leverage": 0}, {"leverage": 500}, {"leverage": "x"},
+    {"thesis": "x" * 5000}, {"conditions": "earnings_soon"},
+    {"holdings": [{"ticker": "NVDA", "side": "long", "notional_usdt": 1000}] * 13},
+    {"holdings": [{"ticker": "NVDA", "side": "up", "notional_usdt": 1000}]}, {"holdings": [{"ticker": "NVDA", "side": "long", "notional_usdt": 1e30}]},
+    {"holdings": "NVDA"},
+])
+def test_a_bad_argument_is_a_readable_refusal_not_a_crash(state, bad):
+    """Every one of these used to be either accepted unchecked or answered with the generic
+    'the desk failed' line, which a calling model cannot act on."""
+    r = _call(state, **bad)
+    assert r["isError"] is True
+    assert "failed to answer" not in r["content"][0]["text"], r
+
+
+def test_a_stop_on_the_wrong_side_is_refused_like_the_http_api_does(state):
+    r = _call(state, stop_price=1e8)
+    assert r["isError"] and "stop for a long must be below the current price" in r["content"][0]["text"]
+
+
+def test_numeric_strings_are_taken_because_models_quote_numbers(state):
+    r = _call(state, notional_usdt="20000", account_equity_usdt="200000")
+    assert r["isError"] is False and r["structuredContent"]["notional_usdt"] == 20000.0
+
+
+def test_params_that_are_not_an_object_are_an_invalid_params_error_not_a_500(state):
+    reply = mcp_server.handle(state, {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": ["x"]})
+    assert reply["error"]["code"] == -32602
+    reply = mcp_server.handle(state, {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "stress_test", "arguments": ["x"]}})
+    assert reply["result"]["isError"] is True
+
+
+def test_an_empty_batch_is_an_invalid_request():
+    status, reply = mcp_server.handle_body(None, b"[]")
+    assert status == 400 and reply["error"]["code"] == -32600
+
+
+def test_a_batch_cannot_smuggle_a_pile_of_analyses_past_the_rate_limit():
+    """The limiter counts HTTP requests; a batch of stress_test calls is one request holding the
+    desk's lock for as long as it takes to run them all."""
+    import json
+
+    call = {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "stress_test", "arguments": {"ticker": "TSLA", "side": "long", "notional_usdt": 1000}}}
+    too_many_analyses = json.dumps([{**call, "id": i} for i in range(mcp_server.MAX_BATCH_ANALYSES + 1)]).encode()
+    status, reply = mcp_server.handle_body(None, too_many_analyses)
+    assert status == 400 and reply["error"]["code"] == -32600
+    too_long = json.dumps([{"jsonrpc": "2.0", "id": i, "method": "ping"} for i in range(mcp_server.MAX_BATCH + 1)]).encode()
+    assert mcp_server.handle_body(None, too_long)[0] == 400
+    ok = json.dumps([{"jsonrpc": "2.0", "id": i, "method": "ping"} for i in range(mcp_server.MAX_BATCH)]).encode()
+    status, replies = mcp_server.handle_body(None, ok)
+    assert status == 200 and len(replies) == mcp_server.MAX_BATCH
