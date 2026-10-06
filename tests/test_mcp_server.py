@@ -157,3 +157,19 @@ def test_params_that_are_not_an_object_are_an_invalid_params_error_not_a_500(sta
 def test_an_empty_batch_is_an_invalid_request():
     status, reply = mcp_server.handle_body(None, b"[]")
     assert status == 400 and reply["error"]["code"] == -32600
+
+
+def test_a_batch_cannot_smuggle_a_pile_of_analyses_past_the_rate_limit():
+    """The limiter counts HTTP requests; a batch of stress_test calls is one request holding the
+    desk's lock for as long as it takes to run them all."""
+    import json
+
+    call = {"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "stress_test", "arguments": {"ticker": "TSLA", "side": "long", "notional_usdt": 1000}}}
+    too_many_analyses = json.dumps([{**call, "id": i} for i in range(mcp_server.MAX_BATCH_ANALYSES + 1)]).encode()
+    status, reply = mcp_server.handle_body(None, too_many_analyses)
+    assert status == 400 and reply["error"]["code"] == -32600
+    too_long = json.dumps([{"jsonrpc": "2.0", "id": i, "method": "ping"} for i in range(mcp_server.MAX_BATCH + 1)]).encode()
+    assert mcp_server.handle_body(None, too_long)[0] == 400
+    ok = json.dumps([{"jsonrpc": "2.0", "id": i, "method": "ping"} for i in range(mcp_server.MAX_BATCH)]).encode()
+    status, replies = mcp_server.handle_body(None, ok)
+    assert status == 200 and len(replies) == mcp_server.MAX_BATCH

@@ -92,6 +92,8 @@ TOOLS: list[dict[str, Any]] = [
 
 
 MAX_HOLDINGS = 12
+MAX_BATCH = 10
+MAX_BATCH_ANALYSES = 3
 MAX_TEXT = 4000
 
 
@@ -317,6 +319,12 @@ def handle_body(state: Any, raw: bytes) -> tuple[int, Any]:  # noqa: ANN401
     if isinstance(body, list):
         if not body:
             return 400, _err(None, -32600, "invalid request: an empty batch")
+        # The rate limit counts HTTP requests, and one request can carry any number of messages.
+        # Each stress_test is a full analysis that holds the desk's lock for seconds, so a batch
+        # of a thousand of them would be a single "request" that stalls everyone else.
+        heavy = sum(1 for m in body if isinstance(m, dict) and m.get("method") == "tools/call" and isinstance(m.get("params"), dict) and m["params"].get("name") == "stress_test")
+        if len(body) > MAX_BATCH or heavy > MAX_BATCH_ANALYSES:
+            return 400, _err(None, -32600, f"invalid request: a batch holds at most {MAX_BATCH} messages and {MAX_BATCH_ANALYSES} stress_test calls")
         replies = [r for r in (handle(state, m) for m in body) if r is not None]
         return (200, replies) if replies else (202, None)
     reply = handle(state, body)
