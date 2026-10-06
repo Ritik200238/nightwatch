@@ -1308,6 +1308,7 @@ export interface ShockCard {
   p5_quote: number | null;
   worst_quote: number | null;
   worst_name: string | null;
+  worst_name_zh?: string | null;
   past: { p5_move_pct: number | null; p1_move_pct: number | null; windows: number | null; beyond: "1_in_20" | "1_in_100" | null } | null;
 }
 export interface CompareRow {

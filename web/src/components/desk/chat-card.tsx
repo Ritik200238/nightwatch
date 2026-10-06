@@ -44,7 +44,7 @@ function Shock({ c }: { c: ShockCard }) {
   const bars: { label: string; value: number | null; tone: string }[] = [
     { label: tx(`At a ${Math.abs(c.move_pct).toLocaleString("en-US")}% move ${c.move_pct < 0 ? "down" : "up"}`, `${c.move_pct < 0 ? "下跌" : "上涨"} ${Math.abs(c.move_pct).toLocaleString("en-US")}% 时`), value: c.pnl_quote, tone: loss ? "bg-status-critical" : "bg-status-good" },
     { label: tx("1-in-20 loss (history)", "二十分之一的坏情况（历史）"), value: c.p5_quote, tone: "bg-status-warning" },
-    { label: tx(c.worst_name ? `Worst stress: ${c.worst_name}` : "Worst stress", c.worst_name ? `最坏压力情景：${c.worst_name}` : "最坏压力情景"), value: c.worst_quote, tone: "bg-status-critical" },
+    { label: tx(c.worst_name ? `Worst stress: ${c.worst_name}` : "Worst stress", c.worst_name ? `最坏压力情景：${c.worst_name_zh ?? c.worst_name}` : "最坏压力情景"), value: c.worst_quote, tone: "bg-status-critical" },
   ];
   const shown = bars.filter((b) => b.value != null);
   const max = Math.max(1, ...shown.map((b) => Math.abs(b.value as number)));

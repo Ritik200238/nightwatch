@@ -22,13 +22,19 @@ from nightwatch.api import followup
 log = logging.getLogger("nightwatch.cards")
 
 
-def _worst_stress(r: dict) -> tuple[float | None, str | None]:
-    """The worst priced stress preset by money, and its name."""
+def _worst_row(r: dict) -> tuple[dict, dict] | None:
+    """The worst priced stress preset by money, with its impact."""
     st = r.get("stress") or {}
     rows = [(p, i) for p, i in zip(st.get("presets") or [], st.get("impacts") or [], strict=False) if i.get("total_pnl_quote") is not None]
-    if not rows:
+    return min(rows, key=lambda x: x[1]["total_pnl_quote"]) if rows else None
+
+
+def _worst_stress(r: dict) -> tuple[float | None, str | None]:
+    """The worst priced stress preset by money, and its name."""
+    row = _worst_row(r)
+    if row is None:
         return None, None
-    p, i = min(rows, key=lambda x: x[1]["total_pnl_quote"])
+    p, i = row
     worst = float(i["total_pnl_quote"])
     lev = r.get("leverage") or {}
     margin = lev.get("margin_quote") if lev.get("liquidation_distance_pct") is not None else None
@@ -65,6 +71,7 @@ def shock_card(r: dict, question: str) -> dict | None:
     pnl_pct = move if long_ else -move  # the position's
     p5_pct, p5_quote = followup._loss_at_size(r)
     worst, worst_name = _worst_stress(r)
+    worst_name_zh = ((_worst_row(r) or ({}, {}))[0]).get("name_zh") or None
     presets = {p["id"]: p for p in ((r.get("stress") or {}).get("presets") or [])}
     p5, p1 = presets.get("closed_window_gap_p5"), presets.get("closed_window_gap_p1")
     past = None
@@ -80,7 +87,7 @@ def shock_card(r: dict, question: str) -> dict | None:
     return {
         "kind": "shock", "ticker": t.get("ticker"), "side": "long" if long_ else "short", "size": notional,
         "move_pct": move, "pnl_pct": pnl_pct, "pnl_quote": notional * pnl_pct / 100.0,
-        "p5_pct": p5_pct, "p5_quote": p5_quote, "worst_quote": worst, "worst_name": worst_name, "past": past,
+        "p5_pct": p5_pct, "p5_quote": p5_quote, "worst_quote": worst, "worst_name": worst_name, "worst_name_zh": worst_name_zh, "past": past,
     }
 
 
