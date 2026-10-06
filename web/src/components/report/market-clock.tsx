@@ -44,7 +44,10 @@ export function MarketClock({ report, lang = "en" }: { report: Report; lang?: La
   }, []);
   if (!tl || !tl.sessions.length) return null;
 
-  const t0 = Date.parse(tl.as_of);
+  // A scheduled weekend (asked on a Tuesday) starts at Friday's close, not now.
+  const tAnalysed = Date.parse(tl.as_of);
+  const t0 = tl.hold_start ? Date.parse(tl.hold_start) : tAnalysed;
+  const deferred = t0 > tAnalysed;
   const t1 = Date.parse(tl.hold_end);
   const span = t1 - t0;
   if (!(span > 0)) return null;
@@ -105,13 +108,18 @@ export function MarketClock({ report, lang = "en" }: { report: Report; lang?: La
         ))}
       </div>
       <div className="relative mt-1 h-4 text-[11px] text-muted-foreground">
-        <span className="absolute left-0">{L("analysed", "分析时")}</span>
+        <span className="absolute left-0">{deferred ? L("hold starts", "持仓开始") : L("analysed", "分析时")}</span>
         <span className="absolute right-0">{L("hold ends", "持仓结束")}</span>
       </div>
       <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-muted-foreground">
         <li>
-          <span className="tabular font-medium text-foreground">{etLabel(t0, lang)} ET</span> {L("analysed", "分析时")}
+          <span className="tabular font-medium text-foreground">{etLabel(tAnalysed, lang)} ET</span> {L("analysed", "分析时")}
         </li>
+        {deferred ? (
+          <li>
+            <span className="tabular font-medium text-foreground">{etLabel(t0, lang)} ET</span> {L("hold starts", "持仓开始")}
+          </li>
+        ) : null}
         {marks.map((m) => (
           <li key={`l-${m.kind}-${m.at}`}>
             <span className="tabular font-medium text-foreground">{etLabel(m.at, lang)} ET</span> {m.kind === "open" ? L("US open", "美股开盘") : L("US close", "美股收盘")}

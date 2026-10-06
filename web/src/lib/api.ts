@@ -1274,7 +1274,7 @@ export interface Report {
   /** Who turned the sentence into a ticket: "rules" when no model was needed. Chat reports only. */
   read_by?: { parsed_by: string; provider?: string | null; model?: string | null } | null;
   /** US regular sessions around the hold (NYSE calendar), for the market-clock strip. */
-  timeline?: { as_of: string; hold_end: string; market_open_at_as_of: boolean; next_open: string | null; sessions: { open: string; close: string }[] } | null;
+  timeline?: { as_of: string; hold_start?: string; hold_end: string; market_open_at_as_of: boolean; next_open: string | null; sessions: { open: string; close: string }[] } | null;
   /** The chained journal receipt for this verdict; see /verify. */
   receipt?: string | null;
   /** Where each headline number came from: live Bitget, history, assumed or AI. */
