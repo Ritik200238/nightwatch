@@ -653,3 +653,15 @@ def test_a_negative_size_after_a_finished_trade_is_asked_about_not_ignored():
     # A later, valid size clears it.
     ok = read_conversation([*msgs, {"role": "assistant", "content": "x"}, {"role": "user", "content": "make it 5k"}], TICKERS)
     assert ok.kind == "analyze" and ok.notional_quote == 5000
+
+
+@pytest.mark.parametrize("text,invalid", [
+    ("周末做多特斯拉 2万U，账户20万，止损340，理由：财报行情，错了如果收盘跌破340", "收盘跌破340"),
+    ("做多 TSLA 2万U，理由：财报行情，跌破340就错了", "跌破340"),
+    ("做多 TSLA 2万U，因为财报，失效条件：收盘跌破340", "收盘跌破340"),
+    ("做多 TSLA 2万U，因为财报，如果收盘跌破340说明我错了", "收盘跌破340"),
+])
+def test_chinese_wrong_if_phrasings_are_all_read(text, invalid):
+    got = p(text)
+    assert got.invalidation == invalid, got
+    assert got.notional_quote == 20_000
