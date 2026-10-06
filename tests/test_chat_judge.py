@@ -343,3 +343,12 @@ def test_a_model_reading_cannot_turn_margin_into_an_account_or_typed_words_into_
     because = intake.parse_message("long TSLA 5k because momentum", TICKERS)
     kept, none = _guard_model_reading(model.model_copy(update={"thesis": "momentum"}), because, None)
     assert kept.thesis == "momentum" and none is None
+
+
+def test_the_model_copying_the_wrong_if_lead_in_is_cut_back_to_the_rules_reading():
+    from nightwatch.api.llm import ParsedIntent, _guard_model_reading
+
+    rules = intake.parse_message("long 8k NVDA overnight, account 100k, because chips, wrong if it closes below 230", TICKERS)
+    model = ParsedIntent(kind="analyze", ticker="NVDA", side="long", notional_quote=8000, thesis="chips", invalidation="wrong if it closes below 230", missing_fields=[], reply="")
+    got, _ = _guard_model_reading(model, rules, None)
+    assert got.invalidation == "it closes below 230" and got.thesis == "chips"
