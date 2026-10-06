@@ -217,7 +217,7 @@ export default function DeskPage() {
         ) : null}
         {report || heroUsed ? <ScenarioChips disabled={busy} onPick={runScenario} onContrast={runContrastDemo} /> : null}
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
-          <TabsList className="w-full">
+          <TabsList className="w-full max-sm:h-11!">
             <TabsTrigger value="form" className="flex-1">
               {tx("Ticket", "表单")}
             </TabsTrigger>
