@@ -406,7 +406,7 @@ function Assumptions({ report, openAll, lang }: { report: Report; openAll?: bool
         {items.map((a, i) => (
           <li key={`${a.topic}-${i}`} className="flex gap-2">
             <span className={`mt-0.5 shrink-0 text-xs font-medium ${a.kind === "caveat" ? "text-status-warning" : "text-muted-foreground"}`}>{a.kind === "caveat" ? "!" : "–"}</span>
-            <span className={a.kind === "caveat" ? "text-foreground" : "text-muted-foreground"}>{a.text}</span>
+            <span className={a.kind === "caveat" ? "text-foreground" : "text-muted-foreground"}>{lang === "zh" && a.text_zh ? a.text_zh : a.text}</span>
           </li>
         ))}
       </ul>
@@ -2275,7 +2275,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                   <TableRow key={p.id}>
                     <TableCell>
                       <span className="font-medium">{presetName(lang, p.name, p.name_zh)}</span>
-                      <span className="block text-[13px] text-muted-foreground">{p.probability_note}</span>
+                      <span className="block text-[13px] text-muted-foreground">{lang === "zh" && p.probability_note_zh ? p.probability_note_zh : p.probability_note}</span>
                     </TableCell>
                     <TableCell>
                       <Pill tone={sevTone(p.severity)}>{lang === "zh" ? (STRINGS.zh.severity[p.severity] ?? p.severity) : p.severity}</Pill>

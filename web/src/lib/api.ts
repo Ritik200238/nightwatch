@@ -539,6 +539,7 @@ export interface Scenario {
   halt_hours: number;
   funding_rate: number;
   probability_note: string;
+  probability_note_zh?: string;
   calibration: Record<string, number | string>;
 }
 
@@ -1265,7 +1266,7 @@ export interface Report {
   /** A leveraged ticket's liquidation price and how often history reached it. */
   leverage?: LeverageView | null;
   /** What the verdict assumes, written by rules from the report's own fields. */
-  assumptions?: { topic: string; text: string; kind: "fact" | "caveat" }[];
+  assumptions?: { topic: string; text: string; text_zh?: string; kind: "fact" | "caveat" }[];
   /** How this trade loses money, worst first: trigger, mechanism, cost and how often. */
   failure_modes?: FailureMode[];
   /** Where the stated reason depends on an event the data can date, and does not match. */

@@ -939,6 +939,7 @@ def _add_zh_names(out: dict[str, Any]) -> None:
     so the report page shows the same words the briefing does."""
     try:
         from nightwatch.api.intake import FAILURE_ZH, preset_zh
+        from nightwatch.decision.zh import assumption_zh, note_zh
 
         for m in out.get("failure_modes") or []:
             if isinstance(m, dict) and m.get("key") in FAILURE_ZH:
@@ -946,6 +947,12 @@ def _add_zh_names(out: dict[str, Any]) -> None:
         for p in ((out.get("stress") or {}).get("presets")) or []:
             if isinstance(p, dict) and p.get("id") and p.get("name"):
                 p["name_zh"] = preset_zh(p["id"], p["name"])
+                # The "how often" line under each preset in the stress table; absent when it is not a known shape.
+                if p.get("probability_note") and (zh := note_zh(p["probability_note"])):
+                    p["probability_note_zh"] = zh
+        for a in out.get("assumptions") or []:
+            if isinstance(a, dict) and a.get("text") and (zh := assumption_zh(a["text"])):
+                a["text_zh"] = zh
     except Exception:  # noqa: BLE001 - a translation must never break a report
         log.exception("zh names failed")
 
