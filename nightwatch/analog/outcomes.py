@@ -83,15 +83,20 @@ def hours_through_weekend(ts: datetime) -> float:
     Sunday the two agree. Holidays come from the session calendar, so a long weekend runs
     to Tuesday.
     """
+    from nightwatch.time_utils import ET
+
     now = ensure_utc(ts)
-    days_to_saturday = (5 - now.weekday()) % 7
-    if now.weekday() == 6:  # Sunday: this weekend is already under way
+    # The weekend is a New York one: Sunday 21:00 ET is already Monday in UTC, and read in
+    # UTC it sent "through the weekend" to the open a full week later (about 180 hours).
+    local = now.astimezone(ET)
+    days_to_saturday = (5 - local.weekday()) % 7
+    if local.weekday() == 6:  # Sunday: this weekend is already under way
         days_to_saturday = -1
-    saturday = (now + timedelta(days=days_to_saturday)).date()
+    saturday = (local + timedelta(days=days_to_saturday)).date()
     at = now
     for _ in range(10):  # a week of sessions is more than enough to get past a weekend
         opens = at + timedelta(hours=structural_horizons(at)["next_open"])
-        if opens.date() > saturday:
+        if opens.astimezone(ET).date() > saturday:
             return (opens - now).total_seconds() / 3600.0
         at = opens + timedelta(minutes=5)  # inside that session, so the next open is the following one
     return structural_horizons(now)["next_open"]

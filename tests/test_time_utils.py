@@ -176,3 +176,24 @@ def test_floor_to_interval():
 def test_naive_datetime_rejected():
     with pytest.raises(ValueError):
         classify_session(datetime(2026, 9, 10, 12, 0))
+
+
+def test_through_the_weekend_reads_new_york_time_not_utc():
+    """Sunday 21:00 New York is already Monday in UTC. Read in UTC, 'through the weekend'
+    looked for the first open after the weekend a week away and answered about 180 hours
+    instead of the 12.5 hours to Monday's open."""
+    from datetime import UTC, datetime
+
+    from nightwatch.analog.outcomes import hours_through_weekend, structural_horizons
+
+    sunday_9pm_et = datetime(2026, 10, 5, 1, 0, tzinfo=UTC)  # EDT: 21:00 Sunday
+    assert hours_through_weekend(sunday_9pm_et) == pytest.approx(12.5)
+    assert hours_through_weekend(sunday_9pm_et) == pytest.approx(structural_horizons(sunday_9pm_et)["next_open"])
+    # Winter (EST) edge: Sunday 23:30 ET is Monday 04:30 UTC.
+    sunday_late_est = datetime(2026, 11, 30, 4, 30, tzinfo=UTC)
+    assert hours_through_weekend(sunday_late_est) == pytest.approx(structural_horizons(sunday_late_est)["next_open"])
+    # Thursday: the open after the coming weekend, Monday 13:30 UTC.
+    thursday = datetime(2026, 10, 8, 15, 0, tzinfo=UTC)
+    assert hours_through_weekend(thursday) == pytest.approx(94.5)
+    # Friday night ET is Saturday in UTC and was already right.
+    assert hours_through_weekend(datetime(2026, 10, 10, 2, 0, tzinfo=UTC)) == pytest.approx(59.5)
