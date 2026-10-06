@@ -129,15 +129,15 @@ orders. Nightwatch never places orders.
 
 ### 3. Validation data and key metrics
 
-**Current figures, as of 5 Oct 2026** (live; recomputed from the journal and checked
+**Current figures, as of 6 Oct 2026** (live; recomputed from the journal and checked
 against the public endpoints that day):
 
-* Receipts: `/api/verify` recomputes 1,190 chained verdicts with no break; 6 of 6 daily
+* Receipts: `/api/verify` recomputes 1,460 chained verdicts with no break; 7 of 7 daily
   anchors are confirmed in Bitcoin.
-* Scored out of sample: 2,818 matured forecasts. The raw one-in-twenty loss (the 5th
-  percentile) was breached 7.4% of the time (red band); with tail factors fitted only on
-  earlier forecasts, 4.8% on 2,774 evaluated (green band).
-* Misses, published at `/wrong`: 124 of 2,301 replays and 8 of 473 live tickets went past the line.
+* Scored out of sample: 3,369 matured forecasts (140 independent nights; resampling whole nights the interval is 2.3% to 4.9%). The raw one-in-twenty loss (the 5th
+  percentile) was breached 4.8% of the time (green band); with tail factors fitted only on
+  earlier forecasts, 3.5% on 3,299 evaluated (green band).
+* Misses, published at `/wrong`: 104 of 2,131 replays and 12 of 1,168 live tickets (6 distinct events) went past the line.
 * Studies: 11 studies (9 formal tests with a p-value, 2 measurements), 5 no, 3 yes, 3 undecided. After correcting for the nine tests asked at once
   (Benjamini-Hochberg, 5%), 1 of the 3 yes survives (a model reading an SEC filing picks
   the ones that move the price, q = 0.004). No directional edge.

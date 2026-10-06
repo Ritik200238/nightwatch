@@ -122,16 +122,18 @@ sources in total**, every one live, every one listed with its real freshness on
 
 ## The proof (recompute it yourself — nothing here is a screenshot of a claim)
 
-Figures pulled live on 6 Oct 2026, from the production API, seconds before writing this:
+Figures as of 6 Oct 2026. Pulled live from the production API — this whole block is
+rewritten by a script (`nightwatch proof-sync`) that reads the same endpoints linked
+below, so it can't drift from what the site shows.
 
 | Claim | The real number, right now | Check it yourself |
 |---|---:|---|
-| Every live verdict is on the record, unedited | **1,441 receipts checked, 0 broken** | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the whole hash chain live |
-| Anchored to something we can't fake | **7 of 7 days anchored in Bitcoin** | [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) — verify any `.ots` proof at opentimestamps.org |
-| The "1-in-20 bad case" line roughly holds | **5.47% observed vs 5% target → amber** (within the wider of our two bands, not a clean green) | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), 3,546 scored forecasts, recomputed live |
-| We publish our own misses | **12 of 1,154 live tickets (1.04%) went past the line** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
-| We test the method itself, not just the trades | **12 internal studies: 4 yes, 5 no, 3 unclear** | [`/studies`](https://nightwatch-gules.vercel.app/studies), corrected for multiple testing |
-| Universe coverage | **24 tokenized US stocks, all with live data** | [`/api/universe`](https://nightwatch-gules.vercel.app/api/universe) |
+| Every live verdict is on the record, unedited | **(1,460 checked, no break, as of 6 Oct 2026)** | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the whole hash chain live |
+| Anchored to something we can't fake | **(7 of 7 in Bitcoin; verify a `.ots` proof at opentimestamps.org)** | [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) |
+| The "1-in-20 bad case" line roughly holds | **3,369 scored forecasts (140 independent nights; resampling whole nights the interval is 2.3% to 4.9%), raw breach rate 4.8% (green), 3.5% with factors fitted only on earlier forecasts (green), as of 6 Oct 2026** | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed live |
+| We publish our own misses | **104 of 2,131 replays and 12 of 1,168 live tickets (6 distinct events) went past the line (as of 6 Oct 2026)** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
+| We test the method itself, not just the trades | **11 internal studies: 3 yes, 5 no, 3 unclear** (a 12th study, against a random-hours baseline, is built and merged but has not yet run on production) | [`/studies`](https://nightwatch-gules.vercel.app/studies), corrected for multiple testing |
+| Universe coverage | **24 tokenized US stocks live now** (a 112-ticker expansion is built and tested, not yet deployed) | [`/api/universe`](https://nightwatch-gules.vercel.app/api/universe) |
 | Not verified by us | real-trader adoption; directional edge (measured: **none**) | — said plainly, not hidden |
 
 <p align="center">
