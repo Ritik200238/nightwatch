@@ -921,6 +921,7 @@ class AnalysisReport:
         out = _serialise(self)
         _add_zh_names(out)
         _add_provenance(out)
+        _add_report_twins(out)
         return out
 
 
@@ -932,6 +933,13 @@ def _add_provenance(out: dict[str, Any]) -> None:
         out["provenance"] = build(out)
     except Exception:  # noqa: BLE001 - a label must never break a report
         log.exception("provenance failed")
+
+
+def _add_report_twins(out: dict[str, Any]) -> None:
+    """The Chinese twins of the report's server-written sentences (nightwatch.decision.report_zh)."""
+    from nightwatch.decision import report_zh
+
+    report_zh.add_twins(out)
 
 
 def _add_zh_names(out: dict[str, Any]) -> None:

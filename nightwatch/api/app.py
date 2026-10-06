@@ -1048,6 +1048,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         leaves 1,752 hours across the universe and 96 in one token's own past.
         """
         from nightwatch.analog import lens as lens_mod
+        from nightwatch.decision import report_zh
 
         s = st()
         cfg = s.ctx.analog_config
@@ -1055,7 +1056,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # past and widens to the pooled history. The interface shows the same number so
         # the cost of a narrow question is visible before it is asked.
         out: dict[str, Any] = {
-            "lenses": lens_mod.menu(),
+            "lenses": [{**x, **({"label_zh": report_zh.LENS_ZH[x["name"]][0], "definition_zh": report_zh.LENS_ZH[x["name"]][1]} if x["name"] in report_zh.LENS_ZH else {})} for x in lens_mod.menu()],
             "counts": {},
             "floor_hours": int(cfg.min_matches * cfg.min_separation_h),
         }
