@@ -59,7 +59,7 @@ def test_the_tools_run_in_order_and_each_step_is_recorded(monkeypatch):
     assert run.status == "done"
     assert [s["tool"] for s in run.steps] == ["explain", "safest_ways"]
     assert [s["n"] for s in run.steps] == [1, 2]
-    assert set(run.steps[0]) == {"n", "thought", "tool", "args", "result_summary", "seconds"}
+    assert set(run.steps[0]) == {"n", "thought", "tool", "args", "result_summary", "seconds", "status"}
     assert "2,147" in run.steps[0]["result_summary"]
     assert run.final["summary"] == "Worst case is 2,147 USDT [explain]."
     assert run.final["findings"] == ["Half size is 10,000 USDT [safest ways]."]
@@ -107,14 +107,15 @@ def test_the_model_cannot_change_the_verdict():
 def test_an_unknown_tool_or_bad_args_become_a_result_not_a_crash():
     run = _run([_call("delete_everything"), _call("rerun", {"leverage": "lots"}), DONE])
     assert run.status == "done"
-    assert run.steps[0]["result_summary"].startswith("unknown tool")
-    assert "no valid change" in run.steps[1]["result_summary"]
+    assert [x["status"] for x in run.steps] == ["skipped", "skipped"]
+    assert all(x["result_summary"] == agent.skip_text("failed", "en") for x in run.steps)
 
 
 def test_a_failure_keeps_the_steps_so_far(monkeypatch):
     monkeypatch.setitem(agent.TOOLS, "explain", lambda s, r, a: "ok")
     run = _run([_call("explain", {"kind": "why"}), RuntimeError("gateway down")])
-    assert run.status == "failed" and len(run.steps) == 1 and "gateway down" in run.error
+    assert run.status == "failed" and len(run.steps) == 1
+    assert "gateway down" not in run.error and run.error == agent._FAILED_RUN[0]  # never the raw exception
 
 
 def test_two_unusable_replies_fail_the_run():
@@ -246,7 +247,10 @@ def test_a_slow_tool_ends_in_a_partial_conclusion_not_a_long_wait(monkeypatch):
     assert time.time() - t0 < 4
     assert run.status == "done" and run.final and run.final.get("partial") is True
     assert "1 check" in run.final["summary"]
-    assert run.steps[1]["result_summary"].startswith("error")
+    assert run.steps[1]["status"] == "skipped"
+    assert run.steps[1]["result_summary"] == agent.skip_text("slow", "en")
+    assert "error" not in run.steps[1]["result_summary"] and "30 s" not in run.steps[1]["result_summary"]
+    assert "1 check completed and 1 skipped" in run.final["coverage"]
 
 
 def test_the_hard_stop_returns_what_was_found(monkeypatch):
@@ -263,3 +267,56 @@ def test_verdict_codes_are_words_in_the_conclusion():
     final, _ = agent._final({"summary": "The desk says NO_GO.", "findings": ["REDUCE_TO the half."], "verdict_restated": ""}, REPORT, "", "en")
     assert "NO_GO" not in final["summary"] and "NO GO" in final["summary"]
     assert "REDUCE TO" in final["findings"][0] or final["findings"] == []
+
+
+def test_a_skipped_step_is_friendly_in_both_languages_and_feeds_no_numbers(monkeypatch):
+    """The trader never reads 'error: no answer within 30 s', and a failed step's text (which
+    may hold a number) never reaches the conclusion's fact sheet."""
+    monkeypatch.setattr(agent, "TOOL_TIMEOUT_S", 1.0)
+    monkeypatch.setitem(agent.TOOLS, "explain", lambda s, r, a: time.sleep(3) or "Loss is 9,999 USDT.")
+    for lang, word in (("en", "took too long"), ("zh", "耗时过长")):
+        run = agent.Run(lang=lang)
+        prov = Script([_call("explain", {"kind": "why"}), {"final": {"summary": "It would lose 9,999 USDT [explain].", "findings": [], "verdict_restated": ""}}])
+        agent.run_agent(prov, FakeState(), REPORT, run)
+        assert run.steps[0]["status"] == "skipped" and word in run.steps[0]["result_summary"]
+        assert "error" not in run.steps[0]["result_summary"] and "9,999" not in run.steps[0]["result_summary"]
+        assert "9,999" not in run.final["summary"]  # the unsupported number is removed
+        assert run.final["coverage"]
+
+
+def test_a_busy_desk_skips_the_check_and_says_so(monkeypatch):
+    """The re-run waits for the analysis lock only a short while; then it is skipped with a note
+    saying the desk was busy, and it does not run late in the background."""
+    from nightwatch.api.locking import RequestFirstLock
+
+    class Busy:
+        lock = RequestFirstLock()
+        ctx = None
+
+    monkeypatch.setattr(agent, "DESK_WAIT_S", 0.3)
+    ran = []
+    monkeypatch.setattr("nightwatch.pipeline.analyze.analyze", lambda *a, **k: ran.append(1))
+    state = Busy()
+    report = {"ticket": {"ticker": "TSLA", "side": "long", "notional_quote": 20000.0, "horizon_kind": "next_open", "horizon_hours": None,
+                         "account_equity_quote": 200000.0, "stop_price": 300.0}, "snapshot": {"prices": {"spot_close": 320.0}}}
+    for lang, word in (("en", "busy"), ("zh", "正忙")):
+        run = agent.Run(lang=lang)
+        with state.lock:  # another request holds the desk
+            t0 = time.time()
+            agent.run_agent(Script([_call("rerun", {"notional_quote": 5000}), DONE]), state, report, run)
+            assert time.time() - t0 < 5
+        assert run.steps[0]["status"] == "skipped" and word in run.steps[0]["result_summary"]
+    time.sleep(0.2)
+    assert ran == []
+
+
+def test_the_request_lock_gives_up_after_its_wait_and_stays_usable():
+    from nightwatch.api.locking import DeskBusy, RequestFirstLock
+
+    lock = RequestFirstLock()
+    with lock, pytest.raises(DeskBusy), lock.request(0.1):
+        pass
+    assert lock.wanted == 0
+    with lock.request(0.1):
+        assert lock.wanted == 1
+    assert lock.wanted == 0

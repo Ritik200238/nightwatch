@@ -901,12 +901,14 @@ export interface AgentStep {
   tool?: string;
   args?: Record<string, unknown>;
   result_summary?: string;
+  /** ok = a result; skipped = timed out / busy / failed (result_summary is a plain note, no numbers); refused = not counted. */
+  status?: "ok" | "skipped" | "refused";
   seconds?: number;
 }
 export interface AgentRun {
   status: "running" | "done" | "failed" | "none";
   steps?: AgentStep[];
-  final?: { summary?: string; findings?: string[]; verdict_restated?: string } | null;
+  final?: { summary?: string; findings?: string[]; verdict_restated?: string; coverage?: string; partial?: boolean } | null;
   removed?: number;
   error?: string;
 }
