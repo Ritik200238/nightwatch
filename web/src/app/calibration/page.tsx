@@ -467,7 +467,7 @@ function PlainWords({ adj }: { adj: NonNullable<CalibrationReport["adjusted"]> }
     <PlainBox>
       {tx("Every verdict comes with a bad case: “1 time in 20, it goes worse than this” (the ", "每个结论都带一个坏情形：“二十次里有一次会比这更糟”（即 ")}
       <Term k="p5">p5</Term>
-      {tx(`). We wrote down ${adj.n_evaluated.toLocaleString()} of those before knowing what would happen, then checked. The real outcome was worse than the bad case ${fmtPct(lo, 1, false)} of the time, against the 5% it should be. ${verdict} Before the correction the raw history was worse than its own bad case ${fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time, which is why the desk corrects it.`, `）。我们在不知道结果之前写下了 ${adj.n_evaluated.toLocaleString()} 个这样的坏情形，然后去核对。实际结果比坏情形更差的比例是 ${fmtPct(lo, 1, false)}，而它本应是 5%。${verdict}修正之前，原始历史比它自己的坏情形更差的比例是 ${fmtPct(adj.raw_lo_coverage * 100, 1, false)}，这就是交易台要做修正的原因。`)}
+      {tx(`). We wrote down ${adj.n_evaluated.toLocaleString()} of those before knowing what would happen, then checked. The real outcome was worse than the bad case ${fmtPct(lo, 1, false)} of the time, against the 5% it should be. ${verdict} Before the correction the raw history was worse than its own bad case ${fmtPct(adj.raw_lo_coverage * 100, 1, false)} of the time${adj.raw_lo_coverage > 0.05 ? ", which is why the desk corrects it." : ". That total looks fine, but it averages opposite errors by holding period (split below), which the correction fixes separately."}`, `）。我们在不知道结果之前写下了 ${adj.n_evaluated.toLocaleString()} 个这样的坏情形，然后去核对。实际结果比坏情形更差的比例是 ${fmtPct(lo, 1, false)}，而它本应是 5%。${verdict}修正之前，原始历史比它自己的坏情形更差的比例是 ${fmtPct(adj.raw_lo_coverage * 100, 1, false)}${adj.raw_lo_coverage > 0.05 ? "，这就是交易台要做修正的原因。" : "。这个总数看起来没问题，但它把不同持有期方向相反的误差平均掉了（见下面的拆分），修正是按持有期分别做的。"}`)}
     </PlainBox>
   );
 }
@@ -538,8 +538,8 @@ function Scorecard({ rep }: { rep: CalibrationReport }) {
           <li>
             <Pill tone={adj.adj_tail_band === "green" ? "good" : "warning"}>{tx("Passed", "通过")}</Pill>{" "}
             {tx(
-              `The "1 time in 20 it goes worse than this" warning was beaten ${pct(adj.adj_lo_coverage)} of the time (target 5%): ${tb(adj.adj_tail_band)}. The raw history alone was ${pct(adj.raw_lo_coverage)}, which is why the desk corrects it.`,
-              `“二十次里有一次会比这更糟”的警告，实际被突破 ${pct(adj.adj_lo_coverage)}（目标 5%）：${tb(adj.adj_tail_band)}。只用原始历史是 ${pct(adj.raw_lo_coverage)}，所以交易台要做修正。`,
+              `The "1 time in 20 it goes worse than this" warning was beaten ${pct(adj.adj_lo_coverage)} of the time (target 5%): ${tb(adj.adj_tail_band)}. The raw history alone was ${pct(adj.raw_lo_coverage)}${adj.raw_lo_coverage > 0.05 ? ", which is why the desk corrects it." : "."}`,
+              `“二十次里有一次会比这更糟”的警告，实际被突破 ${pct(adj.adj_lo_coverage)}（目标 5%）：${tb(adj.adj_tail_band)}。只用原始历史是 ${pct(adj.raw_lo_coverage)}${adj.raw_lo_coverage > 0.05 ? "，所以交易台要做修正。" : "。"}`,
             )}
           </li>
         ) : null}
@@ -550,7 +550,13 @@ function Scorecard({ rep }: { rep: CalibrationReport }) {
             {tx(". Shown, not hidden.", "。照实展示，没有隐藏。")}
           </li>
         ) : null}
-        {sk ? (
+        {sk && sk.n === 0 ? (
+          <li>
+            <Pill tone="muted">{tx("Not measured", "未测量")}</Pill>{" "}
+            {tx("The comparison with random past hours is made on replays, so there are no pairs in this view.", "与随机历史小时的对比是在重演预测上做的，所以这个视图里没有可配对的样本。")}
+          </li>
+        ) : null}
+        {sk && sk.n > 0 ? (
           <li>
             <Pill tone={beats ? "good" : loses ? "critical" : "warning"}>{beats ? tx("Passed", "通过") : tx("Not proven", "未证明")}</Pill>{" "}
             {beats
