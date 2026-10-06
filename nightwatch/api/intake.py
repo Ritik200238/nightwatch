@@ -53,7 +53,7 @@ _STOP_PCT = re.compile(
     re.I,
 )
 _TARGET = re.compile(r"\b(?:target|take[-\s]?profit|tp)\b\s*(?:is|at|of|:|=)?\s*\$?\s*([\d,]+(?:\.\d+)?)", re.I)
-_EQUITY = re.compile(r"\b(?:equity|account|portfolio|book|capital|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?", re.I)
+_EQUITY = re.compile(r"\b(?:equity|account|acct|accnt|acc|portfolio|book|capital|bankroll|aum)\b[^.\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)\s*([kmbw](?![a-z]))?", re.I)
 # "I have 100k", "I've got 50k": the money on hand, not a position. Not "I have 20k of TSLA"
 # (a holding) and not "I have 3 ideas" (no scale, under a hundred).
 _HAVE = re.compile(
@@ -72,7 +72,7 @@ _HOURS = re.compile(r"\b([\d.]+)\s*(?:hours?|hrs?|h)\b", re.I)
 _DAYS = re.compile(r"\b([\d.]+)\s*(?:days?|d)\b", re.I)
 _NEXT_OPEN = re.compile(r"\bovernight\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
 # "Through the weekend" said on a Thursday is until Monday's open, not Thursday's.
-_WEEKEND = re.compile(r"\b(?:through|over|across|for|into)\s+the\s+weekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b|\bweekend\s+hold\b", re.I)
+_WEEKEND = re.compile(r"\bweekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b", re.I)
 # "until Wednesday", "through Thursday's close": a named day, held to its open unless the
 # close is said. Monday is the weekend rule's, which already means the open after it.
 _WEEKDAY = re.compile(r"\b(?:until|till|to|through|into|by)\s+(?:next\s+)?(tues|wednes|thurs|fri)day(?:'s)?(?:\s+(open|close))?", re.I)
@@ -655,6 +655,10 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
         if m.get("role") != "user" or not (m.get("content") or "").strip():
             continue
         latest = parse_message(m["content"], known_tickers, account_equity)
+        if latest.through_earnings and not latest.horizon_kind:
+            # "into earnings" is this message's hold, to be dated from the calendar; a length an
+            # earlier message gave must not stand in for it and be called the trader's choice.
+            merged.horizon_kind = merged.horizon_hours = None
         latest_said_nothing, last_text = said_nothing(latest, m["content"]), m["content"]
         # A stop is either a price or a distance; the later message replaces either kind.
         if latest.stop_price is not None:
@@ -1479,6 +1483,22 @@ def is_a_new_idea(text: str, context: dict[str, Any], known_tickers: list[str]) 
         return False
     current = ((context.get("ticket") or {}).get("ticker") or "").upper()
     return parsed.ticker.upper() != current
+
+
+def is_a_whole_trade(text: str, known_tickers: list[str]) -> bool:
+    """True when one message states a complete trade of its own: a token, a side and a size,
+    and it is not asking "what if". "5x long TSLA 20k over the weekend" is that trade, even when
+    the report on screen is also a TSLA long: it is run as typed, never read as a what-if on the
+    last report (which is how the size got ignored after the stress-test agent had run)."""
+    t = text.strip()
+    if not t or t.endswith(("?", "？")):
+        return False
+    from nightwatch.api.whatif import _WHATIF
+
+    if _WHATIF.search(t):
+        return False
+    p = parse_message(t, known_tickers)
+    return bool(p.ticker and p.side and p.notional_quote)
 
 
 def rule_turn(state: Any, messages: list[dict[str, str]], *, account_equity: float | None = None) -> dict[str, Any]:

@@ -251,7 +251,7 @@ export default function DeskPage() {
             )}
           </TabsContent>
           <TabsContent value="chat" className="pt-3">
-            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} script={script} onRestore={() => setHeroUsed(true)} onReport={(r) => {
+            <Chat accountEquity={equity} busy={busy} setBusy={setBusy} script={script} onRestore={() => setHeroUsed(true)} onNewChat={() => { setReport(null); setError(null); saveReportId(null); }} onReport={(r) => {
                 setContrast(null);
                 setReport(r);
                 setFromChat(true);

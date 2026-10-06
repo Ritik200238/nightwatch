@@ -260,7 +260,7 @@ def test_the_echo_lists_what_it_could_not_use(client):
 def test_a_hold_carried_over_from_an_earlier_ticker_is_said_out_loud(client):
     r = say(client, "long 5000 NVDA for 40 hours, account 100k", "short 5k TSLA")
     echo = next(p for p in r["reply"].split("\n\n") if p.startswith("I read this as:"))
-    assert "short 5,000 USDT of TSLA" in echo and "for 40h - same as in your earlier message" in echo
+    assert "short 5,000 USDT of TSLA" in echo and 'for 40h - typed earlier, in "long 5000 NVDA for 40 hours, account 100k"' in echo
 
 
 def test_the_echo_is_in_chinese_for_a_chinese_message(client):

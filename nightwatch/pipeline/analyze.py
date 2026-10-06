@@ -125,6 +125,13 @@ class AnalysisContext:
     sensitivity: bool = True  # run the size/stop what-if sweeps
     frame_cache_size: int = 64  # >= universe size so a warm cache survives one hour of traffic
     _frames: dict[str, pd.DataFrame] = field(default_factory=dict)
+    # Frames for an end-hour older than the newest one held for that token: a what-if on a report
+    # from earlier in the day asks for one. Kept apart so they never push a hot frame out of
+    # ``_frames`` (the pooled search needs every token's newest), and few, since each is ~6.6 MB.
+    _older_frames: dict[str, pd.DataFrame] = field(default_factory=dict)
+    # Fee rates per symbol pair, good for FEES_TTL_S: reading them parsed every instrument of both
+    # venues (about 3,500 JSON rows) on every analysis and every what-if.
+    _fee_cache: dict[tuple[str, str | None], tuple[float, dict[str, float]]] = field(default_factory=dict)
     _book_windows: dict[str, pd.DataFrame] = field(default_factory=dict)
     _with_data: tuple[str, ...] | None = None
     _factors_cache: dict[str, Any] = field(default_factory=dict)
@@ -656,7 +663,11 @@ class AnalysisContext:
         sees a new end-hour every hour and replays ask for arbitrary as-of hours; an
         unbounded map would grow by a full frame per ticker per hour for weeks."""
         key = f"{ticker}|{ensure_utc(end).replace(minute=0, second=0, microsecond=0).isoformat()}"
-        frame = self._frames.pop(key, None)
+        prefix = f"{ticker}|"
+        newest = max((k for k in self._frames if k.startswith(prefix)), default=None)
+        older = newest is not None and key < newest  # ISO hours sort as time does
+        store = self._older_frames if older else self._frames
+        frame = store.pop(key, None)
         if frame is None:
             spec = self.spec(ticker)
             cov = self.store.bar_coverage(Venue.BITGET_SPOT, spec.spot_symbol, Interval.H1)
@@ -664,7 +675,16 @@ class AnalysisContext:
                 raise InsufficientData(f"no stored bars for {spec.spot_symbol}")
             frame = _compact(compute_feature_frame(self.store, spec, cov[0], end))
             frame = self._checked(ticker, end, frame, lambda: _compact(compute_feature_frame(self.store, spec, cov[0], end)))
-        self._frames[key] = frame  # re-insert as most recent
+        store[key] = frame  # re-insert as most recent
+        if not older:
+            # A new end-hour used to leave the hour before it behind for every token until the
+            # limit pushed it out: two or three full hour-sets (about 6.6 MB a frame, twenty-four
+            # tokens) in memory on a box with 900 MB, which then swapped. Only the newest hour of
+            # a token stays in the main cache.
+            for stale in [k for k in self._frames if k.startswith(prefix) and k != key]:
+                self._frames.pop(stale, None)
+        while len(self._older_frames) > OLDER_FRAMES_KEPT:
+            self._older_frames.pop(next(iter(self._older_frames)))
         while len(self._frames) > self.frame_cache_size:
             self._frames.pop(next(iter(self._frames)))
         while len(self._factors_cache) > 64:
@@ -675,6 +695,7 @@ class AnalysisContext:
 # A search feature missing for this many more percentage points of a token's history
 # than in the previous build is a broken build, not an hour of new data.
 GAP_JUMP = 0.05
+OLDER_FRAMES_KEPT = 4
 PROFILE_WINDOW_S = 48 * 3600
 
 
@@ -1922,7 +1943,20 @@ def _get_book(ctx: AnalysisContext, symbol: str, as_of: datetime) -> tuple[Order
     return None, "none"
 
 
+FEES_TTL_S = 600.0
+
+
 def _fees(ctx: AnalysisContext, spec: SeriesSpec) -> dict[str, float]:
+    key = (spec.spot_symbol, spec.perp_symbol)
+    hit = ctx._fee_cache.get(key)
+    if hit is not None and time.monotonic() - hit[0] < FEES_TTL_S:
+        return dict(hit[1])
+    fees = _read_fees(ctx, spec)
+    ctx._fee_cache[key] = (time.monotonic(), fees)
+    return dict(fees)
+
+
+def _read_fees(ctx: AnalysisContext, spec: SeriesSpec) -> dict[str, float]:
     spot = {i.symbol: i for i in ctx.store.list_instruments(Venue.BITGET_SPOT)}
     perp = {i.symbol: i for i in ctx.store.list_instruments(Venue.BITGET_UMCBL)}
     s = spot.get(spec.spot_symbol)

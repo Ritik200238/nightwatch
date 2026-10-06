@@ -21,7 +21,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from nightwatch import __version__
 from nightwatch.api import followup, guard
@@ -138,12 +138,22 @@ class TonightIn(BaseModel):
     account_equity_quote: float | None = Field(default=None, gt=0, le=MAX_NOTIONAL * 100)
 
 
+CHAT_KEEP = 30  # the newest turns the server reads; older ones are dropped, never refused
+
+
 class ChatIn(BaseModel):
-    messages: list[ChatMessage] = Field(max_length=30)
+    messages: list[ChatMessage] = Field(max_length=CHAT_KEEP)
     account_equity_quote: float | None = Field(default=None, gt=0, le=MAX_NOTIONAL * 100)
     # The report the conversation is currently about, so a question can be answered from
     # it. The desk already stores every report it produces; this is the key to one.
     context_forecast_id: int | None = None
+
+    @field_validator("messages", mode="before")
+    @classmethod
+    def _keep_the_tail(cls, v: Any) -> Any:
+        """A long conversation is trimmed to its newest turns rather than rejected: the desk
+        needs the recent turns and the report id, not the whole scroll-back."""
+        return v[-CHAT_KEEP:] if isinstance(v, list) and len(v) > CHAT_KEEP else v
 
 
 class FeedbackIn(BaseModel):
@@ -1775,7 +1785,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             if booked is not None:
                 return booked
         # "Compare to SPY", "short it instead": the trade on screen, changed, not a new one.
-        carried = bool(context and latest and converse.carries_the_trade(latest, context, tickers_now))
+        from nightwatch.api.intake import is_a_whole_trade
+
+        whole_trade = bool(context and latest and is_a_whole_trade(latest, tickers_now))
+        carried = bool(context and latest and not whole_trade and converse.carries_the_trade(latest, context, tickers_now))
         # "my account is 100k", said about the trade on screen: the same trade, judged against
         # that account. It names no token, side or size of its own, so it is not a new idea.
         said_account = False
@@ -1784,7 +1797,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
             said = _intake.parse_message(latest, tickers_now)
             said_account = bool(said.account_equity_quote and not said.ticker and not said.notional_quote)
-        if context and latest and (carried or said_account or (followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, tickers_now))):
+        if context and latest and not whole_trade and (carried or said_account or (followup.looks_like_a_question(latest) and not is_a_new_idea(latest, context, tickers_now))):
             # "What if I held it twelve hours", "was it worse on earnings nights". The
             # report on screen cannot answer those - they are a different report - so the
             # desk runs one. The model names what changed and the engine does the rest.

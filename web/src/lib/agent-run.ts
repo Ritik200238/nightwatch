@@ -87,10 +87,22 @@ export function toolVerb(tool: string | undefined, args: Record<string, unknown>
   if (/base_?rate|baseline/.test(t)) return zh ? "查了基础概率" : "Checked the base rate";
   if (/safe|compare|hold/.test(t)) return zh ? "比较了最稳妥的持有方式" : "Compared the safest ways";
   if (/rerun|re_run|run/.test(t)) {
-    if (lens.includes("earnings")) return zh ? "只在财报夜重新运行" : "Re-ran on earnings nights only";
-    if (lens) return zh ? `按条件“${lens}”重新运行` : `Re-ran with the ${lens.replace(/_/g, " ")} lens`;
-    if (side) return zh ? (side === "short" ? "改为做空重新运行" : "改为做多重新运行") : `Re-ran it as a ${side}`;
-    if (horizon) return zh ? `换持有期“${horizon.replace(/_/g, " ")}”重新运行` : `Re-ran with horizon ${horizon.replace(/_/g, " ")}`;
+    // Say what was changed in the re-run, in the order a trader would: size, leverage, side, hold, lens.
+    const num = (k: string) => (typeof a[k] === "number" ? (a[k] as number) : typeof a[k] === "string" && a[k] !== "" && Number.isFinite(Number(a[k])) ? Number(a[k]) : null);
+    const size = num("notional_quote");
+    const lev = num("leverage");
+    const hours = num("horizon_hours");
+    const parts: string[] = [];
+    if (size != null) parts.push(zh ? `仓位 ${Math.round(size).toLocaleString("en-US")} USDT` : `at ${Math.round(size).toLocaleString("en-US")} USDT`);
+    if (lev != null) parts.push(zh ? `${lev}倍杠杆` : lev <= 1 ? "with no leverage" : `at ${lev}x leverage`);
+    if (side) parts.push(zh ? (side === "short" ? "做空" : "做多") : `as a ${side}`);
+    if (horizon || hours != null) {
+      const h = horizon ? horizon.replace(/_/g, " ") : `${hours}h`;
+      parts.push(zh ? `持有期“${h}”` : `holding ${h}`);
+    }
+    if (lens.includes("earnings")) parts.push(zh ? "只看财报夜" : "on earnings nights only");
+    else if (lens) parts.push(zh ? `按条件“${lens}”` : `with the ${lens.replace(/_/g, " ")} lens`);
+    if (parts.length) return zh ? `重新运行：${parts.join("，")}` : `Re-ran ${parts.join(", ")}`;
     return zh ? "重新运行" : "Re-ran it";
   }
   return (tool ?? "").replace(/_/g, " ") || (zh ? "检查" : "A check");

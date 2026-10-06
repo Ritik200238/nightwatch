@@ -8,7 +8,7 @@ import { useLang } from "@/lib/lang";
 import { isoIn, isSnapshotAnswer, snapshotFlag, snapshotNoticeFor } from "@/lib/snapshot";
 import { plainText } from "@/lib/plain";
 import { startAgent, useAgent } from "@/lib/agent-run";
-import { loadChat, saveChat } from "@/lib/desk-session";
+import { loadChat, saveChat, saveReportId } from "@/lib/desk-session";
 import { GuardNote } from "@/components/report/guard-note";
 import { ChatCardView } from "./chat-card";
 import { Working } from "./working";
@@ -34,6 +34,8 @@ interface Props {
   onReport: (r: Report, lang: "en" | "zh") => void;
   /** Called once when a conversation from this tab is brought back, so the page can leave its start screen. */
   onRestore?: () => void;
+  /** Called when the trader starts a new chat, so the page can drop the report the old one was about. */
+  onNewChat?: () => void;
   /** A canned run: each step is sent as if typed, once, in order. */
   script?: { id: number; steps: string[] } | null;
 }
@@ -41,6 +43,10 @@ interface Props {
 const STARTERS = ["Hold $20k of TSLA through the weekend, stop at 350", "Short 5k NVDA for the next 12 hours", "Long 10k SPY until Monday open, thesis: strong Friday close"];
 const STARTERS_ZH = ["持有 2 万美元 TSLA 过周末，止损 350", "做空 5000 美元 NVDA，持有 12 小时", "做多 1 万美元 SPY 到周一开盘，理由：周五收盘强势"];
 const HAS_ZH = /[\u3400-\u9fff]/;
+
+/** The server needs the recent turns and the report id, not the whole scroll-back; only this many
+ *  of the newest messages are sent, so a long conversation never hits the request's size limit. */
+const SEND_TAIL = 20;
 
 /** Offered once a report is on screen, because until then there is nothing to ask about. */
 const FOLLOW_UPS = ["Why?", "Explain it simply", "What's the safest way to hold it?", "What if it gaps down 10%?", "Compare it with SPY", "Short it instead", "Talk me out of it"];
@@ -99,7 +105,7 @@ const READ_FROM: Record<string, string> = {
   data: "the list of live sources",
 };
 
-export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, script }: Props) {
+export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewChat, script }: Props) {
   const { lang, setLang, tx } = useLang();
   const [messages, setMessages] = useState<Msg[]>([]);
   // The report the conversation is currently about. Questions are answered from it.
@@ -205,6 +211,22 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, script
     setMessages(m);
   }
 
+  /** Forget this conversation: the saved copy in this tab, the report it was about, and any error. */
+  function newChat() {
+    if (busy) return;
+    commit([]);
+    contextRef.current = null;
+    setContextId(null);
+    setSide(null);
+    setSteps([]);
+    setError(null);
+    setDraft("");
+    postedAgent.current = null;
+    saveChat<Msg>({ messages: [], contextId: null, side: null });
+    saveReportId(null);
+    onNewChat?.();
+  }
+
   async function send(text: string) {
     const content = text.trim();
     if (!content || busy) return;
@@ -219,7 +241,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, script
     try {
       setSteps([]);
       const res = await api.chatStream(
-        next.map((m) => ({ role: m.role, content: m.content })),
+        next.slice(-SEND_TAIL).map((m) => ({ role: m.role, content: m.content })),
         accountEquity,
         contextRef.current,
         (s) => setSteps((prev) => (prev.some((p) => p.stage === s.stage) ? prev : [...prev, s])),
@@ -362,6 +384,18 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, script
         ) : null}
         <div ref={endRef} />
       </div>
+      {messages.length > 0 ? (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={newChat}
+            disabled={busy}
+            className="inline-flex min-h-10 items-center rounded-md border border-border px-3 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 sm:min-h-8"
+          >
+            {tx("New chat", "新对话")}
+          </button>
+        </div>
+      ) : null}
       <form
         className="mt-3 flex items-end gap-2"
         onSubmit={(e) => {

@@ -77,7 +77,7 @@ def test_the_earlier_message_tag_appears_only_when_an_earlier_message_said_it(cl
     assert "the account you set on the page" in echo
     # An account typed earlier in the same conversation carries over, and says so.
     second = _chat(client, [_u("long 20000 NVDA overnight, account 50k"), _u("short 10000 TSLA overnight")])
-    assert "account 50,000 - same as in your earlier message" in second["reply"]
+    assert 'account 50,000 - typed earlier, in "long 20000 NVDA overnight, account 50k"' in second["reply"]
     assert second["ticket"]["account_equity_quote"] == 50000
 
 

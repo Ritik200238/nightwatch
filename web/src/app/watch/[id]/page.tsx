@@ -101,7 +101,12 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
       </Section>
       <Section title={tx("Price tripwires on this report", "本报告的价格警报")}>
         <TripwireList forecastId={w.forecast_id} lang={lang} />
-        <p className="text-[13px] text-muted-foreground">{tx("Set one from the report page. Armed ones are checked every minute.", "可在报告页设置。已布防的每分钟检查一次。")}</p>
+        <p className="text-[13px] text-muted-foreground">
+          <Link href={`/r/${w.forecast_id}`} className="underline underline-offset-2">
+            {tx("Set one from the report page", "到报告页设置")}
+          </Link>
+          {tx(". Armed ones are checked every minute.", "。已布防的每分钟检查一次。")}
+        </p>
       </Section>
       <p className="text-[13px] text-muted-foreground">
         {w.webhook_host ? tx(`Also sent to ${w.webhook_host}${w.webhook_status ? ` (${w.webhook_status})` : ""}. `, `同时发送至 ${w.webhook_host}${w.webhook_status ? `（${w.webhook_status}）` : ""}。`) : ""}
