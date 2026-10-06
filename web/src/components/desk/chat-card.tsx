@@ -108,7 +108,10 @@ function Compare({ c }: { c: CompareCard }) {
         <span className="text-xs text-muted-foreground">{tx("Before", "之前")}</span>
         <span className="text-xs text-muted-foreground">{tx("After", "之后")}</span>
         {c.rows.map((r) => {
-          const changed = r.before !== r.after;
+          // "Changed" is what the reader sees: 14.4 bps and 13.6 bps both read "14 bps" and must
+          // not get an arrow beside an identical number.
+          const shown = (v: string | number | null) => (v == null ? "" : r.unit === "verdict" ? String(v) : r.unit === "pct" ? Number(v).toFixed(1) : String(Math.round(Number(v))));
+          const changed = shown(r.before) !== shown(r.after);
           const [en, zh] = ROW_LABEL[r.key];
           return (
             <div key={r.key} className="contents">
