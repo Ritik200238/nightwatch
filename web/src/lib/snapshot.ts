@@ -24,9 +24,13 @@ export function snapshotKey(path: string, search = ""): string {
   return `/${path.replace(/^\/+|\/+$/g, "")}${q ? `?${q}` : ""}`;
 }
 
-/** Should a live answer be replaced by the snapshot? Network error (null), or 5xx. */
+/** Should a live answer be replaced by the snapshot? Only when the backend is unreachable:
+ *  a network error or timeout (null), or the gateway statuses a down or restarting server
+ *  produces (502, 503, 504). A plain 500 is a bug in the desk, not an outage: showing a saved
+ *  example of a different trade in its place hid two real bugs and misled the visitor, so a
+ *  500 now reaches the page as an error. */
 export function shouldFallback(status: number | null): boolean {
-  return status === null || status >= 500;
+  return status === null || status === 502 || status === 503 || status === 504;
 }
 
 /** Pick the demo report the text names (TSLA, NVDA, AAPL...), else TSLA. */
