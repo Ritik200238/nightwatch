@@ -105,12 +105,15 @@ export interface GateRule {
   rule: string;
   decision: "GO" | "REVIEW_REQUIRED" | "NO_GO";
   reason: string;
+  /** The server's Chinese twin, from the same numbers. */
+  reason_zh?: string;
 }
 
 export interface Cap {
   name: string;
   notional: number | null;
   detail: string;
+  detail_zh?: string;
 }
 
 export interface CohortStats {
@@ -171,6 +174,8 @@ export interface Lens {
   name: string;
   label: string;
   definition: string;
+  label_zh?: string;
+  definition_zh?: string;
 }
 
 /** What a narrowed search found, and what it cost in evidence.
@@ -183,10 +188,12 @@ export interface LensResult {
   lenses: Lens[];
   names: string[];
   description: string;
+  description_zh?: string;
   n_before: number;
   n_after: number;
   applied: boolean;
   refused: string;
+  refused_zh?: string;
   /** Set when the desk narrowed the search itself, with the reason. Empty when the
    *  trader asked for the condition. */
   auto?: string;
@@ -625,6 +632,7 @@ export interface LiquidityHistory {
   buckets: BucketLiquidity[];
   reference_notional: number;
   note: string;
+  note_zh?: string;
 }
 
 export interface SizePoint {
@@ -746,6 +754,7 @@ export interface PortfolioReport {
   correlations: PairCorrelation[];
   mean_correlation_to_book: number | null;
   notes: string[];
+  notes_zh?: string[];
   horizon_h: number;
   /** Holdings with no stored history: left out of the tail, never counted as flat. */
   unknown: string[];
@@ -784,12 +793,15 @@ export interface RebalancePlan {
   after: BookScore;
   achieves_limit: boolean;
   detail: string;
+  detail_zh?: string;
   notes: string[];
+  notes_zh?: string[];
 }
 
 export interface BookCrash {
   key: string;
   name: string;
+  name_zh?: string;
   date: string | null;
   held_quote: number | null;
   asked_quote: number | null;
@@ -820,6 +832,7 @@ export interface BookStress {
   reverse: BookReverseLevel[];
   liquidation: { ticker: string; leverage: number; distance_pct: number; windows_hit: number; windows: number; comes_before_limit: boolean | null } | null;
   notes: string[];
+  notes_zh?: string[];
 }
 
 export interface Regime {
@@ -1234,9 +1247,9 @@ export interface Report {
     book_source: string;
     liquidity_history: LiquidityHistory | null;
   };
-  gate: { decision: "GO" | "REVIEW_REQUIRED" | "NO_GO"; rules: GateRule[]; risk_quote: number | null; risk_pct_of_equity: number | null; risk_basis: string };
-  sizing: { recommended_notional: number | null; binding_cap: string | null; caps: Cap[]; hedge_ratio_suggested: number | null; hedge_rationale: string };
-  verdict: { verdict: "GO" | "REDUCE_TO" | "HEDGE" | "NO_GO" | "REVIEW"; requested_notional: number; recommended_notional: number | null; hedge_ratio: number | null; reasons: string[]; caps: Cap[] };
+  gate: { decision: "GO" | "REVIEW_REQUIRED" | "NO_GO"; rules: GateRule[]; risk_quote: number | null; risk_pct_of_equity: number | null; risk_basis: string; advisories?: string[]; advisories_zh?: string[] };
+  sizing: { recommended_notional: number | null; binding_cap: string | null; caps: Cap[]; hedge_ratio_suggested: number | null; hedge_rationale: string; hedge_rationale_zh?: string };
+  verdict: { verdict: "GO" | "REDUCE_TO" | "HEDGE" | "NO_GO" | "REVIEW"; requested_notional: number; recommended_notional: number | null; hedge_ratio: number | null; reasons: string[]; reasons_zh?: string[]; caps: Cap[] };
   sensitivity: Sensitivity | null;
   lessons: Lesson[];
   breaker: BreakerReport;
@@ -1273,6 +1286,7 @@ export interface Report {
   failure_modes?: FailureMode[];
   /** Where the stated reason depends on an event the data can date, and does not match. */
   premise?: string[];
+  premise_zh?: string[];
   weekend_only?: WeekendOnly | null;
   /** Who turned the sentence into a ticket: "rules" when no model was needed. Chat reports only. */
   read_by?: { parsed_by: string; provider?: string | null; model?: string | null } | null;
@@ -1284,6 +1298,7 @@ export interface Report {
   provenance?: Provenance | null;
   sources: Record<string, unknown>[];
   warnings: string[];
+  warnings_zh?: string[];
   timings_ms: Record<string, number>;
   forecast_id: number | null;
 }

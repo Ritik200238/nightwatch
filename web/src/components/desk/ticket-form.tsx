@@ -43,7 +43,7 @@ interface Menu {
  *  the cost: narrow far enough and there is no evidence left to answer from.
  */
 function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: string[]; onChange: (names: string[]) => void }) {
-  const { tx } = useLang();
+  const { tx, lang } = useLang();
   const [menu, setMenu] = useState<Menu | null>(null);
   const [showAll, setShowAll] = useState(false);
 
@@ -112,15 +112,15 @@ function LensPicker({ ticker, chosen, onChange }: { ticker: string; chosen: stri
               disabled={unanswerable && !on}
               title={
                 unanswerable
-                  ? `${x.definition} — ${tx(`only ${events} separate past events across every token, and the search needs ${menu.minEpisodes}. It cannot answer this yet.`, `所有代币合计只有 ${events} 次独立的历史事件，而搜索至少需要 ${menu.minEpisodes} 次，暂时无法回答。`)}`
-                  : `${x.definition}${n != null ? ` — ${tx(`${n.toLocaleString()} past hours in ${ticker}`, `${ticker} 有 ${n.toLocaleString()} 个历史小时`)}` : ""}`
+                  ? `${lang === "zh" && x.definition_zh ? x.definition_zh : x.definition} — ${tx(`only ${events} separate past events across every token, and the search needs ${menu.minEpisodes}. It cannot answer this yet.`, `所有代币合计只有 ${events} 次独立的历史事件，而搜索至少需要 ${menu.minEpisodes} 次，暂时无法回答。`)}`
+                  : `${lang === "zh" && x.definition_zh ? x.definition_zh : x.definition}${n != null ? ` — ${tx(`${n.toLocaleString()} past hours in ${ticker}`, `${ticker} 有 ${n.toLocaleString()} 个历史小时`)}` : ""}`
               }
               onClick={() => toggle(x.name)}
               className={`rounded-full border px-2 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
                 on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              {x.label}
+              {lang === "zh" && x.label_zh ? x.label_zh : x.label}
               {unanswerable ? (
                 <span className="ml-1 opacity-70">· {tx(`${events} events, too few`, `仅 ${events} 次事件，太少`)}</span>
               ) : n != null ? (
