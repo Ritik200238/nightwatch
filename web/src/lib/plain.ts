@@ -150,12 +150,42 @@ const RULE_LABEL: Record<string, { en: string; zh: string }> = {
   "book tail": { en: "Whole-book tail risk", zh: "整体持仓尾部风险" },
 };
 
+/** The fixed sentences the verdict adds under a passing gate (advisories, the cap line), in Chinese.
+ *  Null when the sentence is not one of them, so the caller falls through to its other shapes. */
+function advisoryZh(t: string): string | null {
+  let m: RegExpExecArray | null;
+  if (t === "requested size is within every cap" || t === "Requested size is within every cap") return "所请求的仓位在所有上限之内";
+  if ((m = /^(?:no stop given|no stop order|No stop given|No stop order): risk is sized on the calibrated 5th percentile, ([+-][\d.]+)% over the horizon(?:; your 'wrong if' line is (\d+)% away, but it is an invalidation, not a stop order)?$/.exec(t)))
+    return `${/^no stop order/i.test(t) ? "没有止损单" : "没有设止损"}：风险按校准后的第 5 百分位（持有期内 ${m[1]}%）定仓位${m[2] ? `；你的“错在哪里”那条线距现价 ${m[2]}%，它是判断失效的条件，不是止损单` : ""}`;
+  if ((m = /^Size held at ([\d,]+) USDT: (.+) \(requested ([\d,]+)\)\.?$/.exec(t))) {
+    const why: Record<string, string> = {
+      "the loss if the stop is hit would exceed the share of equity you allow at risk": "止损被触发时的亏损会超过你允许的风险占比",
+      "more than that would put too much of your equity in one name": "再多就会让太大比例的账户权益集中在一个标的上",
+      "the current market regime calls for a smaller position than requested": "当前市场状态要求比所请求的更小的仓位",
+      "the worst severe stress scenario would cost more than the allowed share of equity at a larger size": "仓位再大，最严重压力情景的亏损会超过允许的账户权益占比",
+      "a larger size would push the whole book's one-in-twenty loss past the allowed share of equity": "仓位再大，整体持仓二十分之一的亏损会超过允许的账户权益占比",
+    };
+    const book = /^the live order book can absorb only that much within the (\d+) bps exit-cost budget$/.exec(m[2]);
+    const reason = book ? `实时盘口在 ${book[1]} bps 的平仓成本预算内只能承接这么多` : why[m[2]];
+    if (reason) return `仓位限制在 ${m[1]} USDT：${reason}（你要求的是 ${m[3]}）`;
+  }
+  if (t === "thin trading: over a quarter of the last day had no trades, so volatility and the analogs lean on filled bars") return "成交稀薄：过去一天超过四分之一的时间没有成交，波动率和相似历史时刻依赖补齐的K线";
+  if (t === "quieter than this token usually is at this time of week, which is a liquidity change rather than a weekend") return "比这只代币在一周中这个时段通常的状态更安静，这是流动性的变化，而不是周末效应";
+  if (t === "the native stock has not printed for three days; fair value is older than usual") return "原生股票已三天没有成交；公允价值比平时更旧";
+  if ((m = /^it moves with the rest of your book \(mean correlation ([\d.]+)\): this adds size, not diversification$/.exec(t))) return `它与你其余持仓同向波动（平均相关性 ${m[1]}）：这只是加大仓位，不是分散风险`;
+  return null;
+}
+
 /** One verdict reason as a plain one-line sentence. The server writes "market posture:
  *  hostile regime (size multiplier 0.50); ..." - a rule name and a machine clause - which
  *  reads as a leaked variable at headline size. Known shapes are rewritten; anything else
  *  keeps its words with the first letter capitalised. */
 export function plainReason(text: string, lang: "en" | "zh" = "en"): string {
   const t = plainText(text, lang).trim();
+  if (lang === "zh") {
+    const z = advisoryZh(t);
+    if (z) return z;
+  }
   const m = /^([a-z][a-z_ ]*?):\s*(.+)$/.exec(t);
   if (!m) return sentence(t);
   const key = m[1].trim().replace(/_/g, " ");
