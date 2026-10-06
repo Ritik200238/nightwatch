@@ -142,7 +142,10 @@ class AnalogEngine:
         if len(used) < 3:
             return self._refuse("fewer than 3 usable features in the query", history, used, dropped, query)
 
-        hist = history.copy()
+        # Only the columns the search reads. Copying all 58 of a pooled history (about 170 MB for
+        # twenty-four tokens) and then filtering it again for each hard filter was the largest
+        # allocation in a chat turn; the features, the bucket and the ticker are all it needs.
+        hist = history[[*used, *(c for c in ("bucket", "ticker") if c in history.columns)]].copy()
         if "bucket" not in hist.columns:
             hist["bucket"] = "unknown"
         if "ticker" not in hist.columns:
@@ -398,8 +401,9 @@ def matches_frame(result: AnalogResult) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("ts") if rows else pd.DataFrame()
 
 
-def pooled_history(frames: Sequence[tuple[str, pd.DataFrame]]) -> pd.DataFrame:
-    """Stack per-ticker feature frames into one history with a ``ticker`` column."""
+def _pooled_history_by_copy(frames: Sequence[tuple[str, pd.DataFrame]]) -> pd.DataFrame:
+    """The plain way to stack: copy each part, concatenate, sort. Kept for frames whose columns
+    differ, and as the reference the column-wise stack is tested against."""
     parts = []
     for ticker, f in frames:
         g = f.copy()
@@ -409,6 +413,33 @@ def pooled_history(frames: Sequence[tuple[str, pd.DataFrame]]) -> pd.DataFrame:
         return pd.DataFrame()
     out = pd.concat(parts)
     return out.sort_index(kind="stable")
+
+
+def pooled_history(frames: Sequence[tuple[str, pd.DataFrame]]) -> pd.DataFrame:
+    """Stack per-ticker feature frames into one history with a ``ticker`` column.
+
+    The same rows in the same order as copying, concatenating and sorting whole frames, but built
+    one column at a time from the sort order of the index alone. Stacking twenty-four tokens'
+    history that way held about four copies of it at once (each part copied, the concatenation,
+    the sorted result); on the 900 MB box that was enough to push the API into swap and made a
+    pooled search the slowest thing a chat could ask for. Here only the finished frame and one
+    column's worth of temporaries exist beside the parts themselves.
+    """
+    frames = list(frames)
+    if not frames:
+        return pd.DataFrame()
+    cols = list(frames[0][1].columns)
+    if any(list(f.columns) != cols or "ticker" in f.columns for _, f in frames) or "ticker" in cols:
+        return _pooled_history_by_copy(frames)
+    index = frames[0][1].index.append([f.index for _, f in frames[1:]]) if len(frames) > 1 else frames[0][1].index
+    order = np.argsort(index.asi8 if hasattr(index, "asi8") else np.asarray(index), kind="stable")
+    out = pd.DataFrame(index=index[order])
+    for c in cols:
+        out.insert(len(out.columns), c, pd.concat([f[c] for _, f in frames], ignore_index=True).iloc[order].array)
+    names = np.empty(len(order), dtype=object)
+    names[:] = np.repeat(np.array([t for t, _ in frames], dtype=object), [len(f) for _, f in frames])
+    out.insert(len(out.columns), "ticker", names[order])
+    return out
 
 
 def default_lookback(query_ts: datetime, days: int = 400) -> datetime:
