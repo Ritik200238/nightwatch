@@ -1778,7 +1778,9 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         br = baserate.detect(latest, list(s.ctx.tickers_with_data())) if latest else None
         if br is not None:
             try:
-                return baserate.answer(s, br, lang=language_of(latest))
+                # A trade on screen in this token is the trade to stress-test beside the rates.
+                on_screen = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
+                return baserate.answer(s, br, lang=language_of(latest), context=on_screen)
             except InsufficientData as exc:
                 raise HTTPException(422, guard.plain_message(exc)) from exc
 
