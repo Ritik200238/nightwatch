@@ -453,10 +453,34 @@ def parse_reply(raw: str) -> dict[str, Any] | None:
     if not text.startswith("{") and "{" in text and "}" in text:
         text = text[text.index("{"): text.rindex("}") + 1]
     try:
-        obj = json.loads(text)
+        # strict=False: a raw line break inside a string is the commonest model slip.
+        obj = json.loads(text, strict=False)
     except (json.JSONDecodeError, ValueError):
-        return None
+        return _salvage(text)
     return obj if isinstance(obj, dict) else None
+
+
+_KEYS = ("take", "for", "against", "reconcile")
+
+
+def _salvage(text: str) -> dict[str, Any] | None:
+    """The string fields of a JSON object that does not parse (a stray quote, a cut-off tail).
+
+    Without this the whole reply was shown as prose, braces, quotes and backslash-n included.
+    Returns None when the text is not an attempt at the object at all."""
+    if not text.lstrip().startswith("{"):
+        return None
+    out: dict[str, Any] = {}
+    stop = re.compile(r'"\s*(?:,\s*"(?:' + "|".join(_KEYS) + r')"\s*:|\}\s*$|$)')
+    for key in _KEYS:
+        m = re.search(r'"' + key + r'"\s*:\s*"', text)
+        if not m:
+            continue
+        rest = text[m.end():]
+        end = stop.search(rest)
+        raw = rest[: end.start()] if end else rest
+        out[key] = raw.replace('\\"', '"').replace("\\n", "\n")
+    return out or None
 
 
 def _as_text(v: Any) -> str:  # noqa: ANN401
@@ -655,6 +679,8 @@ def _attempt(provider: Any, report: dict[str, Any], sheet: str, lang: str, extra
         return None
     obj = parse_reply(raw)
     model = getattr(provider, "model", "")
+    if obj is None and raw.lstrip().startswith(("{", "```")):
+        return None  # a broken JSON object is not prose: never show braces and escapes as the take
     if obj is None:
         # Prose instead of JSON: still a take, checked the same way, with no debate.
         clean, removed, cites = verify_tagged(raw, sheet)
