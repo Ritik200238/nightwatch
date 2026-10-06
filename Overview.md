@@ -210,7 +210,7 @@ the token can move, and how big?"**
 ## 8. MVP vs future
 
 ### What exists today (the shipped product)
-Everything in section 5 is built, deployed and tested (1,012 automated tests), except
+Everything in section 5 is built, deployed and tested (about 1,500 automated tests), except
 Telegram, which is built but switched off. It runs on:
 - **website:** Vercel
 - **API and recorder:** a small AWS Lightsail server (1 GB)

@@ -8,7 +8,7 @@ stock tool goes blind: nights, weekends, holidays, the window where only the tok
 [![ci](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml)
 [![uptime](https://github.com/Ritik200238/nightwatch/actions/workflows/uptime.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/uptime.yml)
 [![browser-smoke](https://github.com/Ritik200238/nightwatch/actions/workflows/browser-smoke.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/browser-smoke.yml)
-[![tests](https://img.shields.io/badge/tests-1%2C000%2B%20passing-brightgreen)](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-1%2C500%2B%20passing-brightgreen)](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml)
 
 **Live desk → https://nightwatch-gules.vercel.app**
 
@@ -115,7 +115,7 @@ sources in total**, every one live, every one listed with its real freshness on
 [`/sources`](https://nightwatch-gules.vercel.app/sources):
 
 <p align="center">
-  <img src="docs/img/sources.png" alt="Data sources page: Bitget 801,886 rows, Yahoo Finance 148,874 rows, Nasdaq, dividends and splits, FRED, each shown fresh with a real update time" width="860">
+  <img src="docs/img/sources.png" alt="Data sources page: every feed with its row count, status and how recently it last delivered" width="860">
 </p>
 
 ---
@@ -128,10 +128,10 @@ below, so it can't drift from what the site shows.
 
 | Claim | The real number, right now | Check it yourself |
 |---|---:|---|
-| Every live verdict is on the record, unedited | **(1,460 checked, no break, as of 6 Oct 2026)** | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the whole hash chain live |
+| Every live verdict is on the record, unedited | **(1,548 checked, no break, as of 6 Oct 2026)** | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the whole hash chain live |
 | Anchored to something we can't fake | **(7 of 7 in Bitcoin; verify a `.ots` proof at opentimestamps.org)** | [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) |
-| The "1-in-20 bad case" line roughly holds | **3,369 scored forecasts (140 independent nights; resampling whole nights the interval is 2.3% to 4.9%), raw breach rate 4.8% (green), 3.5% with factors fitted only on earlier forecasts (green), as of 6 Oct 2026** | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed live |
-| We publish our own misses | **104 of 2,131 replays and 12 of 1,168 live tickets (6 distinct events) went past the line (as of 6 Oct 2026)** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
+| The "1-in-20 bad case" line roughly holds | **3,468 scored forecasts (140 independent nights; resampling whole nights the interval is 2.2% to 4.8%), raw breach rate 4.7% (green), 3.4% with factors fitted only on earlier forecasts (green), as of 6 Oct 2026** | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed live |
+| We publish our own misses | **104 of 2,131 replays and 12 of 1,267 live tickets (6 distinct events) went past the line (as of 6 Oct 2026)** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
 | We test the method itself, not just the trades | **11 internal studies: 3 yes, 5 no, 3 unclear** (a 12th study, against a random-hours baseline, is built and merged but has not yet run on production) | [`/studies`](https://nightwatch-gules.vercel.app/studies), corrected for multiple testing |
 | Universe coverage | **24 tokenized US stocks live now** (configured for 112 — the throttled backfill in `docs/universe-expansion.md` hasn't run yet; check the real count live, not this line) | [`/api/universe`](https://nightwatch-gules.vercel.app/api/universe) |
 | Not verified by us | real-trader adoption; directional edge (measured: **none**) | — said plainly, not hidden |
@@ -178,7 +178,7 @@ Nightwatch holds that literally:
 
 **The AI never computes a price, a percentile, a liquidation level, or a verdict.** Every
 number on every page comes from deterministic code that is tested, versioned, and frozen
-(`method-freeze-2`, see [`nightwatch/journal/method_freeze.json`](nightwatch/journal/method_freeze.json)) before it is ever
+(`method-freeze-3`, see [`nightwatch/journal/method_freeze.json`](nightwatch/journal/method_freeze.json)) before it is ever
 scored against reality. The AI's only job is to read, explain, and translate — the job it's
 actually good at.
 
@@ -259,7 +259,7 @@ nightwatch analyze TSLA --side long --notional 20000 --equity 100000 --stop 350
 nightwatch replay --tickers TSLA --max-points 100
 nightwatch calibration --kind replay
 nightwatch status
-.venv/Scripts/python.exe -m pytest     # 1,000+ tests
+.venv/Scripts/python.exe -m pytest     # 1,500+ tests
 ```
 
 </details>
