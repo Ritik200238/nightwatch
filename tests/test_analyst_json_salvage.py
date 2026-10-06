@@ -26,3 +26,13 @@ def test_a_refusal_at_full_size_is_not_called_an_allowance():
     smaller = {"verdict": {"verdict": "NO_GO", "recommended_notional": 3000.0}, "ticket": {"notional_quote": 10000.0}}
     assert not analyst.refused_as_asked(smaller)
     assert "3,000" in analyst._fixed_reconcile(smaller, "en")
+
+
+def test_a_chinese_take_names_the_verdict_and_the_rule_in_chinese():
+    r = {"verdict": {"verdict": "REVIEW", "recommended_notional": 20000.0}, "ticket": {"notional_quote": 20000.0},
+         "gate": {"rules": [{"rule": "written_plan", "decision": "REVIEW_REQUIRED"}]},
+         "ticket_account": None}
+    out = analyst._fixed_reconcile(r, "zh")
+    assert "REVIEW" not in out and "需要复核" in out
+    mind = analyst.mind_line({**r, "ticket": {"notional_quote": 20000.0, "account_equity_quote": 50000.0}}, "zh")
+    assert "written" not in mind and "REVIEW" not in mind

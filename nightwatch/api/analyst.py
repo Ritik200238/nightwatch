@@ -494,6 +494,15 @@ def _verdict_word(report: dict[str, Any]) -> str:
     return str((report.get("verdict") or {}).get("verdict") or "").replace("_", " ")
 
 
+_VERDICT_ZH = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+
+
+def _verdict_name(report: dict[str, Any], lang: str) -> str:
+    """The verdict as a word of the page's language: a Chinese take must not say REVIEW."""
+    raw = str((report.get("verdict") or {}).get("verdict") or "")
+    return _VERDICT_ZH.get(raw, raw.replace("_", " ")) if lang == "zh" else raw.replace("_", " ")
+
+
 def refused_as_asked(report: dict[str, Any]) -> bool:
     """A NO GO whose size cap is not what refused it (100x leverage): the size caps would take
     the full size, so printing "the size the desk allows: 10,000" beside NO GO reads as a
@@ -507,9 +516,9 @@ def _fixed_reconcile(report: dict[str, Any], lang: str) -> str:
     v = report.get("verdict") or {}
     size = f"{v.get('recommended_notional') or 0:,.0f}"
     if refused_as_asked(report):
-        return f"本台的结论不变：{_verdict_word(report)}，按所问的仓位不通过。" if lang == "zh" else f"The desk's verdict stands: {_verdict_word(report)} at the size asked."
+        return f"本台的结论不变：{_verdict_name(report, lang)}，按所问的仓位不通过。" if lang == "zh" else f"The desk's verdict stands: {_verdict_word(report)} at the size asked."
     if lang == "zh":
-        return f"本台的结论不变：{_verdict_word(report)}，允许的规模 {size} USDT。"
+        return f"本台的结论不变：{_verdict_name(report, lang)}，允许的规模 {size} USDT。"
     return f"The desk's verdict stands: {_verdict_word(report)}, up to {size} USDT."
 
 
@@ -584,7 +593,11 @@ def mind_line(report: dict[str, Any], lang: str = "en") -> str:
                 else f"If getting out cost less than {bps:.0f} bps on the order book, the size the desk allows would go up.")
     if failed:
         rule = failed[0]["rule"].replace("_", " ")
-        return (f"如果「{rule}」这项检查通过，当前的{word}结论可能上调。" if zh
+        if zh:
+            from nightwatch.api.followup_zh import RULE_ZH
+
+            rule = RULE_ZH.get(failed[0]["rule"], rule)
+        return (f"如果「{rule}」这项检查通过，当前的{_verdict_name(report, lang)}结论可能上调。" if zh
                 else f"If the {rule} check passed, the {word.replace('_', ' ')} verdict could improve.")
     if bps is not None:
         return (f"如果盘口上的平仓成本升到 {bps:.0f} 个基点以上，或上面任何一项检查不再通过，这个结论就需要重新评估。" if zh
