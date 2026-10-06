@@ -11,6 +11,7 @@ export function HealthPill() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +26,7 @@ export function HealthPill() {
           }
           else {
             setHealth(h.health);
+            setSlow(h.state === "slow");
             setError(null);
           }
         }
@@ -63,10 +65,10 @@ export function HealthPill() {
   const warm = health.warm.state === "running" ? tx(` · warming ${health.warm.done}/${health.warm.total}`, ` · 预热中 ${health.warm.done}/${health.warm.total}`) : "";
   return (
     <span role="status" title={tx(`${health.tickers_with_data} tokens · last order book ${fmtTimeL(health.last_book_ts, lang)}${warm}`, `${health.tickers_with_data} 个代币 · 最近盘口 ${fmtTimeL(health.last_book_ts, lang)}${warm}`)} className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1 text-xs whitespace-nowrap text-muted-foreground">
-      <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-status-good" />
+      <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${slow ? "bg-status-warning" : "bg-status-good"}`} />
       {/* Narrow screens keep the signal (live, N tokens) and drop the timestamp. */}
       <span className="tabular">
-        {health.tickers_with_data} {tx("tokens", "个代币")}
+        {slow ? `${tx("slow", "较慢")} · ` : ""}{health.tickers_with_data} {tx("tokens", "个代币")}
         <span className="hidden sm:inline">
           {tx(" · book ", " · 盘口 ")}
           {fmtTimeL(health.last_book_ts, lang)}
