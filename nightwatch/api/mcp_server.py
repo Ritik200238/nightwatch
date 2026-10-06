@@ -39,7 +39,7 @@ TOOLS: list[dict[str, Any]] = [
         "title": "Stress-test a trade",
         "description": (
             "Stress-test a proposed position in a tokenized US stock before it is opened. Returns a sized verdict "
-            "(GO, REDUCE, HEDGE, REVIEW or NO_GO), what followed the most similar past moments over the same holding "
+            "(GO, REDUCE_TO, HEDGE, REVIEW or NO_GO), what followed the most similar past moments over the same holding "
             "period, the worst preset stress tests, the live cost of exiting, and the caveats. Use conditions to "
             "compare only against a kind of night, e.g. ['earnings_soon'] - see list_conditions."
         ),
