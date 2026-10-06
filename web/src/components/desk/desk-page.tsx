@@ -492,7 +492,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
       <HeroProof />
       <p className="mt-2 text-[13px] text-muted-foreground">
         {tx("Prefer fields? ", "更喜欢填表？")}
-        <button type="button" onClick={onForm} className="underline underline-offset-2 hover:text-foreground">
+        <button type="button" onClick={onForm} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground">
           {tx("Use the ticket form", "使用表单")}
         </button>
       </p>

@@ -157,7 +157,7 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
         onFocus={open}
         onBlur={() => setPos(null)}
         onClick={() => (pos ? setPos(null) : open())}
-        className={`inline-flex items-center gap-1 rounded-full border border-border/70 ${dot ? "p-1" : "px-1.5 py-px"} text-[11px] font-medium leading-4 whitespace-nowrap hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${st.text}`}
+        className={`relative inline-flex items-center gap-1 rounded-full border border-border/70 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[''] ${dot ? "p-1" : "px-1.5 py-px"} text-[11px] font-medium leading-4 whitespace-nowrap hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${st.text}`}
       >
         <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
         {dot ? <span className="sr-only">{kindName}</span> : chipText(entry, lang)}
