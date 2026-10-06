@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type ClosedHoursLine, type Report, type TicketInput } from "@/lib/api";
 import { fmtBps, fmtLev, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
-import { breakerReason, capDetail, plainReason, plainText, ruleReason, warningText } from "@/lib/plain";
+import { breakerReason, capDetail, lessonText, plainReason, plainText, ruleReason, secondOpinionHead, sensitivityNote, warningText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
 import { fmtDateL, fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
@@ -1600,7 +1600,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
         `${so.against.length} 条反对${largest != null ? `，最大的一条价值 ${largest}` : ""}${so.supporting.length ? ` · ${so.supporting.length} 条支持` : ""}`,
       )}
       title={L("The case against this", "反对这笔交易的理由")}
-      subtitle={so.summary}
+      subtitle={secondOpinionHead(so.summary, lang)}
     >
       <ul className="space-y-2">
         {so.against.map((c) => (
@@ -2125,7 +2125,7 @@ function LessonsSection({ report, openAll, lang }: { report: Report; openAll?: b
         {lessons.map((l) => (
           <li key={l.forecast_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
             <Pill tone={LESSON_TONE[l.classification] ?? "muted"}>{tl(lang, "lesson", l.classification)}</Pill>
-            <span className="flex-1 text-muted-foreground">{l.text}</span>
+            <span className="flex-1 text-muted-foreground">{lessonText(l.text, lang)}</span>
           </li>
         ))}
       </ul>
@@ -2164,7 +2164,7 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
         <ul className="space-y-1 text-sm">
           {sen.notes.map((n) => (
             <li key={n} className="text-muted-foreground">
-              – {n}
+              – {sensitivityNote(n, lang)}
             </li>
           ))}
         </ul>

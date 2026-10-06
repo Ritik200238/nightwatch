@@ -176,6 +176,62 @@ function advisoryZh(t: string): string | null {
   return null;
 }
 
+/** The "What would change it" notes, which the server writes in English from fixed shapes. */
+export function sensitivityNote(note: string, lang: "en" | "zh" = "en"): string {
+  if (lang !== "zh") return note;
+  let m: RegExpExecArray | null;
+  if ((m = /^no size is a GO while (.+) is unresolved$/.exec(note))) {
+    const rule = (k: string) => RULE_LABEL[k.trim().replace(/_/g, " ")]?.zh ?? k.trim();
+    return `在${m[1].split(",").map(rule).join("、")}还没解决之前，任何仓位都不是 GO`;
+  }
+  if ((m = /^no size is a GO: the (.+) cap stays below the request at every size$/.exec(note))) return `没有任何仓位可以做：在每个仓位下，${CAP_ZH[m[1].replace(/ /g, "_")] ?? m[1]}上限都低于所请求的仓位`;
+  if ((m = /^the requested ([\d,]+) is a GO; room up to ([\d,]+)$/.exec(note))) return `所请求的 ${m[1]} 可以做；最多可到 ${m[2]}`;
+  if ((m = /^a GO up to ([\d,]+), (\d+)% below the request$/.exec(note))) return `最高 ${m[1]} 可以做，比所请求的低 ${m[2]}%`;
+  if ((m = /^the stop would have to come in from ([\d.]+)% to ([\d.]+)% for this size to fit the risk budget$/.exec(note))) return `止损需要从 ${m[1]}% 收近到 ${m[2]}%，这个仓位才符合风险预算`;
+  return note;
+}
+
+/** The first line of "The case against this", from the verdict the desk reached. */
+export function secondOpinionHead(head: string, lang: "en" | "zh" = "en"): string {
+  if (lang !== "zh") return head;
+  let m: RegExpExecArray | null;
+  if (head === "The desk says no. If you disagree, this is what would have to be true:") return "系统的结论是不建议做。如果你不同意，下面这些情况必须成立：";
+  if (head === "The desk cannot decide yet. What is already known:") return "系统暂时还无法下结论。目前已知的是：";
+  if ((m = /^The desk says (.+)\. The strongest case against it:$/.exec(head))) {
+    const v: Record<string, string> = { go: "可以做", "reduce to": "建议减仓", hedge: "建议对冲", review: "需要复核" };
+    return `系统的结论是${v[m[1]] ?? m[1]}。最有力的反对理由：`;
+  }
+  return head;
+}
+
+/** One past call from "what happened last time", written by the journal in a fixed shape. */
+export function lessonText(text: string, lang: "en" | "zh" = "en"): string {
+  if (lang !== "zh") return text;
+  const m = /^(\S+) (long|short) over (\d+)h from (\d+ \w+): (.*)$/.exec(text);
+  if (!m) return text;
+  const [, ticker, side, h, whenEn, rest] = m;
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dm = /^(\d+) (\w{3})/.exec(whenEn);
+  const when = dm && MONTHS.includes(dm[2]) ? `${MONTHS.indexOf(dm[2]) + 1} 月 ${dm[1]} 日` : whenEn;
+  let body = rest;
+  let extra = "";
+  let money = "";
+  let r: RegExpExecArray | null;
+  if ((r = /^(.*?)( It went through that level intraday, worst point (.+?), then came back\.| Worst point inside the window (.+?)\.)?( The desk cut the size from ([\d,]+) to ([\d,]+), which (avoided|cost) about ([\d,]+) USDT\.)?$/.exec(rest))) {
+    body = r[1];
+    if (r[3]) extra = `盘中曾跌穿这个水平，最差点 ${r[3]}，之后又回来了。`;
+    else if (r[4]) extra = `窗口内最差点 ${r[4]}。`;
+    if (r[5]) money = `系统把仓位从 ${r[6]} 降到 ${r[7]}，${r[8] === "avoided" ? "避免了" : "多亏了"}约 ${r[9]} USDT。`;
+  }
+  let b: RegExpExecArray | null;
+  if ((b = /^it closed (\S+), below the (\S+) we sized against\.$/.exec(body))) body = `收于 ${b[1]}，低于当时定仓所依据的 ${b[2]}。`;
+  else if ((b = /^it closed (\S+), above the (\S+) upper bound\.$/.exec(body))) body = `收于 ${b[1]}，高于 ${b[2]} 的上界。`;
+  else if ((b = /^it closed (\S+), inside the (\S+) to (\S+) band\.$/.exec(body))) body = `收于 ${b[1]}，处于 ${b[2]} 到 ${b[3]} 的区间之内。`;
+  else if ((b = /^the engine refused to forecast \(too few similar moments\)\. It closed (\S+)\.$/.exec(body))) body = `系统拒绝给出预测（相似时刻太少）。实际收于 ${b[1]}。`;
+  else return text;
+  return `${ticker} ${side === "long" ? "做多" : "做空"}，持有 ${h} 小时，自 ${when} 起：${body}${extra ? ` ${extra}` : ""}${money ? ` ${money}` : ""}`;
+}
+
 /** One verdict reason as a plain one-line sentence. The server writes "market posture:
  *  hostile regime (size multiplier 0.50); ..." - a rule name and a machine clause - which
  *  reads as a leaked variable at headline size. Known shapes are rewritten; anything else
