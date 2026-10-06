@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from nightwatch.time_utils import classify_session, ensure_utc, utc_now, whole_hours
+from nightwatch.time_utils import classify_session, ensure_utc, round_half_up, utc_now, whole_hours
 
 # How wide an overnight window has to be before it is worth mentioning on its own, as a
 # share of the position. Below this the tail is ordinary and the row says so.
@@ -200,7 +200,7 @@ def judge(
 
 
 def _hours_phrase(hours: float) -> str:
-    n = whole_hours(hours)
+    n = round_half_up(hours)
     return f"{n} hour" if n == 1 else f"{n} hours"
 
 
