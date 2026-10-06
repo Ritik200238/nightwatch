@@ -23,7 +23,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from nightwatch import __version__
 from nightwatch.api import followup, guard
@@ -129,9 +129,23 @@ class TicketIn(BaseModel):
         )
 
 
+CHAT_CONTENT_MAX = 2000
+
+
 class ChatMessage(BaseModel):
     role: str = Field(max_length=32)
-    content: str = Field(max_length=2000)
+    content: str = Field(max_length=CHAT_CONTENT_MAX)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _trim_the_desks_own_replies(cls, v: Any) -> Any:
+        """The desk's own earlier replies come back as history, and a full stress-test reply
+        (the base-rate answer carries the whole brief) is longer than a person could type.
+        Refusing it made every later message in that chat fail with "content is too long".
+        Only the user's turns are held to the limit; an assistant turn is cut to it."""
+        if isinstance(v, dict) and v.get("role") == "assistant" and isinstance(v.get("content"), str) and len(v["content"]) > CHAT_CONTENT_MAX:
+            return {**v, "content": v["content"][:CHAT_CONTENT_MAX]}
+        return v
 
 
 class TonightIn(BaseModel):

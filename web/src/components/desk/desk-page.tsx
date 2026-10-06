@@ -20,7 +20,7 @@ import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
 import { ApiError, api, type MissesResponse, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 import { fmtDateL } from "@/lib/i18n";
-import { loadReportId, saveReportId } from "@/lib/desk-session";
+import { loadChat, loadReportId, saveReportId } from "@/lib/desk-session";
 
 export default function DeskPage() {
   const { lang, setLang, tx } = useLang();
@@ -86,7 +86,9 @@ export default function DeskPage() {
     if (restored.current) return;
     restored.current = true;
     if (new URLSearchParams(window.location.search).has("q")) return;
-    const id = loadReportId();
+    // A what-if on screen has no stored copy (its id was dropped), but the chat still knows the
+    // stored report the conversation is about: bring that back rather than the example.
+    const id = loadReportId() ?? loadChat<unknown>()?.contextId ?? null;
     if (id == null) return;
     setHeroUsed(true);
     let live = true;
@@ -189,7 +191,7 @@ export default function DeskPage() {
     {/* The Bitget list is long and says nothing about the trade, so while the
         hero is up it goes below the example verdict instead of pushing the verdict off the first screen. */}
     <div className={heroUp ? "order-last" : ""}>
-      <ProofStrip stocks={universe?.length ?? null} />
+      <ProofStrip stocks={universe ? universe.filter((u) => u.has_data).length : null} />
     </div>
     {/* While the hero is up there is one input on the page (the hero's); the Chat/Ticket rail
         appears once a trade has been asked for, or when the reader asks for the form. */}

@@ -498,3 +498,13 @@ def test_a_margin_change_is_routed_as_a_what_if_and_as_a_question():
     for text in ("add 500 more margin", "what if I add 2k collateral", "加 500 保证金", "withdraw 500 margin"):
         assert whatif.looks_like_a_what_if(text, tickers=("TSLA", "NVDA"), current="TSLA"), text
         assert followup.looks_like_a_question(text), text
+
+
+def test_a_cap_is_only_said_to_hold_the_size_when_it_cuts_it():
+    # The smallest cap sits at the request when the regime is ordinary: naming it as "holding"
+    # a GO at the full size reads as if something was cut.
+    after = report(sizing={"binding_cap": "regime"})
+    text = whatif.compare(report(), after, whatif.Change(horizon_hours=6.0)).text
+    assert "held by" not in text
+    cut = report(sizing={"binding_cap": "regime"}, verdict={"verdict": "REDUCE", "recommended_notional": 12000.0})
+    assert "held by the regime cap" in whatif.compare(report(), cut, whatif.Change(horizon_hours=6.0)).text

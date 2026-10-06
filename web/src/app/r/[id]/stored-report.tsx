@@ -11,6 +11,26 @@ import { snapshotFlag } from "@/lib/snapshot";
 import { fmtDateTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
+/** A link that puts this trade through the desk again, today: the home page runs ``?q=`` through
+ *  the chat once. The words are the ticket's own, in the shapes the desk reads, so it is the same
+ *  trade (side, size, hold, leverage, stop, account, reason) and not just the start screen. */
+export function rerunHref(report: Report): string {
+  const t = report.ticket;
+  if (!t || !t.ticker || !(t.notional_quote > 0)) return "/";
+  const label = String((t.extra as { horizon_label?: unknown } | undefined)?.horizon_label ?? "");
+  const parts = [`${t.side} ${Math.round(t.notional_quote)} ${t.ticker}`];
+  if (/weekend/i.test(label)) parts.push("over the weekend");
+  else if (t.horizon_kind === "next_open") parts.push("overnight");
+  else if (t.horizon_kind === "window_end") parts.push("until the close");
+  else if (t.horizon_hours) parts.push(`for ${t.horizon_hours} hours`);
+  if (t.leverage && t.leverage > 1) parts.push(`${t.leverage}x`);
+  if (t.stop_price) parts.push(`stop ${t.stop_price}`);
+  if (t.account_equity_quote) parts.push(`account ${Math.round(t.account_equity_quote)}`);
+  if (t.thesis) parts.push(`because ${t.thesis}`);
+  if (t.invalidation) parts.push(`wrong if ${t.invalidation}`);
+  return `/?q=${encodeURIComponent(parts.join(", ").slice(0, 480))}`;
+}
+
 /** One stored report, reopened exactly as it was argued.
  *
  *  Nothing is recomputed here. The page shows the report the desk produced at that
@@ -124,7 +144,7 @@ export function StoredReport({ id }: { id: string }) {
             `This is forecast #${id} exactly as the desk argued it on ${fmtDateTimeL(report.as_of, lang)}. Nothing on this page has been recomputed since.`,
             `这是预测 #${id}，与交易台在 ${fmtDateTimeL(report.as_of, lang)} 给出的内容完全一致，此后页面上的任何内容都没有重新计算。`,
           )}{" "}
-          <Link href="/" className="underline underline-offset-2">
+          <Link href={rerunHref(report)} className="underline underline-offset-2">
             {tx("Run the same trade now", "现在重新运行同一笔交易")}
           </Link>
           {tx(".", "。")}

@@ -150,12 +150,98 @@ const RULE_LABEL: Record<string, { en: string; zh: string }> = {
   "book tail": { en: "Whole-book tail risk", zh: "整体持仓尾部风险" },
 };
 
+/** The fixed sentences the verdict adds under a passing gate (advisories, the cap line), in Chinese.
+ *  Null when the sentence is not one of them, so the caller falls through to its other shapes. */
+function advisoryZh(t: string): string | null {
+  let m: RegExpExecArray | null;
+  if (t === "requested size is within every cap" || t === "Requested size is within every cap") return "所请求的仓位在所有上限之内";
+  if ((m = /^(?:no stop given|no stop order|No stop given|No stop order): risk is sized on the calibrated 5th percentile, ([+-][\d.]+)% over the horizon(?:; your 'wrong if' line is (\d+)% away, but it is an invalidation, not a stop order)?$/.exec(t)))
+    return `${/^no stop order/i.test(t) ? "没有止损单" : "没有设止损"}：风险按校准后的第 5 百分位（持有期内 ${m[1]}%）定仓位${m[2] ? `；你的“错在哪里”那条线距现价 ${m[2]}%，它是判断失效的条件，不是止损单` : ""}`;
+  if ((m = /^Size held at ([\d,]+) USDT: (.+) \(requested ([\d,]+)\)\.?$/.exec(t))) {
+    const why: Record<string, string> = {
+      "the loss if the stop is hit would exceed the share of equity you allow at risk": "止损被触发时的亏损会超过你允许的风险占比",
+      "more than that would put too much of your equity in one name": "再多就会让太大比例的账户权益集中在一个标的上",
+      "the current market regime calls for a smaller position than requested": "当前市场状态要求比所请求的更小的仓位",
+      "the worst severe stress scenario would cost more than the allowed share of equity at a larger size": "仓位再大，最严重压力情景的亏损会超过允许的账户权益占比",
+      "a larger size would push the whole book's one-in-twenty loss past the allowed share of equity": "仓位再大，整体持仓二十分之一的亏损会超过允许的账户权益占比",
+    };
+    const book = /^the live order book can absorb only that much within the (\d+) bps exit-cost budget$/.exec(m[2]);
+    const reason = book ? `实时盘口在 ${book[1]} bps 的平仓成本预算内只能承接这么多` : why[m[2]];
+    if (reason) return `仓位限制在 ${m[1]} USDT：${reason}（你要求的是 ${m[3]}）`;
+  }
+  if (t === "thin trading: over a quarter of the last day had no trades, so volatility and the analogs lean on filled bars") return "成交稀薄：过去一天超过四分之一的时间没有成交，波动率和相似历史时刻依赖补齐的K线";
+  if (t === "quieter than this token usually is at this time of week, which is a liquidity change rather than a weekend") return "比这只代币在一周中这个时段通常的状态更安静，这是流动性的变化，而不是周末效应";
+  if (t === "the native stock has not printed for three days; fair value is older than usual") return "原生股票已三天没有成交；公允价值比平时更旧";
+  if ((m = /^it moves with the rest of your book \(mean correlation ([\d.]+)\): this adds size, not diversification$/.exec(t))) return `它与你其余持仓同向波动（平均相关性 ${m[1]}）：这只是加大仓位，不是分散风险`;
+  return null;
+}
+
+/** The "What would change it" notes, which the server writes in English from fixed shapes. */
+export function sensitivityNote(note: string, lang: "en" | "zh" = "en"): string {
+  if (lang !== "zh") return note;
+  let m: RegExpExecArray | null;
+  if ((m = /^no size is a GO while (.+) is unresolved$/.exec(note))) {
+    const rule = (k: string) => RULE_LABEL[k.trim().replace(/_/g, " ")]?.zh ?? k.trim();
+    return `在${m[1].split(",").map(rule).join("、")}还没解决之前，任何仓位都不是 GO`;
+  }
+  if ((m = /^no size is a GO: the (.+) cap stays below the request at every size$/.exec(note))) return `没有任何仓位可以做：在每个仓位下，${CAP_ZH[m[1].replace(/ /g, "_")] ?? m[1]}上限都低于所请求的仓位`;
+  if ((m = /^the requested ([\d,]+) is a GO; room up to ([\d,]+)$/.exec(note))) return `所请求的 ${m[1]} 可以做；最多可到 ${m[2]}`;
+  if ((m = /^a GO up to ([\d,]+), (\d+)% below the request$/.exec(note))) return `最高 ${m[1]} 可以做，比所请求的低 ${m[2]}%`;
+  if ((m = /^the stop would have to come in from ([\d.]+)% to ([\d.]+)% for this size to fit the risk budget$/.exec(note))) return `止损需要从 ${m[1]}% 收近到 ${m[2]}%，这个仓位才符合风险预算`;
+  return note;
+}
+
+/** The first line of "The case against this", from the verdict the desk reached. */
+export function secondOpinionHead(head: string, lang: "en" | "zh" = "en"): string {
+  if (lang !== "zh") return head;
+  let m: RegExpExecArray | null;
+  if (head === "The desk says no. If you disagree, this is what would have to be true:") return "系统的结论是不建议做。如果你不同意，下面这些情况必须成立：";
+  if (head === "The desk cannot decide yet. What is already known:") return "系统暂时还无法下结论。目前已知的是：";
+  if ((m = /^The desk says (.+)\. The strongest case against it:$/.exec(head))) {
+    const v: Record<string, string> = { go: "可以做", "reduce to": "建议减仓", hedge: "建议对冲", review: "需要复核" };
+    return `系统的结论是${v[m[1]] ?? m[1]}。最有力的反对理由：`;
+  }
+  return head;
+}
+
+/** One past call from "what happened last time", written by the journal in a fixed shape. */
+export function lessonText(text: string, lang: "en" | "zh" = "en"): string {
+  if (lang !== "zh") return text;
+  const m = /^(\S+) (long|short) over (\d+)h from (\d+ \w+): (.*)$/.exec(text);
+  if (!m) return text;
+  const [, ticker, side, h, whenEn, rest] = m;
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dm = /^(\d+) (\w{3})/.exec(whenEn);
+  const when = dm && MONTHS.includes(dm[2]) ? `${MONTHS.indexOf(dm[2]) + 1} 月 ${dm[1]} 日` : whenEn;
+  let body = rest;
+  let extra = "";
+  let money = "";
+  let r: RegExpExecArray | null;
+  if ((r = /^(.*?)( It went through that level intraday, worst point (.+?), then came back\.| Worst point inside the window (.+?)\.)?( The desk cut the size from ([\d,]+) to ([\d,]+), which (avoided|cost) about ([\d,]+) USDT\.)?$/.exec(rest))) {
+    body = r[1];
+    if (r[3]) extra = `盘中曾跌穿这个水平，最差点 ${r[3]}，之后又回来了。`;
+    else if (r[4]) extra = `窗口内最差点 ${r[4]}。`;
+    if (r[5]) money = `系统把仓位从 ${r[6]} 降到 ${r[7]}，${r[8] === "avoided" ? "避免了" : "多亏了"}约 ${r[9]} USDT。`;
+  }
+  let b: RegExpExecArray | null;
+  if ((b = /^it closed (\S+), below the (\S+) we sized against\.$/.exec(body))) body = `收于 ${b[1]}，低于当时定仓所依据的 ${b[2]}。`;
+  else if ((b = /^it closed (\S+), above the (\S+) upper bound\.$/.exec(body))) body = `收于 ${b[1]}，高于 ${b[2]} 的上界。`;
+  else if ((b = /^it closed (\S+), inside the (\S+) to (\S+) band\.$/.exec(body))) body = `收于 ${b[1]}，处于 ${b[2]} 到 ${b[3]} 的区间之内。`;
+  else if ((b = /^the engine refused to forecast \(too few similar moments\)\. It closed (\S+)\.$/.exec(body))) body = `系统拒绝给出预测（相似时刻太少）。实际收于 ${b[1]}。`;
+  else return text;
+  return `${ticker} ${side === "long" ? "做多" : "做空"}，持有 ${h} 小时，自 ${when} 起：${body}${extra ? ` ${extra}` : ""}${money ? ` ${money}` : ""}`;
+}
+
 /** One verdict reason as a plain one-line sentence. The server writes "market posture:
  *  hostile regime (size multiplier 0.50); ..." - a rule name and a machine clause - which
  *  reads as a leaked variable at headline size. Known shapes are rewritten; anything else
  *  keeps its words with the first letter capitalised. */
 export function plainReason(text: string, lang: "en" | "zh" = "en"): string {
   const t = plainText(text, lang).trim();
+  if (lang === "zh") {
+    const z = advisoryZh(t);
+    if (z) return z;
+  }
   const m = /^([a-z][a-z_ ]*?):\s*(.+)$/.exec(t);
   if (!m) return sentence(t);
   const key = m[1].trim().replace(/_/g, " ");

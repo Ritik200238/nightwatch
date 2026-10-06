@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nightwatch.api.intake import parse_message, read_conversation
+from nightwatch.api.intake import asks_to_narrow, needs_the_model, parse_message, read_conversation
 from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
 
 TICKERS = "AAPL AMD AMZN AVGO BABA COIN CRCL GOOGL HOOD INTC META MSFT MSTR MU NFLX NVDA PLTR QQQ SMCI SPY SQQQ TQQQ TSLA TSM".split()
@@ -637,3 +637,39 @@ def test_a_leveraged_report_carries_the_ladder(seeded_store):  # noqa: F811
     assert sum(1 for x in r.leverage["ladder"] if x["requested"]) == 1
     req = next(x for x in r.leverage["ladder"] if x["requested"])
     assert req["analog_hits"] == r.leverage["analog_hits"]  # the ladder agrees with the headline count
+
+
+def test_a_night_said_loosely_is_still_an_overnight_hold():
+    for phrase in ("for the night", "for the nite", "tonight", "tonite", "over night", "overnite", "through the night"):
+        assert p(f"long 5k TSLA {phrase}").horizon_kind == "next_open", phrase
+    # "night" alone, or a "night owl" turn of phrase, is not a hold.
+    assert p("long 5k TSLA, night owl trade").horizon_kind is None
+
+
+def test_a_negative_size_after_a_finished_trade_is_asked_about_not_ignored():
+    msgs = [{"role": "user", "content": "long 10k TSLA overnight"}, {"role": "assistant", "content": "ok"}, {"role": "user", "content": "make it -5k"}]
+    r = read_conversation(msgs, TICKERS)
+    assert r.kind == "clarify" and "negative" in r.reply
+    # A later, valid size clears it.
+    ok = read_conversation([*msgs, {"role": "assistant", "content": "x"}, {"role": "user", "content": "make it 5k"}], TICKERS)
+    assert ok.kind == "analyze" and ok.notional_quote == 5000
+
+
+@pytest.mark.parametrize("text,invalid", [
+    ("周末做多特斯拉 2万U，账户20万，止损340，理由：财报行情，错了如果收盘跌破340", "收盘跌破340"),
+    ("做多 TSLA 2万U，理由：财报行情，跌破340就错了", "跌破340"),
+    ("做多 TSLA 2万U，因为财报，失效条件：收盘跌破340", "收盘跌破340"),
+    ("做多 TSLA 2万U，因为财报，如果收盘跌破340说明我错了", "收盘跌破340"),
+])
+def test_chinese_wrong_if_phrasings_are_all_read(text, invalid):
+    got = p(text)
+    assert got.invalidation == invalid, got
+    assert got.notional_quote == 20_000
+
+
+def test_a_word_in_the_traders_own_reason_is_not_a_request_to_narrow_the_history():
+    # "just announced" in a reason sent a plain trade down the model path (20 s instead of 1 s).
+    msg = "long 8k NVDA overnight, account 100k, stop 235, because NVDA just announced a new AI chip, wrong if it closes below 230"
+    assert not asks_to_narrow(msg) and not needs_the_model(msg)
+    assert asks_to_narrow("long 8k NVDA overnight, compare only against Fridays")
+    assert asks_to_narrow("long 8k NVDA overnight because momentum, but only count Fridays")

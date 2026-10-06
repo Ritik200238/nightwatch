@@ -939,6 +939,7 @@ def _add_zh_names(out: dict[str, Any]) -> None:
     so the report page shows the same words the briefing does."""
     try:
         from nightwatch.api.intake import FAILURE_ZH, preset_zh
+        from nightwatch.decision.zh import assumption_zh, note_zh
 
         for m in out.get("failure_modes") or []:
             if isinstance(m, dict) and m.get("key") in FAILURE_ZH:
@@ -946,6 +947,12 @@ def _add_zh_names(out: dict[str, Any]) -> None:
         for p in ((out.get("stress") or {}).get("presets")) or []:
             if isinstance(p, dict) and p.get("id") and p.get("name"):
                 p["name_zh"] = preset_zh(p["id"], p["name"])
+                # The "how often" line under each preset in the stress table; absent when it is not a known shape.
+                if p.get("probability_note") and (zh := note_zh(p["probability_note"])):
+                    p["probability_note_zh"] = zh
+        for a in out.get("assumptions") or []:
+            if isinstance(a, dict) and a.get("text") and (zh := assumption_zh(a["text"])):
+                a["text_zh"] = zh
     except Exception:  # noqa: BLE001 - a translation must never break a report
         log.exception("zh names failed")
 
@@ -1111,7 +1118,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
 
     # 4. Stress.
     t0 = time.perf_counter()
-    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=as_of, analog_p5=_primary_p5(analog, primary),
+    stress = _stress_section(ctx, ticket, spec, snapshot, frame, book, fees["spot_taker"], horizon_h, entry_price, warnings, as_of=_hold_start(ticket, as_of), analog_p5=_primary_p5(analog, primary),
                              options_move_pct=options["implied_move_pct"] if options else None)
     if options:
         from nightwatch.features import options as options_mod
@@ -1458,7 +1465,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     try:
         from nightwatch.decision.timeline import build as build_timeline
 
-        report.timeline = build_timeline(as_of, horizon_h)
+        report.timeline = build_timeline(as_of, horizon_h, hold_start=_hold_start(ticket, as_of))
     except Exception:  # noqa: BLE001 - a clock strip must never break a verdict
         log.exception("timeline failed")
 
@@ -1491,6 +1498,21 @@ def _options_block(ctx: AnalysisContext, ticker: str, as_of: datetime, horizon_h
     except Exception:  # noqa: BLE001
         log.exception("options implied move for %s failed", ticker)
         return None
+
+
+def _hold_start(ticket: TradeTicket, as_of: datetime) -> datetime:
+    """When the hold begins. Now, except for a scheduled weekend ("over the weekend" asked
+    early in the week), which begins at Friday's close: the closed time it crosses is that
+    one weekend, not the nights between now and then."""
+    label = (ticket.extra or {}).get("horizon_label") if isinstance(ticket.extra, dict) else None
+    if isinstance(label, str) and label.startswith("the coming weekend"):
+        from nightwatch.analog.outcomes import coming_weekend_hours
+
+        try:
+            return max(ensure_utc(as_of), coming_weekend_hours(as_of)[1])
+        except Exception:  # noqa: BLE001 - fall back to holding from now
+            log.exception("weekend hold start failed")
+    return ensure_utc(as_of)
 
 
 def _weekend_only(ticket: TradeTicket, horizon_h: float, frame: pd.DataFrame, as_of: datetime) -> dict | None:

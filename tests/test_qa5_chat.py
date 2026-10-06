@@ -81,3 +81,23 @@ def test_a_change_to_the_report_on_screen_is_still_a_what_if(client):
     first = say(client, "long 10k TSLA overnight, account 50k")
     out = say(client, "long 10k TSLA overnight, account 50k", "halve it", ctx=first["report"]["forecast_id"])
     assert out.get("mode") == "what_if"
+
+
+def test_a_long_reply_of_the_desk_in_the_history_does_not_break_the_next_message(client):
+    # The base-rate answer carries the whole brief (> 2,000 chars). Sent back as history it
+    # was refused ("content is too long") and every later message in that chat failed.
+    long_reply = "x" * 5000
+    msgs = [_u("how often does NVDA fall 5% over a weekend?"), {"role": "assistant", "content": long_reply}, _u("long 5k NVDA overnight, account 50k")]
+    r = client.post("/chat", json={"messages": msgs})
+    assert r.status_code == 200, r.text
+    assert r.json()["ticket"]["ticker"] == "NVDA"
+
+
+def test_only_the_desks_own_turns_are_trimmed_a_users_overlong_message_is_still_refused():
+    from pydantic import ValidationError
+
+    from nightwatch.api.app import CHAT_CONTENT_MAX, ChatMessage
+
+    assert len(ChatMessage(role="assistant", content="y" * 9000).content) == CHAT_CONTENT_MAX
+    with pytest.raises(ValidationError):
+        ChatMessage(role="user", content="y" * 9000)

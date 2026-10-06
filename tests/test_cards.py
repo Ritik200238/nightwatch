@@ -174,3 +174,12 @@ def test_the_chat_endpoint_carries_the_card(client, monkeypatch):  # noqa: F811
     assert_from(flipped["card"], first["report"], flipped["report"])
     # A text-only answer has no card key at all.
     assert "card" not in _ask(client, fid, "thanks, that helps")
+
+
+def test_the_shock_card_carries_the_worst_presets_chinese_name(report):
+    # The chat card printed "最坏压力情景：Replay: COVID crash": the English preset name in a Chinese answer.
+    r = copy.deepcopy(report)
+    for p in r["stress"]["presets"]:
+        p["name_zh"] = "中文名：" + p["name"]
+    card = cards.shock_card(r, "what if it gaps down 10%?")
+    assert card["worst_name_zh"] == "中文名：" + card["worst_name"]

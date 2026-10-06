@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type ClosedHoursLine, type Report, type TicketInput } from "@/lib/api";
 import { fmtBps, fmtLev, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
-import { breakerReason, capDetail, plainReason, plainText, ruleReason, warningText } from "@/lib/plain";
+import { breakerReason, capDetail, lessonText, plainReason, plainText, ruleReason, secondOpinionHead, sensitivityNote, warningText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
 import { fmtDateL, fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
 
@@ -406,7 +406,7 @@ function Assumptions({ report, openAll, lang }: { report: Report; openAll?: bool
         {items.map((a, i) => (
           <li key={`${a.topic}-${i}`} className="flex gap-2">
             <span className={`mt-0.5 shrink-0 text-xs font-medium ${a.kind === "caveat" ? "text-status-warning" : "text-muted-foreground"}`}>{a.kind === "caveat" ? "!" : "–"}</span>
-            <span className={a.kind === "caveat" ? "text-foreground" : "text-muted-foreground"}>{a.text}</span>
+            <span className={a.kind === "caveat" ? "text-foreground" : "text-muted-foreground"}>{lang === "zh" && a.text_zh ? a.text_zh : a.text}</span>
           </li>
         ))}
       </ul>
@@ -1600,7 +1600,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
         `${so.against.length} 条反对${largest != null ? `，最大的一条价值 ${largest}` : ""}${so.supporting.length ? ` · ${so.supporting.length} 条支持` : ""}`,
       )}
       title={L("The case against this", "反对这笔交易的理由")}
-      subtitle={so.summary}
+      subtitle={secondOpinionHead(so.summary, lang)}
     >
       <ul className="space-y-2">
         {so.against.map((c) => (
@@ -2125,7 +2125,7 @@ function LessonsSection({ report, openAll, lang }: { report: Report; openAll?: b
         {lessons.map((l) => (
           <li key={l.forecast_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
             <Pill tone={LESSON_TONE[l.classification] ?? "muted"}>{tl(lang, "lesson", l.classification)}</Pill>
-            <span className="flex-1 text-muted-foreground">{l.text}</span>
+            <span className="flex-1 text-muted-foreground">{lessonText(l.text, lang)}</span>
           </li>
         ))}
       </ul>
@@ -2164,7 +2164,7 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
         <ul className="space-y-1 text-sm">
           {sen.notes.map((n) => (
             <li key={n} className="text-muted-foreground">
-              – {n}
+              – {sensitivityNote(n, lang)}
             </li>
           ))}
         </ul>
@@ -2186,7 +2186,7 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
                     <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{verdictLabel(lang, p.verdict)}</Pill>
                   </span>
                   <span className="col-span-2 text-muted-foreground sm:col-span-1">
-                    {p.binding_cap ? L(`${tl(lang, "cap", p.binding_cap)} binds`, `${tl(lang, "cap", p.binding_cap)}是限制项`) : ""}
+                    {p.binding_cap && (p.recommended_notional == null || p.recommended_notional < p.notional - 1) ? L(`${tl(lang, "cap", p.binding_cap)} binds`, `${tl(lang, "cap", p.binding_cap)}是限制项`) : ""}
                     {p.exit_cost_bps != null ? L(` · exit ${fmtBps(p.exit_cost_bps, 0)}`, ` · 平仓 ${fmtBps(p.exit_cost_bps, 0)}`) : ""}
                     {p.risk_pct_of_equity != null ? L(` · risk ${p.risk_pct_of_equity.toFixed(2)}% of equity`, ` · 风险占权益 ${p.risk_pct_of_equity.toFixed(2)}%`) : ""}
                   </span>
@@ -2275,7 +2275,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
                   <TableRow key={p.id}>
                     <TableCell>
                       <span className="font-medium">{presetName(lang, p.name, p.name_zh)}</span>
-                      <span className="block text-[13px] text-muted-foreground">{p.probability_note}</span>
+                      <span className="block text-[13px] text-muted-foreground">{lang === "zh" && p.probability_note_zh ? p.probability_note_zh : p.probability_note}</span>
                     </TableCell>
                     <TableCell>
                       <Pill tone={sevTone(p.severity)}>{lang === "zh" ? (STRINGS.zh.severity[p.severity] ?? p.severity) : p.severity}</Pill>

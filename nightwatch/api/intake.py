@@ -70,7 +70,7 @@ _PRICE_WORD = re.compile(r"\b(?:at|@|price|near|around|above|below|under|over)\s
 BARE_MONEY_FLOOR = 100.0
 _HOURS = re.compile(r"\b([\d.]+)\s*(?:hours?|hrs?|h)\b", re.I)
 _DAYS = re.compile(r"\b([\d.]+)\s*(?:days?|d)\b", re.I)
-_NEXT_OPEN = re.compile(r"\bovernight\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
+_NEXT_OPEN = re.compile(r"\bover\s*-?\s*night\b|\bovernite\b|\btonight\b|\btonite\b|\b(?:for|through|thru)\s+(?:the\s+|one\s+)?(?:night|nite)\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
 # "Through the weekend" said on a Thursday is until Monday's open, not Thursday's.
 _WEEKEND = re.compile(r"\bweekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b", re.I)
 # "until Wednesday", "through Thursday's close": a named day, held to its open unless the
@@ -690,6 +690,12 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
     if merged.account_equity_quote is None and account_equity:
         merged.account_equity_quote = account_equity
     done = _settle(merged)
+    if done.kind == "analyze" and merged.negative_size and last_text.strip():
+        # "make it -5k" after a finished trade: the earlier size is still on the ticket, so the
+        # run would go ahead and the minus sign would vanish without a word. Ask instead.
+        done.kind = "clarify"
+        done.reply = NEGATIVE_SIZE_REPLY["zh" if _CJK.search(last_text) else "en"]
+        return done
     if done.kind == "analyze" and latest_said_nothing:
         # "asdf qwerty lorem" after a finished trade: nothing in it asks for a run, so the
         # earlier ticket is not run again (and never with a side nobody said).
@@ -772,6 +778,8 @@ _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
 
 # How a trader asks to narrow the comparison, in either language the desk answers in.
+# Words that ask for a narrower comparison wherever they sit, reason or not.
+_NARROW_STRONG = re.compile(r"\bcompare\b|\bexcept\b|\bexclud\w*\b|\bonly\s+(?:against|count|compare|use|include|look|those|the)\b|对比|除了", re.I)
 _NARROW = re.compile(r"\bonly\b|\bjust\b|\bexcept\b|\bexclud\w*\b|\bcompare\b|只|仅|对比|除了", re.I)
 
 
@@ -782,7 +790,18 @@ def asks_to_narrow(text: str) -> bool:
     says when, not "compare only against weekends". The model is told the same, and
     this is the check that holds it to it.
     """
-    return bool(_NARROW.search(text or ""))
+    text = text or ""
+    if _NARROW_STRONG.search(text):
+        return True
+    # The trader's own reason is not a request: "because NVDA just announced a chip" has a
+    # "just" in it, which sent a plain trade to the 20-second model path for nothing.
+    from nightwatch.api import thesis_capture
+
+    said = thesis_capture.read(text)
+    for part in (said.thesis, said.invalidation):
+        if part:
+            text = re.sub(re.escape(part), " ", text, flags=re.I)
+    return bool(_NARROW.search(text))
 
 
 def needs_the_model(text: str) -> bool:

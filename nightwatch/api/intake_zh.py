@@ -49,7 +49,13 @@ _NEXT_OPEN = re.compile(r"过夜|隔夜|到开盘|开盘前|今晚")
 _HOURS = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(?:个)?小时")
 _DAYS = re.compile(r"([0-9]+)\s*天")
 _THESIS = re.compile(r"(?:因为|理由是|逻辑是|理由\s*[:：]|论点\s*[:：]|逻辑\s*[:：])(.+?)(?:[，,。；;！!？?]|$)")
-_INVALID = re.compile(r"(?:如果|若|假如)(.+?)(?:就算错|就错|说明我错|就止损|则离场|就离场)")
+# The ways a trader says what would prove them wrong: "如果收盘跌破340就算错", "跌破340就错了",
+# "错了如果收盘跌破340" (the English "wrong if" said in Chinese), "失效条件：跌破340".
+_INVALID = re.compile(
+    r"(?:如果|若|假如)(?P<a>.+?)(?:就算错了?|就错了?|说明我错了?|我就错了|就是我错了|就止损|则离场|就离场|就认错|就不成立)"
+    r"|(?:错了如果|错了若|错在|失效条件|证伪条件|无效条件|认错条件|止损条件)\s*[:：]?\s*(?:如果|若|假如)?(?P<b>[^，,。；;！!？?]+)"
+    r"|(?P<c>[^，,。；;！!？?]+?)(?:就算错了?|就错了|说明我错了?|就是我错了)"
+)
 # "账户10万U", "本金5万美元", "资金 20万U": the money on hand, never the position.
 # "我有10万U" is the money on hand too, unless a stock follows it ("我有2万U的特斯拉" is a holding).
 _ACCOUNT = re.compile(
@@ -321,5 +327,5 @@ def read(text: str, known: set[str]) -> dict[str, object]:
     if thesis:
         out["thesis"] = thesis.group(1).strip()
     if invalid:
-        out["invalidation"] = invalid.group(1).strip()
+        out["invalidation"] = (invalid.group("a") or invalid.group("b") or invalid.group("c")).strip()
     return out

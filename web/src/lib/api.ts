@@ -539,6 +539,7 @@ export interface Scenario {
   halt_hours: number;
   funding_rate: number;
   probability_note: string;
+  probability_note_zh?: string;
   calibration: Record<string, number | string>;
 }
 
@@ -1265,7 +1266,7 @@ export interface Report {
   /** A leveraged ticket's liquidation price and how often history reached it. */
   leverage?: LeverageView | null;
   /** What the verdict assumes, written by rules from the report's own fields. */
-  assumptions?: { topic: string; text: string; kind: "fact" | "caveat" }[];
+  assumptions?: { topic: string; text: string; text_zh?: string; kind: "fact" | "caveat" }[];
   /** How this trade loses money, worst first: trigger, mechanism, cost and how often. */
   failure_modes?: FailureMode[];
   /** Where the stated reason depends on an event the data can date, and does not match. */
@@ -1274,7 +1275,7 @@ export interface Report {
   /** Who turned the sentence into a ticket: "rules" when no model was needed. Chat reports only. */
   read_by?: { parsed_by: string; provider?: string | null; model?: string | null } | null;
   /** US regular sessions around the hold (NYSE calendar), for the market-clock strip. */
-  timeline?: { as_of: string; hold_end: string; market_open_at_as_of: boolean; next_open: string | null; sessions: { open: string; close: string }[] } | null;
+  timeline?: { as_of: string; hold_start?: string; hold_end: string; market_open_at_as_of: boolean; next_open: string | null; sessions: { open: string; close: string }[] } | null;
   /** The chained journal receipt for this verdict; see /verify. */
   receipt?: string | null;
   /** Where each headline number came from: live Bitget, history, assumed or AI. */
@@ -1308,6 +1309,7 @@ export interface ShockCard {
   p5_quote: number | null;
   worst_quote: number | null;
   worst_name: string | null;
+  worst_name_zh?: string | null;
   past: { p5_move_pct: number | null; p1_move_pct: number | null; windows: number | null; beyond: "1_in_20" | "1_in_100" | null } | null;
 }
 export interface CompareRow {

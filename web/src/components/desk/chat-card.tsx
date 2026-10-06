@@ -44,7 +44,7 @@ function Shock({ c }: { c: ShockCard }) {
   const bars: { label: string; value: number | null; tone: string }[] = [
     { label: tx(`At a ${Math.abs(c.move_pct).toLocaleString("en-US")}% move ${c.move_pct < 0 ? "down" : "up"}`, `${c.move_pct < 0 ? "下跌" : "上涨"} ${Math.abs(c.move_pct).toLocaleString("en-US")}% 时`), value: c.pnl_quote, tone: loss ? "bg-status-critical" : "bg-status-good" },
     { label: tx("1-in-20 loss (history)", "二十分之一的坏情况（历史）"), value: c.p5_quote, tone: "bg-status-warning" },
-    { label: tx(c.worst_name ? `Worst stress: ${c.worst_name}` : "Worst stress", c.worst_name ? `最坏压力情景：${c.worst_name}` : "最坏压力情景"), value: c.worst_quote, tone: "bg-status-critical" },
+    { label: tx(c.worst_name ? `Worst stress: ${c.worst_name}` : "Worst stress", c.worst_name ? `最坏压力情景：${c.worst_name_zh ?? c.worst_name}` : "最坏压力情景"), value: c.worst_quote, tone: "bg-status-critical" },
   ];
   const shown = bars.filter((b) => b.value != null);
   const max = Math.max(1, ...shown.map((b) => Math.abs(b.value as number)));
@@ -108,7 +108,10 @@ function Compare({ c }: { c: CompareCard }) {
         <span className="text-xs text-muted-foreground">{tx("Before", "之前")}</span>
         <span className="text-xs text-muted-foreground">{tx("After", "之后")}</span>
         {c.rows.map((r) => {
-          const changed = r.before !== r.after;
+          // "Changed" is what the reader sees: 14.4 bps and 13.6 bps both read "14 bps" and must
+          // not get an arrow beside an identical number.
+          const shown = (v: string | number | null) => (v == null ? "" : r.unit === "verdict" ? String(v) : r.unit === "pct" ? Number(v).toFixed(1) : String(Math.round(Number(v))));
+          const changed = shown(r.before) !== shown(r.after);
           const [en, zh] = ROW_LABEL[r.key];
           return (
             <div key={r.key} className="contents">

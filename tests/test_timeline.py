@@ -39,3 +39,32 @@ def test_sessions_cover_the_hold_and_beyond():
     tl = build(t, 72)
     last_open = datetime.fromisoformat(tl["sessions"][-1]["open"])
     assert last_open >= t + timedelta(hours=72)
+
+
+def test_scheduled_weekend_asked_midweek_is_one_closed_window_from_fridays_close():
+    from types import SimpleNamespace
+
+    from nightwatch.pipeline.analyze import _hold_start
+    from nightwatch.stress.scenarios import closed_windows_in_hold
+
+    tue = _dt("2026-03-10T15:00:00")  # Tue 11:00 EDT
+    ticket = SimpleNamespace(extra={"horizon_label": "the coming weekend, Friday's close to Monday's open"})
+    start = _hold_start(ticket, tue)
+    assert start == _dt("2026-03-13T20:00:00").replace(tzinfo=UTC)  # Fri 16:00 EDT
+    # From now a 65.5 h hold would span three nights; from Friday's close it is the one weekend.
+    assert closed_windows_in_hold(tue, 65.5) == 3
+    assert closed_windows_in_hold(start, 65.5) == 1
+    tl = build(tue, 65.5, hold_start=start)
+    assert tl["hold_start"] == start.isoformat()
+    assert tl["as_of"] == tue.isoformat()
+    assert datetime.fromisoformat(tl["hold_end"]) == start + timedelta(hours=65.5)
+
+
+def test_a_plain_hold_starts_now():
+    from types import SimpleNamespace
+
+    from nightwatch.pipeline.analyze import _hold_start
+
+    tue = _dt("2026-03-10T15:00:00").replace(tzinfo=UTC)
+    assert _hold_start(SimpleNamespace(extra={}), tue) == tue
+    assert "hold_start" not in build(tue, 6)

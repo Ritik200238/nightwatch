@@ -55,9 +55,11 @@ function ticketText(report: Report, symbol: string, lang: Lang): string {
   const t = report.ticket;
   const v = report.verdict;
   const size = v.recommended_notional ?? t.notional_quote;
+  const scored = report.primary_horizon && report.primary_horizon !== `${Math.round(report.horizon_h)}h` ? (lang === "zh" ? `（按 ${report.primary_horizon} 评分）` : ` (scored at ${report.primary_horizon})`) : "";
   const lines = [
     `${t.side === "long" ? L("BUY", "买入") : L("SELL", "卖出")} ${symbol} · ${fmtUsd(size)} USDT`,
-    L(`Hold ${fmtHoursL(report.horizon_h, lang)} (${report.primary_horizon})`, `持有 ${fmtHoursL(report.horizon_h, lang)}（${report.primary_horizon}）`),
+    // The scored horizon is only worth a second mention when it is not just the hold again.
+    L(`Hold ${fmtHoursL(report.horizon_h, lang)}${scored}`, `持有 ${fmtHoursL(report.horizon_h, lang)}${scored}`),
   ];
   if (t.stop_price) lines.push(L(`Stop ${t.stop_price}`, `止损 ${t.stop_price}`));
   if (v.hedge_ratio) lines.push(L(`Hedge ${(v.hedge_ratio * 100).toFixed(0)}% with the perp`, `用永续合约对冲 ${(v.hedge_ratio * 100).toFixed(0)}%`));

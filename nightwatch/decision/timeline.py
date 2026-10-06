@@ -19,10 +19,15 @@ from nightwatch.time_utils import _regular_bounds, classify_session, ensure_utc,
 _TRAILING_DAYS = 6
 
 
-def build(as_of: datetime, horizon_h: float) -> dict[str, Any]:
-    """Regular sessions from the last one before ``as_of`` to a few days past the hold."""
+def build(as_of: datetime, horizon_h: float, hold_start: datetime | None = None) -> dict[str, Any]:
+    """Regular sessions from the last one before ``as_of`` to a few days past the hold.
+
+    ``hold_start`` is for a hold that begins later than the analysis (a scheduled weekend,
+    asked on a Tuesday, starts at Friday's close): the hold, and so ``hold_end``, is counted
+    from there. Without it the hold starts at ``as_of``."""
     t0 = ensure_utc(as_of)
-    end = t0 + timedelta(hours=float(horizon_h))
+    hs = ensure_utc(hold_start) if hold_start is not None and ensure_utc(hold_start) > t0 else None
+    end = (hs or t0) + timedelta(hours=float(horizon_h))
     info = classify_session(t0)
     d = info.et_date
     # The session that opened last at or before t0: today's if it has opened, else the previous one.
@@ -39,6 +44,7 @@ def build(as_of: datetime, horizon_h: float) -> dict[str, Any]:
     nxt = next((s for s in sessions if datetime.fromisoformat(s["open"]) > t0), None)
     return {
         "as_of": t0.isoformat(),
+        **({"hold_start": hs.isoformat()} if hs else {}),
         "hold_end": end.isoformat(),
         "market_open_at_as_of": not info.is_closed,
         "next_open": nxt["open"] if nxt else None,
