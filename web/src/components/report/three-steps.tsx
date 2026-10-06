@@ -84,9 +84,9 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
   const wk = a?.weekend_hold;
   const lensLine = (() => {
     if (!lens || lens.names.length === 0) return L("Lens: none, every kind of moment counts", "筛选条件：无，所有类型的时刻都参与比较");
-    if (!lens.applied) return `${L("Lens asked for but not applied: ", "已请求筛选但未能应用：")}${lens.refused}`;
+    if (!lens.applied) return `${L("Lens asked for but not applied: ", "已请求筛选但未能应用：")}${(lang === "zh" && lens.refused_zh) || lens.refused}`;
     const who = lens.auto ? L("chosen by the desk", "由系统自动选择") : modelName ? L(`chosen by ${modelName} from your wording`, `由 ${modelName} 根据你的措辞选择`) : L("chosen by you", "由你指定");
-    return `${L("Lens: ", "筛选条件：")}${lens.description} (${who})`;
+    return `${L("Lens: ", "筛选条件：")}${lang === "zh" && lens.description_zh ? lens.description_zh : lens.description} (${who})`;
   })();
 
   // Step 2 -------------------------------------------------------------------

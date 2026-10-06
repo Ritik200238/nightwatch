@@ -19,6 +19,7 @@ from dataclasses import replace
 from typing import Any
 
 from nightwatch.decision.ticket import HorizonKind
+from nightwatch.time_utils import whole_hours
 
 ASKS = re.compile(
     r"\bsafest\b|\bbest way\b|\bcompare\b.*\b(?:ways|options|versions|holds?)\b|\b(?:ways|options) to (?:hold|do|play|take)\b|\balternatives?\b"
@@ -103,7 +104,7 @@ def _zh(base: Any, rows: list[dict[str, Any]], best: dict[str, Any] | None, half
     """The same table in Chinese; the numbers are the same fields."""
     lines = [f"同一个{'做多' if base.side.value == 'long' else '做空'} {base.ticker} 的想法，按 {len(rows)} 种方式在同一时刻重新计算："]
     for x in rows:
-        bits = [f"{VERDICT_ZH.get(x['verdict'], x['verdict'])}，{_usd(x['size'])} USDT", f"持有 {x['hours']:.0f} 小时"]
+        bits = [f"{VERDICT_ZH.get(x['verdict'], x['verdict'])}，{_usd(x['size'])} USDT", f"持有 {whole_hours(x['hours'])} 小时"]
         if x["p5_quote"] is not None:
             bits.append(f"二十分之一的坏情况 {_usd(x['p5_quote'])} USDT（{x['p5_pct']:+.1f}%）" + ("，只计未对冲的一半" if x["hedge_bps"] is not None else ""))
         if x["worst_quote"] is not None:
@@ -148,7 +149,7 @@ def answer(state: Any, context: dict[str, Any], lang: str = "en") -> dict[str, A
     zh = lang == "zh"
     lines = []
     for x in rows:
-        bits = [f"{x['verdict'].replace('_', ' ')} at {_usd(x['size'])} USDT", f"held {x['hours']:.0f}h"]
+        bits = [f"{x['verdict'].replace('_', ' ')} at {_usd(x['size'])} USDT", f"held {whole_hours(x['hours'])}h"]
         if x["p5_quote"] is not None:
             on = " on the unhedged half" if x["hedge_bps"] is not None else ""
             bits.append(f"1-in-20 loss {_usd(x['p5_quote'])} USDT ({x['p5_pct']:+.1f}%){on}")

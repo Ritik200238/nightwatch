@@ -18,6 +18,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 
+class DeskBusy(TimeoutError):
+    """The analysis lock was not free within the wait the caller allowed."""
+
+
 class RequestFirstLock:
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -42,6 +46,21 @@ class RequestFirstLock:
         with self._cv:
             self._wanted -= 1
             self._cv.notify_all()
+
+    @contextmanager
+    def request(self, timeout_s: float) -> Iterator[None]:
+        """Like ``with lock:`` but gives up with ``DeskBusy`` after ``timeout_s`` seconds, so a
+        caller with its own deadline never queues past it (and never runs late, unseen)."""
+        with self._cv:
+            self._wanted += 1
+        if not self._lock.acquire(timeout=max(0.0, timeout_s)):
+            self._done()
+            raise DeskBusy(f"the analysis lock was not free within {timeout_s:.0f} s")
+        try:
+            yield
+        finally:
+            self._lock.release()
+            self._done()
 
     @property
     def wanted(self) -> int:

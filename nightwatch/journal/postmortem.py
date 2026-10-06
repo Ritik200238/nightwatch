@@ -27,7 +27,7 @@ from enum import Enum
 
 import pandas as pd
 
-from nightwatch.time_utils import ensure_utc, from_epoch_ms, to_epoch_ms, utc_now
+from nightwatch.time_utils import ensure_utc, from_epoch_ms, to_epoch_ms, utc_now, whole_hours
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lessons (
@@ -122,7 +122,7 @@ def compose(row: pd.Series, cls: Classification, *, touched_stress: bool, recove
     at = ensure_utc(row["as_of"])
     when = f"{at.day} {at:%b}"  # "%-d" is a glibc extension and dies on Windows
     side = str(row["side"]).lower()
-    head = f"{row['ticker']} {side} over {row['horizon_h']:.0f}h from {when}"
+    head = f"{row['ticker']} {side} over {whole_hours(row['horizon_h'])}h from {when}"
     ret = float(row["ret_pct"])
 
     if cls is Classification.NO_DISTRIBUTION:

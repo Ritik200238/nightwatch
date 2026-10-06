@@ -70,9 +70,9 @@ export function BookStressView({ stress, lang }: { stress: BookStress; lang: Lan
                           <Pill tone="warning">{L("not enough alone", "单独不够")}</Pill>
                         </span>
                       ) : null}
-                      {p.notes.map((n) => (
+                      {p.notes.map((n, i) => (
                         <span key={n} className="block text-[13px] text-muted-foreground">
-                          {n}
+                          {(lang === "zh" && p.notes_zh?.[i]) || n}
                         </span>
                       ))}
                     </TableCell>
@@ -109,7 +109,7 @@ export function BookStressView({ stress, lang }: { stress: BookStress; lang: Lan
                 {crashes.map((c) => (
                   <TableRow key={c.key}>
                     <TableCell>
-                      {c.name}
+                      {lang === "zh" && c.name_zh ? c.name_zh : c.name}
                       {c.date ? <span className="block text-[13px] text-muted-foreground">{c.date}</span> : null}
                     </TableCell>
                     <TableCell className="tabular text-right text-muted-foreground">{c.held_quote == null ? "—" : fmtUsd(c.held_quote)}</TableCell>
@@ -161,8 +161,8 @@ export function BookStressView({ stress, lang }: { stress: BookStress; lang: Lan
       ) : null}
       {stress.notes.length ? (
         <ul className="space-y-1 text-[13px] text-muted-foreground">
-          {stress.notes.map((n) => (
-            <li key={n}>– {n}</li>
+          {stress.notes.map((n, i) => (
+            <li key={n}>– {(lang === "zh" && stress.notes_zh?.[i]) || n}</li>
           ))}
         </ul>
       ) : null}

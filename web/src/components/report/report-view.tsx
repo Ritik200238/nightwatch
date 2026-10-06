@@ -325,7 +325,7 @@ function PremiseNote({ report, lang }: { report: Report; lang: Lang }) {
       <span className="font-medium text-foreground">
         {passes ? L("The desk's limits pass, but check your own plan first: ", "交易台的各项限额通过了，但请先检查你自己的计划：") : L("Check your plan: ", "请检查你的计划：")}
       </span>
-      <span className="text-muted-foreground">{report.premise.join(" ")}</span>
+      <span className="text-muted-foreground">{report.premise.map((p, i) => (lang === "zh" && report.premise_zh?.[i]) || p).join(lang === "zh" ? "" : " ")}</span>
     </div>
   );
 }
@@ -438,7 +438,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
   else if ((v.verdict === "REDUCE_TO" || v.verdict === "REVIEW") && rec != null && smaller) sizeText = L(`${fmtUsd(rec)} of ${fmtUsd(req)} USDT`, `${fmtUsd(rec)} / ${fmtUsd(req)} USDT`);
   else if (v.verdict === "HEDGE") sizeText = L(`hedge ${fmtRatio(v.hedge_ratio)} of ${fmtUsd(req)} USDT`, `对冲 ${fmtRatio(v.hedge_ratio)} · ${fmtUsd(req)} USDT`);
   const prov = report.provenance?.items;
-  const reasonLines = v.reasons.map((r) => plainReason(r, lang));
+  const reasonLines = v.reasons.map((r, i) => (lang === "zh" && v.reasons_zh?.[i]) || plainReason(r, lang));
   // A REVIEW with no account size is the first answer most people see. One sentence: what to do,
   // and why, with the loss at the size they asked for. The verdict and the size are unchanged.
   const hz = report.analog?.horizons?.[report.primary_horizon];
@@ -527,7 +527,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
         <Stat
           label={cap ? L("Size held down by", "仓位被压低的原因") : L("Size", "仓位")}
           value={cap ? fmtUsd(cap.notional as number) : fmtUsd(t.notional_quote)}
-          hint={cap ? `${tl(lang, "cap", cap.name)} — ${capDetail(cap.detail, lang)}` : L("inside every cap", "在所有上限之内")}
+          hint={cap ? `${tl(lang, "cap", cap.name)} — ${lang === "zh" && cap.detail_zh ? cap.detail_zh : capDetail(cap.detail, lang)}` : L("inside every cap", "在所有上限之内")}
           tone={cap ? "warning" : "good"}
           chip={<SourceChip entry={prov?.size} lang={lang} />}
         />
@@ -557,8 +557,8 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
             <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> {L("Caveats", "注意事项")}
           </p>
           <ul className="space-y-1 text-muted-foreground">
-            {report.warnings.map((w) => (
-              <li key={w}>{warningText(w, lang)}</li>
+            {report.warnings.map((w, i) => (
+              <li key={w}>{(lang === "zh" && report.warnings_zh?.[i]) || warningText(w, lang)}</li>
             ))}
           </ul>
         </div>
@@ -1098,7 +1098,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
                 )}
                 <span>
                   <span className="font-medium">{tl(lang, "rule", r.rule)}</span>
-                  <span className="text-muted-foreground"> — {ruleReason(r.reason, lang)}</span>
+                  <span className="text-muted-foreground"> — {(lang === "zh" && r.reason_zh) || ruleReason(r.reason, lang)}</span>
                 </span>
               </li>
             ))}
@@ -1142,7 +1142,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
                   <div className="h-1.5 w-full rounded-full bg-muted" aria-hidden>
                     <div className={`h-1.5 rounded-full ${binding ? "bg-status-warning" : "bg-chart-1"}`} style={{ width: `${width}%` }} />
                   </div>
-                  <p className="text-[13px] text-muted-foreground">{capDetail(c.detail, lang)}</p>
+                  <p className="text-[13px] text-muted-foreground">{lang === "zh" && c.detail_zh ? c.detail_zh : capDetail(c.detail, lang)}</p>
                 </li>
               );
             })}
@@ -1233,7 +1233,7 @@ function LensNote({ report, onUnfiltered, lang }: { report: Report; onUnfiltered
   return (
     <div className={`mb-4 rounded-lg border p-3 text-sm ${l.applied ? "border-primary/40 bg-primary/5" : "border-status-warning/40 bg-status-warning/5"}`}>
       <p className="font-medium">
-        {l.applied ? <>{L("Narrowed to ", "已缩小范围至：")}{l.description}</> : <>{L("Could not narrow to ", "无法缩小范围至：")}{l.description}</>}
+        {l.applied ? <>{L("Narrowed to ", "已缩小范围至：")}{lang === "zh" && l.description_zh ? l.description_zh : l.description}</> : <>{L("Could not narrow to ", "无法缩小范围至：")}{lang === "zh" && l.description_zh ? l.description_zh : l.description}</>}
         {l.auto ? <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-normal">{L("automatic", "自动")}</span> : null}
       </p>
       {l.auto ? (
@@ -1265,12 +1265,12 @@ function LensNote({ report, onUnfiltered, lang }: { report: Report; onUnfiltered
           )}
         </p>
       ) : (
-        <p className="mt-1 text-[13px] text-muted-foreground">{l.refused || L("the filter left too little history to search", "筛选之后剩下的历史太少，无法检索")}</p>
+        <p className="mt-1 text-[13px] text-muted-foreground">{(lang === "zh" && l.refused_zh) || l.refused || L("the filter left too little history to search", "筛选之后剩下的历史太少，无法检索")}</p>
       )}
       <ul className="mt-2 space-y-0.5 text-[13px] text-muted-foreground">
         {l.lenses.map((x) => (
           <li key={x.name}>
-            <span className="text-foreground">{x.label}</span> — {x.definition}
+            <span className="text-foreground">{lang === "zh" && x.label_zh ? x.label_zh : x.label}</span> — {lang === "zh" && x.definition_zh ? x.definition_zh : x.definition}
           </li>
         ))}
       </ul>
@@ -1722,7 +1722,7 @@ function LiquidityByTimeOfWeek({ report, lang }: { report: Report; lang: Lang })
           </TableBody>
         </Table>
       </div>
-      {h.note ? <p className="mt-1 text-[13px] text-muted-foreground">{h.note}</p> : null}
+      {h.note ? <p className="mt-1 text-[13px] text-muted-foreground">{lang === "zh" && h.note_zh ? h.note_zh : h.note}</p> : null}
     </div>
   );
 }
@@ -2015,8 +2015,8 @@ function PortfolioSection({ report, openAll, lang }: { report: Report; openAll?:
       {p.stress ? <BookStressView stress={p.stress} lang={lang} /> : null}
       {p.notes.length ? (
         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-          {p.notes.map((n) => (
-            <li key={n}>– {n}</li>
+          {p.notes.map((n, i) => (
+            <li key={n}>– {(lang === "zh" && p.notes_zh?.[i]) || n}</li>
           ))}
         </ul>
       ) : null}

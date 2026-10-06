@@ -147,6 +147,7 @@ def _number(args: dict[str, Any], key: str, *, required: bool = False, low: floa
 
 def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
     from nightwatch.analog import lens as lens_mod
+    from nightwatch.api.guard import plain_message
     from nightwatch.api.intake import brief
     from nightwatch.decision.ticket import MAX_HOLD_HOURS, MAX_NOTIONAL, MAX_PRICE, HorizonKind, TradeTicket, stop_side_problem
     from nightwatch.features.snapshot import InsufficientData
@@ -201,7 +202,7 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
             lenses=tuple(x.name for x in lens_mod.resolve([str(c) for c in conditions])),
         )
     except ValueError as exc:
-        raise ToolError(str(exc)) from exc
+        raise ToolError(plain_message(exc)) from exc
     problem = stop_side_problem(ticket, state.ctx.latest_spot_close(ticker, None))
     if problem:
         raise ToolError(problem)
@@ -209,7 +210,7 @@ def _stress_test(state: Any, args: dict[str, Any]) -> dict[str, Any]:  # noqa: A
         with state.lock:
             report = analyze(state.ctx, ticket, record=False)
     except InsufficientData as exc:
-        raise ToolError(str(exc)) from exc
+        raise ToolError(plain_message(exc)) from exc
     payload = report.to_dict()
     a = payload.get("analog") or {}
     h = (a.get("horizons") or {}).get(payload.get("primary_horizon")) or {}

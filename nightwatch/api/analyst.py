@@ -31,6 +31,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from nightwatch.features.phrases import earnings_ahead
+from nightwatch.time_utils import whole_hours
 
 log = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
     c = h.get("cohort") or {}
     p5 = _loss_p5(h)
     lines = [
-        f"[desk] Trade: {t.get('side')} {t.get('notional_quote'):,.0f} USDT of {t.get('ticker')}, held {r.get('horizon_h', 0):.0f} hours.",
+        f"[desk] Trade: {t.get('side')} {t.get('notional_quote'):,.0f} USDT of {t.get('ticker')}, held {whole_hours(r.get('horizon_h', 0))} hours.",
         f"[desk] Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
         f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
     ]
@@ -234,7 +235,7 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
         lines.append("[bitget] Bitget's and Nasdaq's earnings calendars give the same next report date.")
     for f in (r.get("filings") or [])[:2]:
         if f.get("market_moving") == "unread":
-            lines.append(f"[filing] Fresh filing: a {f.get('form')} landed {f.get('hours_ago', 0):.0f}h ago; the model has not read it yet, so its impact is unknown.")
+            lines.append(f"[filing] Fresh filing: a {f.get('form')} landed {whole_hours(f.get('hours_ago', 0))}h ago; the model has not read it yet, so its impact is unknown.")
         else:
             lines.append(f"[filing] Fresh filing: {f.get('headline')} ({f.get('market_moving')} impact).")
     for w in (r.get("warnings") or [])[:3]:

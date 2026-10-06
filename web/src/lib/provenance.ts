@@ -12,7 +12,9 @@ export type ProvKind = "live" | "history" | "assumed" | "ai";
 export interface ProvEntry {
   kind: ProvKind;
   source?: string;
+  source_zh?: string;
   feed?: string;
+  feed_zh?: string;
   ts?: string | null;
   age_s?: number | null;
   mode?: string;
@@ -91,19 +93,19 @@ export function detailText(e: ProvEntry, lang: Lang): string[] {
   if (e.kind === "live") {
     out.push(
       e.feed
-        ? L(`Live from Bitget: ${e.source ?? ""} (${e.feed}).`, `来自 Bitget 实时数据：${e.source ?? ""}（${e.feed}）。`)
-        : L(`Live from Bitget: ${e.source ?? ""}.`, `来自 Bitget 实时数据：${e.source ?? ""}。`),
+        ? L(`Live from Bitget: ${e.source ?? ""} (${e.feed}).`, `来自 Bitget 实时数据：${e.source_zh ?? e.source ?? ""}（${e.feed_zh ?? e.feed}）。`)
+        : L(`Live from Bitget: ${e.source ?? ""}.`, `来自 Bitget 实时数据：${e.source_zh ?? e.source ?? ""}。`),
     );
     if (e.ts) out.push(L(`Read ${new Date(e.ts).toUTCString()}${e.age_s ? `, ${ageText(e.age_s, lang)} before this verdict` : ""}.`, `读取时间 ${new Date(e.ts).toUTCString()}${e.age_s ? `，早于本结论 ${ageText(e.age_s, lang)}` : ""}。`));
     if (e.mode && e.mode !== "live") out.push(e.stale ? L("This book was older than the freshness limit and a fresh read failed; treat the cost as approximate.", "这份盘口已超过新鲜度上限，且重新读取失败；成本仅供参考。") : L("Taken from the desk's own once-a-minute recording of this book.", "取自本系统每分钟一次的盘口记录。"));
   } else if (e.kind === "history") {
     const s = sample(e, lang);
-    out.push(L(`Measured from history: ${e.source ?? ""}.`, `由历史数据测得：${e.source ?? ""}。`));
+    out.push(L(`Measured from history: ${e.source ?? ""}.`, `由历史数据测得：${e.source_zh ?? e.source ?? ""}。`));
     if (s) out.push(L(`Sample: ${s}${e.n_candidates ? ` retrieved from ${e.n_candidates.toLocaleString()} candidate hours` : ""}${e.horizon ? `, held ${e.horizon}` : ""}.`, `样本：${s}${e.n_candidates ? `，从 ${e.n_candidates.toLocaleString()} 个候选小时中检索` : ""}${e.horizon ? `，持有 ${e.horizon}` : ""}。`));
     if (e.n_fit) out.push(L(`The tail is calibrated on ${e.n_fit.toLocaleString()} earlier scored forecasts.`, `尾部经 ${e.n_fit.toLocaleString()} 个更早已评分的预测校准。`));
     if (e.n_paths) out.push(L(`${e.n_paths.toLocaleString()} simulated paths.`, `${e.n_paths.toLocaleString()} 条模拟路径。`));
   } else if (e.kind === "assumed") {
-    out.push(L(`Assumed, not measured: ${e.source ?? "a preset or policy rule"}.`, `假设值，并非测得：${e.source ?? "预设或策略规则"}。`));
+    out.push(L(`Assumed, not measured: ${e.source ?? "a preset or policy rule"}.`, `假设值，并非测得：${e.source_zh ?? e.source ?? "预设或策略规则"}。`));
   } else {
     out.push(L("Written by the Qwen analyst after the report was finished. It cannot change a number, and any figure it quotes is checked against the report.", "由 Qwen 分析师在报告完成后撰写。它无法改变任何数字，所引用的数字都会与报告核对。"));
   }

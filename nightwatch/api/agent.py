@@ -18,26 +18,31 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
 from nightwatch.api import analyst
+from nightwatch.api.locking import DeskBusy
 from nightwatch.features import bitget_data
 from nightwatch.time_utils import utc_now
 
 log = logging.getLogger(__name__)
 
 MAX_CALLS = 5
-TIME_BUDGET_S = 45.0
-# One slow call must not eat the whole budget: a live run took 83 s for two checks. Each model
-# call and each tool call gets its own cap, and the run as a whole ends by HARD_STOP_S with
-# whatever it has found so far.
+TIME_BUDGET_S = 40.0
+# One slow call must not eat the whole budget: a live run took 83 s for two checks, and another
+# 62 s with one check lost to a 30 s wait. Each model call and each tool call gets its own cap,
+# and the run as a whole ends by HARD_STOP_S with whatever it has found so far.
 MODEL_TIMEOUT_S = 25.0
-TOOL_TIMEOUT_S = 30.0
-HARD_STOP_S = 70.0
+TOOL_TIMEOUT_S = 20.0
+# A re-run needs the analysis lock. If the desk is busy past this, the check is skipped
+# (and says so) instead of queueing behind other people and running late, unseen.
+DESK_WAIT_S = 8.0
+HARD_STOP_S = 60.0
 MAX_TOKENS = 900
 RESULT_CHARS = 1200  # what is fed back to the model per tool call
 
@@ -80,6 +85,52 @@ SYSTEM_ZH = SYSTEM_EN + (
 )
 
 
+@contextmanager
+def _desk(state: Any, wait_s: float | None = None) -> Iterator[None]:  # noqa: ANN401
+    """Hold the analysis lock for one run, waiting at most ``wait_s`` (``DeskBusy`` after that).
+
+    Plain locks (tests, other states) have no timeout form and are taken as usual."""
+    lock = state.lock
+    if hasattr(lock, "request"):
+        with lock.request(DESK_WAIT_S if wait_s is None else wait_s):
+            yield
+    else:
+        with lock:
+            yield
+
+
+# What a trader reads for a check that did not deliver a result. Never the raw exception.
+SKIP_TEXT = {
+    "slow": ("This check took too long and was skipped — the rest still ran.", "这项检查耗时过长，已跳过，其余检查仍已完成。"),
+    "busy": ("The desk was busy with other requests, so this check was skipped — the rest still ran.",
+             "台里正忙于处理其他请求，这项检查已跳过，其余检查仍已完成。"),
+    "failed": ("This check could not run and was skipped — the rest still ran.", "这项检查未能运行，已跳过，其余检查仍已完成。"),
+    "noop": ("That would only repeat the trade as it stands, so it was not counted as a check.", "这只会重复当前的交易，所以没有算作一项检查。"),
+}
+
+
+def skip_text(kind: str, lang: str) -> str:
+    en, zh = SKIP_TEXT[kind]
+    return zh if lang == "zh" else en
+
+
+def coverage_line(steps: list[dict[str, Any]], lang: str) -> str:
+    """One sentence on what finished and what did not, from the steps themselves."""
+    ok = sum(1 for x in steps if x.get("status") == "ok")
+    skipped = sum(1 for x in steps if x.get("status") == "skipped")
+    if lang == "zh":
+        if not ok:
+            return "没有完成任何检查。" + (f"{skipped} 项被跳过。" if skipped else "")
+        if not skipped:
+            return f"{ok} 项检查全部完成。"
+        return f"完成了 {ok} 项检查，跳过了 {skipped} 项；被跳过的检查没有提供任何数字。"
+    if not ok:
+        return "No checks completed." + (f" {skipped} skipped." if skipped else "")
+    if not skipped:
+        return f"All {ok} check{'s' if ok != 1 else ''} completed."
+    return f"{ok} check{'s' if ok != 1 else ''} completed and {skipped} skipped; a skipped check contributed no numbers."
+
+
 def _num(v: Any, lo: float, hi: float) -> float | None:  # noqa: ANN401
     try:
         x = float(v)
@@ -119,9 +170,12 @@ def _within(fn: Callable[[], Any], timeout_s: float) -> Any:  # noqa: ANN401
     The abandoned call is left to finish on its own thread; it cannot be killed, but the run
     no longer waits for it."""
     pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="agent-call")
+    fut = pool.submit(fn)
     try:
-        return pool.submit(fn).result(timeout=max(1.0, timeout_s))
+        return fut.result(timeout=max(1.0, timeout_s))
     except FuturesTimeout as exc:
+        if fut.done():  # the call itself raised a TimeoutError (e.g. DeskBusy): not ours to rename
+            raise
         raise TimeoutError(f"no answer within {timeout_s:.0f} s") from exc
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
@@ -130,13 +184,17 @@ def _within(fn: Callable[[], Any], timeout_s: float) -> Any:  # noqa: ANN401
 def partial_final(run: Any, report: dict[str, Any], lang: str) -> dict[str, Any]:  # noqa: ANN401
     """The conclusion when time ran out: what was checked, the desk's own verdict, and no
     model-written number. The steps above it carry the results."""
-    done = [x for x in run.steps if not x.get("refused") and not str(x.get("result_summary", "")).startswith("error")]
-    n = len(done)
+    n = sum(1 for x in run.steps if x.get("status") == "ok")
     if lang == "zh":
         summary = f"时间用完了，只完成了 {n} 项检查；各项结果见上方步骤。" if n else "时间用完了，没有完成任何检查。"
     else:
         summary = f"Time ran out after {n} check{'s' if n != 1 else ''}; each result is in the steps above." if n else "Time ran out before any check finished."
-    return {"summary": summary, "findings": [], "verdict_restated": analyst._fixed_reconcile(report, lang), "partial": True}  # noqa: SLF001
+    return {"summary": summary, "findings": [], "verdict_restated": analyst._fixed_reconcile(report, lang), "partial": True,
+            "coverage": coverage_line(run.steps, lang)}  # noqa: SLF001
+
+
+_FAILED_RUN = ("The agent stopped before it finished.", "代理未能完成。")
+_NO_MODEL = ("No AI model is switched on for this desk.", "本台未开启 AI 模型。")
 
 
 class NoOpCall(ValueError):
@@ -187,7 +245,7 @@ def tool_rerun(state: Any, report: dict[str, Any], args: dict[str, Any]) -> str:
         equal = [name for name, hit in (("side", side_eq), ("hold", hold_eq), ("size", size_eq), ("leverage", lev_eq)) if hit]
         raise NoOpCall("that is the trade as it already stands" + (f" (the {', '.join(equal)} you gave equal the ticket's)" if equal else "")
                        + "; change something that is different from the ticket")
-    with state.lock:
+    with _desk(state):
         payload = analyze(state.ctx, change.apply_to(base, entry=((report.get("snapshot") or {}).get("prices") or {}).get("spot_close")), as_of=whatif.as_of_of(report), record=False).to_dict()
     return f"Change: {change.describe()}. Result: {_summarise_report(payload)}."
 
@@ -358,6 +416,7 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             checked = sheet + "\n" + "\n".join(results)
             if isinstance(obj.get("final"), dict):
                 run.final, removed = _final(obj["final"], report, checked, lang)
+                run.final["coverage"] = coverage_line(run.steps, lang)
                 run.removed += removed
                 run.status = "done"
                 return run
@@ -370,28 +429,40 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             args = obj.get("args") if isinstance(obj.get("args"), dict) else {}
             ts = time.time()
             refused = False
+            kind = "ok"  # ok | slow | busy | failed | noop
             if name not in TOOLS:
-                text, ok = f"unknown tool '{name}'; use one of {', '.join(TOOLS)}", False
+                text, kind = f"unknown tool '{name}'; use one of {', '.join(TOOLS)}", "failed"
             else:
                 try:
-                    text, ok = _within(lambda fn=TOOLS[name], a=args: fn(state, report, a), min(TOOL_TIMEOUT_S, max(5.0, HARD_STOP_S - 10 - (time.time() - t0)))), True
+                    text = _within(lambda fn=TOOLS[name], a=args: fn(state, report, a), min(TOOL_TIMEOUT_S, max(5.0, HARD_STOP_S - 10 - (time.time() - t0))))
                 except NoOpCall as exc:
-                    text, ok = f"error: {exc}", False
+                    text, kind = f"error: {exc}", "noop"
                     if free_refusals < MAX_FREE_REFUSALS:
                         free_refusals += 1
                         refused = True
+                except DeskBusy as exc:
+                    log.info("agent tool %s skipped, desk busy: %s", name, exc)
+                    text, kind = f"error: {exc}", "busy"
+                except TimeoutError as exc:
+                    log.info("agent tool %s timed out: %s", name, exc)
+                    text, kind = f"error: {exc}", "slow"
                 except Exception as exc:  # noqa: BLE001 - a bad call is a result the model can read
                     log.info("agent tool %s failed: %s", name, exc)
-                    text, ok = f"error: {exc}", False
+                    text, kind = f"error: {exc}", "failed"
+            ok = kind == "ok"
             thought, nrm = analyst.strip_unverified(analyst._as_text(obj.get("thought")), checked)  # noqa: SLF001
             run.removed += nrm
             if ok:
                 results.append(f"[{SECTION[name]}] {_compact(text)}")
                 transcript.append(f"{len(run.steps) + 1}. [thought: {thought}] {name} {json.dumps(args, ensure_ascii=False)} ->\n{results[-1]}")
             else:
+                # The model reads the plain reason; the trader reads the friendly line. A failed
+                # step never carries a number: its raw text stays in the log, not on the screen.
                 transcript.append(f"{len(run.steps) + 1}. {name} {json.dumps(args, ensure_ascii=False)} -> {text}")
             run.steps.append({"n": len(run.steps) + 1, "thought": thought, "tool": name, "args": args,
-                              "result_summary": _compact(text, 400), "seconds": round(time.time() - ts, 1),
+                              "status": "ok" if ok else ("refused" if refused else "skipped"),
+                              "result_summary": _compact(text, 400) if ok else skip_text(kind, lang),
+                              "seconds": round(time.time() - ts, 1),
                               **({"refused": True} if refused else {})})
     except Exception as exc:  # noqa: BLE001 - a failed agent keeps the steps it completed
         log.exception("stress-test agent failed")
@@ -399,7 +470,7 @@ def run_agent(provider: Any, state: Any, report: dict[str, Any], run: Run, *, bu
             # Out of time with checks done: answer with those rather than with an error.
             run.final, run.status = partial_final(run, report, lang), "done"
         else:
-            run.status, run.error = "failed", str(exc)[:200]
+            run.status, run.error = "failed", _FAILED_RUN[lang == "zh"]
     return run
 
 
@@ -426,14 +497,15 @@ class AgentJobs:
             while len(self._runs) > self._keep:
                 self._runs.pop(next(iter(self._runs)))
         if provider is None:
-            run.status, run.error = "failed", "no model is configured"
+            run.status, run.error = "failed", _NO_MODEL[lang == "zh"]
             return run
 
         def work() -> None:
             try:
                 run_agent(provider, state, report, run)
-            except Exception as exc:  # noqa: BLE001
-                run.status, run.error = "failed", str(exc)[:200]
+            except Exception:  # noqa: BLE001
+                log.exception("stress-test agent crashed")
+                run.status, run.error = "failed", _FAILED_RUN[run.lang == "zh"]
 
         self._pool.submit(work)
         return run

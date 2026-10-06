@@ -1054,6 +1054,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         leaves 1,752 hours across the universe and 96 in one token's own past.
         """
         from nightwatch.analog import lens as lens_mod
+        from nightwatch.decision import report_zh
 
         s = st()
         cfg = s.ctx.analog_config
@@ -1061,7 +1062,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # past and widens to the pooled history. The interface shows the same number so
         # the cost of a narrow question is visible before it is asked.
         out: dict[str, Any] = {
-            "lenses": lens_mod.menu(),
+            "lenses": [{**x, **({"label_zh": report_zh.LENS_ZH[x["name"]][0], "definition_zh": report_zh.LENS_ZH[x["name"]][1]} if x["name"] in report_zh.LENS_ZH else {})} for x in lens_mod.menu()],
             "counts": {},
             "floor_hours": int(cfg.min_matches * cfg.min_separation_h),
         }
@@ -1075,7 +1076,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 # offer the question a trader would think to ask rather than all seventeen.
                 out["suggested"] = lens_mod.suggest_now(frame)
             except (InsufficientData, KeyError) as exc:
-                out["note"] = str(exc)
+                out["note"] = guard.plain_message(exc, "The condition counts are not available for this token right now.")
         # Across every token: hours are not the constraint once the search pools, separate
         # events are. A condition with too few of them cannot be answered however many
         # hours it covers, and the interface should say so before it is asked.
@@ -1117,6 +1118,9 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         much of its weekend moves Monday kept. From the committed measurement."""
         from nightwatch.journal import closed_hours
 
+        known = st().ctx.tickers_with_data()
+        if ticker.upper() not in set(known):
+            raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
         return closed_hours.for_ticker(ticker.upper())
 
     @app.post("/mcp")
@@ -1201,11 +1205,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             spec = s.ctx.spec(ticker)
         except KeyError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, guard.plain_message(exc, "That is not a token the desk covers.")) from exc
         try:
             return build_snapshot(s.store, spec, as_of).to_dict()
         except InsufficientData as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
 
     @app.post("/analyze")
     def analyze_endpoint(request: Request, body: TicketIn, text: bool = False) -> Any:
@@ -1213,7 +1217,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             ticket = body.to_ticket()
         except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         # Say which tokens exist rather than letting the pipeline fail on a symbol it
         # constructed hopefully: "no spot bars for RGMEUSDT in [...]" is a stack trace
         # wearing a hat, and this endpoint is public.
@@ -1230,9 +1234,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             with s.lock, trader_scope(_who(request)[0]):
                 report = analyze(s.ctx, ticket, as_of=body.as_of, record=body.record)
         except KeyError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            log.warning("analyze KeyError: %r", exc)
+            raise HTTPException(404, guard.plain_message(exc, "The desk is missing data it needs for that trade.")) from exc
         except InsufficientData as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         payload = report.to_dict()
         if report.forecast_id is not None and body.record:
             _mark(s, request, report.forecast_id)
@@ -1475,7 +1480,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             spec = s.ctx.spec(ticker)
         except KeyError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, guard.plain_message(exc, "That is not a token the desk covers.")) from exc
         return asdict(summarise(s.store, spec.spot_symbol))
 
     @app.get("/lessons")
@@ -1570,9 +1575,9 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 put("done", out)
             except HTTPException as exc:
                 put("error", {"detail": exc.detail, "status": exc.status_code})
-            except Exception as exc:  # noqa: BLE001 - /chat would answer a 500; the stream says so too
+            except Exception:  # noqa: BLE001 - /chat would answer a 500; the stream says so too
                 log.exception("chat stream failed")
-                put("error", {"detail": str(exc) or "Internal Server Error", "status": 500})
+                put("error", {"detail": "Internal Server Error", "status": 500})
 
         async def events():
             fut = loop.run_in_executor(None, work)
@@ -1644,7 +1649,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             hook = watches.check_webhook(body.webhook)
         except watches.BadWebhook as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
             return watches.create(s.store._conn, forecast_id=body.forecast_id, report=report, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
@@ -1683,12 +1688,12 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             hook = tripwires.check_webhook(body.webhook)
         except tripwires.BadWebhook as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
             return tripwires.create(s.store._conn, forecast_id=body.forecast_id, report=report, level=body.level, label=body.label, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except tripwires.BadLevel as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         except tripwires.TooMany as exc:
             raise HTTPException(429, "Too many tripwires from one visitor.") from exc
 
@@ -1724,12 +1729,12 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             hook = tripwires.check_webhook(body.webhook)
         except tripwires.BadWebhook as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
             return plans.save(s.store._conn, forecast_id=body.forecast_id, report=report, choices=body.choices, arm=body.arm, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except plans.BadPlan as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
 
     @app.get("/tripwire/{tripwire_id}")
     def tripwire_get(tripwire_id: str) -> dict[str, Any]:
@@ -1780,9 +1785,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         br = baserate.detect(latest, list(s.ctx.tickers_with_data())) if latest else None
         if br is not None:
             try:
-                return baserate.answer(s, br, lang=language_of(latest))
+                # A trade on screen in this token is the trade to stress-test beside the rates.
+                on_screen = s.reports.get(body.context_forecast_id) if body.context_forecast_id else None
+                return baserate.answer(s, br, lang=language_of(latest), context=on_screen)
             except InsufficientData as exc:
-                raise HTTPException(422, str(exc)) from exc
+                raise HTTPException(422, guard.plain_message(exc)) from exc
 
         # "long 10k ZZZZ": a token we do not cover is said so, never swapped for the ticker of
         # the report on screen or of an earlier message.
@@ -1929,13 +1936,13 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 out.setdefault("mode", "model")
                 return out
         except InsufficientData as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
         except Exception as exc:  # noqa: BLE001 - a language layer must not take the desk down
             log.warning("chat fell back to rules: %s", exc)
         try:
             return rule_turn(s, messages, account_equity=body.account_equity_quote)
         except InsufficientData as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise HTTPException(422, guard.plain_message(exc)) from exc
 
     return app
 

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from nightwatch.features.phrases import earnings_ahead
+from nightwatch.time_utils import whole_hours
 
 # ------------------------------------------------------------------ small formatters
 
@@ -443,7 +444,7 @@ def _a_now(r: dict, _q: str) -> Answer | None:
     if f.get("rv_24h") is not None:
         bits.append(f"Realised volatility over the last day is {f['rv_24h'] * 100:.0f}%, the {_ordinal(f.get('vol_pctl_90d'))} percentile of its own 90 days - {lab.get('vol_state', '?')}.")
     if f.get("hours_since_filing") is not None and f["hours_since_filing"] < 720:
-        bits.append(f"The last SEC filing was {f['hours_since_filing']:.0f} hours ago.")
+        bits.append(f"The last SEC filing was {whole_hours(f['hours_since_filing'])} hours ago.")
     if s.get("quality_flags"):
         bits.append("Data flags on this snapshot: " + ", ".join(s["quality_flags"]) + ".")
     return Answer("now", " ".join(bits), ("snapshot",))
@@ -539,7 +540,7 @@ def _a_premise(r: dict, _q: str) -> Answer | None:
             return "not known"
         if h >= 720:
             return "more than 30 days " + ("ago" if past else "away")
-        span = f"{h / 24:.0f} days" if h >= 48 else f"{h:.0f} hours"
+        span = f"{whole_hours(h / 24)} days" if h >= 48 else f"{whole_hours(h)} hours"
         return f"{span} ago" if past else f"in {span}"
 
     bits = []
@@ -691,7 +692,7 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
     if not v.get("verdict") or not t:
         return None
     side = "buy and hold" if t.get("side") == "long" else "short"
-    bits = [f"In plain words: you want to {side} {_usd(t.get('notional_quote'))} of {t.get('ticker')} for about {r.get('horizon_h', 0):.0f} hours."]
+    bits = [f"In plain words: you want to {side} {_usd(t.get('notional_quote'))} of {t.get('ticker')} for about {whole_hours(r.get('horizon_h', 0))} hours."]
     c = (h or {}).get("cohort") or {}
     if c.get("n") and not c.get("insufficient"):
         p5, loss = _loss_at_size(r)

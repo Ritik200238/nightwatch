@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, Loader2, MinusCircle, Sparkles } from "lucide-react";
 import { GuardNote } from "@/components/report/guard-note";
 import { Button } from "@/components/ui/button";
 import { resetAgent, startAgent, toolVerb, useAgent } from "@/lib/agent-run";
@@ -44,13 +44,17 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
         <ol className="mt-3 space-y-3 border-l border-border pl-4" aria-live="polite">
           {steps.map((s) => (
             <li key={s.n} className="relative text-sm">
-              <CheckCircle2 className="absolute -left-[25px] top-0.5 h-4 w-4 rounded-full bg-card text-status-good" aria-hidden />
+              {s.status === "skipped" || s.status === "refused" ? (
+                <MinusCircle className="absolute -left-[25px] top-0.5 h-4 w-4 rounded-full bg-card text-status-warning" aria-hidden />
+              ) : (
+                <CheckCircle2 className="absolute -left-[25px] top-0.5 h-4 w-4 rounded-full bg-card text-status-good" aria-hidden />
+              )}
               <p className="font-medium">
                 {s.n}. {toolVerb(s.tool, s.args, lang === "zh")}
                 {typeof s.seconds === "number" ? <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">{s.seconds.toFixed(1)} s</span> : null}
               </p>
               {s.thought ? <p className="text-[13px] text-muted-foreground">{s.thought}</p> : null}
-              {s.result_summary ? <p className="mt-0.5">{s.result_summary}</p> : null}
+              {s.result_summary ? <p className={s.status === "skipped" || s.status === "refused" ? "mt-0.5 text-[13px] text-status-warning" : "mt-0.5"}>{s.result_summary}</p> : null}
             </li>
           ))}
           {running ? (
@@ -85,7 +89,8 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
           ) : null}
           {run?.removed ? <GuardNote n={run.removed} lang={lang} className="text-[13px] text-muted-foreground" /> : null}
           <p className="text-[13px] text-muted-foreground">
-            {L(`${steps.length} checks run on the engine in ${Math.round(st.elapsed)} s`, `在引擎上运行了 ${steps.length} 项检查，用时 ${Math.round(st.elapsed)} 秒`)}
+            {final.coverage ? `${final.coverage} ` : ""}
+            {L(`Took ${Math.round(st.elapsed)} s.`, `用时 ${Math.round(st.elapsed)} 秒。`)}
           </p>
         </div>
       ) : null}

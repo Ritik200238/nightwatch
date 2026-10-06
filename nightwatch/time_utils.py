@@ -15,6 +15,7 @@ Conventions
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from enum import Enum
@@ -25,6 +26,19 @@ import numpy as np
 
 UTC = UTC
 ET = ZoneInfo("America/New_York")
+
+
+def round_half_up(x: float) -> int:
+    """Round to a whole number with halves going up (26.5 -> 27, 0.5 -> 1).
+
+    Python's ``round`` and ``:.0f`` send halves to the even neighbour (26.5 -> 26, 27.5 -> 28), so a
+    hold of 26.5 hours was labelled 26 while 27.5 became 28 - and 0.5 became 0. Holds are never negative."""
+    return math.floor(x + 0.5)
+
+
+def whole_hours(h: float) -> str:
+    """A number of hours as a whole-number string, halves rounded up."""
+    return str(round_half_up(h))
 
 REGULAR_OPEN = time(9, 30)
 REGULAR_CLOSE = time(16, 0)

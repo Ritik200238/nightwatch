@@ -6,13 +6,15 @@ takes it for a real date. Everything user-facing goes through here instead.
 """
 from __future__ import annotations
 
+from nightwatch.time_utils import whole_hours
+
 EVENT_CAP_H = 720.0
 NO_EARNINGS_30D = "no earnings in the next 30 days"
 NOT_KNOWN = "not known"
 
 
 def _span(hours: float) -> str:
-    return f"{hours / 24:.0f} days" if hours >= 48 else f"{hours:.0f} hours"
+    return f"{whole_hours(hours / 24)} days" if hours >= 48 else f"{whole_hours(hours)} hours"
 
 
 def earnings_ahead(hours: float | None) -> str:
