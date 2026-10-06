@@ -975,7 +975,14 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         a person opens once in an evening, not something polled.
         """
         s = st()
-        held = [p for p in body.positions if p.notional_quote and p.ticker]
+        # The same token and side listed twice is one position of the summed size: judged
+        # separately it would be two rows with the same name, each walked on half the book.
+        merged: dict[tuple[str, Side], float] = {}
+        for p in body.positions:
+            if p.notional_quote and p.ticker.strip():
+                key = (p.ticker.strip().upper(), p.side)
+                merged[key] = merged.get(key, 0.0) + float(p.notional_quote)
+        held = list(merged.items())
         if not held:
             return tonight_mod.build(None, [], note="no positions given").to_dict()
 
@@ -983,13 +990,12 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         known = set(s.ctx.tickers_with_data())
         judged: list[Any] = []
         skipped: list[str] = []
-        for p in held[:12]:  # a book, not a portfolio; the page stays under twenty seconds
-            ticker = p.ticker.upper()
+        for (ticker, side), notional in held[:12]:  # a book, not a portfolio; the page stays under twenty seconds
             if ticker not in known:
                 skipped.append(ticker)
                 continue
             ticket = TradeTicket(
-                ticker=ticker, side=Side(p.side), notional_quote=float(p.notional_quote),
+                ticker=ticker, side=Side(side), notional_quote=notional,
                 account_equity_quote=body.account_equity_quote,
                 horizon_kind=HorizonKind.NEXT_OPEN,
                 thesis="already held", invalidation="already held",
@@ -1020,7 +1026,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
             judged.append(
                 tonight_mod.judge(
-                    ticker, p.side, float(p.notional_quote),
+                    ticker, side, notional,
                     p5_pct=p5,
                     features=report.snapshot.features,
                     labels=report.snapshot.labels,
@@ -1037,7 +1043,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             note = "No data for " + ", ".join(sorted(set(skipped))) + "."
         if len(held) > 12:
             note = (note + " Only the first twelve positions were judged.").strip()
-        return tonight_mod.build(None, judged, note=note).to_dict()
+        return tonight_mod.build(None, judged, note=note, unjudged=len(skipped)).to_dict()
 
     @app.get("/lenses")
     def lenses(ticker: str | None = None) -> dict[str, Any]:
