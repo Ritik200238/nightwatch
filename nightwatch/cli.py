@@ -263,25 +263,41 @@ def cmd_status(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def parse_as_of(text: str) -> datetime:
+    """An ISO timestamp as an aware UTC instant. One with an offset (``+08:00``) is converted,
+    not relabelled UTC; one without is read as UTC, as ``--as-of`` says."""
+    got = datetime.fromisoformat(text)
+    return got.replace(tzinfo=UTC) if got.tzinfo is None else got.astimezone(UTC)
+
+
 def cmd_analyze(args: argparse.Namespace, settings: Settings) -> int:
     from nightwatch.decision.ticket import HorizonKind, TradeTicket
     from nightwatch.pipeline.analyze import AnalysisContext, analyze
     from nightwatch.pipeline.render import render_text
     from nightwatch.stress.scenarios import Side
 
+    name = args.ticker or args.ticker_pos
+    if not name or (args.ticker and args.ticker_pos and args.ticker.upper() != args.ticker_pos.upper()):
+        print("error: give the stock once, as `analyze TSLA` or `analyze --ticker TSLA`", file=sys.stderr)
+        return 2
     spot, perp = _clients(settings)
     from nightwatch.journal.journal import Journal
 
     with Store(settings.db_path) as store:
         entries = resolve_universe(store, spot, perp, settings) if not args.offline else _entries_from_store(store, settings)
         ctx = AnalysisContext(store=store, entries=entries, spot_client=None if args.offline else spot, perp_client=None if args.offline else perp, journal=Journal(store))
-        ticket = TradeTicket(
-            ticker=args.ticker.upper(), side=Side(args.side), notional_quote=args.notional, account_equity_quote=args.equity,
-            horizon_kind=HorizonKind(args.horizon), horizon_hours=args.hours, entry_price=args.entry, stop_price=args.stop,
-            target_price=args.target, thesis=args.thesis or "", invalidation=args.invalidation or "", hedge_ratio=args.hedge,
-        )
-        as_of = datetime.fromisoformat(args.as_of).replace(tzinfo=UTC) if args.as_of else None
-        report = analyze(ctx, ticket, as_of=as_of)
+        try:
+            ticket = TradeTicket(
+                ticker=name.upper(), side=Side(args.side), notional_quote=args.notional, account_equity_quote=args.equity,
+                horizon_kind=HorizonKind(args.horizon), horizon_hours=args.hours, entry_price=args.entry, stop_price=args.stop,
+                target_price=args.target, thesis=args.thesis or "", invalidation=args.invalidation or "", hedge_ratio=args.hedge,
+                leverage=args.leverage,
+            )
+            as_of = parse_as_of(args.as_of) if args.as_of else None
+            report = analyze(ctx, ticket, as_of=as_of, record=not args.no_record)
+        except (ValueError, KeyError) as exc:  # a bad ticket or an unknown stock is a message, not a traceback
+            print(f"error: {exc.args[0] if isinstance(exc, KeyError) and exc.args else exc}", file=sys.stderr)
+            return 2
         if args.json:
             import json
 
@@ -528,7 +544,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_status)
 
     sp = sub.add_parser("analyze", help="stress-test a trade ticket")
-    sp.add_argument("--ticker", required=True)
+    # The README shows `nightwatch analyze TSLA ...`; `--ticker TSLA` is the same thing.
+    sp.add_argument("ticker_pos", nargs="?", metavar="TICKER", help="the stock, e.g. TSLA (same as --ticker)")
+    sp.add_argument("--ticker", help="the stock, e.g. TSLA")
     sp.add_argument("--side", choices=["long", "short"], default="long")
     sp.add_argument("--notional", type=float, required=True, help="position size in USDT")
     sp.add_argument("--equity", type=float, help="account equity in USDT")
@@ -540,7 +558,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--thesis")
     sp.add_argument("--invalidation")
     sp.add_argument("--hedge", type=float)
-    sp.add_argument("--as-of", help="ISO UTC timestamp for a point-in-time analysis")
+    sp.add_argument("--leverage", type=float, help="leverage on the stock's Bitget perpetual, 1-125")
+    sp.add_argument("--no-record", action="store_true", help="do not write this analysis to the journal")
+    sp.add_argument("--as-of", help="ISO timestamp for a point-in-time analysis; with no offset it is read as UTC")
     sp.add_argument("--offline", action="store_true", help="use stored instruments/books only, no network")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_analyze)
