@@ -88,6 +88,7 @@ BOOK_CASES = [
     "the cost is a taker fee to open and again to close",
 ]
 SRC_CASES = [
+    "1% of 440 past closed windows were worse for this side", "what TSLA did on 2020-03-16, the day the market gapped down most",
     "Bitget spot order book", "api.bitget.com spot orderbook", "spot close→open across closed windows", "rv_24h × √horizon",
     "|basis vs index| during closed sessions", "perp funding history", "1.0% maintenance margin assumed (tiers unavailable)",
     "Yahoo daily, stock's move on SPY's extreme day in the window (2020-03-16)", "block bootstrap of this token's hourly returns",

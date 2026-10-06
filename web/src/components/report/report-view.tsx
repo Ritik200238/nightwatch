@@ -1607,7 +1607,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-hidden />
             <span>
-              {c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
+              {lang === "zh" && c.text_zh ? c.text_zh : c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}
@@ -1615,7 +1615,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-hidden />
             <span>
-              {c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
+              {lang === "zh" && c.text_zh ? c.text_zh : c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}

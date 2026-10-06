@@ -76,7 +76,14 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
   const closest = [...matches].sort((x, y) => y.similarity - x.similarity).slice(0, 3);
   const side = t.side === "short" ? L("short", "做空") : L("long", "做多");
   const label = typeof t.extra?.horizon_label === "string" ? t.extra.horizon_label : null;
-  const hold = label ? `${label} (${Math.round(report.horizon_h)} h)` : fmtHoursL(report.horizon_h, lang);
+  // The server's hold label is English; in Chinese say the shapes it knows, else just the hours.
+  const labelZh: Record<string, string> = {
+    "the coming weekend, Friday's close to Monday's open": "即将到来的周末：周五收盘到周一开盘",
+    "through the weekend, to the next open after it": "持有过周末，到周末后的下一个开盘",
+    "until the next US open": "到下一个美股开盘",
+  };
+  const shownLabel = label ? (lang === "zh" ? (labelZh[label] ?? null) : label) : null;
+  const hold = shownLabel ? `${shownLabel} (${Math.round(report.horizon_h)} ${lang === "zh" ? "小时" : "h"})` : fmtHoursL(report.horizon_h, lang);
   const said = `${side} ${Math.round(t.notional_quote).toLocaleString("en-US")} ${t.ticker}, ${hold}`;
   const by = report.read_by?.parsed_by;
   const modelName = by && by !== "rules" ? by.charAt(0).toUpperCase() + by.slice(1) : null;

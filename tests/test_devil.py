@@ -113,3 +113,8 @@ def test_amounts_are_at_the_requested_size_with_the_recommended_one_beside_them(
 def test_no_bracket_when_the_recommended_size_is_the_requested_one():
     so = build(stub())
     assert "recommended" not in " ".join(c.text for c in so.against)
+
+
+def test_the_points_for_have_a_chinese_twin_like_the_points_against():
+    so = build(stub(verdict=SimpleNamespace(verdict=SimpleNamespace(value="NO_GO"), recommended_notional=8_000.0)))
+    assert so.supporting and all(c.text_zh for c in so.supporting)

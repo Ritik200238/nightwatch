@@ -404,7 +404,10 @@ _SRC = _rules(
 
 
 def source_zh(text: str) -> str | None:
-    return _apply(_SRC, text) or None
+    # A preset's provenance source is its probability note ("5% of 440 past closed windows were worse...").
+    from nightwatch.decision.zh import note_zh
+
+    return _apply(_SRC, text) or note_zh(text) or None
 
 
 # ------------------------------------------------------------------ the premise check
