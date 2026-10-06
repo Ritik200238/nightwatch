@@ -69,3 +69,17 @@ def test_nothing_to_attribute_without_shared_history():
     a = attribute([Position("A", "long", 1_000)], {"A": frame(n=50, seed=12)}, horizon_h=24)
     assert a.book_tail_quote is None
     assert all(c.component_quote is None for c in a.contributions)
+
+
+def test_two_identical_holdings_are_two_positions_and_still_add_up():
+    """The same name, side and size held twice used to share one column: the book's tail left
+    one of them out while both reported its share, so the parts summed to more than the whole."""
+    frames = {"A": frame(seed=1), "B": frame(seed=2)}
+    twice = [Position("A", "long", 10_000), Position("A", "long", 10_000), Position("B", "long", 20_000)]
+    a = attribute(twice, frames, horizon_h=24)
+    assert sum(c.component_quote for c in a.contributions) == pytest.approx(a.book_tail_quote, rel=1e-9)
+    assert sum(c.component_share for c in a.contributions) == pytest.approx(1.0, rel=1e-9)
+    assert a.contributions[0].component_quote == pytest.approx(a.contributions[1].component_quote)
+    # And it is the same book as one holding of double the size.
+    once = attribute([Position("A", "long", 20_000), Position("B", "long", 20_000)], frames, horizon_h=24)
+    assert a.book_tail_quote == pytest.approx(once.book_tail_quote, rel=1e-9)

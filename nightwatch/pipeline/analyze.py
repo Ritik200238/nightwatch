@@ -956,6 +956,21 @@ def _add_zh_names(out: dict[str, Any]) -> None:
 _PROGRESS: contextvars.ContextVar[Callable[[dict[str, Any]], None] | None] = contextvars.ContextVar("nightwatch_progress", default=None)
 
 
+# Whose record the circuit breaker reads: the anonymous visitor the request came from. Unset (a
+# call from the CLI, a background job) it reads the trades no visitor owns, so one person's
+# clicks never move another person's verdict.
+_TRADER: contextvars.ContextVar[str | None] = contextvars.ContextVar("nightwatch_trader", default=None)
+
+
+@contextlib.contextmanager
+def trader_scope(client: str | None):
+    token = _TRADER.set(client)
+    try:
+        yield
+    finally:
+        _TRADER.reset(token)
+
+
 @contextlib.contextmanager
 def progress_to(callback: Callable[[dict[str, Any]], None] | None):
     """Route the progress events of every analyze() call made inside the block to ``callback``.
@@ -1159,7 +1174,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     breaker = BreakerReport(state=BreakerState.NORMAL, reasons=["no journal"], equity=ticket.account_equity_quote)
     if ctx.journal is not None:
         try:
-            breaker = evaluate_breaker(ctx.journal.taken_trades(matured_only=False), equity=ticket.account_equity_quote, now=as_of, policy=ctx.breaker_policy)
+            breaker = evaluate_breaker(ctx.journal.taken_trades(matured_only=False, client=_TRADER.get()), equity=ticket.account_equity_quote, now=as_of, policy=ctx.breaker_policy)
         except Exception:  # noqa: BLE001
             log.exception("circuit breaker evaluation failed")
 
@@ -1187,6 +1202,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         except Exception:  # noqa: BLE001 - the book view must never break the verdict
             log.exception("portfolio evaluation failed")
             portfolio = book_built = None
+            warnings.append("Your holdings could not be measured this time, so this verdict does not include them. Run it again, or treat it as the trade on its own.")
+    # Holdings were given but no tail could be measured from them (the book failed above, or no
+    # window is shared by enough history): say they are unmeasured rather than let the gate
+    # report that "the book's history is measured".
+    book_unknown: tuple[str, ...] = book_built[2] if book_built else ()
+    if ticket.open_positions and not (book_built and book_built[0] is not None):
+        book_unknown = book_unknown or tuple(dict.fromkeys(t.upper() for t, _, _ in ticket.open_positions))
     timings["portfolio"] = _ms(t0)
 
     # One context drives the headline decision and every what-if, so a swept verdict
@@ -1202,7 +1224,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
         hedge_residual_p5_loss_pct=residual_p5, gate_policy=ctx.gate_policy, sizing_policy=ctx.sizing_policy,
         leverage_rule=leverage_rule,
-        book_model=book_built[0] if book_built else None, book_unknown=book_built[2] if book_built else (),
+        book_model=book_built[0] if book_built else None, book_unknown=book_unknown,
         book_mean_correlation=portfolio.mean_correlation_to_book if portfolio else None,
         invalidation_distance_pct=plan.measured_pct() if plan else None,
         invalidation_reach_pct=plan.reach_pct if plan else None,
@@ -1223,7 +1245,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     entry_plan = plan_entry(book, entry_size, long=ticket.closing_long, taker_fee=fees["spot_taker"], budget_bps=ctx.sizing_policy.exit_cost_budget_bps)
     timings["decision"] = _ms(t0)
     v = getattr(verdict.verdict, "value", verdict.verdict)
-    _announce(cb, "decision", f"Checked the risk rules and sized the trade: {v}", f"已核对风控规则并确定仓位：{v}", t_start)
+    zh_v = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}.get(str(v), str(v))
+    _announce(cb, "decision", f"Checked the risk rules and sized the trade: {str(v).replace('_', ' ')}", f"已核对风控规则并确定仓位：{zh_v}", t_start)
 
     # 7. What happened last time conditions looked like this.
     lessons: list[dict[str, Any]] = []

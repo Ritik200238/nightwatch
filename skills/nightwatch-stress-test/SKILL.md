@@ -28,14 +28,14 @@ claude mcp add nightwatch --transport http https://nightwatch-gules.vercel.app/a
 | Tool | Use it for |
 |---|---|
 | `list_tokens()` | Which tickers have history. Call first if unsure the stock is covered. |
-| `stress_test(ticker, side, notional_usdt, ...)` | The analysis. Optional: `hold` (`next_open`, `window_end`, `hours` + `hours`), `stop_price`, `leverage`, `account_equity_usdt`, `thesis`, `invalidation`, `conditions`. |
+| `stress_test(ticker, side, notional_usdt, ...)` | The analysis. Optional: `hold` (`next_open`, `window_end`, `hours` + `hours`), `stop_price`, `leverage`, `account_equity_usdt`, `thesis`, `invalidation`, `conditions`, `holdings` (up to 12 of `{ticker, side, notional_usdt}`; with `account_equity_usdt` the report measures the whole book, not just the trade). |
 | `list_conditions(ticker)` | Narrow the history to a kind of night (e.g. `earnings_soon`) and see how many past hours each leaves. |
 
 ## How to run it
 
 1. **Get the three things it cannot guess:** ticker, long or short, size in USDT. Ask for
    whichever is missing, in one short question. Do not invent a size.
-2. **Pass everything else the user said.** Account size and a written thesis and
+2. **Pass everything else the user said.** What they already hold (`holdings`), account size and a written thesis and
    invalidation change the verdict (the gate asks for a plan); a stop or leverage changes
    the risk basis and adds a liquidation check. A weekend hold on a weekday is `hold="hours"`
    with the hours to the next Monday open, and say that you did so.
