@@ -34,6 +34,7 @@ from typing import Any
 from nightwatch.api import guard
 from nightwatch.journal import engagement, telegram, tripwires, watches
 from nightwatch.journal.telegram import PUBLIC_URL, BotApi, TelegramError
+from nightwatch.time_utils import whole_hours
 
 log = logging.getLogger("nightwatch.telegram")
 
@@ -134,7 +135,7 @@ def format_verdict(report: dict[str, Any], lang: str = "en") -> str:
     side = t.get("side") or "long"
     label = (t.get("extra") or {}).get("horizon_label") if isinstance(t.get("extra"), dict) else None
     hours = report.get("horizon_h")
-    when = label or (f"{hours:.0f}h" if isinstance(hours, int | float) else "")
+    when = label or (f"{whole_hours(hours)}h" if isinstance(hours, int | float) else "")
     side_txt = {"long": "做多", "short": "做空"}.get(side, side) if zh else side
     head = f"{t.get('ticker', '?')} {side_txt} {_n(t.get('notional_quote') or 0)} USDT" + (f", {when}" if when else "")
     lines = [head]
@@ -261,7 +262,9 @@ class TelegramBot:
         sess = self.session(chat_id, lang_code)
         is_cmd = text.startswith("/")
         if is_cmd:
-            cmd, _, arg = text.partition(" ")
+            # Any whitespace ends the command word (a newline or tab, not only a space).
+            parts = text.split(None, 1)
+            cmd, arg = parts[0], (parts[1] if len(parts) > 1 else "")
             cmd = cmd.split("@", 1)[0].lower()
             arg = arg.strip()
         client = self.client_of(chat_id)

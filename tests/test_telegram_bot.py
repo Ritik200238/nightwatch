@@ -260,3 +260,14 @@ def test_bot_api_get_updates_asks_for_messages_only():
     api = telegram.BotApi("1:abc", httpx.Client(transport=httpx.MockTransport(handler)))
     assert api.get_updates(5) == [{"update_id": 1}]
     assert got["allowed_updates"] == ["message"] and got["offset"] == 5 and got["path"].endswith("/getUpdates")
+
+
+
+def test_any_whitespace_after_a_command_ends_the_command_word(desk):
+    """'/watch' then a newline (or a tab) used to read as the unknown command '/watch<newline>'."""
+    for text in ("/watch\n", "/watch\n\n", "/watch\t", "/watch\r\n"):
+        desk.handle_update(msg(text))
+        assert "Tell me a trade first" in last(desk), repr(text)
+    desk.handle_update(msg("/tripwire\n-5"))
+    assert "positive" in last(desk) or "trade" in last(desk).lower()
+    assert "unknown" not in last(desk).lower()
