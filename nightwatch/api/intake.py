@@ -1396,6 +1396,11 @@ def next_step(report: Any, zh: bool) -> str:  # noqa: ANN401
     plan_missing = any(r.rule == "written_plan" and r.decision.value != "GO" for r in report.gate.rules)
     equity_missing = t.account_equity_quote is None and any(r.rule == "position_size" and r.decision.value != "GO" for r in report.gate.rules)
     rec = v.recommended_notional
+    # A trade refused because liquidation sits too close is not fixed by writing a reason: the
+    # leverage is what has to change, so that comes before asking for the plan.
+    if v.verdict.value == "NO_GO" and any(r.rule == "liquidation" and r.decision.value == "NO_GO" for r in report.gate.rules):
+        return ("下一步：降低杠杆，当前杠杆下强平价离现价太近；或者问我“为什么？”。" if zh
+                else 'Next: lower the leverage, the liquidation price is too close at this size; or ask "why?".')
     if plan_missing:
         return ("下一步：告诉我你为什么做这笔交易、什么情况说明你错了，例如“因为……，如果收盘跌破……就算错”。" if zh
                 else 'Next: tell me why you want it and what would prove you wrong, e.g. "because ..., wrong if it closes below ...".')
