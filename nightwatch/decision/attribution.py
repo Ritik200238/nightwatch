@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from nightwatch.decision.portfolio import MIN_OVERLAP_HOURS, TAIL_PCT, Position, _returns
+from nightwatch.time_utils import round_half_up
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,7 @@ def _pnl_matrix(positions: list[Position], frames: dict[str, pd.DataFrame], hori
 
 def attribute(positions: list[Position], frames: dict[str, pd.DataFrame], *, horizon_h: float = 24.0) -> Attribution:
     """Split the book's tail loss among the positions, and price removing each one."""
-    h = max(1, int(round(horizon_h)))
+    h = max(1, round_half_up(horizon_h))
     gross = sum(abs(p.notional_quote) for p in positions) or 1.0
     mat, notes = _pnl_matrix(positions, frames, h)
     if mat.empty or len(mat) < MIN_OVERLAP_HOURS:

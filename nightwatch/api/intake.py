@@ -23,6 +23,7 @@ from typing import Any
 
 from nightwatch.decision.ticket import MAX_HOLD_HOURS, HorizonKind, TradeTicket
 from nightwatch.stress.scenarios import Side
+from nightwatch.time_utils import whole_hours
 
 log = logging.getLogger(__name__)
 
@@ -831,21 +832,21 @@ def _horizon_phrase(report: Any, lang: str) -> str:
     label = (t.extra or {}).get("horizon_label") if isinstance(t.extra, dict) else None
     if lang == "zh":
         if label == SCHEDULED_WEEKEND:
-            return f"持有即将到来的周末（周五收盘到周一开盘，{h:.0f} 小时）"
+            return f"持有即将到来的周末（周五收盘到周一开盘，{whole_hours(h)} 小时）"
         if label:
-            return f"持有过周末（{h:.0f} 小时，到周末后的第一个美股开盘）"
+            return f"持有过周末（{whole_hours(h)} 小时，到周末后的第一个美股开盘）"
         if t.horizon_kind == HorizonKind.NEXT_OPEN:
-            return f"持有到下一次美股开盘（{h:.0f} 小时）"
+            return f"持有到下一次美股开盘（{whole_hours(h)} 小时）"
         if t.horizon_kind == HorizonKind.WINDOW_END:
-            return f"持有到本时段结束（{h:.0f} 小时）"
-        return f"持有 {h:.0f} 小时"
+            return f"持有到本时段结束（{whole_hours(h)} 小时）"
+        return f"持有 {whole_hours(h)} 小时"
     if label:
-        return f"{label} ({h:.0f}h)"
+        return f"{label} ({whole_hours(h)}h)"
     if t.horizon_kind == HorizonKind.NEXT_OPEN:
-        return f"until the next US open ({h:.0f}h)"
+        return f"until the next US open ({whole_hours(h)}h)"
     if t.horizon_kind == HorizonKind.WINDOW_END:
-        return f"to the end of this window ({h:.0f}h)"
-    return f"for {h:.0f}h"
+        return f"to the end of this window ({whole_hours(h)}h)"
+    return f"for {whole_hours(h)}h"
 
 
 _DAY_ZH = {"Monday": "周一", "Tuesday": "周二", "Wednesday": "周三", "Thursday": "周四", "Friday": "周五", "Saturday": "周六", "Sunday": "周日"}
@@ -866,12 +867,12 @@ def weekend_line(report: Any, lang: str) -> str | None:
     if w.get("scheduled"):
         if lang == "zh":
             return (
-                f"说明：今天是{_DAY_ZH.get(w['today'], w['today'])}，所以“过周末”按即将到来的周末来算：周五收盘到周一开盘（{w['scheduled_h']:.0f} 小时），用今天的行情状态来判断。"
+                f"说明：今天是{_DAY_ZH.get(w['today'], w['today'])}，所以“过周末”按即将到来的周末来算：周五收盘到周一开盘（{whole_hours(w['scheduled_h'])} 小时），用今天的行情状态来判断。"
                 f"{report.ticket.ticker} 过去 {w['n']} 个周末（周五收盘到周一开盘），大约每二十个周末有一个亏损超过 {-w['p5_pct']:.1f}%，最差 {w['worst_pct']:+.1f}%（未经校准的原始历史）。"
                 "周五再问我一次，可以得到那个周末的完整检查。"
             )
         return (
-            f"Note: today is {w['today']}, so 'over the weekend' is read as the coming weekend: Friday's close to Monday's open ({w['scheduled_h']:.0f}h), judged on today's conditions. "
+            f"Note: today is {w['today']}, so 'over the weekend' is read as the coming weekend: Friday's close to Monday's open ({whole_hours(w['scheduled_h'])}h), judged on today's conditions. "
             f"Over {report.ticket.ticker}'s last {w['n']} weekends, Friday's close to Monday's open, 1 in 20 lost more than {-w['p5_pct']:.1f}% and the worst was {w['worst_pct']:+.1f}% "
             "(raw history, not calibrated). Ask again on Friday for the full check of that weekend."
         )

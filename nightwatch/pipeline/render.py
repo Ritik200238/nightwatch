@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from nightwatch.features.phrases import earnings_ahead
 from nightwatch.pipeline.analyze import AnalysisReport
+from nightwatch.time_utils import whole_hours
 
 
 def _f(v, fmt: str = "{:+.2f}", none: str = "n/a") -> str:  # noqa: ANN001
@@ -44,7 +45,7 @@ def render_text(r: AnalysisReport) -> str:
     hte = f.get("hours_to_earnings")
     earn = earnings_ahead(hte)
     hsf = f.get("hours_since_filing")
-    filing = "n/a" if hsf is None else (">30d ago" if hsf >= 720 else f"{hsf:.0f}h ago")
+    filing = "n/a" if hsf is None else (">30d ago" if hsf >= 720 else f"{whole_hours(hsf)}h ago")
     lines.append(f"  earnings: {earn}  |  FOMC {('in ' + _f(f.get('hours_to_fomc'), '{:.0f}') + 'h') if f.get('hours_to_fomc') is not None else 'none in 30 days'}  |  macro events next 72h {_f(f.get('macro_events_72h'), '{:.0f}')}  |  headlines 24h {_f(f.get('news_count_24h'), '{:.0f}')}")
     lines.append(f"  last SEC filing {filing}  |  filings in last 72h {_f(f.get('filings_72h'), '{:.0f}')}  |  liq vs same hour of week {_f(f.get('liq_ratio'), '{:.2f}x')}  |  no-trade share 24h {_f(f.get('no_trade_share_24h'), '{:.0%}')} ({_f(f.get('no_trade_excess_24h'), '{:+.0%}')} vs its norm)")
     if s.quality_flags:
@@ -67,7 +68,7 @@ def render_text(r: AnalysisReport) -> str:
             factors = f"k {_f(a.get('k_lo'), '{:.2f}')}/{_f(a.get('k_hi'), '{:.2f}')}, margin {_f(a.get('c_lo', 0.0), '{:.1f}')} pts, n_fit {a.get('n_fit', 'n/a')}"
             floor = f", floored at the {a['floored_by']} hold" if a.get("floored_by") else ""
             adj = f" | calibrated p5 {_f(h.p5_adjusted)}% p95 {_f(h.p95_adjusted)}% ({factors}{floor})" if h.p5_adjusted is not None and h.adjustment else ""
-            lines.append(f"  {name:>10} ({h.hours:.0f}h): n={c.n} mean {c.mean_pct:+.2f}% [{c.ci_mean.low:+.2f},{c.ci_mean.high:+.2f}] med {c.median_pct:+.2f}% win {c.win_rate:.0%} | p5 {c.p5:+.2f}% p95 {c.p95:+.2f}%{adj} | ES5 {_f(c.es5_pct)}% (n={c.es5_n}) | worst-in-window p5 {_f(c.mae_p5_pct)}% | tags {c.tag_counts}{base}")
+            lines.append(f"  {name:>10} ({whole_hours(h.hours)}h): n={c.n} mean {c.mean_pct:+.2f}% [{c.ci_mean.low:+.2f},{c.ci_mean.high:+.2f}] med {c.median_pct:+.2f}% win {c.win_rate:.0%} | p5 {c.p5:+.2f}% p95 {c.p95:+.2f}%{adj} | ES5 {_f(c.es5_pct)}% (n={c.es5_n}) | worst-in-window p5 {_f(c.mae_p5_pct)}% | tags {c.tag_counts}{base}")
     lines.append("")
     st = r.stress
     lines.append(f"STRESS ({st.inputs_summary['closed_windows_n']} closed windows, {st.inputs_summary['earnings_gaps_n']} earnings gaps, {st.inputs_summary['closed_basis_obs_n']} closed-hour basis obs)")

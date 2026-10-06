@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from nightwatch.time_utils import classify_session, ensure_utc, utc_now
+from nightwatch.time_utils import classify_session, ensure_utc, utc_now, whole_hours
 
 # How wide an overnight window has to be before it is worth mentioning on its own, as a
 # share of the position. Below this the tail is ordinary and the row says so.
@@ -109,17 +109,17 @@ def _events(features: dict[str, float | None], hours: float) -> tuple[list[str],
 
     to_earnings = features.get("hours_to_earnings")
     if to_earnings is not None and to_earnings <= limit:
-        said.append(f"earnings in {to_earnings:.0f}h, inside this window")
+        said.append(f"earnings in {whole_hours(to_earnings)}h, inside this window")
         flags.append("earnings_in_window")
 
     since_filing = features.get("hours_since_filing")
     if since_filing is not None and since_filing <= 24:
-        said.append(f"an SEC filing landed {since_filing:.0f}h ago")
+        said.append(f"an SEC filing landed {whole_hours(since_filing)}h ago")
         flags.append("fresh_filing")
 
     to_fomc = features.get("hours_to_fomc")
     if to_fomc is not None and to_fomc <= limit:
-        said.append(f"an FOMC decision in {to_fomc:.0f}h")
+        said.append(f"an FOMC decision in {whole_hours(to_fomc)}h")
         flags.append("fomc_in_window")
 
     macro = features.get("macro_events_72h")
@@ -208,14 +208,14 @@ def summarise(items: list[Watch], hours: float, market_is_open: bool) -> str:
     flagged = [i for i in items if i.flags and i.flags != ("wide_tail",)]
     if not flagged:
         return (
-            f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {hours:.0f} hours. "
+            f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {whole_hours(hours)} hours. "
             f"Nothing needs you {when}: added up, the bad case across them is {tails:,.0f} USDT."
         )
     # The headline's first sentence, as written: lowercasing it turns USDT into usdt and
     # runs two sentences together.
     lead = worst.headline.split(". ")[0].rstrip(".")
     return (
-        f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {hours:.0f} hours, "
+        f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {whole_hours(hours)} hours, "
         f"{len(flagged)} of which want a look {when}. Start with {worst.ticker} - {lead}."
     )
 

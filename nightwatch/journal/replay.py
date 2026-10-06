@@ -26,7 +26,7 @@ from nightwatch.analog.outcomes import compute_match_outcomes, outcomes_table, s
 from nightwatch.features.snapshot import InsufficientData, build_snapshot
 from nightwatch.journal.journal import Journal
 from nightwatch.pipeline.analyze import AnalysisContext
-from nightwatch.time_utils import utc_now
+from nightwatch.time_utils import round_half_up, utc_now
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def replay_ticker(
         hz = structural_horizons(at)[horizon] if horizon in ("next_open", "window_end") else float(horizon.rstrip("h"))
         if hz <= 0:
             continue
-        ticket_h = max(1, int(round(hz)))
+        ticket_h = max(1, round_half_up(hz))
         # The same path analyze() takes: a hold over a weekend is matched to past weekend holds
         # before the search, so the journal scores what the product ships.
         floor = ctx.analog_config.min_matches * ctx.analog_config.min_separation_h

@@ -28,7 +28,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-from nightwatch.time_utils import UTC, utc_now
+from nightwatch.time_utils import UTC, utc_now, whole_hours
 
 WINDOW_DAYS = 90
 RECENT_DAYS = 30
@@ -220,7 +220,7 @@ def last_good_label(age_s: int | None) -> str:
     if age_s < 3600:
         return f"last good {max(1, round(age_s / 60))} min ago"
     h = age_s / 3600
-    return f"last good {h:.1f} h ago" if h < 10 else f"last good {round(h)} h ago"
+    return f"last good {h:.1f} h ago" if h < 10 else f"last good {whole_hours(h)} h ago"
 
 
 def outage_clause(status: dict[str, Any] | None) -> str:

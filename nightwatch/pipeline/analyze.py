@@ -62,7 +62,7 @@ from nightwatch.stress.scenarios import (
     earnings_gaps,
     earnings_in_window,
 )
-from nightwatch.time_utils import classify_session, ensure_utc, utc_now
+from nightwatch.time_utils import classify_session, ensure_utc, round_half_up, utc_now
 
 log = logging.getLogger(__name__)
 
@@ -1021,7 +1021,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     spec = ctx.spec(ticket.ticker)
     entry_info = ctx.entry(ticket.ticker)
     horizon_h = ticket.horizon_h(as_of)
-    primary = f"{max(1, int(round(horizon_h)))}h"
+    primary = f"{max(1, round_half_up(horizon_h))}h"
 
     # 1. Snapshot (now).
     t0 = time.perf_counter()
@@ -1201,7 +1201,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
                         frames[pos.ticker] = ctx.feature_frame(pos.ticker, as_of)
                     except (InsufficientData, KeyError):
                         frames[pos.ticker] = pd.DataFrame()
-            book_built = build_book_model(held, ticket.ticker, frames, horizon_h=max(1, int(round(horizon_h))))
+            book_built = build_book_model(held, ticket.ticker, frames, horizon_h=max(1, round_half_up(horizon_h)))
             portfolio = evaluate_portfolio(
                 held, BookPosition(ticket.ticker, ticket.side.value, ticket.notional_quote), frames,
                 equity=ticket.account_equity_quote, horizon_h=horizon_h, built=book_built,
@@ -1275,7 +1275,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     t0 = time.perf_counter()
     regimes = None
     try:
-        regimes = ctx.regimes_at(frame, snapshot.bar_ts, max(1, int(round(horizon_h))))
+        regimes = ctx.regimes_at(frame, snapshot.bar_ts, max(1, round_half_up(horizon_h)))
     except Exception:  # noqa: BLE001 - a map is not worth breaking a verdict for
         log.exception("regime map failed")
     timings["regimes"] = _ms(t0)
@@ -1768,7 +1768,7 @@ def _analog_section(ctx: AnalysisContext, ticket: TradeTicket, snapshot: Feature
     # The ticket's own horizon length is applied uniformly to every analog (that is the
     # cohort the verdict uses); the structural horizons are each analog's *own* next
     # open / window end and are reported alongside for context.
-    ticket_h = max(1, int(round(horizon_h)))
+    ticket_h = max(1, round_half_up(horizon_h))
     fixed = tuple(sorted({24, 72, ticket_h}))
     outcomes: list[MatchOutcome] = []
     for m in result.matches:
@@ -1912,7 +1912,7 @@ def _stress_section(ctx: AnalysisContext, ticket: TradeTicket, spec: SeriesSpec,
     if rets.size < 48:
         rets = hourly_log_returns(frame, closed_only=False)
     if rets.size >= 48 and horizon_h >= 1:
-        mc = simulate(position.sign, rets, int(round(horizon_h)))
+        mc = simulate(position.sign, rets, round_half_up(horizon_h))
     else:
         warnings.append("not enough hourly history for a Monte Carlo over the horizon")
     reverse = reverse_stress(position, book=book, taker_fee=taker_fee, target_loss_pct=ctx.sizing_policy.max_stress_loss_pct, horizon_h=horizon_h) if book is not None else None

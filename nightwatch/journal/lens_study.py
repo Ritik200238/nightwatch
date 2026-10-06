@@ -29,7 +29,7 @@ import pandas as pd
 
 from nightwatch.journal.calibration import wilson_interval
 from nightwatch.journal.studies import NO, T_CONVINCING, UNCLEAR, YES, Study, _pinball, _t
-from nightwatch.time_utils import utc_now
+from nightwatch.time_utils import round_half_up, utc_now
 
 log = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def collect(ctx: Any, *, common_per_ticker: int = 15, min_history_days: int = 12
             hz = structural_horizons(at)["next_open"]
             if hz <= 0:
                 continue
-            h = max(1, int(round(hz)))
+            h = max(1, round_half_up(hz))
             try:
                 truth = compute_match_outcomes(frame, snap.bar_ts, fixed_h=(h,)).outcomes[f"{h}h"]
             except (KeyError, ValueError):

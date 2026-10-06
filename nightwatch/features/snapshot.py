@@ -26,7 +26,7 @@ from nightwatch.features.events import add_event_columns
 from nightwatch.features.macro import MACRO_COLUMNS, build_macro_frame, macro_label
 from nightwatch.features.regime import add_regime_columns
 from nightwatch.features.series import HOUR, SeriesSpec, completed_before, load_aligned_hourly
-from nightwatch.time_utils import ensure_utc, utc_now
+from nightwatch.time_utils import ensure_utc, utc_now, whole_hours
 
 # Numeric features that describe a moment. Order matters: it is the vector layout the
 # analog engine standardises and searches over.
@@ -152,7 +152,7 @@ def build_snapshot(store: Store, spec: SeriesSpec, as_of: datetime | None = None
     # refusing would hide the most useful fact about it: analyse, and flag it loudly. The
     # flag is one the gate blocks on, so a stale name can never pass as a clean GO.
     if stale_h > STALE_REFUSE_H:
-        raise InsufficientData(f"{spec.ticker} has not traded since {last_trade_ts.isoformat()}, {stale_h:.0f}h before as_of")
+        raise InsufficientData(f"{spec.ticker} has not traded since {last_trade_ts.isoformat()}, {whole_hours(stale_h)}h before as_of")
 
     features = {c: _clean(row.get(c)) for c in FEATURE_COLUMNS}
     labels = {c: str(row.get(c)) for c in LABEL_COLUMNS} | {"macro_label": macro_label(row)}
@@ -170,7 +170,7 @@ def build_snapshot(store: Store, spec: SeriesSpec, as_of: datetime | None = None
         features=features,
         labels=labels,
         prices=prices,
-        quality_flags=quality_flags_for_row(row, done) + ([f"spot_has_not_traded_for_{stale_h:.0f}h"] if stale_h > STALE_FLAG_H else []),
+        quality_flags=quality_flags_for_row(row, done) + ([f"spot_has_not_traded_for_{whole_hours(stale_h)}h"] if stale_h > STALE_FLAG_H else []),
         history_hours=int(done["spot_close"].notna().sum()),
     )
     return FeatureSnapshot(**{**asdict(snap), "content_hash": _hash(snap)})

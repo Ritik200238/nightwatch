@@ -27,6 +27,7 @@ from typing import Any
 
 from nightwatch.decision.zh import note_zh
 from nightwatch.features.phrases import earnings_ahead
+from nightwatch.time_utils import whole_hours
 
 
 @dataclass(frozen=True)
@@ -77,7 +78,7 @@ def _days(hours: float | None) -> str:
         return "unknown"
     if hours >= _EVENT_CAP_H:
         return "over 30 days"
-    return f"{hours / 24:.0f} days" if hours >= 48 else f"{hours:.0f} hours"
+    return f"{whole_hours(hours / 24)} days" if hours >= 48 else f"{whole_hours(hours)} hours"
 
 
 # ------------------------------------------------------------------ assumptions
@@ -94,7 +95,7 @@ def assumptions(r: Any) -> list[Assumption]:  # noqa: ANN401 - an AnalysisReport
     t = r.ticket
     out: list[Assumption] = []
     label = (t.extra or {}).get("horizon_label") if isinstance(t.extra, dict) else None
-    out.append(Assumption("hold", f"Held for {r.horizon_h:.0f} hours" + (f" ({label})" if label else ", to the next US regular open" if t.horizon_kind.value == "next_open" else "") + ", then closed."))
+    out.append(Assumption("hold", f"Held for {whole_hours(r.horizon_h)} hours" + (f" ({label})" if label else ", to the next US regular open" if t.horizon_kind.value == "next_open" else "") + ", then closed."))
     entry = t.entry_price or r.snapshot.prices.get("spot_close")
     if entry:
         out.append(Assumption("entry", f"Entered at the token's last price, {entry:,.2f}, as of {r.snapshot.bar_ts:%d %b %H:%M} UTC."))

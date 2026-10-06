@@ -32,6 +32,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from nightwatch.time_utils import round_half_up
+
 MIN_OVERLAP_HOURS = 240  # ten days of shared history before a correlation means anything
 TAIL_PCT = 5.0
 
@@ -287,7 +289,7 @@ def evaluate(
     caller that already made the model (the pipeline, which also sizes against it) pass
     it in instead of paying for it twice.
     """
-    h = max(1, int(round(horizon_h)))
+    h = max(1, round_half_up(horizon_h))
     after_positions = existing + ([proposed] if proposed else [])
     model, m_notes, unknown = built if built is not None else build_book_model(existing, proposed.ticker if proposed else None, frames, horizon_h=h)
     before = _exposure(existing, equity=equity)

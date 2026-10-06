@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 from nightwatch.decision.ticket import TradeTicket
+from nightwatch.time_utils import whole_hours
 
 # Only what makes the analysis untrustworthy blocks. Thin weekend trading is the
 # product's whole subject, so it is a caution that shows up in the verdict, not a veto.
@@ -214,7 +215,7 @@ def evaluate_gate(ticket: TradeTicket, inputs: GateInputs, policy: GatePolicy = 
     now = inputs.now
     recent = [t for t in inputs.recent_losing_exits if now is not None and now - t <= timedelta(hours=policy.revenge_cooldown_h)]
     if recent:
-        rules.append(RuleResult("revenge_cooldown", GateDecision.NO_GO, f"losing exit {max(recent).isoformat()} inside the {policy.revenge_cooldown_h:.0f}h cooldown"))
+        rules.append(RuleResult("revenge_cooldown", GateDecision.NO_GO, f"losing exit {max(recent).isoformat()} inside the {whole_hours(policy.revenge_cooldown_h)}h cooldown"))
     else:
         rules.append(RuleResult("revenge_cooldown", GateDecision.GO, "no recent losing exit"))
 

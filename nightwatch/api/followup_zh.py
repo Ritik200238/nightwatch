@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 
 from nightwatch.api.followup import Answer, _bps, _median, _p5, _pct, _primary, _usd, _wins
+from nightwatch.time_utils import whole_hours
 
 VERDICT_ZH = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
 RULE_ZH = {
@@ -261,7 +262,7 @@ def _a_plain(r: dict, _q: str) -> Answer | None:
     if not v or not t:
         return None
     side = "买入并持有" if t.get("side") == "long" else "做空"
-    bits = [f"简单说：你想{side} {_usd(t.get('notional_quote'))} 的 {t.get('ticker')}，大约 {r.get('horizon_h', 0):.0f} 小时。"]
+    bits = [f"简单说：你想{side} {_usd(t.get('notional_quote'))} 的 {t.get('ticker')}，大约 {whole_hours(r.get('horizon_h', 0))} 小时。"]
     c = (h or {}).get("cohort") or {}
     if c.get("n") and not c.get("insufficient"):
         p5, loss = _loss(r)
