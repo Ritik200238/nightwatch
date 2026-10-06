@@ -6,7 +6,9 @@ const data = { generated_at: "T0", gets: { "/universe?core=true": [1], "/a?x=1&y
 assert.equal(snapshotKey("a", "?y=2&x=1"), "/a?x=1&y=2");
 assert.equal(snapshotGet(data, "a", "?y=2&x=1"), "ok");
 assert.equal(snapshotGet(data, "nope", ""), null);
-assert.ok(shouldFallback(null) && shouldFallback(502) && !shouldFallback(422) && !shouldFallback(200));
+assert.ok(shouldFallback(null) && shouldFallback(502) && shouldFallback(503) && shouldFallback(504) && !shouldFallback(422) && !shouldFallback(200));
+// A real server error is shown as an error, never swapped for a saved example of another trade.
+assert.ok(!shouldFallback(500) && !shouldFallback(501) && !shouldFallback(500 + 7));
 assert.equal(snapshotPost(data, "analyze", '{"ticker":"NVDA"}').t, "NVDA");
 assert.equal(snapshotPost(data, "analyze", '{"ticker":"ZZZ"}').t, "TSLA");
 const c = snapshotPost(data, "chat", '{"messages":[{"role":"user","content":"long nvda 5000"}]}');
