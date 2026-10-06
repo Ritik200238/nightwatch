@@ -54,11 +54,15 @@ class Attribution:
         return min(scored, key=lambda c: c.component_quote) if scored else None
 
 
+def _key(i: int) -> str:
+    return f"position-{i}"
+
+
 def _pnl_matrix(positions: list[Position], frames: dict[str, pd.DataFrame], horizon_h: int) -> tuple[pd.DataFrame, list[str]]:
     """Historical quote P&L per position on a shared index, and what had to be left out."""
     notes: list[str] = []
     cols = {}
-    for p in positions:
+    for i, p in enumerate(positions):
         f = frames.get(p.ticker)
         if f is None or f.empty:
             notes.append(f"{p.ticker}: no stored history")
@@ -67,8 +71,10 @@ def _pnl_matrix(positions: list[Position], frames: dict[str, pd.DataFrame], hori
         if len(r) < MIN_OVERLAP_HOURS:
             notes.append(f"{p.ticker}: only {len(r)} usable hours")
             continue
-        key = f"{p.ticker}|{p.side}|{p.notional_quote:g}"
-        cols[key] = r * (p.signed / 100.0)
+        # Keyed by place in the book, not by what the position looks like: two holdings of the
+        # same name, side and size are two positions, and sharing a key counted one of them
+        # twice in the components and not at all in the book's tail.
+        cols[_key(i)] = r * (p.signed / 100.0)
     if not cols:
         return pd.DataFrame(), notes
     return pd.concat(cols, axis=1, join="inner").dropna(), notes
@@ -92,8 +98,8 @@ def attribute(positions: list[Position], frames: dict[str, pd.DataFrame], *, hor
     book_tail = float(book[worst].mean())
 
     contributions: list[Contribution] = []
-    for p in positions:
-        key = f"{p.ticker}|{p.side}|{p.notional_quote:g}"
+    for i, p in enumerate(positions):
+        key = _key(i)
         share = abs(p.notional_quote) / gross
         if key not in mat.columns:
             contributions.append(Contribution(p.ticker, p.side, p.notional_quote, share, None, None, None, "no usable history"))
