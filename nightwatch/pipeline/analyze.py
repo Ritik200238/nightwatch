@@ -956,6 +956,21 @@ def _add_zh_names(out: dict[str, Any]) -> None:
 _PROGRESS: contextvars.ContextVar[Callable[[dict[str, Any]], None] | None] = contextvars.ContextVar("nightwatch_progress", default=None)
 
 
+# Whose record the circuit breaker reads: the anonymous visitor the request came from. Unset (a
+# call from the CLI, a background job) it reads the trades no visitor owns, so one person's
+# clicks never move another person's verdict.
+_TRADER: contextvars.ContextVar[str | None] = contextvars.ContextVar("nightwatch_trader", default=None)
+
+
+@contextlib.contextmanager
+def trader_scope(client: str | None):
+    token = _TRADER.set(client)
+    try:
+        yield
+    finally:
+        _TRADER.reset(token)
+
+
 @contextlib.contextmanager
 def progress_to(callback: Callable[[dict[str, Any]], None] | None):
     """Route the progress events of every analyze() call made inside the block to ``callback``.
@@ -1159,7 +1174,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     breaker = BreakerReport(state=BreakerState.NORMAL, reasons=["no journal"], equity=ticket.account_equity_quote)
     if ctx.journal is not None:
         try:
-            breaker = evaluate_breaker(ctx.journal.taken_trades(matured_only=False), equity=ticket.account_equity_quote, now=as_of, policy=ctx.breaker_policy)
+            breaker = evaluate_breaker(ctx.journal.taken_trades(matured_only=False, client=_TRADER.get()), equity=ticket.account_equity_quote, now=as_of, policy=ctx.breaker_policy)
         except Exception:  # noqa: BLE001
             log.exception("circuit breaker evaluation failed")
 

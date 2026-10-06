@@ -41,7 +41,7 @@ from nightwatch.journal.calibration import calibrate
 from nightwatch.journal.journal import Journal
 from nightwatch.journal.postmortem import LessonBook, mature_and_learn
 from nightwatch.journal.reports import ReportStore
-from nightwatch.pipeline.analyze import AnalysisContext, analyze
+from nightwatch.pipeline.analyze import AnalysisContext, analyze, trader_scope
 from nightwatch.pipeline.render import render_text
 from nightwatch.stress.scenarios import Side
 from nightwatch.time_utils import UTC, utc_now
@@ -1110,7 +1110,13 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         from nightwatch.api.mcp_server import handle_body
 
-        status, reply = await run_in_threadpool(handle_body, st(), await request.body())
+        body = await request.body()
+
+        def call() -> tuple[int, Any]:
+            return handle_body(st(), body)
+
+        with trader_scope(_who(request)[0]):
+            status, reply = await run_in_threadpool(call)
         if reply is None:
             return Response(status_code=status)
         return JSONResponse(reply, status_code=status)
@@ -1201,7 +1207,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             if problem:
                 raise HTTPException(422, problem)
         try:
-            with s.lock:
+            with s.lock, trader_scope(_who(request)[0]):
                 report = analyze(s.ctx, ticket, as_of=body.as_of, record=body.record)
         except KeyError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -1411,22 +1417,31 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         return out
 
     @app.post("/forecasts/{forecast_id}/taken")
-    def mark_taken(forecast_id: int, taken: bool = True) -> dict[str, Any]:
+    def mark_taken(forecast_id: int, request: Request, taken: bool = True) -> dict[str, Any]:
         """The trader tells the desk they acted on an analysis. Only these count towards
-        the circuit breaker, so the loss record can never be invented from analyses."""
+        the circuit breaker, so the loss record can never be invented from analyses - and only
+        the visitor who ran the analysis can say they acted on it: the breaker reads a person's
+        own record, and a desk everyone shares must not let one visitor spend another's."""
         s = st()
+        owner = s.journal.owner_of(forecast_id)
+        if owner is None:
+            raise HTTPException(404, f"no forecast {forecast_id}")
+        client, _, _ = _who(request)
+        if owner != client:
+            raise HTTPException(403, "Only the visitor who ran this analysis can mark it as taken.")
         if not s.journal.mark_taken(forecast_id, taken):
             raise HTTPException(404, f"no forecast {forecast_id}")
         return {"forecast_id": forecast_id, "taken": taken}
 
     @app.get("/breaker")
-    def breaker(equity: float | None = None) -> dict[str, Any]:
+    def breaker(request: Request, equity: float | None = Query(default=None, gt=0, le=MAX_NOTIONAL * 100)) -> dict[str, Any]:
         from dataclasses import asdict
 
         from nightwatch.decision.breaker import evaluate as evaluate_breaker
 
         s = st()
-        rep = evaluate_breaker(s.journal.taken_trades(matured_only=False), equity=equity)
+        client, _, _ = _who(request)
+        rep = evaluate_breaker(s.journal.taken_trades(matured_only=False, client=client), equity=equity)
         return asdict(rep) | {"state": rep.state.value, "blocks_new_trades": rep.blocks_new_trades}
 
     @app.get("/liquidity/{ticker}")
@@ -1489,7 +1504,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         """The desk's conversation, plus the two counts that say whether anyone uses it:
         a new live verdict is attributed to an anonymous client, and a follow-up is
         counted by the kind of answer it got (never by what was typed)."""
-        out = _chat(body)
+        with trader_scope(_who(request)[0]):
+            out = _chat(body)
         _count_chat(body, request, out)
         return out
 
@@ -1521,13 +1537,14 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+        client = _who(request)[0]
 
         def put(kind: str, data: Any) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, (kind, data))
 
         def work() -> None:
             try:
-                with progress_to(lambda ev: put("step", ev)):
+                with progress_to(lambda ev: put("step", ev)), trader_scope(client):
                     out = _chat(body)
                 _count_chat(body, request, out)
                 put("done", out)
@@ -1705,7 +1722,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
     def _telegram_chat(messages: list[dict[str, str]], context_id: int | None) -> dict[str, Any]:
         """The web chat's own turn, for the Telegram bot: same intake, same follow-ups."""
-        return _chat(ChatIn(messages=[ChatMessage(**m) for m in messages], context_forecast_id=context_id))
+        with trader_scope("telegram"):
+            return _chat(ChatIn(messages=[ChatMessage(**m) for m in messages], context_forecast_id=context_id))
 
     def _chat(body: ChatIn) -> dict[str, Any]:
         """One chat turn, plus the small card for it when a picture helps."""

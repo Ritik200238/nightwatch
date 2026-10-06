@@ -138,12 +138,31 @@ class Journal:
             cur = self._conn.execute("UPDATE forecasts SET taken=? WHERE id=?", (int(taken), int(forecast_id)))
         return cur.rowcount > 0
 
-    def taken_trades(self, *, matured_only: bool = True) -> pd.DataFrame:
-        """Tickets the trader said they took, with outcomes where they exist."""
+    def owner_of(self, forecast_id: int) -> str | None:
+        """The anonymous visitor (a salted hash, see ``engagement``) whose analysis this was, or
+        None for one nobody claimed: an old row, a replay, the operator's own."""
+        if not self._conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='verdict_marks'").fetchone():
+            return None
+        got = self._conn.execute("SELECT client FROM verdict_marks WHERE forecast_id=?", (int(forecast_id),)).fetchone()
+        return str(got[0]) if got else None
+
+    def taken_trades(self, *, matured_only: bool = True, client: str | None = None) -> pd.DataFrame:
+        """Tickets the trader said they took, with outcomes where they exist.
+
+        "The trader" is one visitor: with ``client`` it is the trades that visitor ran and marked,
+        and without it the ones no visitor owns. The circuit breaker is a person's own record, so
+        it must never be fed by what other people clicked on a desk everyone shares."""
         df = self.forecasts(kind="ticket", matured_only=matured_only)
         if df.empty or "taken" not in df:
             return df.iloc[0:0]
-        return df[df["taken"].astype("int64") == 1]
+        df = df[df["taken"].astype("int64") == 1]
+        if self._conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='verdict_marks'").fetchone():
+            if client is None:
+                owned = {r[0] for r in self._conn.execute("SELECT forecast_id FROM verdict_marks")}
+                return df[~df["id"].isin(owned)]
+            mine = {r[0] for r in self._conn.execute("SELECT forecast_id FROM verdict_marks WHERE client=?", (client,))}
+            return df[df["id"].isin(mine)]
+        return df if client is None else df.iloc[0:0]
 
     def delete_replays(self, ticker: str | None = None) -> int:
         """Remove replay forecasts (and their outcomes). Replays are reproducible from

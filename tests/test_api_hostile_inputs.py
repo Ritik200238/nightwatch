@@ -80,3 +80,4 @@ def test_an_id_too_big_for_the_database_is_a_404_not_a_500(client, method, path,
     r = client.get(path) if method == "get" else client.post(path, json=body)
     assert r.status_code == 404, (path, r.status_code, r.text)
     assert "Traceback" not in r.text and "SQLite" not in r.text
+
