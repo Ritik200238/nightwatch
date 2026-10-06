@@ -690,6 +690,12 @@ def read_conversation(messages: list[dict[str, str]], known_tickers: list[str], 
     if merged.account_equity_quote is None and account_equity:
         merged.account_equity_quote = account_equity
     done = _settle(merged)
+    if done.kind == "analyze" and merged.negative_size and last_text.strip():
+        # "make it -5k" after a finished trade: the earlier size is still on the ticket, so the
+        # run would go ahead and the minus sign would vanish without a word. Ask instead.
+        done.kind = "clarify"
+        done.reply = NEGATIVE_SIZE_REPLY["zh" if _CJK.search(last_text) else "en"]
+        return done
     if done.kind == "analyze" and latest_said_nothing:
         # "asdf qwerty lorem" after a finished trade: nothing in it asks for a run, so the
         # earlier ticket is not run again (and never with a side nobody said).

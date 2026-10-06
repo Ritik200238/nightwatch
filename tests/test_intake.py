@@ -644,3 +644,12 @@ def test_a_night_said_loosely_is_still_an_overnight_hold():
         assert p(f"long 5k TSLA {phrase}").horizon_kind == "next_open", phrase
     # "night" alone, or a "night owl" turn of phrase, is not a hold.
     assert p("long 5k TSLA, night owl trade").horizon_kind is None
+
+
+def test_a_negative_size_after_a_finished_trade_is_asked_about_not_ignored():
+    msgs = [{"role": "user", "content": "long 10k TSLA overnight"}, {"role": "assistant", "content": "ok"}, {"role": "user", "content": "make it -5k"}]
+    r = read_conversation(msgs, TICKERS)
+    assert r.kind == "clarify" and "negative" in r.reply
+    # A later, valid size clears it.
+    ok = read_conversation([*msgs, {"role": "assistant", "content": "x"}, {"role": "user", "content": "make it 5k"}], TICKERS)
+    assert ok.kind == "analyze" and ok.notional_quote == 5000
