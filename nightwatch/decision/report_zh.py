@@ -414,6 +414,8 @@ _PREMISE = _rules(
      lambda m: _p("你的理由依赖最近的一份财报，但上一次财报是 {a} 前" + ("，下一次：{b}" if m.group(2) else "") + "。", a=_span(m.group(1)), b=_ahead(m.group(2) or "x") if m.group(2) else "")),
     (r"Your reason leans on earnings coming up, but next earnings: (.+), well past this hold\.",
      lambda m: _p("你的理由依赖即将到来的财报，但下一次财报：{a}，远在这次持有期之后。", a=_ahead(m.group(1)))),
+    (r"Your reason mentions earnings, but none fall near this hold \(no past report on record; next: (.+)\)\.",
+     lambda m: _p("你的理由提到了财报，但这次持有期附近没有财报（没有历史财报记录；下一次：{b}）。", b=_ahead(m.group(1)))),
     (r"Your reason mentions earnings, but none fall near this hold \(last (.+?) ago; next: (.+)\)\.",
      lambda m: _p("你的理由提到了财报，但这次持有期附近没有财报（上一次在 {a} 前；下一次：{b}）。", a=_span(m.group(1)), b=_ahead(m.group(2)))),
     (r"Your reason mentions the Fed, but there is no FOMC decision in the next 30 days\.", lambda m: "你的理由提到了美联储，但未来 30 天内没有 FOMC 决议。"),

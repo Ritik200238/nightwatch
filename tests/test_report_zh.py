@@ -63,6 +63,7 @@ WARN_CASES = [
     "earnings ahead covers 1,200 past hours, but only 6 distinct episodes (need 15) - they fall on too few separate dates to count as independent evidence; the answer below is the unfiltered one",
 ]
 PREMISE_CASES = [
+    "Your reason mentions earnings, but none fall near this hold (no past report on record; next: in 3 days).",
     "Your reason mentions earnings, but none fall near this hold (last over 30 days ago; next: no earnings in the next 30 days).",
     "Your reason mentions earnings, but none fall near this hold (last 12 days ago; next: in 3 days).",
     "Your reason leans on a recent earnings report, but the last one was 20 days ago and next: in 40 days.",
