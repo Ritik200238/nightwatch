@@ -320,3 +320,27 @@ def test_the_request_lock_gives_up_after_its_wait_and_stays_usable():
     with lock.request(0.1):
         assert lock.wanted == 1
     assert lock.wanted == 0
+
+
+def test_the_whole_run_ends_by_the_hard_stop_even_when_every_call_is_slow(monkeypatch):
+    """Per-call caps are not enough: three slow checks plus a slow model must still end the run
+    by the total budget, with the steps it has and a conclusion that says what was skipped."""
+    monkeypatch.setattr(agent, "TOOL_TIMEOUT_S", 1.0)
+    monkeypatch.setattr(agent, "MODEL_TIMEOUT_S", 1.0)
+    monkeypatch.setattr(agent, "HARD_STOP_S", 6.0)
+    monkeypatch.setattr(agent, "TIME_BUDGET_S", 3.0)
+    monkeypatch.setitem(agent.TOOLS, "explain", lambda s, r, a: time.sleep(4) or "late")
+
+    class Slow(Script):
+        def write(self, *, system, user, max_tokens=1500):  # noqa: ANN001, ANN201
+            if "No more tool calls" in user:
+                time.sleep(4)  # the wrap-up call is slow too
+            return super().write(system=system, user=user, max_tokens=max_tokens)
+
+    run = agent.Run()
+    t0 = time.time()
+    agent.run_agent(Slow([_call("explain", {"kind": "why"})] * 6), FakeState(), REPORT, run, budget_s=3.0)
+    assert time.time() - t0 < 9
+    assert run.status == "done" and run.final["partial"] is True
+    assert all(s["status"] == "skipped" and "took too long" in s["result_summary"] for s in run.steps)
+    assert "No checks completed" in run.final["coverage"]
