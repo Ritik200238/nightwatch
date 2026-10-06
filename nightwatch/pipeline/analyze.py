@@ -1202,6 +1202,13 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         except Exception:  # noqa: BLE001 - the book view must never break the verdict
             log.exception("portfolio evaluation failed")
             portfolio = book_built = None
+            warnings.append("Your holdings could not be measured this time, so this verdict does not include them. Run it again, or treat it as the trade on its own.")
+    # Holdings were given but no tail could be measured from them (the book failed above, or no
+    # window is shared by enough history): say they are unmeasured rather than let the gate
+    # report that "the book's history is measured".
+    book_unknown: tuple[str, ...] = book_built[2] if book_built else ()
+    if ticket.open_positions and not (book_built and book_built[0] is not None):
+        book_unknown = book_unknown or tuple(dict.fromkeys(t.upper() for t, _, _ in ticket.open_positions))
     timings["portfolio"] = _ms(t0)
 
     # One context drives the headline decision and every what-if, so a swept verdict
@@ -1217,7 +1224,7 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
         hedge_cost_bps_of_position=execution.hedge_quote.total_cost_bps_of_position if execution.hedge_quote else None,
         hedge_residual_p5_loss_pct=residual_p5, gate_policy=ctx.gate_policy, sizing_policy=ctx.sizing_policy,
         leverage_rule=leverage_rule,
-        book_model=book_built[0] if book_built else None, book_unknown=book_built[2] if book_built else (),
+        book_model=book_built[0] if book_built else None, book_unknown=book_unknown,
         book_mean_correlation=portfolio.mean_correlation_to_book if portfolio else None,
         invalidation_distance_pct=plan.measured_pct() if plan else None,
         invalidation_reach_pct=plan.reach_pct if plan else None,

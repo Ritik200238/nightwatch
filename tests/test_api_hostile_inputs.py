@@ -81,3 +81,20 @@ def test_an_id_too_big_for_the_database_is_a_404_not_a_500(client, method, path,
     assert r.status_code == 404, (path, r.status_code, r.text)
     assert "Traceback" not in r.text and "SQLite" not in r.text
 
+
+
+def test_holdings_that_could_not_be_measured_are_said_not_silently_dropped(client, monkeypatch):
+    """If the book view fails, the gate used to claim 'the book's history is measured' for holdings
+    nobody had measured, and the verdict quietly ignored them."""
+    def boom(*a, **k):
+        raise RuntimeError("portfolio exploded")
+
+    monkeypatch.setattr("nightwatch.pipeline.analyze.evaluate_portfolio", boom)
+    body = {**GOOD, "thesis": "t", "invalidation": "i", "open_positions": [{"ticker": "NVDA", "side": "long", "notional_quote": 30000}]}
+    r = client.post("/analyze", json=body)
+    assert r.status_code == 200, r.text
+    rep = r.json()
+    assert any("holdings could not be measured" in w for w in rep["warnings"])
+    book = next(x for x in rep["gate"]["rules"] if x["rule"] == "book_tail")
+    assert "no stored history for NVDA" in book["reason"] and "is measured; its limit" not in book["reason"]
+    assert rep["portfolio"] is None
