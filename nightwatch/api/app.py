@@ -332,9 +332,13 @@ class AppState:
     def refresh_bitget(self) -> None:
         """The rest of the Bitget catalogue for every token, one call at a time.
 
-        Sequential on purpose: 24 tokens x 5 entries is 120 calls an hour, and the box has 1 GB
-        and the service is flaky. ``BitgetData`` itself refuses a second call for the same
-        token and entry inside an hour, so this is safe to run as often as the warm-up does."""
+        Sequential on purpose: at 24 tokens x 5 entries this was 120 calls an hour, and the
+        box has 1 GB and the service is flaky. The universe has since grown (see
+        UNIVERSE_CANDIDATES.md and docs/universe-expansion.md): this is now
+        ``len(self.ctx.tickers_with_data()) x 5`` calls/hour, scaling linearly, not a fixed
+        120 - re-measure against the box's 1 GB cap before deploying a much larger core
+        set. ``BitgetData`` itself refuses a second call for the same token and entry
+        inside an hour, so this is safe to run as often as the warm-up does."""
         bd = self.ctx.bitget_data
         if bd is None:
             return

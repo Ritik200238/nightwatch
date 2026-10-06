@@ -131,7 +131,7 @@ Figures pulled live on 6 Oct 2026, from the production API, seconds before writi
 | The "1-in-20 bad case" line roughly holds | **5.47% observed vs 5% target → amber** (within the wider of our two bands, not a clean green) | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), 3,546 scored forecasts, recomputed live |
 | We publish our own misses | **12 of 1,154 live tickets (1.04%) went past the line** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
 | We test the method itself, not just the trades | **12 internal studies: 4 yes, 5 no, 3 unclear** | [`/studies`](https://nightwatch-gules.vercel.app/studies), corrected for multiple testing |
-| Universe coverage | **24 tokenized US stocks, all with live data** | [`/api/universe`](https://nightwatch-gules.vercel.app/api/universe) |
+| Universe coverage | **configured for 112 tokenized US stocks** (up from 24) — production's live data lags until the throttled backfill in `docs/universe-expansion.md` runs; check the real count and each ticker's `has_data` live, not this line | [`/api/universe`](https://nightwatch-gules.vercel.app/api/universe) |
 | Not verified by us | real-trader adoption; directional edge (measured: **none**) | — said plainly, not hidden |
 
 <p align="center">
