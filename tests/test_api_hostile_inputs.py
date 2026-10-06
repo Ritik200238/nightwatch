@@ -105,3 +105,63 @@ def test_a_list_limit_below_one_is_refused_not_read_as_no_limit(client, path):
     """A negative limit used to mean 'everything': tail(-1) of the whole journal, or SQL LIMIT -1."""
     assert client.get(path).status_code == 422
     assert client.get(path.replace("-1", "1").replace("=0", "=1")).status_code == 200
+
+
+# ---------------------------------------------------- no raw exception text reaches a visitor
+
+
+def test_plain_message_passes_the_desks_own_sentences_and_hides_the_rest():
+    from nightwatch.api.guard import GENERIC_PROBLEM, plain_message
+
+    assert plain_message(ValueError("a hold can be at most 720 hours (30 days)")) == "a hold can be at most 720 hours (30 days)"
+    assert plain_message(KeyError("FOO is not in the universe")) == "FOO is not in the universe"
+    for raw in (KeyError("close"), RuntimeError("boom"), ValueError("invalid literal for int() with base 10: 'x'"),
+                TypeError("'NoneType' object is not subscriptable"), RuntimeError('File "/app/nightwatch/x.py", line 3, in f'),
+                RuntimeError("x " * 400)):
+        assert plain_message(raw) == GENERIC_PROBLEM, raw
+    assert plain_message(raw, "custom words") == "custom words"
+
+
+def test_an_unknown_ticker_is_a_plain_404_on_the_ticker_routes(client):
+    for path in ("/snapshot/ZZZZ", "/closed-hours/ZZZZ"):
+        r = client.get(path)
+        assert r.status_code == 404, path
+        detail = r.json()["detail"]
+        assert "ZZZZ" in detail and "Traceback" not in detail and "KeyError" not in detail
+
+
+def test_an_internal_key_error_in_analyze_does_not_leak_its_key(client, monkeypatch):
+    def boom(*a, **k):
+        raise KeyError("spot_close")
+
+    monkeypatch.setattr("nightwatch.api.app.analyze", boom)
+    r = client.post("/analyze", json=GOOD)
+    assert r.status_code == 404
+    assert "spot_close" not in r.text and "missing data" in r.json()["detail"]
+
+
+def test_missing_price_history_is_said_in_plain_words(client):
+    """Before the data starts the real pipeline raises InsufficientData; it must read as a sentence."""
+    r = client.post("/analyze", json={**GOOD, "as_of": "2020-01-01T00:00:00+00:00"})
+    assert r.status_code == 422, r.text
+    detail = r.json()["detail"]
+    assert "TSLA" in detail and "USDT" not in detail and "[" not in detail and "as_of" not in detail
+
+
+def test_the_chat_stream_hides_an_unexpected_exception(client, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("secret trace at /srv/nightwatch/api/app.py line 99")
+
+    monkeypatch.setattr("nightwatch.api.baserate.detect", boom)
+    r = client.post("/chat/stream", json={"messages": [{"role": "user", "content": "long 10k TSLA overnight"}]})
+    assert "secret" not in r.text and "app.py" not in r.text
+    assert '"status": 500' in r.text and "Internal Server Error" in r.text
+
+
+def test_the_plain_chat_hides_an_unexpected_exception_too(client, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("secret trace at /srv/nightwatch/api/app.py line 99")
+
+    monkeypatch.setattr("nightwatch.api.baserate.detect", boom)
+    r = client.post("/chat", json={"messages": [{"role": "user", "content": "long 10k TSLA overnight"}]})
+    assert r.status_code == 500 and "secret" not in r.text and "app.py" not in r.text

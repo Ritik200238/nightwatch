@@ -91,7 +91,7 @@ def compute_feature_frame(store: Store, spec: SeriesSpec, start: datetime, end: 
     """Aligned frame + basis + regime + events for every hour in [start, end)."""
     f = load_aligned_hourly(store, spec, start, end, as_of=as_of)
     if f.empty or f["spot_close"].isna().all():
-        raise InsufficientData(f"no spot bars for {spec.spot_symbol} in [{start}, {end})")
+        raise InsufficientData(f"The desk has no price bars for {spec.ticker} in that period.")
     f = add_basis_columns(f)
     f = add_regime_columns(f)
     f = add_event_columns(f, store, spec.ticker, as_of=as_of)
@@ -138,21 +138,21 @@ def build_snapshot(store: Store, spec: SeriesSpec, as_of: datetime | None = None
     done = completed_before(frame, as_of)
     done = done[done["spot_close"].notna()]
     if done.empty:
-        raise InsufficientData(f"no completed bars for {spec.ticker} before {as_of.isoformat()}")
+        raise InsufficientData(f"The desk has no finished price bars for {spec.ticker} before that time.")
     row = done.iloc[-1]
     bar_ts = done.index[-1].to_pydatetime()
     # Forward-filled hours are not evidence of a live market. Staleness is judged on
     # the last hour that actually traded.
     traded = done[~done["spot_filled"].astype(bool)]
     if traded.empty:
-        raise InsufficientData(f"no traded bars for {spec.ticker} before {as_of.isoformat()}")
+        raise InsufficientData(f"{spec.ticker} has no traded price bars before that time.")
     last_trade_ts = traded.index[-1].to_pydatetime()
     stale_h = (as_of - last_trade_ts).total_seconds() / 3600.0
     # A token that has not traded for two days has no usable price at all. Short of that,
     # refusing would hide the most useful fact about it: analyse, and flag it loudly. The
     # flag is one the gate blocks on, so a stale name can never pass as a clean GO.
     if stale_h > STALE_REFUSE_H:
-        raise InsufficientData(f"{spec.ticker} has not traded since {last_trade_ts.isoformat()}, {whole_hours(stale_h)}h before as_of")
+        raise InsufficientData(f"{spec.ticker} has not traded since {last_trade_ts:%Y-%m-%d %H:%M} UTC, {whole_hours(stale_h)} hours before that time.")
 
     features = {c: _clean(row.get(c)) for c in FEATURE_COLUMNS}
     labels = {c: str(row.get(c)) for c in LABEL_COLUMNS} | {"macro_label": macro_label(row)}

@@ -672,7 +672,7 @@ class AnalysisContext:
             spec = self.spec(ticker)
             cov = self.store.bar_coverage(Venue.BITGET_SPOT, spec.spot_symbol, Interval.H1)
             if cov is None:
-                raise InsufficientData(f"no stored bars for {spec.spot_symbol}")
+                raise InsufficientData(f"The desk has no stored price bars for {spec.ticker}.")
             frame = _compact(compute_feature_frame(self.store, spec, cov[0], end))
             frame = self._checked(ticker, end, frame, lambda: _compact(compute_feature_frame(self.store, spec, cov[0], end)))
         store[key] = frame  # re-insert as most recent

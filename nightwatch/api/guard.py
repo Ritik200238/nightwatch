@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 import threading
 import time
 from collections import OrderedDict
@@ -94,3 +95,20 @@ class RateLimiter:
             while len(self._buckets) > self._max:
                 self._buckets.popitem(last=False)
         return wait
+
+
+GENERIC_PROBLEM = "The desk could not run that. Check the token and the numbers, or try again in a moment."
+_TECHNICAL = re.compile(r"Traceback|File \"|\.py|0x[0-9a-f]{4,}|object at|NoneType|sqlite|pandas|numpy|KeyError|ValueError|TypeError|Exception|line \d+|invalid literal|could not convert|unsupported operand|has no attribute|not subscriptable|not iterable|positional argument|unexpected keyword", re.I)
+
+
+def plain_message(exc: BaseException, fallback: str = GENERIC_PROBLEM) -> str:
+    """The sentence a visitor may read for an exception the desk raised on purpose.
+
+    The desk's own refusals are written as plain sentences and pass through. Anything that
+    looks like the language or a library speaking (a bare key name, a file or line, a type
+    name, an address) is replaced by ``fallback``; the original stays in the log."""
+    text = str(exc.args[0]) if isinstance(exc, KeyError) and exc.args else str(exc)
+    text = " ".join(text.split())
+    if " " not in text or len(text) > 300 or _TECHNICAL.search(text):
+        return fallback
+    return text
