@@ -18,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-from nightwatch.analog.outcomes import WEEKEND_H, closed_windows
+from nightwatch.analog.outcomes import WEEKEND_H, closed_windows, weekend_windows
 
 _ASK = re.compile(
     r"\b(?:base[\s-]?rate|how often|how many times|odds|chances?|probability|likelihood|how likely|historically|history says)\b"
@@ -69,7 +69,7 @@ def answer(state: Any, q: BaseRateQuestion, *, as_of: datetime | None = None, la
     w = closed_windows(frame)
     kind = "weekends" if q.weekend else "overnight closes"
     if not w.empty:
-        w = w[w["hours"] >= WEEKEND_H] if q.weekend else w[w["hours"] < WEEKEND_H]
+        w = weekend_windows(w) if q.weekend else w[w["hours"] < WEEKEND_H]
     zh = lang == "zh"
     word = "rose" if q.up else "fell"
     bits = []

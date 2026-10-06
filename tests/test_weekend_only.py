@@ -54,3 +54,18 @@ def test_a_holiday_closure_that_does_not_start_on_friday_is_not_a_weekend():
     extra.index = extra.index + pd.Timedelta(days=7 * 12 - 2)  # the same shape, starting on a Wednesday
     both = pd.concat([f, extra]).sort_index()
     assert weekend_history(both, "long")["worst_pct"] > -2.0
+
+
+def test_every_weekend_count_uses_the_same_weekend_definition():
+    """The base-rate answer said '97 past weekends' while the weekend note beside it said
+    '87': one counted every closure over 40 h (holiday midweek ones too), the other Friday
+    starts only. Both now go through weekend_windows."""
+    from nightwatch.analog.outcomes import closed_windows, weekend_windows
+
+    f = _frame([-1.0] * 12)
+    extra = _frame([-20.0]).copy()
+    extra.index = extra.index + pd.Timedelta(days=7 * 12 - 2)  # a long closure starting on a Wednesday
+    both = pd.concat([f, extra]).sort_index()
+    w = closed_windows(both)
+    assert len(w[w["hours"] >= 40]) == 13 and len(weekend_windows(w)) == 12
+    assert weekend_windows(w.iloc[0:0]).empty

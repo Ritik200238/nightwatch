@@ -217,6 +217,17 @@ def closed_windows(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def weekend_windows(w: pd.DataFrame) -> pd.DataFrame:
+    """The closed windows that are weekends: a long closure that starts on a Friday. A
+    Thanksgiving Wednesday night also runs past 40 hours and is not what "over the weekend"
+    means. One definition, so every "n weekends" the desk quotes counts the same ones."""
+    if w.empty:
+        return w
+    starts = pd.DatetimeIndex(w["start"])
+    starts = starts.tz_localize("UTC") if starts.tz is None else starts
+    return w[(w["hours"] >= WEEKEND_H) & (starts.tz_convert("America/New_York").weekday == 4)]
+
+
 def weekend_history(frame: pd.DataFrame, side: str) -> dict[str, float | int | str] | None:
     """What past weekends did to this token, Friday's close to Monday's first regular price.
 
@@ -228,11 +239,7 @@ def weekend_history(frame: pd.DataFrame, side: str) -> dict[str, float | int | s
     w = closed_windows(frame)
     if w.empty:
         return None
-    # Weekends only: a long closure that starts on a Friday. A Thanksgiving Wednesday
-    # night also runs past 40 hours and is not what "over the weekend" means.
-    starts = pd.DatetimeIndex(w["start"])
-    starts = starts.tz_localize("UTC") if starts.tz is None else starts
-    w = w[(w["hours"] >= WEEKEND_H) & (starts.tz_convert("America/New_York").weekday == 4)]
+    w = weekend_windows(w)
     if len(w) < 10:
         return None
     signed = w["ret_pct"].to_numpy(float) * (1.0 if side == "long" else -1.0)
