@@ -217,7 +217,7 @@ export default function DeskPage() {
         ) : null}
         {report || heroUsed ? <ScenarioChips disabled={busy} onPick={runScenario} onContrast={runContrastDemo} /> : null}
         <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
-          <TabsList className="w-full">
+          <TabsList className="w-full max-sm:h-11!">
             <TabsTrigger value="form" className="flex-1">
               {tx("Ticket", "表单")}
             </TabsTrigger>
@@ -492,7 +492,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
       <HeroProof />
       <p className="mt-2 text-[13px] text-muted-foreground">
         {tx("Prefer fields? ", "更喜欢填表？")}
-        <button type="button" onClick={onForm} className="underline underline-offset-2 hover:text-foreground">
+        <button type="button" onClick={onForm} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground">
           {tx("Use the ticket form", "使用表单")}
         </button>
       </p>

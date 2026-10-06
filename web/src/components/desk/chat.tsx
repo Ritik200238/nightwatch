@@ -339,7 +339,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
               <button
                 type="button"
                 onClick={() => startAgent(contextId, lang)}
-                className="rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-medium hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs max-sm:min-h-10 font-medium hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 {tx("Let the AI stress-test it", "让 AI 压力测试")}
               </button>
@@ -354,7 +354,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
                 key={q}
                 type="button"
                 onClick={() => void send(q)}
-                className="rounded-full border border-border px-2.5 py-1 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="rounded-full border border-border px-3 py-1 text-[13px] max-sm:min-h-10 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               >
                 {q}
               </button>

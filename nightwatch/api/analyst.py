@@ -141,8 +141,9 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
     p5 = _loss_p5(h)
     lines = [
         f"[desk] Trade: {t.get('side')} {t.get('notional_quote'):,.0f} USDT of {t.get('ticker')}, held {whole_hours(r.get('horizon_h', 0))} hours.",
-        f"[desk] Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
-        f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
+        f"[desk] Desk verdict: {v.get('verdict')}; "
+        + ("no size is allowed as asked (the verdict is a refusal); " if refused_as_asked(r) else f"size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; ")
+        + f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
     ]
     equity = account_equity(r)
     if equity is None:
@@ -453,10 +454,34 @@ def parse_reply(raw: str) -> dict[str, Any] | None:
     if not text.startswith("{") and "{" in text and "}" in text:
         text = text[text.index("{"): text.rindex("}") + 1]
     try:
-        obj = json.loads(text)
+        # strict=False: a raw line break inside a string is the commonest model slip.
+        obj = json.loads(text, strict=False)
     except (json.JSONDecodeError, ValueError):
-        return None
+        return _salvage(text)
     return obj if isinstance(obj, dict) else None
+
+
+_KEYS = ("take", "for", "against", "reconcile")
+
+
+def _salvage(text: str) -> dict[str, Any] | None:
+    """The string fields of a JSON object that does not parse (a stray quote, a cut-off tail).
+
+    Without this the whole reply was shown as prose, braces, quotes and backslash-n included.
+    Returns None when the text is not an attempt at the object at all."""
+    if not text.lstrip().startswith("{"):
+        return None
+    out: dict[str, Any] = {}
+    stop = re.compile(r'"\s*(?:,\s*"(?:' + "|".join(_KEYS) + r')"\s*:|\}\s*$|$)')
+    for key in _KEYS:
+        m = re.search(r'"' + key + r'"\s*:\s*"', text)
+        if not m:
+            continue
+        rest = text[m.end():]
+        end = stop.search(rest)
+        raw = rest[: end.start()] if end else rest
+        out[key] = raw.replace('\\"', '"').replace("\\n", "\n")
+    return out or None
 
 
 def _as_text(v: Any) -> str:  # noqa: ANN401
@@ -466,14 +491,34 @@ def _as_text(v: Any) -> str:  # noqa: ANN401
 
 
 def _verdict_word(report: dict[str, Any]) -> str:
-    return str((report.get("verdict") or {}).get("verdict") or "")
+    return str((report.get("verdict") or {}).get("verdict") or "").replace("_", " ")
+
+
+_VERDICT_ZH = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}
+
+
+def _verdict_name(report: dict[str, Any], lang: str) -> str:
+    """The verdict as a word of the page's language: a Chinese take must not say REVIEW."""
+    raw = str((report.get("verdict") or {}).get("verdict") or "")
+    return _VERDICT_ZH.get(raw, raw.replace("_", " ")) if lang == "zh" else raw.replace("_", " ")
+
+
+def refused_as_asked(report: dict[str, Any]) -> bool:
+    """A NO GO whose size cap is not what refused it (100x leverage): the size caps would take
+    the full size, so printing "the size the desk allows: 10,000" beside NO GO reads as a
+    contradiction. Only a smaller recommended size is an allowance."""
+    v = report.get("verdict") or {}
+    rec, asked = v.get("recommended_notional"), (report.get("ticket") or {}).get("notional_quote")
+    return v.get("verdict") == "NO_GO" and (not rec or (asked is not None and rec >= float(asked) - 1))
 
 
 def _fixed_reconcile(report: dict[str, Any], lang: str) -> str:
     v = report.get("verdict") or {}
     size = f"{v.get('recommended_notional') or 0:,.0f}"
+    if refused_as_asked(report):
+        return f"本台的结论不变：{_verdict_name(report, lang)}，按所问的仓位不通过。" if lang == "zh" else f"The desk's verdict stands: {_verdict_word(report)} at the size asked."
     if lang == "zh":
-        return f"本台的结论不变：{_verdict_word(report)}，允许的规模 {size} USDT。"
+        return f"本台的结论不变：{_verdict_name(report, lang)}，允许的规模 {size} USDT。"
     return f"The desk's verdict stands: {_verdict_word(report)}, up to {size} USDT."
 
 
@@ -487,6 +532,8 @@ def _norm_verdict(tok: str) -> str:
 
 def _reconcile(model_line: str, report: dict[str, Any], sheet: str, lang: str) -> str:
     """The model's reconciling line if it restates the verdict and the size and cites cleanly; otherwise the desk's own words."""
+    if refused_as_asked(report):
+        return _fixed_reconcile(report, lang)
     size = f"{(report.get('verdict') or {}).get('recommended_notional') or 0:,.0f}".replace(",", "")
     clean, removed, _ = verify_tagged(model_line, sheet)
     plain = re.sub(r"\s*\[[A-Za-z ]+\]", "", clean)
@@ -537,6 +584,7 @@ def mind_line(report: dict[str, Any], lang: str = "en") -> str:
     bps = (((report.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"))
     cap = str((report.get("sizing") or {}).get("binding_cap") or "")
     failed = [x for x in ((report.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
+    failed.sort(key=lambda x: x.get("decision") != "NO_GO")  # the rule that refused it first
     if account_equity(report) is None and word != "GO":
         return ("如果给出账户规模，本台就能检查与之挂钩的仓位上限，目前的复核结论可能随之改变。" if zh
                 else "If you give the desk your account size, it can check the size limits that depend on it, and the review could clear.")
@@ -545,7 +593,11 @@ def mind_line(report: dict[str, Any], lang: str = "en") -> str:
                 else f"If getting out cost less than {bps:.0f} bps on the order book, the size the desk allows would go up.")
     if failed:
         rule = failed[0]["rule"].replace("_", " ")
-        return (f"如果「{rule}」这项检查通过，当前的{word}结论可能上调。" if zh
+        if zh:
+            from nightwatch.api.followup_zh import RULE_ZH
+
+            rule = RULE_ZH.get(failed[0]["rule"], rule)
+        return (f"如果「{rule}」这项检查通过，当前的{_verdict_name(report, lang)}结论可能上调。" if zh
                 else f"If the {rule} check passed, the {word.replace('_', ' ')} verdict could improve.")
     if bps is not None:
         return (f"如果盘口上的平仓成本升到 {bps:.0f} 个基点以上，或上面任何一项检查不再通过，这个结论就需要重新评估。" if zh
@@ -655,6 +707,8 @@ def _attempt(provider: Any, report: dict[str, Any], sheet: str, lang: str, extra
         return None
     obj = parse_reply(raw)
     model = getattr(provider, "model", "")
+    if obj is None and raw.lstrip().startswith(("{", "```")):
+        return None  # a broken JSON object is not prose: never show braces and escapes as the take
     if obj is None:
         # Prose instead of JSON: still a take, checked the same way, with no debate.
         clean, removed, cites = verify_tagged(raw, sheet)

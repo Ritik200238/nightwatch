@@ -63,6 +63,7 @@ WARN_CASES = [
     "earnings ahead covers 1,200 past hours, but only 6 distinct episodes (need 15) - they fall on too few separate dates to count as independent evidence; the answer below is the unfiltered one",
 ]
 PREMISE_CASES = [
+    "Your reason mentions earnings, but none fall near this hold (no past report on record; next: in 3 days).",
     "Your reason mentions earnings, but none fall near this hold (last over 30 days ago; next: no earnings in the next 30 days).",
     "Your reason mentions earnings, but none fall near this hold (last 12 days ago; next: in 3 days).",
     "Your reason leans on a recent earnings report, but the last one was 20 days ago and next: in 40 days.",
@@ -87,6 +88,7 @@ BOOK_CASES = [
     "the cost is a taker fee to open and again to close",
 ]
 SRC_CASES = [
+    "1% of 440 past closed windows were worse for this side", "what TSLA did on 2020-03-16, the day the market gapped down most",
     "Bitget spot order book", "api.bitget.com spot orderbook", "spot close→open across closed windows", "rv_24h × √horizon",
     "|basis vs index| during closed sessions", "perp funding history", "1.0% maintenance margin assumed (tiers unavailable)",
     "Yahoo daily, stock's move on SPY's extreme day in the window (2020-03-16)", "block bootstrap of this token's hourly returns",

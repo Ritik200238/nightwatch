@@ -477,7 +477,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       </div>
       <BuildTrace report={report} lang={lang} />
       <details className="mt-3 text-[13px] text-muted-foreground">
-        <summary className="cursor-pointer select-none hover:text-foreground">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
+        <summary className="flex min-h-10 cursor-pointer select-none items-center hover:text-foreground">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
         <ul className="mt-1 space-y-0.5">
           {VERDICT_ORDER.map((k) => (
             <li key={k} className={k === v.verdict ? "text-foreground" : undefined}>
@@ -939,7 +939,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           type="button"
           onClick={() => setOpenAll((o) => !o)}
           aria-pressed={Boolean(openAll)}
-          className="rounded text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="inline-flex min-h-10 items-center rounded px-1 text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           {openAll ? L("Collapse all", "全部收起") : L("Expand all", "全部展开")}
         </button>
@@ -1607,7 +1607,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-status-critical" aria-hidden />
             <span>
-              {c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
+              {lang === "zh" && c.text_zh ? c.text_zh : c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}
@@ -1615,7 +1615,7 @@ function SecondOpinionSection({ report, openAll, lang }: { report: Report; openA
           <li key={c.text} className="flex gap-2 text-sm">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-status-good" aria-hidden />
             <span>
-              {c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
+              {lang === "zh" && c.text_zh ? c.text_zh : c.text} <span className="text-[13px] text-muted-foreground">{sourceName(lang, c.source)}</span>
             </span>
           </li>
         ))}

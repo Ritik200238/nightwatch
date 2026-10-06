@@ -98,7 +98,8 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
             against.append(Counterpoint("against", f"Only {wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort",
                                         text_zh=f"这些时刻里只有 {wins:.0%} 朝这个仓位有利的方向走，共 {c.n} 次。"))
         elif wins is not None:
-            supporting.append(Counterpoint("for", f"{wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort"))
+            supporting.append(Counterpoint("for", f"{wins:.0%} of those moments went this position's way, on {c.n} episodes.", None, "analog cohort",
+                                           text_zh=f"这些时刻里有 {wins:.0%} 朝这个仓位有利的方向走，共 {c.n} 次。"))
         base = primary.baseline
         if base and base.permutation_p_value is not None and base.permutation_p_value > 0.2:
             against.append(Counterpoint("against", f"The resemblance may be doing nothing: against random hours of the same kind the difference in mean outcome is {base.mean_diff_pct:+.2f}% with p = {base.permutation_p_value:.2f}.", None, "baseline test",
@@ -166,11 +167,16 @@ def build(report: Any) -> SecondOpinion:  # noqa: C901 - a long list of independ
     # The case for taking it, which matters when the answer was no.
     caps = sorted((c for c in report.sizing.caps if c.notional is not None), key=lambda c: c.notional)
     if caps and report.ticket.notional_quote > caps[0].notional:
-        supporting.append(Counterpoint("for", f"Only the {caps[0].name.replace('_', ' ')} cap stands in the way; at {_q(caps[0].notional)} USDT the same trade passes every check.", caps[0].notional, "sizing caps"))
+        from nightwatch.api.intake import CAP_ZH
+
+        supporting.append(Counterpoint("for", f"Only the {caps[0].name.replace('_', ' ')} cap stands in the way; at {_q(caps[0].notional)} USDT the same trade passes every check.", caps[0].notional, "sizing caps",
+                                       text_zh=f"只有「{CAP_ZH.get(caps[0].name, caps[0].name.replace('_', ' '))}」上限挡在前面；按 {_q(caps[0].notional)} USDT，同一笔交易能通过所有检查。"))
     if report.sensitivity and report.sensitivity.max_go_notional:
-        supporting.append(Counterpoint("for", f"Up to {_q(report.sensitivity.max_go_notional)} USDT this is a straight go.", report.sensitivity.max_go_notional, "size sweep"))
+        supporting.append(Counterpoint("for", f"Up to {_q(report.sensitivity.max_go_notional)} USDT this is a straight go.", report.sensitivity.max_go_notional, "size sweep",
+                                       text_zh=f"在 {_q(report.sensitivity.max_go_notional)} USDT 以内，这笔交易可以直接做。"))
     if ex.hedge_quote and ex.hedge_quote.total_cost_bps_of_position < 30:
-        supporting.append(Counterpoint("for", f"A full perp hedge costs {ex.hedge_quote.total_cost_bps_of_position:.0f} bps, which buys out most of the price risk if you want the position anyway.", None, "hedge quote"))
+        supporting.append(Counterpoint("for", f"A full perp hedge costs {ex.hedge_quote.total_cost_bps_of_position:.0f} bps, which buys out most of the price risk if you want the position anyway.", None, "hedge quote",
+                                       text_zh=f"用永续合约全额对冲的成本是 {ex.hedge_quote.total_cost_bps_of_position:.0f} bps，如果你仍想持有这个仓位，它能抵消大部分价格风险。"))
 
     against.sort(key=lambda c: (c.magnitude_quote is None, -(c.magnitude_quote or 0)))
     supporting.sort(key=lambda c: (c.magnitude_quote is None, -(c.magnitude_quote or 0)))

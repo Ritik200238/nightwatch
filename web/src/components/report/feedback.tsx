@@ -124,7 +124,7 @@ export function WatchButton({ forecastId, lang = "en" }: { forecastId: number; l
           <BellRing aria-hidden /> {L("Re-check at the next US close", "在下一个美股收盘时复查")}
         </Button>
         {!showHook ? (
-          <button type="button" onClick={() => setShowHook(true)} className="text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          <button type="button" onClick={() => setShowHook(true)} className="inline-flex items-center text-[13px] text-muted-foreground underline underline-offset-2 hover:text-foreground max-sm:min-h-10">
             {L("or send it to a webhook", "或发送到 webhook")}
           </button>
         ) : null}

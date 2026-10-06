@@ -29,7 +29,7 @@ export function Permalink({ forecastId, lang = "en" }: { forecastId: number; lan
 
   return (
     <span className="inline-flex items-center gap-2">
-      <a href={href} className="inline-flex items-center gap-1 rounded underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+      <a href={href} className="inline-flex items-center gap-1 rounded underline underline-offset-2 hover:text-foreground max-sm:min-h-10 max-sm:min-w-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
         <Link2 className="h-3 w-3" aria-hidden />
         {L("open this report on its own", "单独打开这份报告")}
       </a>

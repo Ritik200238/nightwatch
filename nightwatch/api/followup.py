@@ -784,7 +784,9 @@ def looks_like_a_question(text: str) -> bool:
 
     t = text.strip()
     # "add 500 more margin" has no question mark and no leading verb the list knows.
-    return bool(_QUESTIONY.search(t) or _INSTRUCTION.search(t) or SHOCK.search(t) or margin_adjustment(t) is not None)
+    # "any dividend coming" has no question mark and no leading verb either.
+    corporate = any(kind == "corporate" and pattern.search(t) for kind, pattern, _ in ROUTES)
+    return bool(_QUESTIONY.search(t) or _INSTRUCTION.search(t) or SHOCK.search(t) or margin_adjustment(t) is not None or corporate)
 
 
 def answer(report: dict, question: str) -> Answer | None:

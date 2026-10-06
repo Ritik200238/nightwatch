@@ -474,7 +474,8 @@ def premise(r: Any) -> list[str]:  # noqa: ANN401
         elif _PRE.search(thesis) and (until is None or until > 14 * 24):
             out.append(f"Your reason leans on earnings coming up, but next earnings: {earnings_ahead(until)}, well past this hold.")
         elif not _POST.search(thesis) and not _PRE.search(thesis) and (since is None or since > 7 * 24) and (until is None or until > r.horizon_h + 24):
-            out.append(f"Your reason mentions earnings, but none fall near this hold (last {_days(since)} ago; next: {earnings_ahead(until)}).")
+            last = "no past report on record" if since is None else f"last {_days(since)} ago"
+            out.append(f"Your reason mentions earnings, but none fall near this hold ({last}; next: {earnings_ahead(until)}).")
     fomc = f.get("hours_to_fomc")
     if _FED.search(thesis):
         if fomc is None:

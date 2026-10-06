@@ -114,7 +114,11 @@ class GateReport:
         being printed verbatim into the chat reply, where "written_plan: missing
         invalidation" reads as a leaked variable rather than an answer.
         """
-        return [f"{r.rule.replace('_', ' ')}: {r.reason}" for r in self.rules if r.decision != GateDecision.GO]
+        # A rule that refuses the trade comes first: the headline shows reasons[0] beside a NO GO,
+        # and "Plan is incomplete" is not why 100x liquidation was refused.
+        failing = [r for r in self.rules if r.decision != GateDecision.GO]
+        failing.sort(key=lambda r: r.decision != GateDecision.NO_GO)
+        return [f"{r.rule.replace('_', ' ')}: {r.reason}" for r in failing]
 
 
 def _worst(rules: list[RuleResult]) -> GateDecision:
