@@ -17,3 +17,12 @@ def test_a_stray_quote_is_salvaged_field_by_field():
 
 def test_not_json_at_all_is_not_an_object():
     assert analyst.parse_reply("The desk says GO.") is None
+
+
+def test_a_refusal_at_full_size_is_not_called_an_allowance():
+    r = {"verdict": {"verdict": "NO_GO", "recommended_notional": 10000.0}, "ticket": {"notional_quote": 10000.0}}
+    assert analyst.refused_as_asked(r)
+    assert analyst._fixed_reconcile(r, "en") == "The desk's verdict stands: NO GO at the size asked."
+    smaller = {"verdict": {"verdict": "NO_GO", "recommended_notional": 3000.0}, "ticket": {"notional_quote": 10000.0}}
+    assert not analyst.refused_as_asked(smaller)
+    assert "3,000" in analyst._fixed_reconcile(smaller, "en")

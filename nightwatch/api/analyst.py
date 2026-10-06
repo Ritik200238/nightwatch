@@ -141,8 +141,9 @@ def fact_sheet(r: dict[str, Any], lang: str = "en") -> str:
     p5 = _loss_p5(h)
     lines = [
         f"[desk] Trade: {t.get('side')} {t.get('notional_quote'):,.0f} USDT of {t.get('ticker')}, held {whole_hours(r.get('horizon_h', 0))} hours.",
-        f"[desk] Desk verdict: {v.get('verdict')}; size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; "
-        f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
+        f"[desk] Desk verdict: {v.get('verdict')}; "
+        + ("no size is allowed as asked (the verdict is a refusal); " if refused_as_asked(r) else f"size the desk allows: {v.get('recommended_notional') or 0:,.0f} USDT; ")
+        + f"binding cap: {(r.get('sizing') or {}).get('binding_cap') or 'none'}.",
     ]
     equity = account_equity(r)
     if equity is None:
@@ -490,12 +491,23 @@ def _as_text(v: Any) -> str:  # noqa: ANN401
 
 
 def _verdict_word(report: dict[str, Any]) -> str:
-    return str((report.get("verdict") or {}).get("verdict") or "")
+    return str((report.get("verdict") or {}).get("verdict") or "").replace("_", " ")
+
+
+def refused_as_asked(report: dict[str, Any]) -> bool:
+    """A NO GO whose size cap is not what refused it (100x leverage): the size caps would take
+    the full size, so printing "the size the desk allows: 10,000" beside NO GO reads as a
+    contradiction. Only a smaller recommended size is an allowance."""
+    v = report.get("verdict") or {}
+    rec, asked = v.get("recommended_notional"), (report.get("ticket") or {}).get("notional_quote")
+    return v.get("verdict") == "NO_GO" and (not rec or (asked is not None and rec >= float(asked) - 1))
 
 
 def _fixed_reconcile(report: dict[str, Any], lang: str) -> str:
     v = report.get("verdict") or {}
     size = f"{v.get('recommended_notional') or 0:,.0f}"
+    if refused_as_asked(report):
+        return f"本台的结论不变：{_verdict_word(report)}，按所问的仓位不通过。" if lang == "zh" else f"The desk's verdict stands: {_verdict_word(report)} at the size asked."
     if lang == "zh":
         return f"本台的结论不变：{_verdict_word(report)}，允许的规模 {size} USDT。"
     return f"The desk's verdict stands: {_verdict_word(report)}, up to {size} USDT."
@@ -511,6 +523,8 @@ def _norm_verdict(tok: str) -> str:
 
 def _reconcile(model_line: str, report: dict[str, Any], sheet: str, lang: str) -> str:
     """The model's reconciling line if it restates the verdict and the size and cites cleanly; otherwise the desk's own words."""
+    if refused_as_asked(report):
+        return _fixed_reconcile(report, lang)
     size = f"{(report.get('verdict') or {}).get('recommended_notional') or 0:,.0f}".replace(",", "")
     clean, removed, _ = verify_tagged(model_line, sheet)
     plain = re.sub(r"\s*\[[A-Za-z ]+\]", "", clean)
@@ -561,6 +575,7 @@ def mind_line(report: dict[str, Any], lang: str = "en") -> str:
     bps = (((report.get("execution") or {}).get("exit_quote") or {}).get("total_cost_bps"))
     cap = str((report.get("sizing") or {}).get("binding_cap") or "")
     failed = [x for x in ((report.get("gate") or {}).get("rules") or []) if x.get("decision") != "GO"]
+    failed.sort(key=lambda x: x.get("decision") != "NO_GO")  # the rule that refused it first
     if account_equity(report) is None and word != "GO":
         return ("如果给出账户规模，本台就能检查与之挂钩的仓位上限，目前的复核结论可能随之改变。" if zh
                 else "If you give the desk your account size, it can check the size limits that depend on it, and the review could clear.")
