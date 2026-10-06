@@ -155,3 +155,12 @@ def test_old_tripwires_expire(client):
     s = client.app.state.nw
     n = tripwires.run_armed(s.store._conn, lambda t, since: [_bar(1, 1, 2)], lambda r: r, s.reports.get, now=utc_now() + timedelta(days=31))
     assert n == 0 and client.get(f"/tripwire/{w['id']}").json()["status"] == "expired"
+
+
+def test_a_line_ten_times_away_from_the_price_is_refused_as_a_typo(client):
+    """33302 for 333.02 used to arm a line that can never be reached and reads as protection."""
+    fid = _fid(client)
+    for level in (30, 300_000, 5_000_000):
+        r = client.post("/tripwire", json={"forecast_id": fid, "level": level}, headers=ME)
+        assert r.status_code == 422 and "check the digits" in r.json()["detail"], (level, r.text)
+    assert client.post("/tripwire", json={"forecast_id": fid, "level": 150}, headers=ME).status_code == 200  # a 60% fall is far but real
