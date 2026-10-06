@@ -34,7 +34,7 @@ def numbers(text: str) -> list[float]:
 
 @pytest.mark.parametrize(
     "text",
-    ["why not bigger?", "What if I do 40k", "how bad can it get", "can I get out", "talk me out of it", "Is this reliable?", "should I hedge"],
+    ["why not bigger?", "any dividend coming", "ex-dividend date", "What if I do 40k", "how bad can it get", "can I get out", "talk me out of it", "Is this reliable?", "should I hedge"],
 )
 def test_a_question_is_recognised(text):
     assert looks_like_a_question(text)
