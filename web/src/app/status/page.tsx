@@ -59,7 +59,8 @@ export default function StatusPage() {
 
   const stale = sources.data?.filter((r) => !isFresh(r)).length;
   const list = anchors.data?.anchors ?? [];
-  const latestAnchor = list.length ? list[list.length - 1] : null;
+  // The API lists newest first, so the latest anchor is the first one.
+  const latestAnchor = list.length ? list[0] : null;
   const band = calib.data?.adjusted?.adj_tail_band;
   const NA = tx("unavailable", "不可用");
 
