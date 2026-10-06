@@ -311,6 +311,12 @@ def _guard_model_reading(intent: ParsedIntent, rules: Any, account_equity: float
             update["account_equity_quote"] = account_equity
         if rules.notional_quote and rules.leverage:
             update["notional_quote"] = rules.notional_quote
+    # The model copied the lead-in with the line ("wrong if it closes below 230"); the rules cut it
+    # off ("it closes below 230"), and the echo then read: wrong if "wrong if it closes below 230".
+    for field in ("thesis", "invalidation"):
+        mine, theirs = getattr(rules, field, None), getattr(intent, field, None)
+        if mine and theirs and mine != theirs and mine.lower() in theirs.lower():
+            update[field] = mine
     dropped = None
     if intent.thesis and not rules.thesis and not reads_as_reason(intent.thesis):
         dropped = intent.thesis

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nightwatch.api.intake import parse_message, read_conversation
+from nightwatch.api.intake import asks_to_narrow, needs_the_model, parse_message, read_conversation
 from tests.test_pipeline import seeded_store  # noqa: F401 - fixture
 
 TICKERS = "AAPL AMD AMZN AVGO BABA COIN CRCL GOOGL HOOD INTC META MSFT MSTR MU NFLX NVDA PLTR QQQ SMCI SPY SQQQ TQQQ TSLA TSM".split()
@@ -665,3 +665,11 @@ def test_chinese_wrong_if_phrasings_are_all_read(text, invalid):
     got = p(text)
     assert got.invalidation == invalid, got
     assert got.notional_quote == 20_000
+
+
+def test_a_word_in_the_traders_own_reason_is_not_a_request_to_narrow_the_history():
+    # "just announced" in a reason sent a plain trade down the model path (20 s instead of 1 s).
+    msg = "long 8k NVDA overnight, account 100k, stop 235, because NVDA just announced a new AI chip, wrong if it closes below 230"
+    assert not asks_to_narrow(msg) and not needs_the_model(msg)
+    assert asks_to_narrow("long 8k NVDA overnight, compare only against Fridays")
+    assert asks_to_narrow("long 8k NVDA overnight because momentum, but only count Fridays")

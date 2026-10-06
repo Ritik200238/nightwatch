@@ -778,6 +778,8 @@ _CJK = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
 
 
 # How a trader asks to narrow the comparison, in either language the desk answers in.
+# Words that ask for a narrower comparison wherever they sit, reason or not.
+_NARROW_STRONG = re.compile(r"\bcompare\b|\bexcept\b|\bexclud\w*\b|\bonly\s+(?:against|count|compare|use|include|look|those|the)\b|对比|除了", re.I)
 _NARROW = re.compile(r"\bonly\b|\bjust\b|\bexcept\b|\bexclud\w*\b|\bcompare\b|只|仅|对比|除了", re.I)
 
 
@@ -788,7 +790,18 @@ def asks_to_narrow(text: str) -> bool:
     says when, not "compare only against weekends". The model is told the same, and
     this is the check that holds it to it.
     """
-    return bool(_NARROW.search(text or ""))
+    text = text or ""
+    if _NARROW_STRONG.search(text):
+        return True
+    # The trader's own reason is not a request: "because NVDA just announced a chip" has a
+    # "just" in it, which sent a plain trade to the 20-second model path for nothing.
+    from nightwatch.api import thesis_capture
+
+    said = thesis_capture.read(text)
+    for part in (said.thesis, said.invalidation):
+        if part:
+            text = re.sub(re.escape(part), " ", text, flags=re.I)
+    return bool(_NARROW.search(text))
 
 
 def needs_the_model(text: str) -> bool:
