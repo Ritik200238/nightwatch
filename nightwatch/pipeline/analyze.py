@@ -1223,7 +1223,8 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
     entry_plan = plan_entry(book, entry_size, long=ticket.closing_long, taker_fee=fees["spot_taker"], budget_bps=ctx.sizing_policy.exit_cost_budget_bps)
     timings["decision"] = _ms(t0)
     v = getattr(verdict.verdict, "value", verdict.verdict)
-    _announce(cb, "decision", f"Checked the risk rules and sized the trade: {v}", f"已核对风控规则并确定仓位：{v}", t_start)
+    zh_v = {"GO": "可以做", "REDUCE_TO": "建议减仓", "HEDGE": "建议对冲", "REVIEW": "需要复核", "NO_GO": "不建议做"}.get(str(v), str(v))
+    _announce(cb, "decision", f"Checked the risk rules and sized the trade: {str(v).replace('_', ' ')}", f"已核对风控规则并确定仓位：{zh_v}", t_start)
 
     # 7. What happened last time conditions looked like this.
     lessons: list[dict[str, Any]] = []
