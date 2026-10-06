@@ -49,19 +49,24 @@ export function TripwireLine({ t, lang }: { t: Tripwire; lang: Lang }) {
 }
 
 /** The tripwires this visitor armed on a report, as a list. Shared by the report and the watch page. */
-export function TripwireList({ forecastId, lang = "en", reloadKey = 0 }: { forecastId: number; lang?: Lang; reloadKey?: number }) {
+export function TripwireList({ forecastId, lang = "en", reloadKey = 0, empty }: { forecastId: number; lang?: Lang; reloadKey?: number; empty?: string }) {
   const [items, setItems] = useState<Tripwire[]>([]);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let off = false;
     engagement
       .tripwiresFor(forecastId)
-      .then((r) => !off && setItems(r.tripwires))
+      .then((r) => {
+        if (off) return;
+        setItems(r.tripwires);
+        setLoaded(true);
+      })
       .catch(() => undefined);
     return () => {
       off = true;
     };
   }, [forecastId, reloadKey]);
-  if (!items.length) return null;
+  if (!items.length) return loaded && empty ? <p className="text-sm text-muted-foreground">{empty}</p> : null;
   return (
     <ul className="space-y-1" aria-label={tr(lang)("Tripwires", "价格警报")}>
       {items.map((t) => (

@@ -47,7 +47,7 @@ export function Section({
       <Card className="gap-4 py-5">
         <CardHeader className="flex flex-row items-start justify-between gap-4 px-5">
           <div className="space-y-1">
-            <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+            <CardTitle role="heading" aria-level={2} className="text-sm font-semibold">{title}</CardTitle>
             {subtitle ? <p className="text-[13px] text-muted-foreground">{subtitle}</p> : null}
           </div>
           {action}
@@ -59,6 +59,7 @@ export function Section({
 
   return (
     <Card className={`gap-0 py-0 ${open ? "" : "hover:border-border/80"}`}>
+      <div role="heading" aria-level={2}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -74,6 +75,7 @@ export function Section({
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
+      </div>
       {open ? (
         <CardContent className="px-5 pb-5">
           {summary && subtitle ? <p className="mb-3 text-[13px] text-muted-foreground">{subtitle}</p> : null}

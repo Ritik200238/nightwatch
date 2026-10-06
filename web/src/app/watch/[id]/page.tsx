@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { Pill, Section, Stat } from "@/components/report/primitives";
 import { TripwireList } from "@/components/report/tripwire";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { engagement, EngagementError, type Watch, type WatchSummary } from "@/lib/engagement";
 import { fmtPct, fmtUsd } from "@/lib/format";
@@ -42,39 +43,78 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
   const { id } = use(params);
   const { tx, lang } = useLang();
   const [w, setW] = useState<Watch | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; missing: boolean } | null>(null);
+  const [slow, setSlow] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    setError(null);
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 12_000);
     const load = () =>
       void engagement
         .getWatch(id)
         .then((r) => {
           if (cancelled) return;
+          clearTimeout(slowTimer);
           setW(r);
           if (r.status === "pending") timer = setTimeout(load, 60_000);
         })
-        .catch((e) => !cancelled && setError(e instanceof EngagementError ? e.message : tx("Could not load that re-check.", "无法加载这次复查。")));
+        .catch((e) => {
+          if (cancelled) return;
+          clearTimeout(slowTimer);
+          setError({
+            message: e instanceof EngagementError ? e.message : tx("Could not load that re-check.", "无法加载这次复查。"),
+            // Only a 404 means the link is wrong; a busy or unreachable server is worth another try.
+            missing: e instanceof EngagementError && e.status === 404,
+          });
+        });
     load();
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
       if (timer) clearTimeout(timer);
     };
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, attempt]);
 
-  if (error) {
+  if (error && !w) {
     return (
       <div className="mx-auto max-w-xl space-y-3 py-10 text-center">
-        <h1 className="text-lg font-semibold">{tx("That re-check is not here", "找不到这次复查")}</h1>
-        <p className="text-sm text-muted-foreground">{error}</p>
-        <Link href="/" className="text-sm underline underline-offset-2">
-          {tx("Back to the desk", "回到交易台")}
-        </Link>
+        <h1 className="text-lg font-semibold">{error.missing ? tx("That re-check is not here", "找不到这次复查") : tx("That re-check did not load", "这次复查没有加载出来")}</h1>
+        <p className="text-sm text-muted-foreground">{error.message}</p>
+        {error.missing ? null : (
+          <Button variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+            {tx("Try again", "重试")}
+          </Button>
+        )}
+        <p>
+          <Link href="/" className="inline-flex min-h-10 items-center text-sm underline underline-offset-2">
+            {tx("Back to the desk", "回到交易台")}
+          </Link>
+        </p>
       </div>
     );
   }
-  if (!w) return <Skeleton className="h-64 w-full" />;
+  if (!w)
+    return (
+      <div className="space-y-4" role="status" aria-live="polite">
+        <p className="text-sm text-muted-foreground">
+          {slow ? tx("Still loading. The server is slow or not answering right now.", "仍在加载。服务器响应很慢，或暂时没有响应。") : tx("Loading the re-check…", "正在加载复查…")}
+          {slow ? (
+            <>
+              {" "}
+              <button type="button" onClick={() => setAttempt((n) => n + 1)} className="inline-flex min-h-10 items-center px-2 underline underline-offset-2 hover:text-foreground">
+                {tx("Try again", "重试")}
+              </button>
+            </>
+          ) : null}
+        </p>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
 
   return (
     <div className="space-y-4">
@@ -100,7 +140,7 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
         </div>
       </Section>
       <Section title={tx("Price tripwires on this report", "本报告的价格警报")}>
-        <TripwireList forecastId={w.forecast_id} lang={lang} />
+        <TripwireList forecastId={w.forecast_id} lang={lang} empty={tx("None set on this report yet.", "这份报告还没有设置价格警报。")} />
         <p className="text-[13px] text-muted-foreground">
           <Link href={`/r/${w.forecast_id}`} className="underline underline-offset-2">
             {tx("Set one from the report page", "到报告页设置")}

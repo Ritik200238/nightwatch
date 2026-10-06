@@ -199,7 +199,19 @@ def judge(
     return Watch(**{**w.__dict__, "headline": _headline(w.to_dict())})
 
 
-def summarise(items: list[Watch], hours: float, market_is_open: bool) -> str:
+def _hours_phrase(hours: float) -> str:
+    n = round(hours)
+    return f"{n} hour" if n == 1 else f"{n} hours"
+
+
+def summarise(items: list[Watch], hours: float, market_is_open: bool, unjudged: int = 0) -> str:
+    if not items and unjudged:
+        # Positions were given but none could be read: "nothing held" would tell the person
+        # their own book was empty.
+        return (
+            f"None of the {unjudged} position{'' if unjudged == 1 else 's'} you gave could be judged, "
+            "so there is nothing to rank. Try another token, or try again in a minute."
+        )
     if not items:
         return "Nothing held, so nothing to watch. Add what you are carrying and this page will tell you which of it needs you tonight."
     worst = items[0]
@@ -208,14 +220,14 @@ def summarise(items: list[Watch], hours: float, market_is_open: bool) -> str:
     flagged = [i for i in items if i.flags and i.flags != ("wide_tail",)]
     if not flagged:
         return (
-            f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {hours:.0f} hours. "
+            f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {_hours_phrase(hours)}. "
             f"Nothing needs you {when}: added up, the bad case across them is {tails:,.0f} USDT."
         )
     # The headline's first sentence, as written: lowercasing it turns USDT into usdt and
     # runs two sentences together.
     lead = worst.headline.split(". ")[0].rstrip(".")
     return (
-        f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {hours:.0f} hours, "
+        f"{len(items)} position{'' if len(items) == 1 else 's'} over the next {_hours_phrase(hours)}, "
         f"{len(flagged)} of which want a look {when}. Start with {worst.ticker} - {lead}."
     )
 
@@ -226,6 +238,7 @@ def build(
     *,
     tail_quote: float | None = None,
     note: str = "",
+    unjudged: int = 0,
 ) -> Tonight:
     """Rank what has been judged and say what it adds up to."""
     at = ensure_utc(as_of or utc_now())
@@ -239,7 +252,7 @@ def build(
         items=items,
         gross_quote=sum(abs(i.notional_quote) for i in items),
         tail_quote=tail_quote,
-        summary=summarise(items, hours, open_now),
+        summary=summarise(items, hours, open_now, unjudged),
         note=note,
     )
 

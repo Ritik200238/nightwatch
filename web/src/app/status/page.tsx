@@ -115,7 +115,7 @@ export default function StatusPage() {
         {verify.data ? (
           <>
             <p>
-              {verify.data.ok ? tx("Intact", "完整") : tx("BROKEN", "已断裂")} · {verify.data.checked} {tx("verdicts re-checked just now", "个结论刚刚重新校验")} · {verify.data.unchained} {tx("unchained", "个未入链")}
+              {verify.data.ok ? tx("Intact", "完整") : tx("BROKEN", "已断裂")} · {verify.data.checked.toLocaleString()} {tx("verdicts re-checked just now", "个结论刚刚重新校验")} · {verify.data.unchained.toLocaleString()} {tx("unchained", "个未入链")}
             </p>
             {verify.data.first_break ? (
               <p className="text-destructive">
@@ -155,7 +155,7 @@ export default function StatusPage() {
       <Card title={tx("Calibration", "校准")} ok={calib.error ? false : band ? band === "green" : null}>
         {calib.data?.adjusted ? (
           <p>
-            {tx("Tail band after adjustment", "调整后的尾部区间")}: <span className="font-semibold text-foreground">{band}</span> · {calib.data.adjusted.n_evaluated.toLocaleString()} {tx("matured forecasts evaluated", "个已到期预测已评估")} ·{" "}
+            {tx("Tail band after adjustment", "调整后的尾部区间")}: <span className="font-semibold text-foreground">{zh ? ({ green: "绿", amber: "黄", red: "红" } as Record<string, string>)[band ?? ""] ?? band : band}</span> · {calib.data.adjusted.n_evaluated.toLocaleString()} {tx("matured forecasts evaluated", "个已到期预测已评估")} ·{" "}
             <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
               {tx("details", "详情")}
             </Link>

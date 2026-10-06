@@ -7,6 +7,9 @@ import { LoadingRecord, PageHead, PROOF_WIDTH, RecordError } from "@/components/
 import { useLang } from "@/lib/lang";
 import { localLatest, localSource } from "@/lib/source-zh";
 
+/** What the strongest thing a feed can do to an answer is called, in Chinese. */
+const EFFECT_ZH: Record<string, string> = { "moves the size": "可改变仓位", "sets a preset": "设定情景", "raises a flag": "触发提示", "context only": "仅供参考" };
+
 /** Every feed behind a report: what it is, how often it is pulled, when it last was. */
 export default function SourcesPage() {
   const { tx, lang } = useLang();
@@ -62,6 +65,13 @@ export default function SourcesPage() {
                 </p>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{r.what}</p>
+              {r.used_for ? (
+                <p className="mt-1 text-sm">
+                  <span className="font-medium">{tx("Used for: ", "用途：")}</span>
+                  {zh ? r.used_for_zh || r.used_for : r.used_for}
+                  {r.effect ? <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[13px] text-muted-foreground">{zh ? EFFECT_ZH[r.effect] ?? r.effect : r.effect}</span> : null}
+                </p>
+              ) : null}
               <p className="mt-1 text-[13px] text-muted-foreground">
                 {tx("Pulled", "频率")}: {r.cadence} · {r.rows.toLocaleString()} {tx("rows", "行")}
                 {r.latest_label ? ` · ${r.latest_label}` : ""}
