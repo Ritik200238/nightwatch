@@ -189,7 +189,7 @@ export default function DeskPage() {
     {/* The Bitget list is long and says nothing about the trade, so while the
         hero is up it goes below the example verdict instead of pushing the verdict off the first screen. */}
     <div className={heroUp ? "order-last" : ""}>
-      <ProofStrip stocks={universe?.length ?? null} />
+      <ProofStrip stocks={universe ? universe.filter((u) => u.has_data).length : null} />
     </div>
     {/* While the hero is up there is one input on the page (the hero's); the Chat/Ticket rail
         appears once a trade has been asked for, or when the reader asks for the form. */}
