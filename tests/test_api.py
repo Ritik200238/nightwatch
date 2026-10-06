@@ -285,8 +285,9 @@ def test_closed_hours_for_one_token_quotes_only_what_was_measured(client):
     r = client.get("/closed-hours/tsla").json()
     assert r["ticker"] == "TSLA" and r["line"] and "when the US market is shut" in r["line"]
     assert r["numbers"]["n_windows"] > 100
-    none = client.get("/closed-hours/ZZZZ").json()
-    assert none["line"] is None and none["numbers"] is None
+    # A token the desk does not cover is a plain 404, not a 200 full of nulls.
+    gone = client.get("/closed-hours/ZZZZ")
+    assert gone.status_code == 404 and "not a tokenized stock this desk has data for" in gone.json()["detail"]
 
 
 def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
