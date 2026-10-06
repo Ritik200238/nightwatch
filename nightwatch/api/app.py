@@ -139,6 +139,7 @@ class TonightIn(BaseModel):
 
 
 CHAT_KEEP = 30  # the newest turns the server reads; older ones are dropped, never refused
+CHAT_MAX_ACCEPT = 200  # past this a request is refused outright: no real chat sends that many
 
 
 class ChatIn(BaseModel):
@@ -153,6 +154,10 @@ class ChatIn(BaseModel):
     def _keep_the_tail(cls, v: Any) -> Any:
         """A long conversation is trimmed to its newest turns rather than rejected: the desk
         needs the recent turns and the report id, not the whole scroll-back."""
+        # Still a bound on what one request may carry: a real chat trims fine, but a body of
+        # thousands of messages is abuse and is refused before anything parses it.
+        if isinstance(v, list) and len(v) > CHAT_MAX_ACCEPT:
+            raise ValueError(f"at most {CHAT_MAX_ACCEPT} messages per request")
         return v[-CHAT_KEEP:] if isinstance(v, list) and len(v) > CHAT_KEEP else v
 
 

@@ -97,7 +97,9 @@ def test_input_limits(client, monkeypatch):  # noqa: F811
     assert client.post("/analyze", json={**ticket, "open_positions": too_many}).status_code == 422
     assert client.post("/tonight", json={"positions": too_many}).status_code == 422
     assert client.post("/chat", json={"messages": [{"role": "user", "content": "x" * 2001}]}).status_code == 422
-    assert client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}] * 31}).status_code == 422
+    # A long chat is trimmed to its newest turns (it used to die at 31 messages); only an
+    # absurd body is refused.
+    assert client.post("/chat", json={"messages": [{"role": "user", "content": "hi"}] * 201}).status_code == 422
     TicketIn(**ticket)
 
 
