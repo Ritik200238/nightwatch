@@ -9,6 +9,7 @@ endpoints), so one long analysis never blocks health checks.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 import time
@@ -19,6 +20,7 @@ from typing import Any
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -33,7 +35,7 @@ from nightwatch.data.models import Venue
 from nightwatch.data.store import Store
 from nightwatch.data.sync import UniverseEntry, build_universe
 from nightwatch.decision import tonight as tonight_mod
-from nightwatch.decision.ticket import HorizonKind, TradeTicket
+from nightwatch.decision.ticket import MAX_HOLD_HOURS, MAX_NOTIONAL, MAX_PRICE, HorizonKind, TradeTicket, stop_side_problem
 from nightwatch.features.snapshot import InsufficientData, build_snapshot
 from nightwatch.journal.calibration import calibrate
 from nightwatch.journal.journal import Journal
@@ -84,9 +86,6 @@ WARM_YIELD_MAX_S = 30.0
 CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
 
 
-MAX_NOTIONAL = 10_000_000
-
-
 class PositionIn(BaseModel):
     ticker: str = Field(max_length=32)
     side: Side = Side.LONG
@@ -99,12 +98,14 @@ class TicketIn(BaseModel):
     notional_quote: float = Field(gt=0, le=MAX_NOTIONAL)
     account_equity_quote: float | None = Field(default=None, gt=0, le=MAX_NOTIONAL * 100)
     horizon_kind: HorizonKind = HorizonKind.NEXT_OPEN
-    horizon_hours: float | None = None
-    entry_price: float | None = None
-    stop_price: float | None = None
-    target_price: float | None = None
-    thesis: str = ""
-    invalidation: str = ""
+    # A hold of more than a year is not a trade this desk can judge; 1e9 hours used to overflow
+    # the clock arithmetic and answer a 500.
+    horizon_hours: float | None = Field(default=None, gt=0, le=MAX_HOLD_HOURS)
+    entry_price: float | None = Field(default=None, gt=0, lt=MAX_PRICE)
+    stop_price: float | None = Field(default=None, gt=0, lt=MAX_PRICE)
+    target_price: float | None = Field(default=None, gt=0, lt=MAX_PRICE)
+    thesis: str = Field(default="", max_length=4000)
+    invalidation: str = Field(default="", max_length=4000)
     hedge_ratio: float | None = Field(default=None, ge=0, le=1)
     # Leverage on the stock's Bitget perpetual; adds the liquidation price and how often
     # history reached it. None or 1 is a plain token position.
@@ -803,6 +804,21 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             state.close()
 
     app = FastAPI(title="Nightwatch", version=__version__, lifespan=lifespan)
+
+    @app.exception_handler(RequestValidationError)
+    async def _bad_request(request: Request, exc: RequestValidationError) -> JSONResponse:  # noqa: ARG001
+        """The same 422 shape FastAPI gives (the web client reads ``type``/``loc``/``ctx``), minus
+        the offending value. Echoing it back is not just noise: a bare ``NaN`` in a JSON body
+        parses in Python, then fails the response encoder, and a well-formed refusal became a 500."""
+        items = []
+        for err in exc.errors():
+            ctx = {k: v for k, v in (err.get("ctx") or {}).items() if isinstance(v, str) or (isinstance(v, (int, float)) and math.isfinite(v))}
+            item: dict[str, Any] = {"type": err.get("type"), "loc": list(err.get("loc") or ()), "msg": err.get("msg")}
+            if ctx:
+                item["ctx"] = ctx
+            items.append(item)
+        return JSONResponse({"detail": items}, status_code=422)
+
     app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("NIGHTWATCH_CORS", "*").split(","), allow_methods=["*"], allow_headers=["*"])
 
     limiter = guard.RateLimiter()
@@ -1172,10 +1188,9 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # A stop on the wrong side of the price is a typo, not a plan: say so now, in a
         # sentence, instead of after a minute of analysis that cannot use it.
         if ticket.stop_price:
-            ref = ticket.entry_price or s.ctx.latest_spot_close(ticket.ticker, body.as_of)
-            if ref and ticket.stop_is_on_correct_side(ref) is False:
-                way, rel = ("long", "below") if ticket.closing_long else ("short", "above")
-                raise HTTPException(422, f"A stop for a {way} must be {rel} the current price ({ref:,.2f}). You entered {ticket.stop_price:,.2f}.")
+            problem = stop_side_problem(ticket, s.ctx.latest_spot_close(ticket.ticker, body.as_of))
+            if problem:
+                raise HTTPException(422, problem)
         try:
             with s.lock:
                 report = analyze(s.ctx, ticket, as_of=body.as_of, record=body.record)
