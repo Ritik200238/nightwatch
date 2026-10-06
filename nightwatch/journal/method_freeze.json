@@ -1,16 +1,26 @@
 {
   "frozen_at": "2026-10-07T00:00:00+00:00",
-  "git_tag": "method-freeze-2",
-  "git_commit": "7aa4495ac3a343e90c5f630a439dc54ff6e88b77",
+  "git_tag": "method-freeze-3",
+  "git_commit": "630697a2409881a5b8ab6216d384e6ac0082a1f6",
   "frozen": [
     "nightwatch/journal/adjust.py (tail factors, horizon bands, the narrow-window margin, MIN_BAND_N, refit cadence, K clamps)",
-    "the analog search that produces the p5 to p95 forecast it adjusts (hold-shape match plus three volatility features, k=80)"
+    "the analog search that produces the p5 to p95 forecast it adjusts (hold-shape match plus three volatility features, k=80)",
+    "how a hold is measured and labelled: a scheduled weekend counted from Friday's close in New York time, horizons rounded half up"
   ],
-  "superseded": {
-    "git_tag": "method-freeze-1",
-    "git_commit": "7a1492b5ca57f42e98015e61a764233e2b152993",
-    "was_to_start": "2026-10-06T00:00:00+00:00",
-    "why": "Replaced before it took effect. A held-out test (first 60% of dates to choose, last 40% judged once) found a search that beats the old one on the tail loss (+0.074, CI +0.045 to +0.103) with a 19% narrower band; it ties random hours, which the studies page reports. The replays were re-run with it and the adjustment refitted before the new freeze date."
-  },
+  "superseded": [
+    {
+      "git_tag": "method-freeze-2",
+      "git_commit": "7aa4495ac3a343e90c5f630a439dc54ff6e88b77",
+      "was_to_start": "2026-10-07T00:00:00+00:00",
+      "why": "Replaced before it took effect, on 6 Oct 2026, after a full QA pass found that the way a hold is measured was wrong in places (a weekend asked on a weekday was counted from now instead of from Friday's close; a Sunday evening read the weekday in UTC instead of New York time; horizons rounded half to even, so a 26.5 h hold was scored on a 26 h horizon). Those fixes change which hold a forecast is made and scored on, so the older tag no longer described the code. The tail-adjustment code (adjust.py) is byte-for-byte unchanged. Memory-saving changes to the pooled search keep the same rows in the same order."
+    },
+    {
+      "git_tag": "method-freeze-1",
+      "git_commit": "7a1492b5ca57f42e98015e61a764233e2b152993",
+      "was_to_start": "2026-10-06T00:00:00+00:00",
+      "why": "Replaced before it took effect, after a held-out test (first 60% of dates to choose, last 40% judged once) found a search that beats the old one on tail loss (+0.074, CI +0.045 to +0.103) with a 19% narrower band. It ties random hours, which the studies page reports."
+    }
+  ],
+  "not_done": "The plan was to re-run the replays with the new search and refit the tail adjustment before the freeze. That job did not complete on the production server (it repeatedly exhausted the 1 GB machine and was stopped to protect the live site), so the tail factors in use were fitted on replays made with the earlier search. The live calibration still reads inside its target (see /calibration), and forecasts from the freeze date on are scored separately.",
   "note": "The adjustment was designed and tuned by looking at the replayed forecasts it is also scored on, so the headline breach rate on that history is optimistic by an unknown amount. Forecasts whose as-of time is on or after frozen_at were made after the method was fixed and could not have influenced it. Their result is the out-of-sample one."
 }
