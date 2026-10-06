@@ -26,6 +26,15 @@ const BAND_LABEL: Record<string, string> = {
   pooled: "Before there was enough of either",
 };
 
+/** The server writes the drift sentence in English; this says it in Chinese when the page is. */
+function walkNote(note: string | undefined, lang: "en" | "zh"): string {
+  if (!note) return "";
+  const m = /^the gap to 90% coverage is (closing|widening) by ([\d.]+) points per period$/.exec(note);
+  if (!m) return note;
+  if (lang === "zh") return `与 90% 覆盖率的差距正以每期 ${m[2]} 个百分点的速度${m[1] === "closing" ? "收窄" : "扩大"}。`;
+  return `The gap to 90% coverage is ${m[1]} by ${m[2]} points per period.`;
+}
+
 const PIT_ORDER = ["<p5", "p5-p25", "p25-p50", "p50-p75", "p75-p95", ">p95"];
 const PIT_EXPECTED: Record<string, number> = { "<p5": 0.05, "p5-p25": 0.2, "p25-p50": 0.25, "p50-p75": 0.25, "p75-p95": 0.2, ">p95": 0.05 };
 
@@ -147,7 +156,7 @@ export default function CalibrationPage() {
             <Section
               collapsible
               title={tx("Tail adjustment, scored out of sample", "尾部调整，样本外评分")}
-              subtitle={tx(`Each forecast re-scored with a correction learned only from forecasts that had already matured before it (${rep.adjusted.n_evaluated} evaluated). Technical detail: latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}. The verdict uses the corrected bad case.`, `每个预测都只用在它之前已到期的预测学到的修正来重新评分（评估了 ${rep.adjusted.n_evaluated} 个）。技术细节：最新 k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `，边际 ${rep.adjusted.c_lo_last.toFixed(1)} 个百分点` : ""}，k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}。结论使用修正后的坏情形。`)}
+              subtitle={tx(`Each forecast re-scored with a correction learned only from forecasts that had already matured before it (${rep.adjusted.n_evaluated.toLocaleString()} evaluated). Technical detail: latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}. The verdict uses the corrected bad case.`, `每个预测都只用在它之前已到期的预测学到的修正来重新评分（评估了 ${rep.adjusted.n_evaluated.toLocaleString()} 个）。技术细节：最新 k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `，边际 ${rep.adjusted.c_lo_last.toFixed(1)} 个百分点` : ""}，k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}。结论使用修正后的坏情形。`)}
             >
               <ScrollTable>
 
@@ -248,7 +257,7 @@ export default function CalibrationPage() {
             </Section>
           ) : null}
 
-          <Section collapsible title={tx(`Before adjustment: the raw search, ${rep.n_matured} matured forecasts`, `调整之前：原始搜索，${rep.n_matured} 个已到期预测`)} subtitle={Object.entries(rep.by_ticker).map(([t, n]) => `${t} ${n}`).join(" · ")} action={<Pill tone={bandTone}>{tx("raw 5% tail: ", "原始 5% 尾部：")}{tb(rep.tail.band)}</Pill>}>
+          <Section collapsible title={tx(`Before adjustment: the raw search, ${rep.n_matured.toLocaleString()} matured forecasts`, `调整之前：原始搜索，${rep.n_matured.toLocaleString()} 个已到期预测`)} subtitle={Object.entries(rep.by_ticker).map(([t, n]) => `${t} ${n}`).join(" · ")} action={<Pill tone={bandTone}>{tx("raw 5% tail: ", "原始 5% 尾部：")}{tb(rep.tail.band)}</Pill>}>
             <p className="mb-3 text-sm text-muted-foreground">
               {tx("What the analog search says on its own, before the tail adjustment. The desk does not size on this; it is here because the adjustment above is only as honest as the number it corrects, and hiding the uncorrected one would make that impossible to check.", "相似时刻搜索自己给出的结果，尚未做尾部调整。交易台不按这个定仓位；它放在这里，是因为上面的调整只有与被修正的数字一样诚实才有意义，而藏起未修正的数字就无法检验这一点。")}
             </p>
@@ -264,7 +273,7 @@ export default function CalibrationPage() {
             <Section
               collapsible
               title={tx("Does it beat guessing?", "它比瞎猜强吗？")}
-              subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them. This averages all five quantiles; the studies page tests only the 5th-percentile tail, where the analogs are narrowly ahead. Different questions, not a contradiction.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。弹球损失越低越好。共 ${rep.skill.n} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}这里对五个分位数取平均；研究页只检验第 5 百分位尾部，相似时刻在那里略占优。两者问的是不同的问题，并不矛盾。`)}
+              subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n.toLocaleString()} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them. This averages all five quantiles; the studies page tests only the 5th-percentile tail, where the analogs are narrowly ahead. Different questions, not a contradiction.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。弹球损失越低越好。共 ${rep.skill.n.toLocaleString()} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}。这里对五个分位数取平均；研究页只检验第 5 百分位尾部，相似时刻在那里略占优。两者问的是不同的问题，并不矛盾。`)}
               action={
                 <Pill tone={rep.skill.diff_ci_low != null && rep.skill.diff_ci_low > 0 ? "good" : rep.skill.diff_ci_high != null && rep.skill.diff_ci_high < 0 ? "critical" : "warning"}>
                   {tx("skill ", "技能 ")}{rep.skill.skill >= 0 ? "+" : ""}
@@ -337,7 +346,7 @@ export default function CalibrationPage() {
             <Section
               collapsible
               title={tx("Is it getting better or worse?", "它在变好还是变差？")}
-              subtitle={`${tx("The same out-of-sample scoring, split by month.", "同样的样本外评分，按月拆开。")} ${rep.walk_forward.note || ""}`}
+              subtitle={`${tx("The same out-of-sample scoring, split by month.", "同样的样本外评分，按月拆开。")} ${walkNote(rep.walk_forward.note, lang)}`}
               action={
                 rep.walk_forward.improving == null ? null : (
                   <Pill tone={rep.walk_forward.improving ? "good" : "warning"}>{rep.walk_forward.improving ? tx("closing on target", "正在接近目标") : tx("drifting from target", "正在偏离目标")}</Pill>
@@ -545,8 +554,8 @@ function Scorecard({ rep }: { rep: CalibrationReport }) {
           <li>
             <Pill tone={beats ? "good" : loses ? "critical" : "warning"}>{beats ? tx("Passed", "通过") : tx("Not proven", "未证明")}</Pill>{" "}
             {beats
-              ? tx(`Beats picking a random past hour: the similar-moments forecast was closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n} pairs.`, `优于随机挑一个历史小时：相似时刻的预测在 ${sk.n} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际。`)
-              : tx(`Does not clearly beat picking a random past hour (closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n} pairs).`, `没有明显优于随机挑一个历史小时（${sk.n} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际）。`)}
+              ? tx(`Beats picking a random past hour: the similar-moments forecast was closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n.toLocaleString()} pairs.`, `优于随机挑一个历史小时：相似时刻的预测在 ${sk.n.toLocaleString()} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际。`)
+              : tx(`Does not clearly beat picking a random past hour (closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n.toLocaleString()} pairs).`, `没有明显优于随机挑一个历史小时（${sk.n.toLocaleString()} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际）。`)}
           </li>
         ) : null}
       </ul>
