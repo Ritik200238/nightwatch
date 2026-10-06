@@ -25,7 +25,7 @@ export function ProofTabs() {
               <Link
                 href={t.href}
                 aria-current={here ? "page" : undefined}
-                className={`inline-flex min-h-9 items-center rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                className={`inline-flex min-h-10 items-center rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
                   here ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
