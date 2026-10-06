@@ -70,7 +70,7 @@ _PRICE_WORD = re.compile(r"\b(?:at|@|price|near|around|above|below|under|over)\s
 BARE_MONEY_FLOOR = 100.0
 _HOURS = re.compile(r"\b([\d.]+)\s*(?:hours?|hrs?|h)\b", re.I)
 _DAYS = re.compile(r"\b([\d.]+)\s*(?:days?|d)\b", re.I)
-_NEXT_OPEN = re.compile(r"\bovernight\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
+_NEXT_OPEN = re.compile(r"\bover\s*-?\s*night\b|\bovernite\b|\btonight\b|\btonite\b|\b(?:for|through|thru)\s+(?:the\s+|one\s+)?(?:night|nite)\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
 # "Through the weekend" said on a Thursday is until Monday's open, not Thursday's.
 _WEEKEND = re.compile(r"\bweekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b", re.I)
 # "until Wednesday", "through Thursday's close": a named day, held to its open unless the

@@ -442,6 +442,13 @@ def compare(before: dict, after: dict, change: Change, lang: str = "en", *, what
     vb, va = (before.get("verdict") or {}), (after.get("verdict") or {})
     if va.get("verdict"):
         cap = (after.get("sizing") or {}).get("binding_cap")
+        # The smallest cap is named whether or not it cuts anything (the market-conditions
+        # one sits exactly at the request when the regime is ordinary). "Held by" is only
+        # true when the size really is below what was asked.
+        asked = float(((after.get("ticket") or {}).get("notional_quote")) or 0)
+        rec = va.get("recommended_notional")
+        if cap and asked and rec is not None and rec >= asked - 1:
+            cap = None
         moved = bool(vb.get("verdict")) and (
             vb.get("verdict") != va.get("verdict") or abs((vb.get("recommended_notional") or 0) - (va.get("recommended_notional") or 0)) > 1
         )

@@ -637,3 +637,10 @@ def test_a_leveraged_report_carries_the_ladder(seeded_store):  # noqa: F811
     assert sum(1 for x in r.leverage["ladder"] if x["requested"]) == 1
     req = next(x for x in r.leverage["ladder"] if x["requested"])
     assert req["analog_hits"] == r.leverage["analog_hits"]  # the ladder agrees with the headline count
+
+
+def test_a_night_said_loosely_is_still_an_overnight_hold():
+    for phrase in ("for the night", "for the nite", "tonight", "tonite", "over night", "overnite", "through the night"):
+        assert p(f"long 5k TSLA {phrase}").horizon_kind == "next_open", phrase
+    # "night" alone, or a "night owl" turn of phrase, is not a hold.
+    assert p("long 5k TSLA, night owl trade").horizon_kind is None
