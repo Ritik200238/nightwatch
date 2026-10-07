@@ -1,6 +1,7 @@
 "use client";
 
 import type { Report, TicketInput } from "@/lib/api";
+import { verdictText } from "@/lib/verdict-style";
 import { type Lang, tr } from "@/lib/i18n";
 
 const VERDICT_ZH: Record<string, string> = { GO: "可以做", REDUCE_TO: "减仓", HEDGE: "对冲", REVIEW: "复核", NO_GO: "不建议做" };
@@ -23,9 +24,7 @@ function k(x: number): string {
 }
 
 function tone(v: string): string {
-  if (v === "GO") return "text-status-good";
-  if (v === "NO_GO") return "text-status-critical";
-  return "text-status-warning";
+  return verdictText(v);
 }
 
 /** A REVIEW that only waits for the account size, answered anyway: the same trade judged at a

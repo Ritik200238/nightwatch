@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 
-const VERDICT_COLOR: Record<string, string> = { GO: "#34d399", REDUCE_TO: "#fbbf24", HEDGE: "#60a5fa", REVIEW: "#a1a1aa", NO_GO: "#f87171" };
+const VERDICT_COLOR: Record<string, string> = { GO: "#34d399", REDUCE_TO: "#60a5fa", HEDGE: "#60a5fa", REVIEW: "#fbbf24", NO_GO: "#f87171" };
 const VERDICT_WORD: Record<string, string> = { GO: "GO", REDUCE_TO: "REDUCE", HEDGE: "HEDGE", REVIEW: "REVIEW", NO_GO: "NO GO" };
 
 export interface OgReport {
