@@ -152,12 +152,27 @@ export default function CalibrationPage() {
 
           {rep.since_freeze ? <SinceFreezeBlock f={rep.since_freeze} /> : null}
 
+          <div className="space-y-2">
+          <h2 className="pt-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("The detail behind it", "背后的细节")}</h2>
           {rep.adjusted ? (
             <Section
               collapsible
               title={tx("Tail adjustment, scored out of sample", "尾部调整，样本外评分")}
-              subtitle={tx(`Each forecast re-scored with a correction learned only from forecasts that had already matured before it (${rep.adjusted.n_evaluated.toLocaleString()} evaluated). Technical detail: latest k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `, margin ${rep.adjusted.c_lo_last.toFixed(1)} pts` : ""}, k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}. The verdict uses the corrected bad case.`, `每个预测都只用在它之前已到期的预测学到的修正来重新评分（评估了 ${rep.adjusted.n_evaluated.toLocaleString()} 个）。技术细节：最新 k_lo ${rep.adjusted.k_lo_last?.toFixed(2)}${rep.adjusted.c_lo_last ? `，边际 ${rep.adjusted.c_lo_last.toFixed(1)} 个百分点` : ""}，k_hi ${rep.adjusted.k_hi_last?.toFixed(2)}。结论使用修正后的坏情形。`)}
+              subtitle={tx(`Each forecast re-scored with a correction learned only from forecasts that had already matured before it (${rep.adjusted.n_evaluated.toLocaleString()} evaluated). The verdict uses the corrected bad case.`, `每个预测都只用在它之前已到期的预测学到的修正来重新评分（评估了 ${rep.adjusted.n_evaluated.toLocaleString()} 个）。结论使用修正后的坏情形。`)}
             >
+              <p className="mb-3 text-[13px] text-muted-foreground">
+                {tx("Technical detail: latest ", "技术细节：最新 ")}
+                <Term k="klo">k_lo</Term> {rep.adjusted.k_lo_last?.toFixed(2)}
+                {rep.adjusted.c_lo_last ? (
+                  <>
+                    {tx(", ", "，")}
+                    <Term k="margin">{tx("margin", "边际")}</Term> {tx(`${rep.adjusted.c_lo_last.toFixed(1)} pts`, `${rep.adjusted.c_lo_last.toFixed(1)} 个百分点`)}
+                  </>
+                ) : null}
+                {tx(", ", "，")}
+                <Term k="khi">k_hi</Term> {rep.adjusted.k_hi_last?.toFixed(2)}
+                {tx(".", "。")}
+              </p>
               <ScrollTable>
 
               <Table>
@@ -273,7 +288,7 @@ export default function CalibrationPage() {
             <Section
               collapsible
               title={tx("Does it beat guessing?", "它比瞎猜强吗？")}
-              subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. Lower pinball loss is better. ${rep.skill.n.toLocaleString()} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them. This averages all five quantiles; the studies page tests only the 5th-percentile tail, where the analogs are narrowly ahead. Different questions, not a contradiction.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。弹球损失越低越好。共 ${rep.skill.n.toLocaleString()} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}。这里对五个分位数取平均；研究页只检验第 5 百分位尾部，相似时刻在那里略占优。两者问的是不同的问题，并不矛盾。`)}
+              subtitle={tx(`Each replay forecast is paired with the distribution of random past hours from the same time-of-week bucket. ${rep.skill.n.toLocaleString()} pairs; the analogs win ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)} of them. This averages all five quantiles; the studies page tests only the 5th-percentile tail, where the analogs are narrowly ahead. Different questions, not a contradiction.`, `每个重演预测都与同一周内时段的随机历史小时分布配对。共 ${rep.skill.n.toLocaleString()} 对；相似时刻方法赢了其中的 ${fmtPct((rep.skill.win_share ?? 0) * 100, 0, false)}。这里对五个分位数取平均；研究页只检验第 5 百分位尾部，相似时刻在那里略占优。两者问的是不同的问题，并不矛盾。`)}
               action={
                 <Pill tone={rep.skill.diff_ci_low != null && rep.skill.diff_ci_low > 0 ? "good" : rep.skill.diff_ci_high != null && rep.skill.diff_ci_high < 0 ? "critical" : "warning"}>
                   {tx("skill ", "技能 ")}{rep.skill.skill >= 0 ? "+" : ""}
@@ -288,7 +303,7 @@ export default function CalibrationPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>{tx("Quantile", "分位数")}</TableHead>
-                      <TableHead className="text-right"><Term k="analog">{tx("Analog", "相似时刻")}</Term> {tx("loss", "损失")}</TableHead>
+                      <TableHead className="text-right"><Term k="analog">{tx("Analog", "相似时刻")}</Term> <Term k="pinball">{tx("loss", "损失")}</Term></TableHead>
                       <TableHead className="text-right">{tx("Random loss", "随机损失")}</TableHead>
                       <TableHead className="text-right">{tx("Skill", "技能")}</TableHead>
                       <TableHead className="text-right">{tx("95% CI of gain", "增益的 95% 置信区间")}</TableHead>
@@ -326,7 +341,7 @@ export default function CalibrationPage() {
                       verdict never takes one from it; the tail is the part that is used. */}
                   <p className="text-[13px] text-muted-foreground">
                     <span className="text-foreground">{tx("How to read this.", "怎么读这个。")}</span>{" "}
-                    {tx("Scored by ", "评分采用")}<Term k="pinball" />{tx(". ", "。")}
+                    {tx("Scored by ", "评分采用")}<Term k="pinball" />{tx(" (lower is better). ", "（越低越好）。")}
                     {tx("Over the whole distribution the analogs are indistinguishable from picking random hours of the same kind, and around the quartiles they are measurably worse — the resemblance narrows the middle where the truth is wide. Where they help is the loss tail: ", "就整个分布而言，相似时刻与随机挑同类小时没有区别，在四分位附近还明显更差——相似性把本该很宽的中间部分收窄了。它真正有用的是亏损尾部：")}{fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} {tx("of outcomes fall below the analog 5th percentile against", "的结果低于相似时刻的第 5 百分位，而随机小时的对应比例是")}{" "}
                     {fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)} {tx("below the random-hours one. That is the number every verdict is sized against, and it is the only claim this product makes about the retrieval.", "。每个结论都是按这个数字定仓位的，这也是本产品对检索能力做出的唯一主张。")}
                   </p>
@@ -445,6 +460,7 @@ export default function CalibrationPage() {
                 </figcaption>
               </figure>
             </Section>
+          </div>
           </div>
         </>
       )}

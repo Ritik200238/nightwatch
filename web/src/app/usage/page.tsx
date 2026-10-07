@@ -68,6 +68,7 @@ export default function UsagePage() {
         title={tx("Who uses the desk", "谁在使用交易台")}
         intro={tx(`Counted since ${since}; no accounts; only an anonymous random id in your browser.`, `统计自 ${since}；无账户；只使用您浏览器里的匿名随机编号。`)}
       />
+      <p className="text-[13px] text-muted-foreground">{tx("Early numbers — small sample.", "早期数字，样本很小。")}</p>
       <Section title={tx("Numbers", "数字")}>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat

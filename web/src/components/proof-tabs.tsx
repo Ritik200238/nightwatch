@@ -12,11 +12,12 @@ export function ProofTabs() {
     { href: "/calibration", label: tx("Calibration", "校准") },
     { href: "/studies", label: tx("Studies", "研究") },
     { href: "/journal", label: tx("Journal", "日志") },
-    { href: "/wrong", label: tx("Misses", "未达标") },
+    { href: "/wrong", label: tx("Misses", "失误") },
   ];
+  // Same words as the top nav ("Track record" / "战绩", "Misses" / "失误"), so the page matches where you clicked.
   return (
-    <nav aria-label={tx("Track record", "公开记录")} className="space-y-1.5">
-      <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("Track record", "公开记录")}</p>
+    <nav aria-label={tx("Track record", "战绩")} className="space-y-1.5">
+      <p className="text-sm font-semibold tracking-tight text-foreground">{tx("Track record", "战绩")}</p>
       <ul className="flex flex-wrap gap-1.5">
         {tabs.map((t) => {
           const here = path === t.href || (path?.startsWith(`${t.href}/`) ?? false);
