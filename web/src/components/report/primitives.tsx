@@ -195,8 +195,8 @@ export function SourceLegend({ lang }: { lang: Lang }) {
     <div className="mt-4 text-xs text-muted-foreground">
       {/* Phone: one quiet line of the four kinds; the meanings open on tap. */}
       <details className="sm:hidden">
-        <summary className="flex min-h-10 cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-0.5 hover:text-foreground">
-          <span className="font-medium text-foreground">{label}</span>
+        <summary className="flex min-h-10 cursor-pointer select-none flex-nowrap items-center gap-x-2.5 whitespace-nowrap hover:text-foreground">
+          <span className="font-medium text-foreground">{lang === "zh" ? "来源：" : "Sources:"}</span>
           {kinds.map((k) => (
             <span key={k}>{kindTag(k)}</span>
           ))}

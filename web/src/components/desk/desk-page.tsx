@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang } from "@/lib/lang";
-import { scrollIntoViewOnSmall } from "@/lib/scroll";
+import { scrollIntoViewOnSmall, scrollToAnswer } from "@/lib/scroll";
 import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
 import { ApiError, api, type MissesResponse, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
@@ -37,6 +37,8 @@ export default function DeskPage() {
   // A canned run for the chat to play once: the id makes each click a new run.
   const [script, setScript] = useState<{ id: number; steps: string[] } | null>(null);
   const deepLinked = useRef(false);
+  // Set when a fresh answer is on its way; the effect below scrolls to it once it has rendered.
+  const scrollPending = useRef(false);
   const [heroDraft, setHeroDraft] = useState("");
   const [heroUsed, setHeroUsed] = useState(false);
   // True only while a ticket-form (or example) analysis is in flight, so the form can show its own progress.
@@ -105,6 +107,19 @@ export default function DeskPage() {
     };
   }, []);
   useEffect(() => {
+    if (!report || !scrollPending.current) return;
+    scrollPending.current = false;
+    // Two frames: the report and anything the chat does in the same tick have settled by then.
+    let id2 = 0;
+    const id1 = requestAnimationFrame(() => {
+      id2 = requestAnimationFrame(() => scrollToAnswer(resultRef.current));
+    });
+    return () => {
+      cancelAnimationFrame(id1);
+      cancelAnimationFrame(id2);
+    };
+  }, [report]);
+  useEffect(() => {
     if (report) saveReportId((report.forecast_id as number | null) ?? null);
   }, [report]);
 
@@ -151,6 +166,7 @@ export default function DeskPage() {
         setError(snapshotNoticeFor(snapshotFlag.get() as string, lang));
       } else {
         setContrast(null);
+        scrollPending.current = true;
         setReport(got);
       }
     } catch (e) {
@@ -257,7 +273,7 @@ export default function DeskPage() {
                 setContrast(null);
                 setReport(r);
                 setFromChat(true);
-                scrollIntoViewOnSmall(resultRef.current);
+                scrollPending.current = true;
               }}
             />
           </TabsContent>
@@ -400,20 +416,13 @@ function HeroProof() {
   );
 }
 
-const HERO_STEPS: { en: string; zh: string; subEn: string; subZh: string }[] = [
-  { en: "Similar past moments", zh: "相似的历史时刻", subEn: "the nights most like now", subZh: "与现在最像的那些夜晚" },
-  { en: "What happened after", zh: "之后发生了什么", subEn: "real outcomes, best to worst", subZh: "真实结果，从好到坏" },
-  { en: "Stress tests", zh: "压力测试", subEn: "gaps, crashes, thin books", subZh: "跳空、暴跌、盘口变薄" },
-  { en: "Sized verdict", zh: "带仓位的结论", subEn: "GO, REDUCE, HEDGE or NO GO", subZh: "可以做、减仓、对冲或不做" },
-];
-
 function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDisabled, onForm }: { draft: string; setDraft: (s: string) => void; busy: boolean; onSend: (t: string) => void; onContrast: () => void; onExample: () => void; exampleDisabled: boolean; onForm: () => void }) {
   const { lang, tx } = useLang();
   const text = draft.trim();
   return (
-    <section className="rounded-xl border border-border bg-card p-4 sm:p-6" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <h1 className={`text-balance text-2xl font-semibold tracking-tight sm:text-3xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
-      <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
+    <section className="px-1 pb-2 pt-4 sm:px-2 sm:pt-10" aria-label={tx("Describe a trade", "描述一笔交易")}>
+      <h1 className={`text-balance text-[1.75rem] font-semibold leading-[1.15] tracking-tight sm:text-5xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
+      <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:mt-4 sm:text-lg">
         {tx("A pre-trade desk for tokenized US stocks on Bitget. ", "Bitget 上代币化美股的交易前工作台。")}
         <span className="hidden sm:inline">
           {tx(
@@ -423,7 +432,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
         </span>
       </p>
       <form
-        className="mt-4 flex flex-col gap-2 sm:flex-row"
+        className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row"
         onSubmit={(e) => {
           e.preventDefault();
           if (text && !busy) onSend(text);
@@ -452,7 +461,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           {tx("Get the verdict", "获取结论")}
         </Button>
       </form>
-      <ul className="mt-3 flex flex-wrap gap-2">
+      <ul className="mt-4 flex flex-wrap gap-2">
         {HERO_CHIPS.map((c) => (
           <li key={c.en} className="shrink-0">
             <button
@@ -460,42 +469,26 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
               disabled={busy}
               title={lang === "zh" ? c.zh : c.en}
               onClick={() => onSend(c.send ?? c.en)}
-              className={`${CHIP} whitespace-nowrap text-muted-foreground disabled:opacity-50`}
+              className={`${CHIP} whitespace-nowrap border-border/60 text-muted-foreground disabled:opacity-50`}
             >
               {lang === "zh" ? c.shortZh : c.short}
             </button>
           </li>
         ))}
-        <li className="shrink-0">
-          <button type="button" disabled={exampleDisabled} onClick={onExample} title={tx("Run the example trade below live, right now", "立即实时运行下面的示例交易")} className={`${CHIP} whitespace-nowrap border-foreground/40 font-medium disabled:opacity-50`}>
-            {tx("Run the TSLA example live", "实时运行 TSLA 示例")}
-          </button>
-        </li>
-        <li className="shrink-0">
-          <button type="button" disabled={busy} onClick={onContrast} title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")} className={`${CHIP} whitespace-nowrap text-muted-foreground disabled:opacity-50`}>
-            {tx("Same trade, different book", "同一笔交易，不同组合")}
-          </button>
-        </li>
       </ul>
-      {/* Hidden on a phone: the example verdict below says the same thing, and these boxes pushed it a screen down. */}
-      <ol className="mt-4 hidden grid-cols-4 gap-2 sm:grid" aria-label={tx("How it works", "工作方式")}>
-        {HERO_STEPS.map((st, i) => (
-          <li key={st.en} className="rounded-lg border border-border bg-muted/30 px-2.5 py-1.5 sm:px-3 sm:py-2">
-            <p className="text-[13px] font-medium leading-tight">
-              <span className="tabular mr-1 text-muted-foreground">{i + 1}</span>
-              {lang === "zh" ? st.zh : st.en}
-            </p>
-            <p className="mt-0.5 hidden text-xs leading-snug text-muted-foreground sm:block">{lang === "zh" ? st.subZh : st.subEn}</p>
-          </li>
-        ))}
-      </ol>
-      <HeroProof />
-      <p className="mt-2 text-[13px] text-muted-foreground">
-        {tx("Prefer fields? ", "更喜欢填表？")}
-        <button type="button" onClick={onForm} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground">
+      {/* Two quieter ways in, as plain links so the chips and the one button stay the only loud things. */}
+      <p className="mt-3 flex flex-wrap items-center gap-x-5 text-[13px] text-muted-foreground">
+        <button type="button" disabled={exampleDisabled} onClick={onExample} title={tx("Run the example trade below live, right now", "立即实时运行下面的示例交易")} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground disabled:opacity-50 sm:min-h-8">
+          {tx("Run the TSLA example live", "实时运行 TSLA 示例")}
+        </button>
+        <button type="button" disabled={busy} onClick={onContrast} title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground disabled:opacity-50 sm:min-h-8">
+          {tx("Same trade, different book", "同一笔交易，不同组合")}
+        </button>
+        <button type="button" onClick={onForm} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground sm:min-h-8">
           {tx("Use the ticket form", "使用表单")}
         </button>
       </p>
+      <HeroProof />
     </section>
   );
 }

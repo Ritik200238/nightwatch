@@ -38,46 +38,24 @@ export function Working({ lang: langProp, compact = false, steps }: { lang?: "en
   }, []);
   const zh = lang === "zh";
   // Steps the server reported as they finished replace the clock-driven guide.
-  if (steps && steps.length > 0) {
-    const next = NEXT[steps[steps.length - 1].stage];
-    return (
-      <div className={compact ? "space-y-1.5" : "space-y-2 rounded-lg border border-border p-4"} role="status" aria-live="polite">
-        <p className="flex items-center justify-between text-sm font-medium">
-          <span>{zh ? "正在计算" : "Running the desk"}</span>
-          <span className="tabular-nums text-[13px] text-muted-foreground">{Math.floor(elapsed)}s</span>
-        </p>
-        <ol className="space-y-1 text-sm">
-          {steps.map((s) => (
-            <li key={s.stage} className="text-muted-foreground">
-              <span aria-hidden className="mr-1.5 inline-block w-3">✓</span>
-              {zh ? s.zh : s.en}
-            </li>
-          ))}
-          {next ? (
-            <li className="font-medium text-foreground">
-              <span aria-hidden className="mr-1.5 inline-block w-3">›</span>
-              {zh ? next.zh : next.en}
-            </li>
-          ) : null}
-        </ol>
-      </div>
-    );
-  }
+  const reported = steps && steps.length > 0;
+  const next = reported ? NEXT[steps[steps.length - 1].stage] : undefined;
   const current = STEPS.reduce((i, s, j) => (elapsed >= s.at ? j : i), 0);
+  const label = reported
+    ? next
+      ? zh ? next.zh : next.en
+      : zh ? steps[steps.length - 1].zh : steps[steps.length - 1].en
+    : zh ? STEPS[current].zh : STEPS[current].en;
+  const done = reported ? Math.min(steps.length, 6) / 6 : (current + 0.5) / STEPS.length;
   return (
     <div className={compact ? "space-y-1.5" : "space-y-2 rounded-lg border border-border p-4"} role="status" aria-live="polite">
-      <p className="flex items-center justify-between text-sm font-medium">
-        <span>{zh ? "正在计算" : "Running the desk"}</span>
-        <span className="tabular-nums text-[13px] text-muted-foreground">{Math.floor(elapsed)}s</span>
+      <p className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="min-w-0 truncate font-medium">{label}</span>
+        <span className="shrink-0 tabular-nums text-[13px] text-muted-foreground">{Math.floor(elapsed)}s</span>
       </p>
-      <ol className="space-y-1 text-sm">
-        {STEPS.map((s, j) => (
-          <li key={s.en} className={j < current ? "text-muted-foreground line-through decoration-muted-foreground/40" : j === current ? "font-medium text-foreground" : "text-muted-foreground"}>
-            <span aria-hidden className="mr-1.5 inline-block w-3">{j < current ? "✓" : j === current ? "›" : ""}</span>
-            {zh ? s.zh : s.en}
-          </li>
-        ))}
-      </ol>
+      <div className="h-0.5 overflow-hidden rounded-full bg-border" aria-hidden>
+        <div className="h-full rounded-full bg-foreground/50 transition-[width] duration-700 ease-out motion-reduce:transition-none" style={{ width: `${Math.round(done * 100)}%` }} />
+      </div>
       {elapsed > SLOW_AFTER ? (
         <p className="text-[13px] text-muted-foreground">
           {zh ? "比平常慢：长时间没人用之后，第一次计算要先加载历史数据。" : "Slower than usual: the first run after a quiet spell loads the history first."}

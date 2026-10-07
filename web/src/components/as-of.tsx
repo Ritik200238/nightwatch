@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { recall } from "@/lib/record-cache";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
@@ -10,7 +11,12 @@ import { useLang } from "@/lib/lang";
  *  read: the page re-renders when its data arrives, which is when this is written. */
 export function AsOf({ path }: { path: string }) {
   const { tx, lang } = useLang();
-  const hit = recall<unknown>(path);
+  // The cache lives in the browser, so the server render never has it. Read it only once mounted,
+  // so the first client render matches the server's; after that it is read on every render, as
+  // before, so a page whose data just arrived shows the time it was saved.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const hit = mounted ? recall<unknown>(path) : null;
   if (!hit) return null;
   const iso = new Date(hit.at).toISOString();
   return (
