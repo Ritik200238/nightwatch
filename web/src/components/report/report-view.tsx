@@ -463,7 +463,6 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       </p>
       {subhead ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{subhead}</p> : null}
       <CredStrip lang={lang} />
-      {prov ? <SourceLegend lang={lang} /> : null}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <StressBars report={report} lang={lang} />
         <AnalogMini report={report} lang={lang} />
@@ -525,6 +524,8 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
           chip={<SourceChip entry={prov?.size} lang={lang} />}
         />
       </div>
+      {/* The key numbers come first; the key to their source tags follows them, as one quiet line. */}
+      {prov ? <SourceLegend lang={lang} /> : null}
 
       {against ? (
         <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -903,7 +904,10 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
   const flags = report.snapshot.quality_flags.length;
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="flex flex-col gap-5 sm:gap-6">
+      {/* Phone stacking only (max-md): verdict card, then how the trade loses money, then the
+          rest in its usual order. The blocks are independent and nothing reads their position,
+          so this is CSS `order`; from md up every wrapper stacks exactly as before. */}
       {/* Everything the page builds itself is translated. The few sentences the server
           writes (failure-mode titles, some caveats, lens definitions) are shown as sent; one
           short note says so rather than an apology for the whole page. */}
@@ -914,6 +918,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       ) : null}
       <Hypothetical report={report} lang={lang} />
       <DecisionCard report={report} lang={lang} onRerun={onRerun} />
+      <div className="flex flex-col gap-5 empty:hidden max-md:order-2 sm:gap-6 md:contents">
       <ThreeSteps report={report} lang={lang} />
       <AccountLadder report={report} lang={lang} onRerun={onRerun} />
       <MarketClock report={report} lang={lang} />
@@ -926,8 +931,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           open before the summary stops being misleading. */}
       <LensNote report={report} lang={lang} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} lang={lang} />
-      <FailureModes report={report} openAll={openAll} lang={lang} />
+      </div>
+      <div className="flex flex-col gap-5 empty:hidden max-md:order-1 sm:gap-6 md:contents">
+        <FailureModes report={report} openAll={openAll} lang={lang} />
+      </div>
 
+      <div className="flex flex-col gap-5 max-md:order-3 sm:gap-6 md:contents">
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-[13px] text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
         <button
@@ -1209,6 +1218,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
       </p>
       {primary ? null : null}
+      </div>
     </div>
   );
 }

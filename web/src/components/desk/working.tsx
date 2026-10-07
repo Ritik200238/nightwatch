@@ -72,7 +72,7 @@ export function Working({ lang: langProp, compact = false, steps }: { lang?: "en
       </p>
       <ol className="space-y-1 text-sm">
         {STEPS.map((s, j) => (
-          <li key={s.en} className={j < current ? "text-muted-foreground line-through decoration-muted-foreground/40" : j === current ? "font-medium text-foreground" : "text-muted-foreground/60"}>
+          <li key={s.en} className={j < current ? "text-muted-foreground line-through decoration-muted-foreground/40" : j === current ? "font-medium text-foreground" : "text-muted-foreground"}>
             <span aria-hidden className="mr-1.5 inline-block w-3">{j < current ? "✓" : j === current ? "›" : ""}</span>
             {zh ? s.zh : s.en}
           </li>

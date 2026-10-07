@@ -201,7 +201,7 @@ export default function DeskPage() {
             repeats none of them, and takes over once the hero is gone. */}
         {report || heroUsed ? (
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">{tx("Stress-test a trade", "给交易做压力测试")}</h1>
+          <h1 className={`text-balance text-lg font-semibold tracking-tight ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test a trade", "给交易做压力测试")}</h1>
           <p className="text-sm text-muted-foreground">{tx("Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.", "代币化美股全天候交易。下单之前，先看看历史上与现在相似的时刻发生了什么、可能出什么问题、以及能不能顺利平仓。")}</p>
           {/* On a phone the explainer on the right sits under this whole form, so a first
               visitor scrolls past twelve fields before learning what the desk does. */}
@@ -412,7 +412,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const text = draft.trim();
   return (
     <section className="rounded-xl border border-border bg-card p-4 sm:p-6" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
+      <h1 className={`text-balance text-2xl font-semibold tracking-tight sm:text-3xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
       <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
         {tx("A pre-trade desk for tokenized US stocks on Bitget. ", "Bitget 上代币化美股的交易前工作台。")}
         <span className="hidden sm:inline">

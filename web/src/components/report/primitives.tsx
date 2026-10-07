@@ -184,18 +184,41 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
 /** One line that explains the four chips, shown once above the evidence. */
 export function SourceLegend({ lang }: { lang: Lang }) {
   const kinds: ProvKind[] = ["live", "history", "assumed", "ai"];
+  const label = lang === "zh" ? "每个数字的来源：" : "Where each number comes from:";
+  const kindTag = (k: ProvKind) => (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${KIND_STYLE[k].text}`}>
+      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${KIND_STYLE[k].dot}`} />
+      {lang === "zh" ? KIND_NAME[k].zh : KIND_NAME[k].en}
+    </span>
+  );
   return (
-    <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-      <span className="font-medium text-foreground">{lang === "zh" ? "每个数字的来源：" : "Where each number comes from:"}</span>
-      {kinds.map((k) => (
-        <span key={k} className="inline-flex items-center gap-1.5">
-          <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${KIND_STYLE[k].text}`}>
-            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${KIND_STYLE[k].dot}`} />
-            {lang === "zh" ? KIND_NAME[k].zh : KIND_NAME[k].en}
+    <div className="mt-4 text-xs text-muted-foreground">
+      {/* Phone: one quiet line of the four kinds; the meanings open on tap. */}
+      <details className="sm:hidden">
+        <summary className="flex min-h-10 cursor-pointer select-none flex-wrap items-center gap-x-3 gap-y-0.5 hover:text-foreground">
+          <span className="font-medium text-foreground">{label}</span>
+          {kinds.map((k) => (
+            <span key={k}>{kindTag(k)}</span>
+          ))}
+        </summary>
+        <ul className="mt-1 space-y-1">
+          {kinds.map((k) => (
+            <li key={k} className="flex flex-wrap items-center gap-x-1.5">
+              {kindTag(k)}
+              {lang === "zh" ? KIND_MEANING[k].zh : KIND_MEANING[k].en}
+            </li>
+          ))}
+        </ul>
+      </details>
+      <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 sm:flex">
+        <span className="font-medium text-foreground">{label}</span>
+        {kinds.map((k) => (
+          <span key={k} className="inline-flex items-center gap-1.5">
+            {kindTag(k)}
+            {lang === "zh" ? KIND_MEANING[k].zh : KIND_MEANING[k].en}
           </span>
-          {lang === "zh" ? KIND_MEANING[k].zh : KIND_MEANING[k].en}
-        </span>
-      ))}
-    </p>
+        ))}
+      </p>
+    </div>
   );
 }

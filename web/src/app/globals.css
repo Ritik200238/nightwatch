@@ -183,3 +183,13 @@
     min-height: 40px;
   }
 }
+
+/* Small status-coloured text in the light theme: the amber and green used as fills are
+   1.8:1 and 3.3:1 on white, too faint for 11-13 px labels. Text only; fills, borders and
+   the dark theme keep their colours. Both values are >= 4.5:1 on white and on the card. */
+:root:not(.dark) .text-status-warning {
+  color: #8a5300;
+}
+:root:not(.dark) .text-status-good {
+  color: #0a710a;
+}
