@@ -1,170 +1,82 @@
-# Nightwatch — Final QA & Product Evaluation Report
+# Nightwatch — Final QA Report
 
-> Bitget AI Base Camp Hackathon Season 2 — Track 3: Agent Hub & Intelligent Trading Tools  
-> Sub-theme: **Decision Stress Testing**  
-> Verification date: 7 October 2026 · Main commit: `d686070` · Branch: `redesign/ui-ux-polish`
+## 1. Summary and readiness
+- The pipeline from question to verdict, the journal, the public pages and the chat all work on the live site.
+- CI on main passed on d686070.
+- The last live check was "long 10k TSLA tonight 500x". It returned NO GO and capped leverage at 75x. It also said "Next: lower the leverage, the liquidation price is too close at this size". That wording is the fix from PR #7.
+- Method freeze 3 is tagged. Nothing in the frozen code has changed since the tag.
+- Readiness: ready to judge on what is built. The weak spots are listed in parts 6 and 7.
 
----
+## 2. Features
+- **Stress test and verdict:** works. Retested after each fix.
+- **Wording and display:** rewording the plain-language explanations and ordering the NO GO reasons first are fixed and retested. The liquidation next-step is fixed and checked live.
+- **Chat (including streaming):** works. Long histories are trimmed, and absurdly long ones are rejected with a plain message. Retested.
+- **Chinese view:** works. Some server messages still show in English (see part 6).
+- **Journal, receipts, Bitcoin anchors, calibration, misses, studies:** work. Page figures match the live API.
+- **Status page:** fixed so it shows the newest anchor, and it matches the API. Retested.
+- **Phone layout:** tap targets reach 40 px. The small provenance chips pass because their hit area is expanded.
+- **Site proxy:** only real outages (502, 503, 504) fall back to the saved snapshot now. Other server errors show up as they are.
+- **MCP server and the Agent Hub skill file:** work.
+- **Bitget US-stock data:** wired, but the service returns nothing. This is an outside problem.
 
-## 1. Fit to the Sub-Theme (Decision Stress Testing)
+## 3. User flows
+- Ask a trade, get a verdict, ask "why?", try a what-if.
+- Missing account size: it asks for it.
+- Absurd leverage: it caps at 75x and says so.
+- Dividend question: answers in 0.4 s.
+- Refresh and back navigation: fixed race condition where static example report flashed beside a restored chat.
+- Phone width: verified on 390x844 without horizontal overflow.
+- Chinese view: UI labels translated, no mid-word line breaking.
+- Public pages and the Bitcoin proof: all verified.
+- All of these work. The AWS Lightsail box is slow on first answers (12–40 s) when cold until process memory and caches warm up.
 
-The official Track 3 sub-theme requirement specifies:
-> *"Before opening a position, AI retrieves historically similar scenarios → historical distribution → preset stress tests."*
+## 4. Bugs
+- No exact tally was kept of every bug across the whole pass, so the totals in part 8 are estimates.
+- The fixes in this stretch:
+  - The status page showed the oldest anchor instead of the newest.
+  - Hold lengths were measured wrongly in places. Weekends were counted from now instead of Friday's close, Sunday evening read the weekday in UTC, and horizons rounded half to even.
+  - The site proxy hid real server errors behind the saved snapshot.
+  - Phone tap targets were too small.
+  - The README and proof figures overclaimed (studies, token count).
+  - NO GO reasons were in the wrong order.
+  - Huge ids and closed-hours requests gave bad errors.
+  - A NO GO from liquidation risk told the user to "write a plan" instead of lowering the leverage.
+  - Reloading with a stored chat briefly or permanently showed the TSLA example report next to the restored chat. Fixed with `restoring` skeleton and `!heroUsed` guard.
+  - On `/journal`, the 60 newest rows are in-flight awaiting horizon maturity, which previously read as "0 scored" / "none has landed". Fixed by clarifying in-flight status and cross-linking to the 1,274+ scored historical record on `/calibration` and `/wrong`.
+  - The report receipt line was a dense single wrapped paragraph with sub-40px touch targets. Fixed with a structured hairline layout and 40px link.
+- Each was fixed at the source and retested. Regression tests were added for the logic fixes.
 
-### Verification & Findings
-1. **Pre-trade execution gate:** Nightwatch strictly intervenes *before* a trade is entered. When a user queries a position (e.g. `Long 20k TSLA overnight 5x`), the engine:
-   - Identifies candidate analogs across multi-year historical 1-hour candles matching volatility, calendar context, and regime (`nightwatch/analog/cohort.py`).
-   - Constructs a calibrated empirical return distribution ($p5$ to $p95$).
-   - Subject the proposed trade to deterministic stress presets (COVID crash replay, tech rotation unwind, 1-in-100 jump/gap, earnings gap).
-   - Walks the live Bitget order book to compute realistic market exit cost and slippage under stressed volume.
-   - Applies the deterministic rule gate to output an actionable, sized verdict: `GO`, `REDUCE TO <$amt>`, `HEDGE`, `REVIEW`, or `NO GO`.
-2. **Deterministic computation boundary:** The Qwen LLM is strictly confined to intent parsing and qualitative synthesis; **0% of risk calculations or numbers originate from the model**. Every metric is generated by Python algorithms running locally, verified by unit and regression suites.
-3. **Verdict:** **Complete fit.** The 3-phase pipeline (Analogs → Stress Testing → Order-Book Walk & Gate) directly maps to the hackathon sub-theme mandate.
+## 5. Regression testing
+- Full CI on every pull request and on main: lint, about 1,500 tests, and the web build. All green.
+- Live spot checks after each deploy.
+- The proof-sync tool checks README and submission figures against the live API.
+- Automated Playwright smoke tests (`web/e2e/smoke.mjs`) verify 14 core flows against production.
 
----
+## 6. Remaining issues and limits
+- **Calibration and study refit:** NOT DONE. It needs a bigger server, which the user is upgrading. Until then the tail factors were fitted on replays made with the earlier search. The freeze file says this openly.
+- **Backfill:** the universe is 24 live tokens. Backfilling the other 88 was not run.
+- **Studies:** the 12th study is built but not run on production.
+- **Bitget US-stock data:** empty or 503 from the service itself.
+- **GetAgent playbook:** not built. It needs the user's Bitget API key.
+- **Minor items, not fixed:**
+  - The `/tonight` rejection message is silent.
+  - The not-found `/r/` page says "Try again".
+  - A "wrong if" on the wrong side of a short is accepted silently.
+  - `HEAD /api/health` returns 405.
+  - The stress presets jump at a 40 h hold (frozen area).
+  - Some server strings still show in English in the Chinese view.
+- **Real users:** zero so far.
 
-## 2. Research Quality & Method Honesty
+## 7. Risks with judges
+- An idle Lightsail server makes the first answer slow, so warm the site once before judging.
+- The history headline numbers are optimistic. Only forecasts made after 7 Oct 00:00 UTC are truly out of sample, and there will be very few by Oct 8. The freeze file says this.
+- Rivals may add features before the deadline.
+- The Bitget stock data gap could show up if a judge tries equities.
+- NOT VERIFIED: that a judge will rate us best in the sub-theme. That is an opinion, with no proof either way.
 
-Judges explicitly prioritize mathematical integrity and honest reporting of negative findings over black-box claims.
-
-### Verification & Findings
-1. **Empirical Calibration & Provenance (`/calibration`):**
-   - The engine logs every forecast before the outcome occurs with an immutable SHA-256 hash of all input features (`snapshot_hash`).
-   - Matured forecasts are scored out-of-sample against the stated $p5-p95$ band.
-   - Out-of-sample tail coverage across 1,274+ live scored tickets sits at **4% breach rate**, closely meeting the stated 5% nominal risk threshold (1-in-20 tail loss).
-   - Probability Integral Transform (PIT) histogram and quantile pinball loss verify forecast calibration against uninformative random baselines.
-2. **Negative Results Published (`/wrong` & `/studies`):**
-   - Rather than concealing misses, Nightwatch maintains a dedicated public ledger of every breach (`/wrong`), citing the specific forecast ID, timestamps, and loss beyond the threshold.
-   - A chronological changelog documents internal mistakes discovered and corrected during testing (e.g. short-side tail misorientation, weekend duration alignment).
-   - The `/studies` directory documents Benjamini–Hochberg False Discovery Rate ($FDR$) corrections across 12 empirical hypotheses, explicitly highlighting negative/unsupported signals.
-3. **Perception Clarification Resolved:**
-   - On `/journal`, displaying the 60 newest live calls previously showed "0 scored" because recent calls had not reached horizon maturity.
-   - This has been updated with explicit contextual badges and cross-links clarifying that the 60 displayed rows are actively in-flight, while pointing judges directly to the 1,274+ scored historical track record on `/calibration` and `/wrong`.
-
----
-
-## 3. Chat Quality & LUI Fluency
-
-The Conversational Language User Interface (LUI) allows natural-language interaction without requiring complex trading parameter forms.
-
-### Verification & Findings
-1. **Natural Language Intake:**
-   - Tested messy user prompts, colloquial phrasing, and slang:
-     - `5x long TSLA overnight safe?` → Correctly parses ticker `TSLA`, leverage `5x`, horizon `next_open`.
-     - `Hold 20k NVDA over weekend, stop 170` → Correctly populates invalidation price and weekend horizon.
-     - Chinese inputs: `想周末拿点特斯拉，2万U安全吗？` → Correctly identifies `做多`, `20,000 USDT`, and weekend holding period.
-2. **Interactive What-If Reasoning:**
-   - After a verdict is returned, follow-up chips (`Why?`, `What if it gaps down 10%?`, `Short it instead`) execute live what-if re-simulations within 0.4s.
-   - Context retention: Chat preserves the underlying trade context and report ID across subsequent conversation turns.
-3. **Session Restoration Race Condition Fixed:**
-   - **Root cause diagnosed & resolved:** When reloading the page with an active chat session, asynchronous report fetching previously flashed or fell back to the TSLA static example report next to the user's conversation.
-   - Added `restoring` state, guarded `exampleReport` behind `!heroUsed && !restoring`, and rendered smooth skeleton states during session hydrate. Old chats now render cleanly without report mismatch.
-
----
-
-## 4. Feature Depth & External Integrations
-
-Track 3 penalizes single-source chatbots. Nightwatch integrates multiple heterogeneous financial data streams.
-
-### Verification & Findings
-1. **Active Feeds (`/sources`):**
-   - **Bitget Market Data:** Live order books (`market/depth`), trade ticks, and OHLCV 1h candles via Bitget V2 REST & WebSocket feeds.
-   - **Bitget Perp Margins:** Real-time liquidation tier tables (`mix/market/contracts`) for margin risk computation.
-   - **Cboe / Options Volatility:** Real-time VIX index, VXN, skew indices, and equity options implied volatility surfaces.
-   - **FRED (Federal Reserve Economic Data):** Macro interest rates, Treasury yields, liquidity metrics.
-   - **SEC EDGAR:** Automated 8-K/10-Q/10-K filing feeds for corporate event calendar detection.
-   - **Nasdaq Trader:** Consolidated US equity holiday and early-close schedule calendar.
-2. **Degradation Resilience:**
-   - If a third-party non-critical feed experiences latency or downtime, the engine flags the item as stale or missing in the source provenance chip rather than silently failing, falling back to conservative margin floors.
-
----
-
-## 5. Bitget Ecosystem Alignment
-
-Judges assess how deeply the solution leverages Bitget's platform capabilities beyond generic market ticker display.
-
-### Verification & Findings
-1. **Direct Bitget Integrations:**
-   - **Order Book Depth Slippage:** Uses Bitget's live level-2 order book depth to calculate non-linear exit execution cost under panic selling.
-   - **Contract Margin & Liquidation Tiers:** Fetches Bitget's exact perpetual contract risk limits to verify that user leverage does not breach liquidation thresholds before the market opens.
-   - **Bitget Hackathon Qwen Gateway:** Routes intent parsing and analyst synthesis through the dedicated Bitget AI gateway.
-   - **Agent Hub Skill File:** Bundles a production-ready OpenClI / Agent Hub skill (`skills/nightwatch-stress-test/SKILL.md`) enabling other agents in the Bitget ecosystem to invoke Nightwatch's stress engine via standardized tool calls.
-   - **MCP Server:** Exposes Model Context Protocol endpoints for seamless integration into external agentic workflows.
-
----
-
-## 6. AI Responsibilities & Guardrails
-
-Judges evaluate whether the LLM fulfills a disciplined analyst role rather than generating hallucinatory trading advice.
-
-### Verification & Findings
-1. **Strict Division of Labor:**
-   - **Deterministic Python Engine:** All math, probabilities, quantiles, stress loss simulations, stop-loss calculations, order book walks, and verdict state transitions.
-   - **Qwen Model:** Natural language parsing, conversational routing, and generating the executive summary synthesis ("Analyst's Take").
-2. **Number Guard Verification:**
-   - The engine validates every sentence emitted by the model against the exact figures calculated by Python (`nightwatch/api/llm.py`).
-   - Any model statement containing unauthorized or altered numeric quantities is dropped or flagged, with the transcript noting exact sentences pruned.
-
----
-
-## 7. Visual Design, UX & Mobile Responsiveness
-
-The interface follows a clean, modern aesthetic avoiding AI-slop (excessive neon glows, heavy card nesting, decorative gradients).
-
-### Verification & Findings
-1. **Typography & Open Hairline Architecture:**
-   - Strict hierarchical type scale (`t-title`, `t-heading`, `t-label`, `t-caption`, `tabular-nums`).
-   - Hairline borders (`border-border/60`), muted monochromatic accents, and high-contrast readable typography.
-   - Elimination of boxy cards in favor of scannable figures with clear hints.
-2. **Touch Targets (>= 40px):**
-   - Verified on mobile touch emulation (390x844 viewport):
-     - SourceChips touch area: 40x40px (`min-h-10 min-w-10`).
-     - Copy permalink touch area: expanded via `after:-inset-y-3` to 44px.
-     - Tab triggers and filter buttons: compliant at 40-48px.
-3. **CJK Localization & Responsive Typography:**
-   - Chinese labels incorporate `[word-break:keep-all] [overflow-wrap:anywhere]` preventing awkward mid-word line breaking.
-   - Tables across `/calibration`, `/journal`, `/wrong`, and `/studies` wrapped in responsive `<ScrollTable>` containers with horizontal scroll guards.
-
----
-
-## 8. Product-Market Fit & Target User
-
-Nightwatch targets retail and prop crypto traders speculating on tokenized US equities outside traditional Wall Street hours.
-
-### Verification & Findings
-1. **Target Problem:**
-   - Tokenized US stocks trade 24/7 on crypto venues like Bitget, while the underlying New York equity cash market shuts at 16:00 ET weekdays and remains closed all weekend.
-   - Traders holding leveraged positions overnight or over weekends face asymmetric gap risk, thin overnight order books, and predatory liquidation cascades before Wall Street reopens.
-2. **Value Delivered:**
-   - Nightwatch delivers immediate clarity on whether a trade has sufficient cushion to survive the weekend, what past gap events did to similar setups, and how much it actually costs to exit on Bitget's live order book.
-3. **Current Maturity:**
-   - Complete technical MVP with audited historical logs; currently in testing/hackathon showcase stage with zero external live accounts connected.
-
----
-
-## 9. Innovation & Differentiation
-
-What differentiates Nightwatch from competing submissions in Track 3:
-
-| Capability | Generic Trading Bots / LLM Prompters | Nightwatch |
-| :--- | :--- | :--- |
-| **Stress Testing** | Static rule-of-thumb / generic advice | Point-in-time analog retrieval + empirical quantile distributions |
-| **Exit Cost** | Assumes zero slippage at mark price | Live Bitget order-book walk with non-linear liquidity consumption |
-| **Mathematical Proof** | None (unverifiable promises) | Immutable hash-chained journal + OpenTimestamps Bitcoin block anchors |
-| **Transparency** | Hides bad calls | Public `/wrong` ledger of every tail breach and system post-mortem |
-| **Language Support** | Single language or machine auto-translate | Full native bilingual (English & 中文) reasoning and metrics |
-| **Interoperability** | Siloed web interface | Web UI + REST API + MCP Server + Bitget Agent Hub Skill |
-
----
-
-## 10. Reliability, Build Health & Launch Readiness
-
-### Verification & Findings
-1. **Build Status:**
-   - **Frontend:** Next.js 16.3 + Turbopack builds cleanly with **0 errors**, all 14 routes statically and dynamically verified.
-   - **TypeScript:** Strict type check passes with 0 diagnostics.
-   - **Backend:** Python 3.12 + FastAPI test suite passes cleanly across 1,500+ unit and integration tests.
-2. **Public Audit Endpoints:**
-   - Live hash chain verification endpoint (`/api/verify`) confirms 100% cryptographic integrity of stored receipts.
-   - Bitcoin blockchain anchoring via OpenTimestamps confirms calendar provenance of historical records.
-3. **Overall Readiness:** **Ready for judging.** All core user journeys, stress simulations, verification checks, and public proof pages operate cleanly.
+## 8. Counts (approximate)
+- **Features tested:** about 15 areas.
+- **Flows tested:** about 10.
+- **Bugs:** a few dozen found and fixed. About 6 minor ones remain, plus the outside and server-upgrade items in part 6.
+- **Automated checks:** about 1,500 tests, ruff, web build and Vercel preview. All pass on main.
+- **Overall:** judge-ready, with the limits above stated openly.
