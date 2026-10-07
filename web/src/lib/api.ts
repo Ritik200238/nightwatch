@@ -1647,6 +1647,7 @@ export const api = {
   verify: () => request<VerifyResponse>("/verify"),
   anchors: () => request<{ anchors: Anchor[] }>("/anchors"),
   misses: () => request<MissesResponse>("/misses"),
+  ledger: () => request<LedgerResponse>("/ledger"),
   analystStart: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`, { method: "POST" }),
   agentStart: (forecastId: number, lang: "en" | "zh") => request<AgentRun>(`/agent/${forecastId}?lang=${lang}`, { method: "POST" }),
   agentGet: (forecastId: number, lang: "en" | "zh") => request<AgentRun>(`/agent/${forecastId}?lang=${lang}`),
@@ -1749,5 +1750,25 @@ export interface MissesResponse {
     }
   >;
   misses: Miss[];
+  target_rate: number;
+}
+
+export interface LedgerRow {
+  id: number;
+  kind: string;
+  as_of: string;
+  ticker: string;
+  side: string;
+  horizon_h: number;
+  verdict: string | null;
+  stated_p5_pct: number;
+  outcome_pct: number;
+  missed: boolean;
+  receipt: string | null;
+}
+
+export interface LedgerResponse {
+  rows: LedgerRow[];
+  scored: number;
   target_rate: number;
 }

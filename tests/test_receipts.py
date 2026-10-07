@@ -86,3 +86,16 @@ def test_the_api_verifies_the_chain_and_lists_misses(client):  # noqa: F811
     m = client.get("/misses").json()
     assert set(m) >= {"totals", "misses", "target_rate"}
 
+
+
+def test_the_ledger_lists_every_scored_forecast_with_the_same_totals_as_misses(client):  # noqa: F811
+    client.post("/analyze", json={"ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000,
+                                  "thesis": "t", "invalidation": "i", "as_of": AS_OF.isoformat()})
+    led = client.get("/ledger").json()
+    assert set(led) >= {"rows", "scored", "target_rate"} and led["scored"] == len(led["rows"])
+    totals = client.get("/misses").json()["totals"]
+    for kind in ("replay", "ticket"):
+        mine = [r for r in led["rows"] if r["kind"] == kind]
+        assert len(mine) == totals.get(kind, {"scored": 0})["scored"]
+        assert sum(r["missed"] for r in mine) == totals.get(kind, {"missed": 0})["missed"]
+    assert all(set(r) >= {"id", "as_of", "ticker", "stated_p5_pct", "outcome_pct", "missed", "receipt"} for r in led["rows"])

@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api, peek, type DataSource, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 import { AsOf } from "@/components/as-of";
+import { LedgerCheck } from "@/components/ledger-check";
 import { fmtPct, fmtUsd } from "@/lib/format";
 import { fmtTimeL, t } from "@/lib/i18n";
 
@@ -264,6 +265,14 @@ export default function WrongPage() {
         ) : (
           <LoadingRecord blocks={[64]} />
         )}
+      </Section>
+
+      <Section
+        collapsible
+        title={tx("Check the numbers yourself", "自己核对这些数字")}
+        subtitle={tx("The whole scored record as a file, and where it is weakest.", "完整的已评分记录文件，以及它最薄弱的地方。")}
+      >
+        <LedgerCheck />
       </Section>
 
       <Section title={tx("Mistakes we found in the desk itself", "我们在交易台自身发现的错误")} subtitle={tx("Each one changed a number a trader was shown. Newest first; the open one is still open.", "每一个都改变过展示给交易者的某个数字。最新的在前；标为未解决的仍未解决。")}>
