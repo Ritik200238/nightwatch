@@ -83,23 +83,38 @@ export default function StatusPage() {
       <PageHead title={tx("Status", "状态")} intro={health.data?.state === "down" ? tx("The API is down, so the cards below may be saved copies, not live readings.", "API 离线，下面的卡片可能是已保存的副本，而非实时读数。") : tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <AsOf path="/sources" />
-      <Card title="API" ok={health.data ? (health.data.state === "up" ? true : health.data.state === "slow" ? "warn" : false) : null}>
-        {health.data && health.data.state !== "down" ? (
-          <p>
-            {health.data.state === "slow" ? tx("Up but slow", "运行中，但响应较慢") : tx("Up", "运行中")} · v{health.data.health.version} · {health.data.health.bars.toLocaleString()} {tx("candles", "根 K 线")} · {health.data.health.orderbook_snapshots.toLocaleString()} {tx("order-book snapshots", "个盘口快照")} · {health.data.health.tickers_with_data} {tx("tokens with data", "个有数据的代币")}
-            {health.data.health.llm ? ` · ${tx("analyst model", "分析师模型")} ${health.data.health.llm.ready ? tx("ready", "就绪") : tx("not ready", "未就绪")}` : ""}
-          </p>
-        ) : health.data ? (
-          <p>
-            {tx("Down: the API is not answering right now.", "离线：API 暂时没有响应。")}{" "}
-            {health.data.savedAt
-              ? tx(`Showing saved data from ${fmtDateTimeL(health.data.savedAt, lang)}.`, `正在显示 ${fmtDateTimeL(health.data.savedAt, lang)} 的已保存数据。`)
-              : tx("Saved copies of the public pages are still shown.", "公开页面仍显示已保存的副本。")}
-          </p>
-        ) : (
-          <p>{tx("Checking (up to 15 seconds)…", "检查中（最多 15 秒）…")}</p>
-        )}
-      </Card>
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+        <Card title="API" ok={health.data ? (health.data.state === "up" ? true : health.data.state === "slow" ? "warn" : false) : null}>
+          {health.data && health.data.state !== "down" ? (
+            <p>
+              {health.data.state === "slow" ? tx("Up but slow", "运行中，但响应较慢") : tx("Up", "运行中")} · v{health.data.health.version} · {health.data.health.bars.toLocaleString()} {tx("candles", "根 K 线")} · {health.data.health.orderbook_snapshots.toLocaleString()} {tx("order-book snapshots", "个盘口快照")} · {health.data.health.tickers_with_data} {tx("tokens with data", "个有数据的代币")}
+              {health.data.health.llm ? ` · ${tx("analyst model", "分析师模型")} ${health.data.health.llm.ready ? tx("ready", "就绪") : tx("not ready", "未就绪")}` : ""}
+            </p>
+          ) : health.data ? (
+            <p>
+              {tx("Down: the API is not answering right now.", "离线：API 暂时没有响应。")}{" "}
+              {health.data.savedAt
+                ? tx(`Showing saved data from ${fmtDateTimeL(health.data.savedAt, lang)}.`, `正在显示 ${fmtDateTimeL(health.data.savedAt, lang)} 的已保存数据。`)
+                : tx("Saved copies of the public pages are still shown.", "公开页面仍显示已保存的副本。")}
+            </p>
+          ) : (
+            <p>{tx("Checking (up to 15 seconds)…", "检查中（最多 15 秒）…")}</p>
+          )}
+        </Card>
+
+        <Card title={tx("Calibration", "校准")} ok={calib.error ? false : band ? band === "green" : null}>
+          {calib.data?.adjusted ? (
+            <p>
+              {tx("Tail band after adjustment", "调整后的尾部区间")}: <span className="font-semibold text-foreground">{zh ? ({ green: "绿", amber: "黄", red: "红" } as Record<string, string>)[band ?? ""] ?? band : band}</span> · {calib.data.adjusted.n_evaluated.toLocaleString()} {tx("matured forecasts evaluated", "个已到期预测已评估")} ·{" "}
+              <Link href="/calibration" className="relative after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] underline underline-offset-2 hover:text-foreground">
+                {tx("details", "详情")}
+              </Link>
+            </p>
+          ) : (
+            <p>{calib.error ? NA : tx("Checking…", "检查中…")}</p>
+          )}
+        </Card>
+      </div>
 
       <Card title={tx("Feed freshness", "数据源新鲜度")} ok={sources.error ? false : sources.data ? stale === 0 : null}>
         {sources.data ? (
@@ -143,59 +158,48 @@ export default function StatusPage() {
         </p>
       </Card>
 
-      <Card title={tx("Receipt chain", "凭证链")} ok={verify.error ? false : verify.data ? verify.data.ok && !verify.data.first_break : null}>
-        {verify.data ? (
-          <>
-            <p>
-              {verify.data.ok ? tx("Intact", "完整") : tx("BROKEN", "已断裂")} · {verify.data.checked.toLocaleString()} {tx("verdicts re-checked just now", "个结论刚刚重新校验")} · {verify.data.unchained.toLocaleString()} {tx("unchained", "个未入链")}
-            </p>
-            {verify.data.first_break ? (
-              <p className="text-destructive">
-                {tx("First break at seq", "首个断点序号")} {verify.data.first_break.seq}: {verify.data.first_break.reason}
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+        <Card title={tx("Receipt chain", "凭证链")} ok={verify.error ? false : verify.data ? verify.data.ok && !verify.data.first_break : null}>
+          {verify.data ? (
+            <>
+              <p>
+                {verify.data.ok ? tx("Intact", "完整") : tx("BROKEN", "已断裂")} · {verify.data.checked.toLocaleString()} {tx("verdicts re-checked just now", "个结论刚刚重新校验")} · {verify.data.unchained.toLocaleString()} {tx("unchained", "个未入链")}
               </p>
-            ) : null}
-            <p className="font-mono text-[13px] break-all">
-              {tx("head", "链头")} {short(verify.data.head)}
-            </p>
-          </>
-        ) : (
-          <p>{verify.error ? NA : tx("Re-checking every receipt…", "正在重新校验每张凭证…")}</p>
-        )}
-      </Card>
-
-      <Card title={tx("Latest Bitcoin anchor", "最新比特币锚定")} ok={anchors.error ? false : anchors.data ? latestAnchor?.state === "bitcoin" : null}>
-        {latestAnchor ? (
-          <>
-            <p>
-              {latestAnchor.state === "bitcoin" ? tx("Confirmed in Bitcoin", "已写入比特币") : tx("Waiting for a Bitcoin block", "等待比特币区块")}
-              {latestAnchor.block ? ` · ${tx("block", "区块")} ${latestAnchor.block.toLocaleString()}` : ""} · {tx("covers receipts up to", "覆盖到序号")} {latestAnchor.seq}
-            </p>
-            <p className="font-mono text-[13px] break-all">
-              {tx("head", "链头")} {short(latestAnchor.head)}
-            </p>
-            {latestAnchor.verified ? (
-              <p className="text-[13px]">
-                {tx("Stamped", "盖章于")} {fmtAge(latestAnchor.verified, zh)}
+              {verify.data.first_break ? (
+                <p className="text-destructive">
+                  {tx("First break at seq", "首个断点序号")} {verify.data.first_break.seq}: {verify.data.first_break.reason}
+                </p>
+              ) : null}
+              <p className="font-mono text-[13px] break-all">
+                {tx("head", "链头")} {short(verify.data.head)}
               </p>
-            ) : null}
-          </>
-        ) : (
-          <p>{anchors.error ? NA : anchors.data ? tx("No anchor yet.", "还没有锚定记录。") : tx("Checking…", "检查中…")}</p>
-        )}
-      </Card>
+            </>
+          ) : (
+            <p>{verify.error ? NA : tx("Re-checking every receipt…", "正在重新校验每张凭证…")}</p>
+          )}
+        </Card>
 
-      <Card title={tx("Calibration", "校准")} ok={calib.error ? false : band ? band === "green" : null}>
-        {calib.data?.adjusted ? (
-          <p>
-            {tx("Tail band after adjustment", "调整后的尾部区间")}: <span className="font-semibold text-foreground">{zh ? ({ green: "绿", amber: "黄", red: "红" } as Record<string, string>)[band ?? ""] ?? band : band}</span> · {calib.data.adjusted.n_evaluated.toLocaleString()} {tx("matured forecasts evaluated", "个已到期预测已评估")} ·{" "}
-            <Link href="/calibration" className="relative after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] underline underline-offset-2 hover:text-foreground">
-              {tx("details", "详情")}
-            </Link>
-          </p>
-        ) : (
-          <p>{calib.error ? NA : tx("Checking…", "检查中…")}</p>
-        )}
-      </Card>
+        <Card title={tx("Latest Bitcoin anchor", "最新比特币锚定")} ok={anchors.error ? false : anchors.data ? latestAnchor?.state === "bitcoin" : null}>
+          {latestAnchor ? (
+            <>
+              <p>
+                {latestAnchor.state === "bitcoin" ? tx("Confirmed in Bitcoin", "已写入比特币") : tx("Waiting for a Bitcoin block", "等待比特币区块")}
+                {latestAnchor.block ? ` · ${tx("block", "区块")} ${latestAnchor.block.toLocaleString()}` : ""} · {tx("covers receipts up to", "覆盖到序号")} {latestAnchor.seq}
+              </p>
+              <p className="font-mono text-[13px] break-all">
+                {tx("head", "链头")} {short(latestAnchor.head)}
+              </p>
+              {latestAnchor.verified ? (
+                <p className="text-[13px]">
+                  {tx("Stamped", "盖章于")} {fmtAge(latestAnchor.verified, zh)}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <p>{anchors.error ? NA : anchors.data ? tx("No anchor yet.", "还没有锚定记录。") : tx("Checking…", "检查中…")}</p>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

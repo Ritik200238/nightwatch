@@ -267,7 +267,7 @@ export default function WrongPage() {
       </Section>
 
       <Section title={tx("Mistakes we found in the desk itself", "我们在交易台自身发现的错误")} subtitle={tx("Each one changed a number a trader was shown. Newest first; the open one is still open.", "每一个都改变过展示给交易者的某个数字。最新的在前；标为未解决的仍未解决。")}>
-        <ul className="divide-y divide-border border-y border-border">
+        <ul className="grid grid-cols-1 divide-y divide-border border-y border-border md:grid-cols-2 md:gap-x-12 md:divide-y-0">
           {FOUND.map((f0, fi) => {
             let f = lang === "zh" && FOUND_ZH[fi] ? { ...f0, ...FOUND_ZH[fi] } : f0;
             // The Bitget entry was marked fixed on 29 Sep. The fix was ours (we reach it over IPv6 and say when it
@@ -283,7 +283,7 @@ export default function WrongPage() {
               };
             }
             return (
-            <li key={f0.what} className="t-body py-4">
+            <li key={f0.what} className="t-body py-4 md:border-b md:border-border/60">
               <p className="t-caption flex flex-wrap items-center gap-x-3 gap-y-1">
                 {f.when}
                 {f.open ? <Pill tone="warning">{tx("open", "未解决")}</Pill> : <Pill tone="good">{tx("fixed", "已修复")}</Pill>}

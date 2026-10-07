@@ -113,19 +113,19 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
 export function SourceLegend({ lang }: { lang: Lang }) {
   const kinds: ProvKind[] = ["live", "history", "assumed", "ai"];
   const kindTag = (k: ProvKind) => (
-    <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${KIND_STYLE[k].text}`}>
-      <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${KIND_STYLE[k].dot}`} />
+    <span className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-medium ${KIND_STYLE[k].text}`}>
+      <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${KIND_STYLE[k].dot}`} />
       {lang === "zh" ? KIND_NAME[k].zh : KIND_NAME[k].en}
     </span>
   );
   return (
     <div className="mt-4 text-xs text-muted-foreground">
       {/* One quiet line of the four kinds at every width; the meanings open on tap. */}
-      <details>
-        <summary className="flex min-h-10 cursor-pointer select-none flex-nowrap items-center gap-x-2.5 whitespace-nowrap hover:text-foreground">
-          <span className="font-medium text-foreground">{lang === "zh" ? "来源：" : "Sources:"}</span>
+      <details className="group">
+        <summary className="flex min-h-10 cursor-pointer select-none flex-nowrap items-center gap-x-2.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] list-none hover:text-foreground [&::-webkit-details-marker]:hidden [&::-webkit-scrollbar]:hidden">
+          <span className="shrink-0 font-medium text-foreground">{lang === "zh" ? "来源：" : "Sources:"}</span>
           {kinds.map((k) => (
-            <span key={k}>{kindTag(k)}</span>
+            <span key={k} className="shrink-0">{kindTag(k)}</span>
           ))}
         </summary>
         <ul className="mt-1 space-y-1">
