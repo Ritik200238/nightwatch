@@ -76,8 +76,18 @@ function fmtHorizon(h: number, zh: boolean): string {
 export default function JournalPage() {
   const { tx, lang } = useLang();
   const sideW = (s: string) => (lang === "zh" ? (s === "long" ? "做多" : s === "short" ? "做空" : s) : s);
-  const verdictPill = (r: ForecastRow) =>
-    r.verdict ? <Pill verdict={r.verdict}>{lang === "zh" ? tl(lang, "verdictName", r.verdict) : r.verdict.replace("_", " ")}</Pill> : <span className="text-[13px] text-muted-foreground">—</span>;
+  const verdictPill = (r: ForecastRow) => {
+    if (!r.verdict) return <span className="text-[13px] text-muted-foreground">—</span>;
+    const vText = lang === "zh" ? tl(lang, "verdictName", r.verdict) : r.verdict.replace("_", " ");
+    if (r.verdict === "REVIEW" || r.verdict === "REVIEW_REQUIRED") {
+      return (
+        <span className="inline-flex items-center rounded-full border border-border/80 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+          {vText}
+        </span>
+      );
+    }
+    return <Pill verdict={r.verdict}>{vText}</Pill>;
+  };
   const [rows, setRows] = useState<ForecastRow[] | null>(null);
   const [misses, setMisses] = useState<MissesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +126,12 @@ export default function JournalPage() {
   }, [kind]);
 
   const grouped = useMemo(() => groupRows(rows ?? []), [rows]);
+  const displayGrouped = useMemo(() => {
+    const scored = grouped.filter((g) => g.row.ret_pct != null);
+    if (scored.length === 0) return grouped;
+    const unscored = grouped.filter((g) => g.row.ret_pct == null);
+    return [...scored, ...unscored];
+  }, [grouped]);
   const matured = useMemo(() => (rows ?? []).filter((r) => r.ret_pct != null), [rows]);
   const inside = useMemo(() => matured.filter((r) => r.p5 != null && r.p95 != null && r.ret_pct! >= r.p5! && r.ret_pct! <= r.p95!).length, [matured]);
   const points = useMemo(() => matured.filter((r) => r.p50 != null).map((r) => ({ x: r.p50 as number, y: r.ret_pct as number, ticker: r.ticker })), [matured]);
@@ -137,7 +153,7 @@ export default function JournalPage() {
         actions={
           <div className="flex gap-1" role="group" aria-label={tx("Forecast kind", "预测类型")}>
             {KINDS.map((k) => (
-              <Button key={k} size="sm" className="min-w-10" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
+              <Button key={k} size="sm" className="min-w-10 min-h-10" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
                 {k === "all" ? tx("All", "全部") : k === "replay" ? tx("Replays", "重演") : tx("Live tickets", "实时交易")}
               </Button>
             ))}
@@ -161,11 +177,11 @@ export default function JournalPage() {
               {totalScored ? (
                 <>
                   {tx(`The full track record (${totalScored.toLocaleString()} scored across past windows) is audited on `, `完整的历史记录（在过去窗口中已评分 ${totalScored.toLocaleString()} 条）已在 `)}
-                  <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+                  <Link href="/calibration" className="relative inline-block after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] underline underline-offset-2 hover:text-foreground">
                     {tx("Calibration", "校准")}
                   </Link>
                   {tx(" and ", " 和 ")}
-                  <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
+                  <Link href="/wrong" className="relative inline-block after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] underline underline-offset-2 hover:text-foreground">
                     {tx("What we got wrong", "我们错在哪")}
                   </Link>
                   {tx(". Rows are never edited afterwards.", " 页公开审计。记录事后绝不修改。")}
@@ -184,11 +200,11 @@ export default function JournalPage() {
                   {tx("–", "–")}
                   <Term k="p95">p95</Term>
                   {tx(" band is published and audited on ", " 区间检验的结果已在 ")}
-                  <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+                  <Link href="/calibration" className="relative inline-block after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] underline underline-offset-2 hover:text-foreground">
                     {tx("Calibration", "校准")}
                   </Link>
                   {tx(" and ", " 和 ")}
-                  <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
+                  <Link href="/wrong" className="relative inline-block after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] underline underline-offset-2 hover:text-foreground">
                     {tx("What we got wrong", "我们错在哪")}
                   </Link>
                   {tx(". Rows are never edited afterwards.", " 页全面公开。记录事后绝不修改。")}
@@ -290,9 +306,9 @@ export default function JournalPage() {
                 <ResponsiveContainer width="100%" height={240}>
                   <ScatterChart margin={{ top: 8, right: 12, bottom: 16, left: -12 }}>
                     <CartesianGrid stroke="var(--grid)" />
-                    <XAxis type="number" dataKey="x" domain={[-span, span]} allowDataOverflow tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `${v}%`} axisLine={{ stroke: "var(--grid)" }} tickLine={false}>
+                    <XAxis type="number" dataKey="x" domain={[-span, span]} allowDataOverflow tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickFormatter={(v: number) => `${v}%`} axisLine={{ stroke: "var(--grid)" }} tickLine={false}>
                     </XAxis>
-                    <YAxis type="number" dataKey="y" domain={[-span, span]} allowDataOverflow tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickFormatter={(v: number) => `${v}%`} axisLine={false} tickLine={false} />
+                    <YAxis type="number" dataKey="y" domain={[-span, span]} allowDataOverflow tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickFormatter={(v: number) => `${v}%`} axisLine={false} tickLine={false} />
                     <ZAxis range={[24, 24]} />
                     <ReferenceLine x={0} stroke="var(--grid)" />
                     <ReferenceLine y={0} stroke="var(--grid)" />
@@ -315,9 +331,12 @@ export default function JournalPage() {
 
           <Section
             title={tx("The journal", "日志")}
-            subtitle={tx(`Newest first. The band is the analog distribution at the moment of the call.${grouped.length < rows.length ? ` ${rows.length - grouped.length} repeat calls inside the same hour are folded into a ×N row.` : ""}`, `最新的在前。区间是给出结论时相似时刻样本的分布。${grouped.length < rows.length ? `同一小时内重复的 ${rows.length - grouped.length} 次相同调用，已折叠成“×N”的一行。` : ""}`)}
+            subtitle={tx(
+              `${matured.length > 0 ? "Scored results shown first · " : ""}${grouped.length < rows.length ? `${rows.length - grouped.length} repeat calls in same hour folded into ×N · ` : ""}The band is the analog distribution at the moment of the call.`,
+              `${matured.length > 0 ? "已评分结果优先展示 · " : ""}${grouped.length < rows.length ? `同一小时内重复的 ${rows.length - grouped.length} 次相同调用已折叠为 ×N · ` : ""}区间是给出结论时相似时刻样本的分布。`
+            )}
             action={
-              <Button size="sm" variant="secondary" aria-pressed={details} onClick={() => setDetails((d) => !d)}>
+              <Button size="sm" variant="secondary" className="min-h-10 px-3" aria-pressed={details} onClick={() => setDetails((d) => !d)}>
                 {details ? tx("Hide details", "隐藏详情") : tx("Details", "详情")}
               </Button>
             }
@@ -337,7 +356,7 @@ export default function JournalPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {grouped.map(({ row: r, count }) => {
+                  {displayGrouped.map(({ row: r, count }) => {
                     const band = r.p5 != null && r.p95 != null;
                     const insideBand = band && r.ret_pct != null && r.ret_pct >= r.p5! && r.ret_pct <= r.p95!;
                     return (
@@ -356,7 +375,14 @@ export default function JournalPage() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <span className="font-medium">{r.ticker}</span> {sideW(r.side)}
-                          {count > 1 ? <span className="tabular ml-1 text-[13px] text-muted-foreground" title={tx(`${count} identical calls in this hour`, `这一小时内有 ${count} 次相同调用`)}>×{count}</span> : null}
+                          {count > 1 ? (
+                            <span
+                              className="tabular ml-1.5 inline-flex items-center rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 text-xs font-semibold text-foreground/80"
+                              title={tx(`${count} identical calls in this hour`, `这一小时内有 ${count} 次相同调用`)}
+                            >
+                              ×{count}
+                            </span>
+                          ) : null}
                           <span className="block text-[13px] text-muted-foreground">
                             {fmtUsd(r.notional)} · {r.analog_n ?? 0} {tx("analogs", "个相似时刻")}
                           </span>
@@ -388,7 +414,7 @@ export default function JournalPage() {
             </ScrollTable>
             </div>
             <ul className="divide-y divide-border border-y border-border md:hidden" aria-label={tx("The journal", "日志")}>
-              {grouped.map(({ row: r, count }) => {
+              {displayGrouped.map(({ row: r, count }) => {
                 const band = r.p5 != null && r.p95 != null;
                 const insideBand = band && r.ret_pct != null && r.ret_pct >= r.p5! && r.ret_pct <= r.p95!;
                 return (
@@ -399,7 +425,14 @@ export default function JournalPage() {
                     </div>
                     <p className="text-sm">
                       <span className="font-semibold">{r.ticker}</span> {sideW(r.side)} · {fmtUsd(r.notional)}
-                      {count > 1 ? <span className="tabular ml-1.5 text-[13px] text-muted-foreground" title={tx(`${count} identical calls in this hour`, `这一小时内有 ${count} 次相同调用`)}>×{count}</span> : null}
+                      {count > 1 ? (
+                        <span
+                          className="tabular ml-1.5 inline-flex items-center rounded border border-border/80 bg-muted/60 px-1.5 py-0.5 text-xs font-semibold text-foreground/80"
+                          title={tx(`${count} identical calls in this hour`, `这一小时内有 ${count} 次相同调用`)}
+                        >
+                          ×{count}
+                        </span>
+                      ) : null}
                     </p>
                     <p className="text-[13px] text-muted-foreground">
                       {r.kind === "replay" ? (

@@ -81,15 +81,15 @@ export function SiteFooter() {
       )}
       </p>
       <p className="flex flex-wrap items-center gap-x-1">
-        <Link href="/status" className="inline-flex min-h-10 min-w-10 items-center justify-center sm:min-h-0 sm:min-w-0 underline underline-offset-2 hover:text-foreground">
+        <Link href="/status" className="inline-flex min-h-10 items-center px-1 underline underline-offset-2 hover:text-foreground">
           {tx("Status", "状态")}
         </Link>
         {" · "}
-        <Link href="/sources" className="inline-flex min-h-10 min-w-10 items-center justify-center sm:min-h-0 sm:min-w-0 underline underline-offset-2 hover:text-foreground">
+        <Link href="/sources" className="inline-flex min-h-10 items-center px-1 underline underline-offset-2 hover:text-foreground">
           {tx("Data sources", "数据来源")}
         </Link>
         {" · "}
-        <Link href="/usage" className="inline-flex min-h-10 min-w-10 items-center justify-center sm:min-h-0 sm:min-w-0 underline underline-offset-2 hover:text-foreground">
+        <Link href="/usage" className="inline-flex min-h-10 items-center px-1 underline underline-offset-2 hover:text-foreground">
           {tx("Usage", "用量")}
         </Link>
       </p>

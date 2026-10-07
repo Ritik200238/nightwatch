@@ -62,32 +62,19 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
       </p>
       {report.open_interest ? <p className="mt-1 text-[13px] text-foreground">{oiLine(report.open_interest, lang)}</p> : null}
       {l.open_interest_crowded_line ? <p className="text-[13px] font-medium text-status-warning">{L(`Crowded: OI ${(report.open_interest?.change_24h_pct ?? 0) >= 0 ? "+" : ""}${(report.open_interest?.change_24h_pct ?? 0).toFixed(0)}% in 24h, a bigger target for a liquidation cascade.`, `拥挤：未平仓量 24 小时 ${(report.open_interest?.change_24h_pct ?? 0) >= 0 ? "+" : ""}${(report.open_interest?.change_24h_pct ?? 0).toFixed(0)}%，更容易引发连环强平。`)}</p> : null}
-      {/* On a phone each rung becomes a small card (label above value) so no column is cut off or
-          hidden behind a sideways scroll; from sm up it is the plain table. */}
-      <Table className="mt-1 max-sm:block" role="table">
-        <TableHeader className="max-sm:sr-only">
-          <TableRow>
-            <TableHead>{L("Leverage", "杠杆")}</TableHead>
-            <TableHead className="text-right">{L("Liquidation price", "强平价")}</TableHead>
-            <TableHead className="text-right">{L("Distance", "距离")}</TableHead>
-            <TableHead className="text-right">{L("Margin", "保证金")}</TableHead>
-            <TableHead className="text-right">{L("Past moments liquidated", "曾被强平的历史时刻")}</TableHead>
-            <TableHead />
-          </TableRow>
-        </TableHeader>
-        <TableBody className="max-sm:block">
-          {rungs.map((r) => {
-            const look = gateLook(r.gate, lang);
-            const clickable = !!onRerun && !r.requested;
-            return (
-              <TableRow
-                key={r.leverage}
-                aria-current={r.requested ? "true" : undefined}
-                onClick={clickable ? () => onRerun?.({ leverage: r.leverage }) : undefined}
-                role="row"
-                className={`max-sm:grid max-sm:grid-cols-2 max-sm:gap-x-3 max-sm:gap-y-1 max-sm:py-2 ${r.requested ? "bg-primary/10 font-medium" : ""} ${clickable ? "cursor-pointer" : ""}`}
-              >
-                <TableCell className="max-sm:col-span-2">
+      {/* Mobile stacked view (eliminates 390px overflow) */}
+      <div className="mt-2 space-y-2 sm:hidden">
+        {rungs.map((r) => {
+          const look = gateLook(r.gate, lang);
+          const clickable = !!onRerun && !r.requested;
+          return (
+            <div
+              key={r.leverage}
+              onClick={clickable ? () => onRerun?.({ leverage: r.leverage }) : undefined}
+              className={`rounded-lg border border-border/70 p-3 text-xs space-y-2 ${r.requested ? "bg-primary/10 border-primary/40 font-medium" : "bg-muted/20"} ${clickable ? "cursor-pointer active:bg-muted/40" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
                   {clickable ? (
                     <button
                       type="button"
@@ -95,30 +82,101 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
                         e.stopPropagation();
                         onRerun?.({ leverage: r.leverage });
                       }}
-                      className="rounded px-1 text-left font-medium underline decoration-dotted underline-offset-4 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                      className="relative inline-flex items-center rounded px-1.5 py-0.5 font-semibold text-foreground underline decoration-dotted underline-offset-4 hover:text-primary after:absolute after:-inset-2.5 after:content-['']"
                       aria-label={L(`Re-run at ${fmtLev(r.leverage)}x`, `按 ${fmtLev(r.leverage)}x 重新运行`)}
                     >
                       {fmtLev(r.leverage)}x
                     </button>
                   ) : (
-                    <span>
-                      {fmtLev(r.leverage)}x <span className="text-xs text-muted-foreground">{L("(yours)", "（你的）")}</span>
+                    <span className="font-semibold text-foreground">
+                      {fmtLev(r.leverage)}x <span className="text-[11px] font-normal text-muted-foreground">{L("(yours)", "（你的）")}</span>
                     </span>
                   )}
-                </TableCell>
-                <TableCell data-label={L("Liquidation price", "强平价")} className={`text-right tabular-nums ${CELL}`}>{fmtPrice(r.liquidation_price)}</TableCell>
-                <TableCell data-label={L("Distance", "距离")} className={`text-right tabular-nums ${CELL}`}>{r.distance_pct == null ? "—" : `${r.distance_pct.toFixed(1)}%`}</TableCell>
-                <TableCell data-label={L("Margin", "保证金")} className={`text-right tabular-nums ${CELL}`}>{fmtUsd(r.margin_quote)}</TableCell>
-                <TableCell data-label={L("Past moments liquidated", "曾被强平的历史时刻")} className={`text-right tabular-nums ${CELL}`}>{r.analog_of ? L(`${r.analog_hits ?? 0} of ${r.analog_of}`, `${r.analog_hits ?? 0} / ${r.analog_of}`) : "—"}</TableCell>
-                <TableCell className="text-right max-sm:col-span-2 max-sm:text-left">
-                  <Pill tone={look.tone}>{look.label}</Pill>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-      <p className="mt-1 text-muted-foreground">{safestLine(l, rungs, lang)}</p>
+                </div>
+                <Pill tone={look.tone}>{look.label}</Pill>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1.5 border-t border-border/40 text-[12px]">
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">{L("Liquidation price", "强平价")}</span>
+                  <span className="tabular-nums font-medium text-foreground">{fmtPrice(r.liquidation_price)}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">{L("Distance", "距离")}</span>
+                  <span className="tabular-nums font-medium text-foreground">{r.distance_pct == null ? "—" : `${r.distance_pct.toFixed(1)}%`}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">{L("Margin", "保证金")}</span>
+                  <span className="tabular-nums font-medium text-foreground">{fmtUsd(r.margin_quote)}</span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted-foreground block">{L("Past moments liquidated", "曾被强平的历史时刻")}</span>
+                  <span className="tabular-nums font-medium text-foreground">{r.analog_of ? L(`${r.analog_hits ?? 0} of ${r.analog_of}`, `${r.analog_hits ?? 0} / ${r.analog_of}`) : "—"}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden sm:block">
+        <Table className="mt-1" role="table">
+          <TableHeader>
+            <TableRow>
+              <TableHead>{L("Leverage", "杠杆")}</TableHead>
+              <TableHead className="text-right">{L("Liquidation price", "强平价")}</TableHead>
+              <TableHead className="text-right">{L("Distance", "距离")}</TableHead>
+              <TableHead className="text-right">{L("Margin", "保证金")}</TableHead>
+              <TableHead className="text-right">{L("Past moments liquidated", "曾被强平的历史时刻")}</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rungs.map((r) => {
+              const look = gateLook(r.gate, lang);
+              const clickable = !!onRerun && !r.requested;
+              return (
+                <TableRow
+                  key={r.leverage}
+                  aria-current={r.requested ? "true" : undefined}
+                  onClick={clickable ? () => onRerun?.({ leverage: r.leverage }) : undefined}
+                  role="row"
+                  className={`${r.requested ? "bg-primary/10 font-medium" : ""} ${clickable ? "cursor-pointer" : ""}`}
+                >
+                  <TableCell>
+                    {clickable ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRerun?.({ leverage: r.leverage });
+                        }}
+                        className="relative inline-flex items-center rounded px-1.5 py-0.5 text-left font-medium underline decoration-dotted underline-offset-4 hover:text-primary after:absolute after:-inset-2.5 after:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                        aria-label={L(`Re-run at ${fmtLev(r.leverage)}x`, `按 ${fmtLev(r.leverage)}x 重新运行`)}
+                      >
+                        {fmtLev(r.leverage)}x
+                      </button>
+                    ) : (
+                      <span>
+                        {fmtLev(r.leverage)}x <span className="text-xs text-muted-foreground">{L("(yours)", "（你的）")}</span>
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{fmtPrice(r.liquidation_price)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.distance_pct == null ? "—" : `${r.distance_pct.toFixed(1)}%`}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmtUsd(r.margin_quote)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.analog_of ? L(`${r.analog_hits ?? 0} of ${r.analog_of}`, `${r.analog_hits ?? 0} / ${r.analog_of}`) : "—"}</TableCell>
+                  <TableCell className="text-right">
+                    <Pill tone={look.tone}>{look.label}</Pill>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      <p className="mt-2 text-muted-foreground">{safestLine(l, rungs, lang)}</p>
     </div>
   );
 }

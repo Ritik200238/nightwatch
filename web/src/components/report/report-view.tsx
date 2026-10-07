@@ -958,7 +958,20 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <StressSection report={report} openAll={openAll} lang={lang} />
       <MarketContext report={report} lang={lang} />
 
-      <Group tier="primary" title={L("Evidence", "证据")} hint={L("What the answer assumes, today's inputs, exit cost, the limits, the case against, what would change it", "结论的前提、当前输入、平仓成本、各项限额、反面意见、什么会改变结论")} openAll={openAll}>
+      <Group
+        tier="primary"
+        title={L("Evidence", "证据")}
+        takeaway={
+          report.execution.exit_quote?.total_cost_bps != null
+            ? L(
+                `${fmtBps(report.execution.exit_quote.total_cost_bps)} exit cost · ${report.sources.length} sources checked`,
+                `平仓成本 ${fmtBps(report.execution.exit_quote.total_cost_bps)} · 已核对 ${report.sources.length} 个数据源`
+              )
+            : L(`${report.sources.length} sources checked`, `已核对 ${report.sources.length} 个数据源`)
+        }
+        hint={L("What the answer assumes, today's inputs, exit cost, the limits, the case against, what would change it", "结论的前提、当前输入、平仓成本、各项限额、反面意见、什么会改变结论")}
+        openAll={openAll}
+      >
         <SourceEffects report={report} lang={lang} />
         <Assumptions report={report} openAll={openAll} lang={lang} />
       {/* Now */}
@@ -1165,7 +1178,19 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
 
       </Group>
 
-      <Group title={L("Your book", "你的组合")} hint={L("How this trade sits next to what you already hold, your own record, what happened last time", "这笔交易与你已有持仓的关系、你自己的记录、上次发生了什么")} openAll={openAll}>
+      <Group
+        title={L("Your book", "你的组合")}
+        takeaway={
+          report.portfolio
+            ? L(
+                `${report.portfolio.positions.length} position${report.portfolio.positions.length === 1 ? "" : "s"} · ${fmtUsd(report.portfolio.positions.reduce((s, p) => s + (p.notional_quote || 0), 0))} total`,
+                `${report.portfolio.positions.length} 个持仓 · 总额 ${fmtUsd(report.portfolio.positions.reduce((s, p) => s + (p.notional_quote || 0), 0))}`
+              )
+            : undefined
+        }
+        hint={L("How this trade sits next to what you already hold, your own record, what happened last time", "这笔交易与你已有持仓的关系、你自己的记录、上次发生了什么")}
+        openAll={openAll}
+      >
       {/* The whole book */}
       <PortfolioSection report={report} openAll={openAll} lang={lang} />
 
@@ -1177,7 +1202,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
 
       </Group>
 
-      <Group title={L("Alerts & plan", "提醒与计划")} hint={L("The plan to follow, a tripwire, watching this verdict, your feedback", "要遵守的计划、触发提醒、关注这个结论、你的反馈")} openAll={openAll}>
+      <Group
+        title={L("Alerts & plan", "提醒与计划")}
+        takeaway={L("Stop plan & tripwire monitoring", "止损计划与异动监控")}
+        hint={L("The plan to follow, a tripwire, watching this verdict, your feedback", "要遵守的计划、触发提醒、关注这个结论、你的反馈")}
+        openAll={openAll}
+      >
         {report.forecast_id != null && report.forecast_id > 0 ? <PlanCard forecastId={report.forecast_id} lang={lang} openAll={openAll} /> : null}
         {report.forecast_id != null && report.forecast_id > 0 ? (
           <div className="space-y-3">
@@ -1188,7 +1218,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         ) : null}
       </Group>
 
-      <Group title={L("Research", "研究")} hint={L("What the street says, Bitget signal, the book contrast", "市场观点、Bitget 信号、组合对比")} openAll={openAll}>
+      <Group
+        title={L("Research", "研究")}
+        takeaway={L("Street consensus & Bitget signal", "华尔街一致预期与 Bitget 信号")}
+        hint={L("What the street says, Bitget signal, the book contrast", "市场观点、Bitget 信号、组合对比")}
+        openAll={openAll}
+      >
         <StreetSection report={report} openAll={openAll} lang={lang} />
         <BitgetSection report={report} openAll={openAll} lang={lang} />
         <SignalLine report={report} lang={lang} />

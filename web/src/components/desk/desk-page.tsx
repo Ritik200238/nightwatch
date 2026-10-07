@@ -220,7 +220,7 @@ export default function DeskPage() {
     </div>
     {/* While the hero is up there is one input on the page (the hero's); the Chat/Ticket rail
         appears once a trade has been asked for, or when the reader asks for the form. */}
-    <div className={heroUp ? "mx-auto grid w-full max-w-5xl gap-6" : "grid gap-6 lg:grid-cols-[380px_1fr]"}>
+    <div className={heroUp ? "grid w-full gap-6" : "grid gap-6 lg:grid-cols-[380px_1fr]"}>
       <aside className={`min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start ${heroUp ? "hidden" : ""}`}>
         {/* While the hero is up it carries the h1, the pitch and the demo trades; the rail
             repeats none of them, and takes over once the hero is gone. */}
@@ -429,7 +429,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const { lang, tx } = useLang();
   const text = draft.trim();
   return (
-    <section className="px-1 pb-2 pt-4 sm:px-2 sm:pt-10" aria-label={tx("Describe a trade", "描述一笔交易")}>
+    <section className="pb-2 pt-4 sm:pt-10" aria-label={tx("Describe a trade", "描述一笔交易")}>
       <h1 className={`text-balance text-[1.75rem] font-semibold leading-[1.15] tracking-tight sm:text-5xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
       <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:mt-4 sm:text-lg">
         {tx("A pre-trade desk for tokenized US stocks on Bitget. ", "Bitget 上代币化美股的交易前工作台。")}
@@ -470,7 +470,36 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           {tx("Get the verdict", "获取结论")}
         </Button>
       </form>
-      <ul className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={exampleDisabled}
+          onClick={onExample}
+          title={tx("Run the example trade below live, right now", "立即实时运行下面的示例交易")}
+          className="min-h-10 text-xs sm:text-sm font-medium"
+        >
+          {tx("Run the TSLA example live", "实时运行 TSLA 示例")}
+        </Button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onContrast}
+          title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")}
+          className="inline-flex min-h-10 items-center px-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+        >
+          {tx("Same trade, different book", "同一笔交易，不同组合")}
+        </button>
+        <button
+          type="button"
+          onClick={onForm}
+          className="inline-flex min-h-10 items-center px-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          {tx("Use the ticket form", "使用表单")}
+        </button>
+      </div>
+      <ul className="mt-3 flex flex-wrap gap-2">
         {HERO_CHIPS.map((c) => (
           <li key={c.en} className="shrink-0">
             <button
@@ -485,18 +514,6 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           </li>
         ))}
       </ul>
-      {/* Two quieter ways in, as plain links so the chips and the one button stay the only loud things. */}
-      <p className="mt-3 flex flex-wrap items-center gap-x-5 text-[13px] text-muted-foreground">
-        <button type="button" disabled={exampleDisabled} onClick={onExample} title={tx("Run the example trade below live, right now", "立即实时运行下面的示例交易")} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground disabled:opacity-50 sm:min-h-8">
-          {tx("Run the TSLA example live", "实时运行 TSLA 示例")}
-        </button>
-        <button type="button" disabled={busy} onClick={onContrast} title={tx("Run one trade alone and on a concentrated book, side by side", "把同一笔交易单独运行，并叠加在集中的组合上，并排对比")} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground disabled:opacity-50 sm:min-h-8">
-          {tx("Same trade, different book", "同一笔交易，不同组合")}
-        </button>
-        <button type="button" onClick={onForm} className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground sm:min-h-8">
-          {tx("Use the ticket form", "使用表单")}
-        </button>
-      </p>
       <HeroProof />
     </section>
   );
@@ -504,12 +521,15 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
 
 function ReportSkeleton() {
   return (
-    <div className="space-y-4">
-      <Working />
-      <Skeleton className="h-36 w-full rounded-lg" aria-hidden />
-      <Skeleton className="h-28 w-full rounded-lg" />
-      <Skeleton className="h-72 w-full rounded-lg" />
-      <Skeleton className="h-64 w-full rounded-lg" />
+    <div className="space-y-6">
+      <div className="rounded-xl border border-border/80 bg-card/60 p-5 shadow-xs">
+        <Working />
+      </div>
+      <div className="space-y-4 opacity-40">
+        <Skeleton className="h-32 w-full rounded-xl" aria-hidden />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
     </div>
   );
 }

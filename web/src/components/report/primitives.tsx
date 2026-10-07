@@ -88,7 +88,7 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
         onFocus={open}
         onBlur={() => setPos(null)}
         onClick={() => (pos ? setPos(null) : open())}
-        className={`group/chip relative -mx-1 -my-3 inline-flex min-h-10 min-w-10 items-center justify-center text-[11px] font-medium leading-4 whitespace-nowrap focus-visible:outline-none ${st.text}`}
+        className={`group/chip relative -mx-1 -my-3 inline-flex min-h-10 min-w-10 items-center justify-center text-xs font-medium leading-4 whitespace-nowrap focus-visible:outline-none ${st.text}`}
       >
         {/* The button is 40 px tall for a finger; the visible chip inside keeps its small size. */}
         <span className={`inline-flex items-center gap-1 rounded-full border border-border/70 group-hover/chip:border-border group-focus-visible/chip:ring-2 group-focus-visible/chip:ring-ring ${dot ? "p-1" : "px-1.5 py-px"}`}>
@@ -113,7 +113,7 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
 export function SourceLegend({ lang }: { lang: Lang }) {
   const kinds: ProvKind[] = ["live", "history", "assumed", "ai"];
   const kindTag = (k: ProvKind) => (
-    <span className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-medium ${KIND_STYLE[k].text}`}>
+    <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-medium ${KIND_STYLE[k].text}`}>
       <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${KIND_STYLE[k].dot}`} />
       {lang === "zh" ? KIND_NAME[k].zh : KIND_NAME[k].en}
     </span>

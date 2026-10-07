@@ -140,19 +140,37 @@ export default function TonightPage() {
         ) : null}
 
         {!report && !busy && !error ? (
-          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-8 text-center">
-            <Moon className="h-6 w-6 text-muted-foreground" aria-hidden />
-            <p className="font-medium">{tx("Nothing on the watch yet", "还没有盯任何持仓")}</p>
-            <p className="max-w-md text-sm text-muted-foreground">
-              {tx("Add the positions you are carrying and this page will tell you which of them has earnings landing overnight, which one the book will not absorb at three in the morning, and which one carries the widest tail between now and the open.", "添加你持有的仓位，这个页面会告诉你：哪个有财报在夜间发布，哪个在凌晨三点盘口接不住，哪个从现在到开盘之间的尾部风险最大。")}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {tx("Or", "或者在交易台")}{" "}
-              <Link href="/" className="underline underline-offset-2">
-                {tx("stress-test something new", "测试一笔新的交易")}
-              </Link>{" "}
-              {tx("on the desk.", "。")}
-            </p>
+          <div className="flex min-h-[400px] flex-col items-center justify-center gap-5 rounded-xl border border-dashed border-border p-8 text-center sm:p-12">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/60">
+              <Moon className="h-6 w-6 text-foreground/80" aria-hidden />
+            </div>
+            <div className="max-w-lg space-y-2">
+              <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                {tx("Overnight risk audit for your open tokenized-stock positions before market open.", "在市场开盘前，对您持有的代币化美股仓位进行隔夜风险全面审计。")}
+              </h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {tx("Checks which positions face overnight earnings or filings, whether thin books can absorb your exit at 3 AM, and which asset carries the widest tail before the bell.", "检测哪些持仓面临隔夜财报或突发披露、凌晨三点盘口是否接得住平仓、以及开盘前哪个资产尾部风险最大。")}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <Button
+                variant="default"
+                size="default"
+                className="min-h-10 px-5"
+                onClick={() => setPositions([
+                  { ticker: "TSLA", side: "long", notional_quote: 10000 },
+                  { ticker: "NVDA", side: "long", notional_quote: 15000 },
+                ])}
+              >
+                {tx("Load sample positions (TSLA + NVDA)", "载入示例持仓（TSLA + NVDA）")}
+              </Button>
+              <Link
+                href="/"
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                {tx("Stress-test a new trade on desk", "在交易台测试新交易")}
+              </Link>
+            </div>
           </div>
         ) : null}
 

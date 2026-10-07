@@ -73,19 +73,44 @@ export function ProofStrip({ stocks }: { stocks: number | null }) {
         {stocks ? <span className="font-normal text-muted-foreground"> · {tx(`${stocks} tokenized US stocks`, `${stocks} 只代币化美股`)}</span> : null}
       </p>
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
-        {pieces.map((p) => (
-          <li key={p.key} className="inline-flex items-center gap-1.5">
-            <span aria-hidden title={p.partial && p.note ? tx(`Partly live: ${p.note} answering`, `部分正常：${p.note}可用`) : undefined} className={`h-2 w-2 rounded-full ${p.ok === true && p.partial ? "bg-amber-500" : p.ok === true ? "bg-emerald-500" : p.ok === false ? "bg-amber-500" : "bg-muted-foreground/40"}`} />
-            {p.href ? (
-              <a href={p.href} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
-                {tx(p.en, p.zh)}
-              </a>
-            ) : (
-              tx(p.en, p.zh)
-            )}
-            <span className="sr-only">{p.ok === true && p.partial ? tx(`partly live, ${p.note} answering`, `部分正常，${p.note}可用`) : p.ok === true ? tx("live", "正常") : p.ok === false ? tx("stale", "过期") : tx("checking", "检查中")}</span>
-          </li>
-        ))}
+        {pieces.map((p) => {
+          const isMcpOffline = p.key === "mcp" && p.ok === false;
+          const dotColor = isMcpOffline
+            ? "bg-muted-foreground/40"
+            : p.ok === true && p.partial
+            ? "bg-amber-500"
+            : p.ok === true
+            ? "bg-emerald-500"
+            : p.ok === false
+            ? "bg-amber-500"
+            : "bg-muted-foreground/40";
+          return (
+            <li key={p.key} className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                title={
+                  isMcpOffline
+                    ? tx("Upstream feed temporarily offline (HTTP 503)", "上游数据源暂时离线（HTTP 503）")
+                    : p.partial && p.note
+                    ? tx(`Partly live: ${p.note} answering`, `部分正常：${p.note}可用`)
+                    : undefined
+                }
+                className={`h-2 w-2 rounded-full ${dotColor}`}
+              />
+              {p.href ? (
+                <a href={p.href} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">
+                  {tx(p.en, p.zh)}
+                </a>
+              ) : (
+                <span>
+                  {tx(p.en, p.zh)}
+                  {isMcpOffline ? <span className="ml-1 text-xs text-muted-foreground/70">{tx("(upstream offline)", "(上游离线)")}</span> : null}
+                </span>
+              )}
+              <span className="sr-only">{p.ok === true && p.partial ? tx(`partly live, ${p.note} answering`, `部分正常，${p.note}可用`) : p.ok === true ? tx("live", "正常") : p.ok === false ? tx("stale", "过期") : tx("checking", "检查中")}</span>
+            </li>
+          );
+        })}
       </ul>
       <p className="text-[13px] text-muted-foreground">
         <Link href="/status" className="underline underline-offset-2 hover:text-foreground">

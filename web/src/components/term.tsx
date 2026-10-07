@@ -162,7 +162,7 @@ export function Term({ k, children }: { k: TermKey; children?: ReactNode }) {
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
         }}
-        className="relative cursor-help rounded-sm [@media(pointer:coarse)]:after:absolute [@media(pointer:coarse)]:after:-inset-x-4 [@media(pointer:coarse)]:after:-inset-y-3 [@media(pointer:coarse)]:after:content-[''] underline decoration-muted-foreground/70 decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="relative cursor-help rounded-sm after:absolute after:-inset-x-3 after:-inset-y-2 after:content-[''] underline decoration-muted-foreground/70 decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         {children ?? entry.label[i]}
       </button>

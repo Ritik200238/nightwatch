@@ -164,38 +164,68 @@ function ConditionTable({ stats, labels }: { stats: Record<string, number>; labe
   const num = (v: number | undefined, d = 2) => (v == null || !Number.isFinite(v) ? "—" : v.toFixed(d));
   return (
     <div>
-      <ScrollTable>
-      <table className="w-full min-w-[560px] text-[13px]">
-        <thead>
-          <tr className="border-b border-border text-left text-muted-foreground">
-            <th className="py-1 pr-3 font-medium">{tx("condition", "条件")}</th>
-            <th className="py-1 pr-3 text-right font-medium">{tx("nights", "夜数")}</th>
-            <th className="py-1 pr-3 text-right font-medium">{tx("below p5, all hours", "低于 p5，全部小时")}</th>
-            <th className="py-1 pr-3 text-right font-medium">{tx("below p5, narrowed", "低于 p5，收窄后")}</th>
-            <th className="py-1 pr-3 text-right font-medium">{tx("typical p5, all → narrowed", "典型 p5：全部 → 收窄后")}</th>
-            <th className="py-1 text-right font-medium"><Term k="clustered">{tx("t, by token", "t 值，按代币")}</Term></th>
-          </tr>
-        </thead>
-        <tbody className="tabular">
-          {rows.map(([name, r]) => (
-            <tr key={name} className="border-b border-border/50">
-              <td className="py-1 pr-3">{labels[name] ?? name.replace(/_/g, " ")}</td>
-              <td className="py-1 pr-3 text-right">{num(r.n, 0)}</td>
-              <td className="py-1 pr-3 text-right">{pct(r.breach_all)}</td>
-              <td className="py-1 pr-3 text-right">
-                {pct(r.breach_lens)}
-                {r.breach_lens_lo != null ? <span className="text-muted-foreground"> [{pct(r.breach_lens_lo)}–{pct(r.breach_lens_hi)}]</span> : null}
-              </td>
-              <td className="py-1 pr-3 text-right">
-                {r.p5_all_median != null ? `${num(r.p5_all_median, 1)}% → ${num(r.p5_lens_median, 1)}%` : "—"}
-              </td>
-              <td className="py-1 text-right">{num(r.t_clustered, 1)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </ScrollTable>
-      <p className="mt-1 text-muted-foreground">{tx("Target for both breach columns is 5%. A positive t means the narrowed tail scored better.", "两列突破率的目标都是 5%。t 为正表示收窄后的尾部评分更好。")}</p>
+      <div className="hidden md:block">
+        <ScrollTable>
+          <table className="w-full min-w-[560px] text-[13px]">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground">
+                <th className="py-1 pr-3 font-medium">{tx("condition", "条件")}</th>
+                <th className="py-1 pr-3 text-right font-medium">{tx("nights", "夜数")}</th>
+                <th className="py-1 pr-3 text-right font-medium">{tx("below p5, all hours", "低于 p5，全部小时")}</th>
+                <th className="py-1 pr-3 text-right font-medium">{tx("below p5, narrowed", "低于 p5，收窄后")}</th>
+                <th className="py-1 pr-3 text-right font-medium">{tx("typical p5, all → narrowed", "典型 p5：全部 → 收窄后")}</th>
+                <th className="py-1 text-right font-medium"><Term k="clustered">{tx("t, by token", "t 值，按代币")}</Term></th>
+              </tr>
+            </thead>
+            <tbody className="tabular">
+              {rows.map(([name, r]) => (
+                <tr key={name} className="border-b border-border/50">
+                  <td className="py-1 pr-3 font-medium">{labels[name] ?? name.replace(/_/g, " ")}</td>
+                  <td className="py-1 pr-3 text-right">{num(r.n, 0)}</td>
+                  <td className="py-1 pr-3 text-right">{pct(r.breach_all)}</td>
+                  <td className="py-1 pr-3 text-right">
+                    {pct(r.breach_lens)}
+                    {r.breach_lens_lo != null ? <span className="text-muted-foreground"> [{pct(r.breach_lens_lo)}–{pct(r.breach_lens_hi)}]</span> : null}
+                  </td>
+                  <td className="py-1 pr-3 text-right">
+                    {r.p5_all_median != null ? `${num(r.p5_all_median, 1)}% → ${num(r.p5_lens_median, 1)}%` : "—"}
+                  </td>
+                  <td className="py-1 text-right">{num(r.t_clustered, 1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </div>
+      <div className="md:hidden space-y-2.5">
+        {rows.map(([name, r]) => (
+          <div key={name} className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs space-y-1.5">
+            <div className="flex items-center justify-between font-medium">
+              <span>{labels[name] ?? name.replace(/_/g, " ")}</span>
+              <span className="text-muted-foreground tabular-nums">{num(r.n, 0)} {tx("nights", "夜")}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[12px] pt-1 border-t border-border/40">
+              <div>
+                <span className="text-muted-foreground block text-[11px]">{tx("Below p5 (all → narrowed)", "低于 p5（全部 → 收窄）")}</span>
+                <span className="tabular-nums font-medium text-foreground">
+                  {pct(r.breach_all)} → {pct(r.breach_lens)}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[11px]">{tx("Typical p5", "典型 p5")}</span>
+                <span className="tabular-nums font-medium text-foreground">
+                  {r.p5_all_median != null ? `${num(r.p5_all_median, 1)}% → ${num(r.p5_lens_median, 1)}%` : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[12px] pt-1 border-t border-border/40">
+              <span className="text-muted-foreground text-[11px]">{tx("t, by token", "t 值，按代币")}</span>
+              <span className="tabular-nums font-medium text-foreground">{num(r.t_clustered, 1)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{tx("Target for both breach columns is 5%. A positive t means the narrowed tail scored better.", "两列突破率的目标都是 5%。t 为正表示收窄后的尾部评分更好。")}</p>
     </div>
   );
 }
@@ -429,19 +459,29 @@ export default function StudiesPage() {
                   </Pill>
                 }
               >
-                <div className="space-y-3 text-sm">
+                <div className="space-y-4 text-sm">
+                  <div className="rounded-lg border border-border/70 bg-muted/40 p-3 space-y-1.5">
+                    <p className="text-xs font-medium text-foreground">
+                      <span className="font-semibold text-foreground/70 mr-1.5">{tx("Finding:", "发现：")}</span>
+                      <span lang="en">{s.finding}</span>
+                    </p>
+                    <p className="text-xs font-medium text-foreground">
+                      <span className="font-semibold text-foreground/70 mr-1.5">{tx("Action taken:", "采取的行动：")}</span>
+                      <span lang="en">{s.consequence}</span>
+                    </p>
+                  </div>
                   <div>
                     <p className="t-label">{tx("How it was tested", "怎么检验的")}</p>
-                    <p lang="en" className="mt-1 text-muted-foreground">{s.method}</p>
+                    <p lang="en" className="mt-1 text-foreground/80 leading-relaxed">{s.method}</p>
                   </div>
                   <div>
                     <p className="t-label">{tx("What came back", "结果如何")}</p>
-                    <p lang="en" className="mt-1 leading-relaxed">{s.finding}</p>
+                    <p lang="en" className="mt-1 leading-relaxed text-foreground/90">{s.finding}</p>
                   </div>
                   <Significance s={s} m={rep.fdr?.m_tests} />
-                  <div className="border-l-2 border-foreground/25 pl-4">
+                  <div className="border-l-2 border-foreground/30 pl-4">
                     <p className="t-label">{tx("What changed because of it", "因此改变了什么")}</p>
-                    <p lang="en" className="mt-1 leading-relaxed">{s.consequence}</p>
+                    <p lang="en" className="mt-1 leading-relaxed text-foreground/90">{s.consequence}</p>
                   </div>
                   {Object.keys(s.stats).length ? (
                     <div>

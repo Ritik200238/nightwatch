@@ -55,7 +55,7 @@ export function useLang(): LangCtx {
 /** Compact EN / 中文 switch for the header. */
 export function LangToggle() {
   const { lang, setLang } = useLang();
-  const base = "min-h-10 min-w-10 px-2 py-1 text-xs sm:min-h-0 sm:min-w-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+  const base = "min-h-10 min-w-10 px-2.5 py-1 text-xs focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
   return (
     <div role="group" aria-label="Language / 语言" className="inline-flex shrink-0 overflow-hidden rounded-md border border-border">
       {(["en", "zh"] as const).map((l) => (

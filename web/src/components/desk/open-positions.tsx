@@ -119,7 +119,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
               <span className="font-medium">{p.ticker}</span>
               <span className="text-muted-foreground">{p.side === "long" ? tx("long", "做多") : tx("short", "做空")}</span>
               <span className="tabular ml-auto">{p.notional_quote.toLocaleString()} USDT</span>
-              <Button variant="ghost" size="icon" aria-label={tx(`Remove ${p.ticker}`, `移除 ${p.ticker}`)} onClick={() => onChange(positions.filter((_, j) => j !== i))}>
+              <Button variant="ghost" size="icon" className="h-10 w-10 min-h-10 min-w-10" aria-label={tx(`Remove ${p.ticker}`, `移除 ${p.ticker}`)} onClick={() => onChange(positions.filter((_, j) => j !== i))}>
                 <Trash2 className="h-4 w-4" aria-hidden />
               </Button>
             </li>
@@ -134,7 +134,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
             {tx("Token", "代币")}
           </Label>
           <Select value={ticker} onValueChange={(v) => setTicker(v ?? "")}>
-            <SelectTrigger id="pos-ticker" className="w-full">
+            <SelectTrigger id="pos-ticker" className="h-10 min-h-10 w-full">
               <SelectValue placeholder={tx("Token", "代币")} />
             </SelectTrigger>
             <SelectContent>
@@ -151,7 +151,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
             {tx("Side", "方向")}
           </Label>
           <Select value={side} onValueChange={(v) => setSide((v as Side) ?? "long")}>
-            <SelectTrigger id="pos-side">
+            <SelectTrigger id="pos-side" className="h-10 min-h-10">
               <SelectValue>{side === "short" ? tx("short", "做空") : tx("long", "做多")}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -171,6 +171,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
             min={MIN_SIZE}
             max={MAX_SIZE}
             step="any"
+            className="h-10 min-h-10"
             value={size}
             onChange={(e) => {
               setSize(e.target.value);
@@ -187,7 +188,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
             autoComplete="off"
           />
         </div>
-        <Button type="button" variant="default" onClick={add} disabled={!size.trim()}>
+        <Button type="button" variant="default" className="h-10 min-h-10 px-3" onClick={add} disabled={!size.trim()}>
           {tx("Add", "添加")}
         </Button>
       </div>

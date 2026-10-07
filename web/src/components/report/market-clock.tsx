@@ -107,7 +107,7 @@ export function MarketClock({ report, lang = "en" }: { report: Report; lang?: La
           <span key={`${m.kind}-${m.at}`} className="absolute inset-y-0 w-0.5 bg-foreground/70" style={{ left: pct(m.at) }} />
         ))}
       </div>
-      <div className="relative mt-1 h-4 text-[11px] text-muted-foreground">
+      <div className="relative mt-1 h-4 text-xs text-muted-foreground">
         <span className="absolute left-0">{deferred ? L("hold starts", "持仓开始") : L("analysed", "分析时")}</span>
         <span className="absolute right-0">{L("hold ends", "持仓结束")}</span>
       </div>
