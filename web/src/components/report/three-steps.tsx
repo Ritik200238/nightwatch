@@ -45,7 +45,7 @@ function whoDecided(report: Report): { step: Driver; en: string; zh: string } {
 
 function StepCard({ n, title, active, children, lang }: { n: 1 | 2 | 3; title: string; active: boolean; children: ReactNode; lang: Lang }) {
   return (
-    <li className={`min-w-0 rounded-lg border px-3 py-3 ${active ? "border-primary bg-primary/5" : "border-border bg-muted/20"}`}>
+    <li className={`min-w-0 border-t-2 pt-3 ${active ? "border-primary" : "border-border"}`}>
       <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden>
           {n}
@@ -113,7 +113,7 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
   const windows = Math.max(...report.stress.presets.map((p) => Number(p.calibration?.closed_windows ?? 1)), 1);
 
   return (
-    <section aria-label={L("The three steps behind this verdict", "这个结论背后的三个步骤")} className="rounded-xl border border-border bg-card px-3 py-3 sm:px-4">
+    <section aria-label={L("The three steps behind this verdict", "这个结论背后的三个步骤")} className="border-t border-border pt-4">
       <p className="mb-2 text-sm font-semibold">
         {L("How this verdict was built", "这个结论是怎么得出的")}
         <span className="ml-2 font-normal text-muted-foreground">{L("Step 1 → Step 2 → Step 3 → Verdict", "第 1 步 → 第 2 步 → 第 3 步 → 结论")}</span>
@@ -201,7 +201,7 @@ export function ThreeSteps({ report, lang }: { report: Report; lang: Lang }) {
           </ul>
         </StepCard>
       </ol>
-      <p className="mt-3 rounded-lg bg-muted/40 px-3 py-2 text-sm" data-testid="verdict-trace">
+      <p className="mt-4 border-t border-border pt-3 text-sm" data-testid="verdict-trace">
         <span className="font-semibold">→ {L("Verdict", "结论")}: {verdictName}</span>
         <span className="text-muted-foreground">
           {" "}

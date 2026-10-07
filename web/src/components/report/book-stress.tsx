@@ -128,7 +128,7 @@ export function BookStressView({ stress, lang }: { stress: BookStress; lang: Lan
         </div>
       ) : null}
       {limit && stress.direction && limit.shock_pct_after != null ? (
-        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+        <div className="border-l-2 border-border pl-3 text-sm text-muted-foreground">
           <p className="font-medium text-foreground">{L("How far from the limit", "离上限还有多远")}</p>
           <p>
             {L(

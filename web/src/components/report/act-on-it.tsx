@@ -174,7 +174,7 @@ function EntryPlanNote({ report, symbol, lang }: { report: Report; symbol: strin
     line = L(`Getting in: ${p.note}.`, `入场：${p.note}。`);
   }
   return (
-    <div className="mt-1 w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+    <div className="mt-1 w-full border-l-2 border-border pl-3 text-sm text-muted-foreground">
       <p>{line}</p>
       {prompt ? (
         <button

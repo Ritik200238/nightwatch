@@ -51,7 +51,7 @@ export function MarketContext({ report, lang }: { report: Report; lang: Lang }) 
   const oi = report.leverage?.ladder?.length ? null : report.open_interest;
   if (!o && !oi) return null;
   return (
-    <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+    <div className="mt-3 border-l-2 border-border pl-3 text-sm">
       <p className="font-medium text-foreground">{L("What the markets around it say", "周边市场的信号")}</p>
       {o ? (
         <p className="mt-1 text-foreground">

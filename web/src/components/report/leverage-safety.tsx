@@ -54,7 +54,7 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
   const rungs = l?.ladder ?? [];
   if (!l || !rungs.length) return null;
   return (
-    <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+    <div className="mt-3 border-l-2 border-border pl-3 text-sm">
       <p className="font-medium text-foreground">{L("Leverage safety", "杠杆安全")}</p>
       <p className="text-[13px] text-muted-foreground">
         {L("The same position at each level, judged on the same past moments. This table judges liquidation risk only; the verdict above also weighs size, risk budget and exit cost.", "同一个仓位在各个杠杆下的情况，用同样的历史时刻来衡量。这张表只判断强平风险；上面的结论还要看仓位大小、风险预算和平仓成本。")}

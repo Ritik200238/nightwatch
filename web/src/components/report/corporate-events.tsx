@@ -36,7 +36,7 @@ export function CorporateEventsNote({ report, lang }: { report: Report; lang: La
   }
   const warn = inside.length > 0 || notices.some((n) => n.kind === "suspension");
   return (
-    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${warn ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
+    <div className={`mt-3 border-l-2 pl-3 text-sm ${warn ? "border-status-warning" : "border-border"}`}>
       <span className="font-medium text-foreground">{L("Dividends and splits: ", "分红与拆股：")}</span>
       {inside.length ? (
         <span className="text-muted-foreground">

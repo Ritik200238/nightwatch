@@ -72,7 +72,7 @@
   --secondary: oklch(0.955 0.005 250);
   --secondary-foreground: oklch(0.22 0.01 250);
   --muted: oklch(0.955 0.005 250);
-  --muted-foreground: oklch(0.45 0.015 250);
+  --muted-foreground: oklch(0.42 0.015 250);
   --accent: oklch(0.955 0.005 250);
   --accent-foreground: oklch(0.22 0.01 250);
   --destructive: oklch(0.5 0.2 27);
@@ -117,7 +117,7 @@
   --secondary: oklch(0.26 0.01 250);
   --secondary-foreground: oklch(0.93 0.005 250);
   --muted: oklch(0.24 0.01 250);
-  --muted-foreground: oklch(0.72 0.012 250);
+  --muted-foreground: oklch(0.75 0.012 250);
   --accent: oklch(0.26 0.01 250);
   --accent-foreground: oklch(0.93 0.005 250);
   --destructive: oklch(0.7 0.19 22);
@@ -192,4 +192,50 @@
 }
 :root:not(.dark) .text-status-good {
   color: #0a710a;
+}
+
+/*
+ * Type scale. Four steps plus a label, each with its own line-height, so a page is built
+ * from the same few sizes everywhere. Caption is the smallest running text (13 px) and uses
+ * the muted colour, which is >= 4.5:1 on the page, card and muted surfaces in both themes.
+ * Spacing follows a 4/8 px rhythm: 8 inside a group, 24 between sections, 32 between blocks.
+ */
+@utility t-display {
+  font-size: 1.75rem;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+@utility t-title {
+  font-size: 1.5rem;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+@utility t-heading {
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+@utility t-body {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+@utility t-caption {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  /* Chinese: keep short words whole (有利, not 有 / 利); break only at punctuation. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+}
+@utility t-label {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
 }

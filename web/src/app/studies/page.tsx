@@ -3,8 +3,7 @@
 import { CheckCircle2, CircleHelp, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Pill, Section, Stat } from "@/components/report/primitives";
-import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { Digest, DigestRow, Figure as Stat, LoadingRecord, OpenSection as Section, PageHead, PlainBox, PROOF_STACK, PROOF_WIDTH, ScrollTable, Tag as Pill } from "@/components/proof-page";
 import { Term } from "@/components/term";
 import { api, peek, type StudiesResponse, type Study } from "@/lib/api";
 import { fmtTimeL } from "@/lib/i18n";
@@ -305,7 +304,7 @@ export default function StudiesPage() {
   const unclear = rep?.studies.filter((s) => s.verdict === "unclear").length ?? 0;
 
   return (
-    <div className={`${PROOF_WIDTH} space-y-4`}>
+    <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
       <PageHead
         tabs
         title={tx("What we tested about our own retrieval", "我们对自己的检索做了哪些检验")}
@@ -318,31 +317,26 @@ export default function StudiesPage() {
         }
       />
       {rep?.studies.length ? (
-        <div className="rounded-lg border border-border bg-card p-4 text-sm">
-          <p className="font-medium">{tx("The short version", "一句话版本")}</p>
-          <ul className="mt-2 space-y-2">
-            <li>
-              <Pill tone="muted">{tx("Tested", "检验了什么")}</Pill>{" "}
-              {tx(`${rep.studies.length} claims about our own method, each written so it could fail.`, `关于我们自己方法的 ${rep.studies.length} 个主张，每个都写成可能被证伪的形式。`)}
-            </li>
-            {yes ? (
-              <li>
-                <Pill tone="good">{tx(`Passed (${yes})`, `通过（${yes}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "yes").map(studyTitle).join(" · ")}
-              </li>
-            ) : null}
-            {no ? (
-              <li>
-                <Pill tone="warning">{tx(`Failed (${no})`, `未通过（${no}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "no").map(studyTitle).join(" · ")}
-              </li>
-            ) : null}
-            {unclear ? (
-              <li>
-                <Pill tone="muted">{tx(`Too early (${unclear})`, `还太早（${unclear}）`)}</Pill> {rep.studies.filter((s) => s.verdict === "unclear").map(studyTitle).join(" · ")}
-              </li>
-            ) : null}
-          </ul>
-          <p className="mt-2 text-[13px] text-muted-foreground">{tx("Each question opens below with how it was tested and what changed. Statistical detail comes after that.", "每个问题在下面展开，说明怎么检验、因此改变了什么。统计细节在其后。")}</p>
-        </div>
+        <Digest title={tx("The short version", "一句话版本")} note={tx("Each question opens below with how it was tested and what changed. Statistical detail comes after that.", "每个问题在下面展开，说明怎么检验、因此改变了什么。统计细节在其后。")}>
+          <DigestRow tag={<Pill tone="muted">{tx("Tested", "检验了什么")}</Pill>}>
+            {tx(`${rep.studies.length} claims about our own method, each written so it could fail.`, `关于我们自己方法的 ${rep.studies.length} 个主张，每个都写成可能被证伪的形式。`)}
+          </DigestRow>
+          {yes ? (
+            <DigestRow tag={<Pill tone="good">{tx(`Passed (${yes})`, `通过（${yes}）`)}</Pill>}>
+              {rep.studies.filter((s) => s.verdict === "yes").map(studyTitle).join(" · ")}
+            </DigestRow>
+          ) : null}
+          {no ? (
+            <DigestRow tag={<Pill tone="warning">{tx(`Failed (${no})`, `未通过（${no}）`)}</Pill>}>
+              {rep.studies.filter((s) => s.verdict === "no").map(studyTitle).join(" · ")}
+            </DigestRow>
+          ) : null}
+          {unclear ? (
+            <DigestRow tag={<Pill tone="muted">{tx(`Too early (${unclear})`, `还太早（${unclear}）`)}</Pill>}>
+              {rep.studies.filter((s) => s.verdict === "unclear").map(studyTitle).join(" · ")}
+            </DigestRow>
+          ) : null}
+        </Digest>
       ) : null}
       {rep?.studies.length ? (
         <PlainBox>
@@ -361,7 +355,7 @@ export default function StudiesPage() {
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">{tx("Couldn't load the studies", "无法加载研究")}</p>
-          <p className="text-[13px] text-muted-foreground">{error}</p>
+          <p className="t-caption">{error}</p>
         </div>
       ) : null}
 
@@ -381,14 +375,14 @@ export default function StudiesPage() {
             title={tx("The scoreboard", "记分牌")}
             subtitle={tx(`Last recomputed ${rep.last_run ? fmtTimeL(rep.last_run, lang) : "unknown"}. Every number on this page is derived from the stored bars and the journal by \`nightwatch studies\`; none of it is typed in.`, `上次重新计算：${rep.last_run ? fmtTimeL(rep.last_run, lang) : "未知"}。本页的每个数字都由 \`nightwatch studies\` 从存储的 K 线和日志推导而来，没有一个是手填的。`)}
           >
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
               <Stat label={tx("Questions asked", "提出的问题")} value={String(rep.studies.length)} hint={tx("each written so it could come back no", "每个都写成可能得到“否”的形式")} />
               <Stat label={tx("Answered yes", "回答为是")} value={String(yes)} hint={tx("and acted on", "并据此采取了行动")} tone={yes ? "good" : undefined} />
               <Stat label={tx("Answered no", "回答为否")} value={String(no)} hint={tx("which is the more useful half", "这是更有用的那一半")} tone={no ? "warning" : undefined} />
               <Stat label={tx("Cannot tell yet", "暂时无法判断")} value={String(unclear)} hint={tx("not enough matured history", "已到期的历史不够多")} />
             </div>
             {rep.fdr ? (
-              <p className="mt-3 text-[13px] text-muted-foreground">
+              <p className="t-caption mt-4 max-w-prose">
                 {tx(`Asking ${rep.fdr.m_tests} testable questions at once makes a lucky “yes” likely, so the p-values are corrected together (`, `同时提出 ${rep.fdr.m_tests} 个可检验的问题，很容易碰巧得到“是”，所以对 p 值统一做了校正（`)}
                 <Term k="bh">Benjamini–Hochberg</Term>
                 {tx(", a ", "，")}
@@ -396,7 +390,7 @@ export default function StudiesPage() {
                 {tx(`). ${rep.fdr.yes_survive} of ${rep.fdr.yes_tested} “yes” answers survive the correction${rep.fdr.yes_fail.length ? `. The other ${rep.fdr.yes_fail.length} should be read as leads, not settled findings` : ""}. The remaining ${rep.fdr.m_studies - rep.fdr.m_tests} ${rep.fdr.m_studies - rep.fdr.m_tests === 1 ? "study is" : "studies are"} not hypothesis tests and carry no p-value.`, `）。${rep.fdr.yes_tested} 个回答为“是”的问题中有 ${rep.fdr.yes_survive} 个经得起校正${rep.fdr.yes_fail.length ? `；其余 ${rep.fdr.yes_fail.length} 个应当视为线索，而不是定论` : ""}。剩下的 ${rep.fdr.m_studies - rep.fdr.m_tests} 项研究不是假设检验，没有 p 值。`)}
               </p>
             ) : null}
-            <p className="mt-3 text-[13px] text-muted-foreground">
+            <p className="t-caption mt-4 max-w-prose">
               {tx("A study that nobody acted on is decoration, so each one below ends with what changed because of it — including “nothing, and here is why that is the right answer”. The calibration behind two of these is on the", "没人据此行动的研究只是摆设，所以下面每一项都以“因此改变了什么”结尾——包括“什么都没改，以及为什么这是正确答案”。其中两项背后的校准在")}{" "}
               <Link href="/calibration" className="underline underline-offset-2">
                 {tx("calibration page", "校准页面")}
@@ -406,13 +400,13 @@ export default function StudiesPage() {
           </Section>
 
           {lang === "zh" ? (
-            <p className="text-[13px] text-muted-foreground">
+            <p className="t-caption">
               各项研究的标题和问题已译成中文；“怎么检验的”“结果如何”“因此改变了什么”和统计细节含有计算出的数字，仍为服务器给出的英文原文，数字与英文版完全一致。
             </p>
           ) : null}
 
-          <div className="space-y-2">
-          <h2 className="pt-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("Each question, one by one", "逐个问题")}</h2>
+          <div>
+          <h2 className="t-label pb-3">{tx("Each question, one by one", "逐个问题")}</h2>
           {rep.studies.map((s) => {
             const v = VERDICT[s.verdict];
             return (
@@ -437,21 +431,21 @@ export default function StudiesPage() {
               >
                 <div className="space-y-3 text-sm">
                   <div>
-                    <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("How it was tested", "怎么检验的")}</p>
+                    <p className="t-label">{tx("How it was tested", "怎么检验的")}</p>
                     <p lang="en" className="mt-1 text-muted-foreground">{s.method}</p>
                   </div>
                   <div>
-                    <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("What came back", "结果如何")}</p>
+                    <p className="t-label">{tx("What came back", "结果如何")}</p>
                     <p lang="en" className="mt-1 leading-relaxed">{s.finding}</p>
                   </div>
                   <Significance s={s} m={rep.fdr?.m_tests} />
-                  <div className="rounded-lg border border-border bg-muted/30 p-3">
-                    <p className="text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("What changed because of it", "因此改变了什么")}</p>
+                  <div className="border-l-2 border-foreground/25 pl-4">
+                    <p className="t-label">{tx("What changed because of it", "因此改变了什么")}</p>
                     <p lang="en" className="mt-1 leading-relaxed">{s.consequence}</p>
                   </div>
                   {Object.keys(s.stats).length ? (
                     <div>
-                      <p className="mb-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx(`The numbers (${s.n.toLocaleString()} observations)`, `数字（${s.n.toLocaleString()} 个观测）`)}</p>
+                      <p className="t-label mb-2">{tx(`The numbers (${s.n.toLocaleString()} observations)`, `数字（${s.n.toLocaleString()} 个观测）`)}</p>
                       <ConditionTable stats={s.stats} labels={lensLabels} />
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] lg:grid-cols-3">
                         {Object.entries(s.stats).filter(([k]) => !k.includes(".")).map(([k, val]) => (

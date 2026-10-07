@@ -166,7 +166,7 @@ function Ways({ c }: { c: WaysCard }) {
         {c.rows.map((r) => {
           const picked = r.label === c.pick;
           return (
-            <li key={r.label} className={`rounded-md border px-2.5 py-2 ${picked ? "border-status-good/60 bg-status-good/5" : "border-border"}`}>
+            <li key={r.label} className={`border-l-2 pl-3 ${picked ? "border-status-good" : "border-border"}`}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                 <span className="min-w-0 font-medium text-foreground">{lang === "zh" ? r.label_zh ?? r.label : r.label}</span>
                 <span className={`shrink-0 font-medium ${verdictTone(r.verdict)}`}>{lang === "zh" ? VERDICT_ZH[r.verdict] ?? r.verdict : r.verdict.replace(/_/g, " ")}</span>

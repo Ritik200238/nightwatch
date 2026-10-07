@@ -12,6 +12,7 @@ import { loadChat, saveChat, saveReportId } from "@/lib/desk-session";
 import { GuardNote } from "@/components/report/guard-note";
 import { ChatCardView } from "./chat-card";
 import { Working } from "./working";
+import { reducedMotion, scrollToMessageStart } from "@/lib/scroll";
 
 interface Msg {
   role: "user" | "assistant";
@@ -137,8 +138,21 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
     setMessages((m) => [...m, { role: "assistant", content: body, removed: agent.run?.removed, byline: lang === "zh" ? `Nightwatch 代理 · Qwen · 在引擎上运行了 ${n} 项检查，数字已核对` : `Nightwatch agent · Qwen · ${n} checks run on the engine, numbers verified` }]);
   }, [agent.run, contextId, lang]);
 
+  // What the next change to the transcript should do to the page. Set by send() only, so a restored
+  // conversation or a late agent note never moves the reader. "end": the reader's own message, keep
+  // it and the progress below it in view. "start": a plain reply, read from its first line. "none":
+  // the answer is a new report and the page scrolls to that instead.
+  const scrollMode = useRef<"end" | "start" | "none">("none");
+  const logRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
+    const mode = scrollMode.current;
+    scrollMode.current = "none";
+    if (mode === "end") {
+      endRef.current?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+    } else if (mode === "start") {
+      const all = logRef.current?.querySelectorAll<HTMLElement>("[data-msg]");
+      scrollToMessageStart(all && all.length ? all[all.length - 1] : null);
+    }
   }, [messages.length]);
 
   // A refresh or the Back button brings the conversation back from this tab's storage; the
@@ -234,6 +248,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
     const chatLang: "en" | "zh" = HAS_ZH.test(content) ? "zh" : lang;
     if (chatLang !== lang) setLang(chatLang);
     const next: Msg[] = [...messagesRef.current, { role: "user", content }];
+    scrollMode.current = "end";
     commit(next);
     setDraft("");
     setError(null);
@@ -250,9 +265,11 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
       // A saved example served while the live server is down is a chat message only: it
       // must never replace the report on screen, which belongs to the trader's own trade.
       if (isSnapshotAnswer(res, snapshotFlag.get())) {
+        scrollMode.current = "start";
         commit([...next, { role: "assistant", content: snapshotNoticeFor(snapshotFlag.get() ?? isoIn(res.reply), chatLang) }]);
         return;
       }
+      scrollMode.current = res.report ? "none" : "start";
       commit([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined, card: res.card }]);
       // A follow-up answers about the report already on screen and leaves it there.
       if (res.report) {
@@ -276,6 +293,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
               : e.message
           : tx("Something went wrong.", "出错了。");
       setError(msg);
+      scrollMode.current = "none";
       commit(next);
     } finally {
       setBusy(false);
@@ -298,9 +316,9 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
 
   return (
     <div className="flex h-full min-h-[320px] flex-col">
-      <div className="flex-1 space-y-3 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label={tx("Conversation", "对话")}>
+      <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label={tx("Conversation", "对话")}>
         {ready === false ? (
-          <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-sm">
+          <div className="mb-3 border-l-2 border-border pl-3 text-sm">
             <p className="font-medium">{tx("Reading your words with rules, not a model", "用规则而不是模型来理解你的话")}</p>
             <p className="text-[13px] text-muted-foreground">
               {tx("This server has no Anthropic API key, so a parser handles the sentence instead. It understands the usual shape — “long 25k TSLA overnight, stop 340” — and every number in the answer is copied from the report. With a key the same conversation gets more range.", "这台服务器没有 Anthropic API 密钥，所以由解析器处理你的句子。它能理解常见的写法——“做多 2.5 万 TSLA 过夜，止损 340”——回答里的每个数字都取自报告。有密钥时，同样的对话能覆盖更多情况。")}
@@ -322,7 +340,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
           </div>
         ) : null}
         {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}>
+          <div key={i} data-msg={i} className={`scroll-mt-4 ${m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}`}>
             <p className="whitespace-pre-wrap">{m.role === "assistant" ? plainText(m.content, lang) : m.content}</p>
             {m.card ? <ChatCardView card={m.card} /> : null}
             {m.readFrom ? <p className="mt-2 text-[13px] text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}

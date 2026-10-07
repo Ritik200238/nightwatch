@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Pill, Section, Stat } from "@/components/report/primitives";
 import { Button } from "@/components/ui/button";
-import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { Digest, DigestRow, Figure as Stat, LoadingRecord, OpenSection as Section, PageHead, PlainBox, PROOF_STACK, PROOF_WIDTH, ScrollTable, Tag as Pill } from "@/components/proof-page";
 import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, peek, type CalibrationReport } from "@/lib/api";
@@ -66,7 +65,7 @@ export default function CalibrationPage() {
   const pitData = rep ? PIT_ORDER.map((k) => ({ bucket: k, observed: (rep.pit_histogram[k] ?? 0) / Math.max(1, rep.n_matured), expected: PIT_EXPECTED[k] })) : [];
 
   return (
-    <div className={`${PROOF_WIDTH} space-y-4`}>
+    <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
       <PageHead
         tabs
         title={tx("Does it tell the truth?", "它说的是真话吗？")}
@@ -96,7 +95,7 @@ export default function CalibrationPage() {
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">{tx("Couldn't load calibration", "无法加载校准数据")}</p>
-          <p className="text-[13px] text-muted-foreground">{error}</p>
+          <p className="t-caption">{error}</p>
           <Button variant="secondary" size="sm" className="mt-2" onClick={() => void load()}>
             {tx("Try again", "重试")}
           </Button>
@@ -118,18 +117,18 @@ export default function CalibrationPage() {
               subtitle={tx("Every verdict is sized on the adjusted tail. These are those tails, each scored against what then happened, with the adjustment fitted only on forecasts that had matured before it.", "每个结论都按调整后的尾部来定仓位。这里是这些尾部，每个都对照后来实际发生的结果评分，调整系数只用在它之前已到期的预测拟合。")}
               action={<Pill tone={rep.adjusted.adj_tail_band === "green" ? "good" : rep.adjusted.adj_tail_band === "amber" ? "warning" : "critical"}>{tx("5% tail: ", "5% 尾部：")}{tb(rep.adjusted.adj_tail_band)}</Pill>}
             >
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
                 <Stat
                   label={tx("Outcomes below the 5th percentile", "低于第 5 百分位的结果")}
                   value={fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}
                   hint={tx(`target 5% · ${rep.adjusted.n_evaluated.toLocaleString()} forecasts · raw search ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`, `目标 5% · ${rep.adjusted.n_evaluated.toLocaleString()} 个预测 · 原始搜索 ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`)}
                 />
                 {rep.adjusted.raw_lo_coverage > 0.05 ? (
-                  <p className="col-span-2 text-[13px] text-muted-foreground sm:col-span-4">
+                  <p className="col-span-2 t-caption max-w-prose sm:col-span-4">
                     {tx(`Raw history breaches more often than it should (${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)} against a 5% target); that is why every verdict uses the adjusted line, which is on target (${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}).`, `原始历史突破坏情形的频率高于应有水平（${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}，目标 5%）；所以每个结论都用调整后的线，它已达标（${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}）。`)}
                   </p>
                 ) : null}
-                <p className="col-span-2 text-[13px] text-muted-foreground sm:col-span-4">
+                <p className="col-span-2 t-caption max-w-prose sm:col-span-4">
                   {tx(
                     `Treating every forecast as independent, the 95% interval on that rate is ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}. That assumes ${rep.adjusted.n_evaluated.toLocaleString()} separate facts, but forecasts made on the same night share that night's market move.${rep.adjusted.adj_lo_night_ci ? ` Resampling whole nights instead (${rep.adjusted.n_nights} independent nights) gives ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}, which is the interval to trust.` : ""}`,
                     `把每个预测都当作相互独立，该比例的 95% 区间为 ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}。这假设有 ${rep.adjusted.n_evaluated.toLocaleString()} 个独立事实，但同一夜的预测共享该夜的市场波动。${rep.adjusted.adj_lo_night_ci ? ` 改为按整夜重抽样（${rep.adjusted.n_nights} 个独立夜晚）得到 ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}，应以此区间为准。` : ""}`,
@@ -152,15 +151,15 @@ export default function CalibrationPage() {
 
           {rep.since_freeze ? <SinceFreezeBlock f={rep.since_freeze} /> : null}
 
-          <div className="space-y-2">
-          <h2 className="pt-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("The detail behind it", "背后的细节")}</h2>
+          <div>
+          <h2 className="t-label pb-3">{tx("The detail behind it", "背后的细节")}</h2>
           {rep.adjusted ? (
             <Section
               collapsible
               title={tx("Tail adjustment, scored out of sample", "尾部调整，样本外评分")}
               subtitle={tx(`Each forecast re-scored with a correction learned only from forecasts that had already matured before it (${rep.adjusted.n_evaluated.toLocaleString()} evaluated). The verdict uses the corrected bad case.`, `每个预测都只用在它之前已到期的预测学到的修正来重新评分（评估了 ${rep.adjusted.n_evaluated.toLocaleString()} 个）。结论使用修正后的坏情形。`)}
             >
-              <p className="mb-3 text-[13px] text-muted-foreground">
+              <p className="t-caption mb-3">
                 {tx("Technical detail: latest ", "技术细节：最新 ")}
                 <Term k="klo">k_lo</Term> {rep.adjusted.k_lo_last?.toFixed(2)}
                 {rep.adjusted.c_lo_last ? (
@@ -266,7 +265,7 @@ export default function CalibrationPage() {
                 </TableBody>
               </Table>
 </ScrollTable>
-              <p className="mt-3 text-[13px] text-muted-foreground">
+              <p className="t-caption mt-4 max-w-prose">
                 {tx("A k_lo below 1 means the cohort's own p5 was already too pessimistic for that kind of window and gets pulled in, not pushed out. The margin is an absolute floor under narrow forecasts: a multiplicative factor alone left the narrowest third of forecasts breaching 8.2% of the time and the widest third 2.7%, and the margin is solved so the narrower half breaches 5% as well. The “before there was enough” row is every forecast made before its window had 120 matured examples of its own; those used the pooled factor, and they are shown rather than dropped.", "k_lo 小于 1 表示该类窗口里样本自身的 p5 本来就过于悲观，会被往回收，而不是往外推。边际是给窄区间预测加的绝对下限：只用乘法系数时，最窄的三分之一预测有 8.2% 突破，最宽的三分之一只有 2.7%；边际的取值使较窄的一半也刚好是 5% 突破。“样本还不够多的时候”那一行，是指该窗口自己还没有 120 个到期样本之前做出的所有预测；它们用的是合并系数，这里照实展示而不是丢掉。")}
               </p>
             </Section>
@@ -276,7 +275,7 @@ export default function CalibrationPage() {
             <p className="mb-3 text-sm text-muted-foreground">
               {tx("What the analog search says on its own, before the tail adjustment. The desk does not size on this; it is here because the adjustment above is only as honest as the number it corrects, and hiding the uncorrected one would make that impossible to check.", "相似时刻搜索自己给出的结果，尚未做尾部调整。交易台不按这个定仓位；它放在这里，是因为上面的调整只有与被修正的数字一样诚实才有意义，而藏起未修正的数字就无法检验这一点。")}
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
               <Stat label={tx("Breaches below p5", "跌破 p5 的次数")} value={`${rep.tail.breaches} / ${rep.tail.n}`} hint={tx(`expected ${(rep.tail.expected_rate * rep.tail.n).toFixed(1)}${rep.tail.n_nights ? ` · ${rep.tail.n_nights} nights` : ""}${rep.tail.night_ci ? ` · nights-resampled [${fmtPct(rep.tail.night_ci[0] * 100, 1, false)}, ${fmtPct(rep.tail.night_ci[1] * 100, 1, false)}]` : ""}`, `预期 ${(rep.tail.expected_rate * rep.tail.n).toFixed(1)}${rep.tail.n_nights ? ` · ${rep.tail.n_nights} 个夜晚` : ""}${rep.tail.night_ci ? ` · 按夜重抽样 [${fmtPct(rep.tail.night_ci[0] * 100, 1, false)}, ${fmtPct(rep.tail.night_ci[1] * 100, 1, false)}]` : ""}`)} tone={bandTone === "muted" ? undefined : bandTone} />
               <Stat label={tx("Failure-rate test", "失败率检验")} value={rep.tail.pof_p_value != null ? `p = ${rep.tail.pof_p_value.toFixed(3)}` : "—"} hint={rep.tail.pof_stat != null ? `LR ${rep.tail.pof_stat.toFixed(2)}` : tx("needs ≥ 20 forecasts", "至少需要 20 个预测")} />
               <Stat label={tx("Independence test", "独立性检验")} value={rep.tail.independence_p_value != null ? `p = ${rep.tail.independence_p_value.toFixed(3)}` : "—"} hint={tx("do breaches cluster?", "突破是否扎堆出现？")} />
@@ -330,7 +329,7 @@ export default function CalibrationPage() {
                 </Table>
 </ScrollTable>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-6">
                     <Stat label={tx("Mean loss, analog", "平均损失：相似时刻")} value={rep.skill.mean_loss_analog?.toFixed(3) ?? "—"} hint={tx("average pinball loss over the five quantiles", "五个分位数的平均弹球损失")} />
                     <Stat label={tx("Mean loss, random hours", "平均损失：随机小时")} value={rep.skill.mean_loss_baseline?.toFixed(3) ?? "—"} hint={tx(`gain CI [${rep.skill.diff_ci_low?.toFixed(3)}, ${rep.skill.diff_ci_high?.toFixed(3)}]`, `增益置信区间 [${rep.skill.diff_ci_low?.toFixed(3)}, ${rep.skill.diff_ci_high?.toFixed(3)}]`)} />
                     <Stat label={tx("Below p5", "低于 p5")} value={`${fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} vs ${fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)}`} hint={tx("analog vs random · target 5%", "相似时刻 vs 随机 · 目标 5%")} />
@@ -339,13 +338,13 @@ export default function CalibrationPage() {
                   {/* A judge reading only the headline number would conclude the retrieval
                       is useless. It is nearly useless for direction, which is why the
                       verdict never takes one from it; the tail is the part that is used. */}
-                  <p className="text-[13px] text-muted-foreground">
+                  <p className="t-caption">
                     <span className="text-foreground">{tx("How to read this.", "怎么读这个。")}</span>{" "}
                     {tx("Scored by ", "评分采用")}<Term k="pinball" />{tx(" (lower is better). ", "（越低越好）。")}
                     {tx("Over the whole distribution the analogs are indistinguishable from picking random hours of the same kind, and around the quartiles they are measurably worse — the resemblance narrows the middle where the truth is wide. Where they help is the loss tail: ", "就整个分布而言，相似时刻与随机挑同类小时没有区别，在四分位附近还明显更差——相似性把本该很宽的中间部分收窄了。它真正有用的是亏损尾部：")}{fmtPct((rep.skill.analog_lo_coverage ?? 0) * 100, 1, false)} {tx("of outcomes fall below the analog 5th percentile against", "的结果低于相似时刻的第 5 百分位，而随机小时的对应比例是")}{" "}
                     {fmtPct((rep.skill.baseline_lo_coverage ?? 0) * 100, 1, false)} {tx("below the random-hours one. That is the number every verdict is sized against, and it is the only claim this product makes about the retrieval.", "。每个结论都是按这个数字定仓位的，这也是本产品对检索能力做出的唯一主张。")}
                   </p>
-                  <p className="text-[13px] text-muted-foreground">
+                  <p className="t-caption">
                     {tx("Per token:", "按代币：")}{" "}
                     {Object.entries(rep.skill.by_ticker)
                       .sort(([a], [b]) => a.localeCompare(b))
@@ -403,7 +402,7 @@ export default function CalibrationPage() {
                   </TableBody>
                 </Table>
               </ScrollTable>
-              <p className="mt-2 text-[13px] text-muted-foreground">{tx("Targets: 5% below p5, 90% inside the band. A month marked thin has too few scored forecasts to read much into.", "目标：5% 低于 p5，90% 落在区间内。标为“样本少”的月份，已评分的预测太少，不宜过度解读。")}</p>
+              <p className="t-caption mt-3 max-w-prose">{tx("Targets: 5% below p5, 90% inside the band. A month marked thin has too few scored forecasts to read much into.", "目标：5% 低于 p5，90% 落在区间内。标为“样本少”的月份，已评分的预测太少，不宜过度解读。")}</p>
             </Section>
           ) : null}
 
@@ -504,7 +503,7 @@ function SinceFreezeBlock({ f }: { f: NonNullable<CalibrationReport["since_freez
       )}
     >
       {f.n ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
           <Stat label={tx("Forecasts scored", "已评分预测")} value={f.n.toLocaleString()} hint={tx(`${f.n_nights} independent nights`, `${f.n_nights} 个独立夜晚`)} />
           <Stat label={tx("Below the 5th percentile", "低于第 5 百分位")} value={`${f.breaches} (${fmtPct((f.rate ?? 0) * 100, 1, false)})`} hint={tx("target 5%", "目标 5%")} />
           <Stat
@@ -540,48 +539,39 @@ function Scorecard({ rep }: { rep: CalibrationReport }) {
   const loses = sk && sk.diff_ci_high != null && sk.diff_ci_high < 0;
   const pct = (x: number) => fmtPct(x * 100, 1, false);
   return (
-    <div className="rounded-lg border border-border bg-card p-4 text-sm" aria-label={tx("The short version", "一句话版本")}>
-      <p className="font-medium">{tx("The short version", "一句话版本")}</p>
-      <ul className="mt-2 space-y-2">
-        <li>
-          <Pill tone="muted">{tx("Tested", "检验了什么")}</Pill>{" "}
+    <Digest title={tx("The short version", "一句话版本")} note={tx("The technical detail (percentile bands, correction factors, scoring rule) is below.", "技术细节（百分位区间、修正系数、评分规则）在下面。")}>
+      <DigestRow tag={<Pill tone="muted">{tx("Tested", "检验了什么")}</Pill>}>
+        {tx(
+          `${rep.n_matured.toLocaleString()} forecasts, each written down before the outcome was known, then scored once the holding period ended.`,
+          `${rep.n_matured.toLocaleString()} 个预测，每个都在结果未知时先写下，持有期结束后再评分。`,
+        )}
+      </DigestRow>
+      {adj ? (
+        <DigestRow tag={<Pill tone={adj.adj_tail_band === "green" ? "good" : "warning"}>{tx("Passed", "通过")}</Pill>}>
           {tx(
-            `${rep.n_matured.toLocaleString()} forecasts, each written down before the outcome was known, then scored once the holding period ended.`,
-            `${rep.n_matured.toLocaleString()} 个预测，每个都在结果未知时先写下，持有期结束后再评分。`,
+            `The "1 time in 20 it goes worse than this" warning was beaten ${pct(adj.adj_lo_coverage)} of the time (target 5%): ${tb(adj.adj_tail_band)}. The raw history alone was ${pct(adj.raw_lo_coverage)}${adj.raw_lo_coverage > 0.05 ? ", which is why the desk corrects it." : "."}`,
+            `“二十次里有一次会比这更糟”的警告，实际被突破 ${pct(adj.adj_lo_coverage)}（目标 5%）：${tb(adj.adj_tail_band)}。只用原始历史是 ${pct(adj.raw_lo_coverage)}${adj.raw_lo_coverage > 0.05 ? "，所以交易台要做修正。" : "。"}`,
           )}
-        </li>
-        {adj ? (
-          <li>
-            <Pill tone={adj.adj_tail_band === "green" ? "good" : "warning"}>{tx("Passed", "通过")}</Pill>{" "}
-            {tx(
-              `The "1 time in 20 it goes worse than this" warning was beaten ${pct(adj.adj_lo_coverage)} of the time (target 5%): ${tb(adj.adj_tail_band)}. The raw history alone was ${pct(adj.raw_lo_coverage)}${adj.raw_lo_coverage > 0.05 ? ", which is why the desk corrects it." : "."}`,
-              `“二十次里有一次会比这更糟”的警告，实际被突破 ${pct(adj.adj_lo_coverage)}（目标 5%）：${tb(adj.adj_tail_band)}。只用原始历史是 ${pct(adj.raw_lo_coverage)}${adj.raw_lo_coverage > 0.05 ? "，所以交易台要做修正。" : "。"}`,
-            )}
-          </li>
-        ) : null}
-        {weak.length ? (
-          <li>
-            <Pill tone="warning">{tx("Weaker", "较弱")}</Pill>{" "}
-            {weak.map((b) => `${bandName(b.band)}: ${pct(b.adj_lo_coverage)} (${tb(b.adj_tail_band)})`).join("; ")}
-            {tx(". Shown, not hidden.", "。照实展示，没有隐藏。")}
-          </li>
-        ) : null}
-        {sk && sk.n === 0 ? (
-          <li>
-            <Pill tone="muted">{tx("Not measured", "未测量")}</Pill>{" "}
-            {tx("The comparison with random past hours is made on replays, so there are no pairs in this view.", "与随机历史小时的对比是在重演预测上做的，所以这个视图里没有可配对的样本。")}
-          </li>
-        ) : null}
-        {sk && sk.n > 0 ? (
-          <li>
-            <Pill tone={beats ? "good" : loses ? "critical" : "warning"}>{beats ? tx("Passed", "通过") : tx("Not proven", "未证明")}</Pill>{" "}
-            {beats
-              ? tx(`Beats picking a random past hour: the similar-moments forecast was closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n.toLocaleString()} pairs.`, `优于随机挑一个历史小时：相似时刻的预测在 ${sk.n.toLocaleString()} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际。`)
-              : tx(`Does not clearly beat picking a random past hour (closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n.toLocaleString()} pairs).`, `没有明显优于随机挑一个历史小时（${sk.n.toLocaleString()} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际）。`)}
-          </li>
-        ) : null}
-      </ul>
-      <p className="mt-2 text-[13px] text-muted-foreground">{tx("The technical detail (percentile bands, correction factors, scoring rule) is below.", "技术细节（百分位区间、修正系数、评分规则）在下面。")}</p>
-    </div>
+        </DigestRow>
+      ) : null}
+      {weak.length ? (
+        <DigestRow tag={<Pill tone="warning">{tx("Weaker", "较弱")}</Pill>}>
+          {weak.map((b) => `${bandName(b.band)}: ${pct(b.adj_lo_coverage)} (${tb(b.adj_tail_band)})`).join("; ")}
+          {tx(". Shown, not hidden.", "。照实展示，没有隐藏。")}
+        </DigestRow>
+      ) : null}
+      {sk && sk.n === 0 ? (
+        <DigestRow tag={<Pill tone="muted">{tx("Not measured", "未测量")}</Pill>}>
+          {tx("The comparison with random past hours is made on replays, so there are no pairs in this view.", "与随机历史小时的对比是在重演预测上做的，所以这个视图里没有可配对的样本。")}
+        </DigestRow>
+      ) : null}
+      {sk && sk.n > 0 ? (
+        <DigestRow tag={<Pill tone={beats ? "good" : loses ? "critical" : "warning"}>{beats ? tx("Passed", "通过") : tx("Not proven", "未证明")}</Pill>}>
+          {beats
+            ? tx(`Beats picking a random past hour: the similar-moments forecast was closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n.toLocaleString()} pairs.`, `优于随机挑一个历史小时：相似时刻的预测在 ${sk.n.toLocaleString()} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际。`)
+            : tx(`Does not clearly beat picking a random past hour (closer in ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} of ${sk.n.toLocaleString()} pairs).`, `没有明显优于随机挑一个历史小时（${sk.n.toLocaleString()} 对中有 ${fmtPct((sk.win_share ?? 0) * 100, 0, false)} 更接近实际）。`)}
+        </DigestRow>
+      ) : null}
+    </Digest>
   );
 }

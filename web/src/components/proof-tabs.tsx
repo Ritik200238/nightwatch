@@ -16,18 +16,18 @@ export function ProofTabs() {
   ];
   // Same words as the top nav ("Track record" / "战绩", "Misses" / "失误"), so the page matches where you clicked.
   return (
-    <nav aria-label={tx("Track record", "战绩")} className="space-y-1.5">
-      <p className="text-sm font-semibold tracking-tight text-foreground">{tx("Track record", "战绩")}</p>
-      <ul className="flex flex-wrap gap-1.5">
+    <nav aria-label={tx("Track record", "战绩")} className="space-y-1">
+      <p className="t-label">{tx("Track record", "战绩")}</p>
+      <ul className="-mx-1 flex gap-x-1 overflow-x-auto border-b border-border px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => {
           const here = path === t.href || (path?.startsWith(`${t.href}/`) ?? false);
           return (
-            <li key={t.href}>
+            <li key={t.href} className="shrink-0">
               <Link
                 href={t.href}
                 aria-current={here ? "page" : undefined}
-                className={`inline-flex min-h-10 items-center rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
-                  here ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                className={`-mb-px inline-flex min-h-11 items-center border-b-2 px-3 text-sm whitespace-nowrap focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                  here ? "border-foreground font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {t.label}

@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Section, Stat } from "@/components/report/primitives";
-import { LoadingRecord, PageHead, PROOF_WIDTH, RecordError } from "@/components/proof-page";
+import { Figure as Stat, LoadingRecord, OpenSection as Section, PageHead, PROOF_STACK, PROOF_WIDTH, RecordError } from "@/components/proof-page";
 import { engagement, type Usage } from "@/lib/engagement";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
@@ -63,14 +62,14 @@ export default function UsagePage() {
   const asked = u.feedback.useful + u.feedback.not_useful;
   const kinds = Object.entries(u.follow_ups_by_answer_kind);
   return (
-    <div className={`${PROOF_WIDTH} space-y-4`}>
+    <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
       <PageHead
         title={tx("Who uses the desk", "谁在使用交易台")}
         intro={tx(`Counted since ${since}; no accounts; only an anonymous random id in your browser.`, `统计自 ${since}；无账户；只使用您浏览器里的匿名随机编号。`)}
       />
-      <p className="text-[13px] text-muted-foreground">{tx("Early numbers — small sample.", "早期数字，样本很小。")}</p>
+      <p className="t-caption">{tx("Early numbers — small sample.", "早期数字，样本很小。")}</p>
       <Section title={tx("Numbers", "数字")}>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-6 md:grid-cols-4">
           <Stat
             label={tx("Verdicts given to visitors", "给访客的结论")}
             value={u.live_verdicts.toLocaleString()}
@@ -87,7 +86,7 @@ export default function UsagePage() {
           <Stat label={tx("Useful", "有用")} value={String(u.feedback.useful)} hint={asked ? tx(`of ${asked} answers`, `共 ${asked} 个回答`) : tx("no answers yet", "暂无回答")} />
           <Stat label={tx("Not useful", "没用")} value={String(u.feedback.not_useful)} />
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="t-body mt-6 text-muted-foreground">
           {tx("By language: ", "按语言：")}
           {Object.entries(u.by_language)
             .map(([k, v]) => `${k === "zh" ? "中文" : "English"} ${v}`)
@@ -96,11 +95,11 @@ export default function UsagePage() {
       </Section>
       <Section title={tx("Follow-up questions by kind of answer", "追问（按回答类型）")}>
         {kinds.length ? (
-          <ul className="space-y-1 text-sm">
+          <ul className="t-body divide-y divide-border border-y border-border">
             {kinds.map(([k, n]) => (
-              <li key={k} className="flex justify-between gap-4">
+              <li key={k} className="flex justify-between gap-4 py-2">
                 <span>{kindLabel(k, lang)}</span>
-                <span className="font-mono">{n}</span>
+                <span className="tabular-nums">{n}</span>
               </li>
             ))}
           </ul>
@@ -110,9 +109,9 @@ export default function UsagePage() {
       </Section>
       <Section title={tx("Latest notes", "最新留言")} subtitle={tx("Links and email addresses are removed.", "链接和邮箱已删除。")}>
         {u.last_notes.length ? (
-          <ul className="space-y-2 text-sm">
+          <ul className="t-body divide-y divide-border border-y border-border">
             {u.last_notes.map((n) => (
-              <li key={n.at + n.note}>
+              <li key={n.at + n.note} className="py-3">
                 <span className="text-muted-foreground">
                   {n.useful ? tx("useful", "有用") : tx("not useful", "没用")} · {fmtTimeL(n.at, lang)}
                 </span>
@@ -125,7 +124,7 @@ export default function UsagePage() {
           <p className="text-sm text-muted-foreground">{tx("None yet.", "暂无。")}</p>
         )}
       </Section>
-      <p className="text-[13px] text-muted-foreground">
+      <p className="t-caption">
         {tx(
           "Requests from the operator's own browser are excluded (header x-nw-internal: 1, or localStorage nightwatch.internal = 1).",
           "运营者自己浏览器的请求不计入（请求头 x-nw-internal: 1，或 localStorage nightwatch.internal = 1）。",

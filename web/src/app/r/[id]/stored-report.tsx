@@ -122,7 +122,7 @@ export function StoredReport({ id }: { id: string }) {
   return (
     <div className="space-y-4">
       {copyFrom !== null || proxyCopy ? (
-        <p role="status" className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm">
+        <p role="status" className="border-l-2 border-status-warning pl-4 text-sm">
           {proxyCopy
             ? tx(`The live server is not answering, so this is the saved copy from ${fmtDateTimeL(proxyCopy, lang)}.`, `实时服务器没有响应，所以这里显示的是 ${fmtDateTimeL(proxyCopy, lang)} 保存的副本。`)
             : tx(`Showing the copy this browser saved${copyFrom ? ` on ${fmtDateTimeL(copyFrom, lang)}` : ""} while the server answers. A stored report does not change.`, `正在显示本浏览器${copyFrom ? `于 ${fmtDateTimeL(copyFrom, lang)} ` : ""}保存的副本，同时等待服务器响应。已保存的报告不会改变。`)}
@@ -137,7 +137,7 @@ export function StoredReport({ id }: { id: string }) {
         </p>
       ) : null}
       <h1 className="sr-only">{`${report.ticket.ticker} ${tx("stored report", "已保存的报告")}`}</h1>
-      <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
+      <div className="border-l-2 border-foreground/25 pl-4 text-sm">
         <p className="font-medium">{tx("A saved report, not a live one", "这是保存的报告，不是实时的")}</p>
         <p className="text-[13px] text-muted-foreground">
           {tx(

@@ -66,7 +66,7 @@ export function ProofStrip({ stocks }: { stocks: number | null }) {
   ];
 
   return (
-    <section className="space-y-2 rounded-lg border border-border bg-card px-4 py-3" aria-label={tx("Bitget pieces", "Bitget 组件")}>
+    <section className="space-y-2 border-t border-border pt-4" aria-label={tx("Bitget pieces", "Bitget 组件")}>
       {/* The live record is shown once, in the hero; here only what it is built on. */}
       <p className="text-sm font-medium">
         {tx("Built on Bitget, checked live", "基于 Bitget 构建，实时检查")}

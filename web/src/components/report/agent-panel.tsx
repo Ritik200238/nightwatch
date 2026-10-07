@@ -18,7 +18,7 @@ export function AgentPanel({ forecastId, lang }: { forecastId: number; lang: Lan
   const final = run?.status === "done" ? run.final : null;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="border-t border-border pt-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold">{L("AI stress-test agent", "AI 压力测试代理")}</p>

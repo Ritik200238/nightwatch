@@ -50,7 +50,7 @@ export function AccountLadder({ report, lang = "en", onRerun }: { report: Report
           ? L(`Even on a larger account it still needs: ${needs.join("; ")}.`, `即使账户更大，仍需：${needs.join("；")}。`)
           : L(`No account size makes ${asked.toLocaleString("en-US")} a GO.`, `任何账户规模都无法让 ${asked.toLocaleString("en-US")} USDT 通过。`);
   return (
-    <section className="rounded-lg border border-border bg-card px-3 py-2.5 text-sm" aria-label={L("The same trade by account size", "按账户规模看这笔交易")}>
+    <section className="border-t border-border pt-4 text-sm" aria-label={L("The same trade by account size", "按账户规模看这笔交易")}>
       <p className="font-medium text-foreground">{L("No account size given, so here is the same trade at a few:", "你没有给出账户规模，这里是同一笔交易在几种账户规模下的结论：")}</p>
       <ul className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         {ladder.map((p) => {

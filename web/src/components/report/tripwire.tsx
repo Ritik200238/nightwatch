@@ -125,7 +125,7 @@ export function TripwireButton({ forecastId, ticker, lang = "en" }: { forecastId
         </Button>
       </div>
       {open ? (
-        <div className="space-y-2 rounded-lg border border-border p-3">
+        <div className="space-y-2 border-l-2 border-border pl-3">
           <p className="text-[13px] text-muted-foreground">
             {L(
               "Checked every minute against Bitget highs and lows. It fires once, records the price and time, re-runs the desk on this trade, and can post to a webhook.",

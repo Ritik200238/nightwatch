@@ -26,13 +26,13 @@ export function StressBars({ report, lang }: { report: Report; lang: Lang }) {
       <figcaption className="mb-2 text-[13px] font-medium text-muted-foreground">{L("Loss in each stress test (USDT)", "每个压力测试的损失（USDT）")}</figcaption>
       <ul className="space-y-1.5">
         {rows.map((r) => (
-          <li key={r.name} className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 text-[13px] sm:grid-cols-[minmax(0,10rem)_1fr_auto]">
+          <li key={r.name} className="grid grid-cols-[1fr_auto] items-start gap-x-2 gap-y-1 text-[13px] sm:grid-cols-[minmax(0,14rem)_1fr_auto]">
             {/* On a phone the name sits on its own line above the bar, so it wraps instead of being cut. */}
-            <span className="col-span-2 flex min-w-0 items-start gap-1 text-muted-foreground sm:col-span-1 sm:items-center" title={presetName(lang, r.name, r.zh)}>
+            <span className="col-span-2 flex min-w-0 items-start gap-1 text-muted-foreground sm:col-span-1" title={presetName(lang, r.name, r.zh)}>
               <SourceChip dot entry={report.provenance?.items.stress?.[r.id]} lang={lang} />
-              <span className="min-w-0 break-words sm:truncate">{presetName(lang, r.name, r.zh)}</span>
+              <span className="min-w-0 break-words leading-snug">{presetName(lang, r.name, r.zh)}</span>
             </span>
-            <span className="h-2.5 rounded-sm bg-muted" aria-hidden>
+            <span className="mt-1 h-2.5 rounded-sm bg-muted" aria-hidden>
               <span className={`block h-full rounded-sm ${r.v < 0 ? "bg-status-critical" : "bg-status-good"}`} style={{ width: `${Math.max(2, (Math.abs(r.v) / max) * 100)}%` }} />
             </span>
             <span className="tabular-nums text-foreground">{fmtUsd(r.v)}</span>
@@ -104,7 +104,7 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
   if (a) items.push({ key: "analog", label: `${L("Analog search", "相似时刻检索")} (${a.result.matches.length} ${L("of", "/")} ${(a.result.n_candidates ?? 0).toLocaleString()} ${L("hours", "小时")})${ms(tm.analog)}` });
   items.push({ key: "stress", label: `${report.stress.presets.length} ${L("stress presets", "个压力预设")}${ms(tm.stress)}` });
   return (
-    <div className="mt-4 rounded-lg border border-border/60 px-3 py-2">
+    <div className="mt-4 border-l-2 border-border pl-3">
       {/* Different from the "How this verdict was built" card below: that one is the method
           (three steps); this one is the data pulled and tools called to produce this report. */}
       <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">{L("Data and tools used for this answer", "这个答案用到的数据与工具")}</p>

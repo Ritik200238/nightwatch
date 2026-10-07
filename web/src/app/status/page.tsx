@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, probeHealth, type Liveness, type Anchor, type CalibrationReport, type DataSource, type Health, type VerifyResponse } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
-import { PageHead, PROOF_WIDTH } from "@/components/proof-page";
+import { PageHead, PROOF_STACK, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
 import { AsOf } from "@/components/as-of";
 import { localSource } from "@/lib/source-zh";
@@ -33,12 +33,12 @@ function Dot({ ok }: { ok: boolean | "warn" | null }) {
 
 function Card({ title, ok, children }: { title: string; ok: boolean | "warn" | null; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
+    <section className="border-t border-border pt-6">
+      <h2 className="t-heading flex items-center gap-2">
         <Dot ok={ok} />
         {title}
       </h2>
-      <div className="mt-2 space-y-1 text-sm text-muted-foreground">{children}</div>
+      <div className="t-body mt-3 space-y-1 text-muted-foreground">{children}</div>
     </section>
   );
 }
@@ -79,7 +79,7 @@ export default function StatusPage() {
   );
 
   return (
-    <div className={`${PROOF_WIDTH} space-y-4`}>
+    <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
       <PageHead title={tx("Status", "状态")} intro={health.data?.state === "down" ? tx("The API is down, so the cards below may be saved copies, not live readings.", "API 离线，下面的卡片可能是已保存的副本，而非实时读数。") : tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <AsOf path="/sources" />
@@ -105,7 +105,7 @@ export default function StatusPage() {
         {sources.data ? (
           <>
             {usStaleRows.length >= 2 ? (
-              <p className="rounded-md bg-muted/50 px-3 py-2 text-[13px] leading-relaxed">
+              <p className="border-l-2 border-foreground/25 pl-3 text-[13px] leading-relaxed">
                 {tx(
                   "The US-stock data feed is down upstream. The engine marks those inputs unavailable and does not guess. Each gap is logged on the ",
                   "美股数据源在上游中断。引擎会把这些输入标为不可用，而不是猜测。每一次缺口都记录在",
@@ -120,7 +120,7 @@ export default function StatusPage() {
               {(usStaleRows.length >= 2 ? sources.data.filter((r) => !usStaleRows.includes(r)) : sources.data).map(renderRow)}
             </ul>
             {usStaleRows.length >= 2 ? (
-              <details className="group rounded-md border border-border/60 px-3 py-2">
+              <details className="group border-l-2 border-border pl-3">
                 <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 text-[13px] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
                   <span className="flex items-center gap-2">
                     <Dot ok={null} />
@@ -188,7 +188,7 @@ export default function StatusPage() {
         {calib.data?.adjusted ? (
           <p>
             {tx("Tail band after adjustment", "调整后的尾部区间")}: <span className="font-semibold text-foreground">{zh ? ({ green: "绿", amber: "黄", red: "红" } as Record<string, string>)[band ?? ""] ?? band : band}</span> · {calib.data.adjusted.n_evaluated.toLocaleString()} {tx("matured forecasts evaluated", "个已到期预测已评估")} ·{" "}
-            <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+            <Link href="/calibration" className="relative after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] underline underline-offset-2 hover:text-foreground">
               {tx("details", "详情")}
             </Link>
           </p>

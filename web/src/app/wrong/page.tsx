@@ -3,9 +3,9 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Pill, Section, Stat } from "@/components/report/primitives";
-import { LoadingRecord, PageHead, PlainBox, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { Figure as Stat, LoadingRecord, OpenSection as Section, PageHead, PlainBox, PROOF_STACK, PROOF_WIDTH, ScrollTable, Tag as Pill } from "@/components/proof-page";
 import { Term } from "@/components/term";
+import { verdictText } from "@/lib/verdict-style";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, peek, type DataSource, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
@@ -103,7 +103,7 @@ export default function WrongPage() {
   const replay = misses?.totals.replay;
 
   return (
-    <div className={`${PROOF_WIDTH} space-y-4`}>
+    <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
       <PageHead
         tabs
         title={tx("What we got wrong", "我们错在哪")}
@@ -121,15 +121,14 @@ export default function WrongPage() {
               ? tx("That is more often than it should be, and it is shown below rather than hidden. ", "这比应有的频率高，我们把它们列在下面，而不是藏起来。")
               : tx("That is close to what an honest line would give. ", "这与诚实的线应有的结果接近。")}
           {tx("Every miss is listed with its receipt, and the mistakes we found in the desk itself are listed further down. A miss is a ", "每一次突破都附有凭证列出，我们在交易台自身发现的错误列在更下面。一次突破指的是一次 ")}
-          <Term k="coverage">{tx("breach", "突破")}</Term>
-          {tx(", and a few are expected.", "，出现少量是正常的。")}
+          <Term k="coverage">{tx("breach", "突破")}</Term>{tx(", and a few are expected.", "，出现少量是正常的。")}
         </PlainBox>
       ) : null}
 
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
           <p className="font-medium">{tx("Couldn't load the misses", "无法加载未达标记录")}</p>
-          <p className="text-[13px] text-muted-foreground">{error}</p>
+          <p className="t-caption">{error}</p>
         </div>
       ) : null}
 
@@ -141,7 +140,7 @@ export default function WrongPage() {
           <LoadingRecord blocks={[96]} />
         ) : misses ? (
           <>
-            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
               <Stat label={tx("Live verdicts scored", "已评分的实时结论")} value={live ? live.scored.toLocaleString() : "0"} hint={tx("given by the live desk (testers and our own checks, no verified real traders), scored when the hold ended", "由线上交易台给出（试用者和我们自己的检查，没有经核实的真实交易者），持有结束后评分")} />
               <Stat
                 label={tx("Went past the line", "突破了该线")}
@@ -177,9 +176,9 @@ export default function WrongPage() {
                         <TableCell className="whitespace-nowrap">{fmtTimeL(m.as_of, lang)}</TableCell>
                         <TableCell className="whitespace-nowrap">
                           {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
-                          {m.notional < TEST_SIZE_USDT ? <span className="ml-1.5 rounded border border-border px-1 text-[11px] text-muted-foreground">{tx("test size", "测试规模")}</span> : null}
+                          {m.notional < TEST_SIZE_USDT ? <span className="t-caption ml-2 underline decoration-dotted underline-offset-4">{tx("test size", "测试规模")}</span> : null}
                         </TableCell>
-                        <TableCell>{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</TableCell>
+                        <TableCell>{m.verdict ? <Pill verdict={m.verdict}>{t(lang, "verdictName", m.verdict)}</Pill> : "—"}</TableCell>
                         <TableCell className="tabular text-right">{fmtPct(m.stated_p5_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right font-medium">{fmtPct(m.outcome_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right">{fmtUsd(Math.abs(m.beyond_quote))} USDT</TableCell>
@@ -198,16 +197,16 @@ export default function WrongPage() {
                 </Table>
                 </ScrollTable>
                 </div>
-                <ul className="divide-y divide-border rounded-lg border border-border md:hidden" aria-label={tx("Live verdicts that went past their line", "亏损超过所述线的实时结论")}>
+                <ul className="divide-y divide-border border-y border-border md:hidden" aria-label={tx("Live verdicts that went past their line", "亏损超过所述线的实时结论")}>
                   {misses.misses.map((m) => (
                     <li key={m.id} className="space-y-1.5 px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</span>
-                        <span className="text-[13px] text-muted-foreground">{fmtTimeL(m.as_of, lang)}</span>
+                        <span className={`text-sm font-medium ${m.verdict ? verdictText(m.verdict) : ""}`}>{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</span>
+                        <span className="t-caption">{fmtTimeL(m.as_of, lang)}</span>
                       </div>
                       <p className="text-sm">
                         {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
-                        {m.notional < TEST_SIZE_USDT ? <span className="ml-1.5 rounded border border-border px-1 text-[11px] text-muted-foreground">{tx("test size", "测试规模")}</span> : null}
+                        {m.notional < TEST_SIZE_USDT ? <span className="t-caption ml-2 underline decoration-dotted underline-offset-4">{tx("test size", "测试规模")}</span> : null}
                       </p>
                       <dl className="tabular grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[13px]">
                         <dt className="text-muted-foreground">{tx("Line stated", "所述的线")}</dt>
@@ -234,7 +233,7 @@ export default function WrongPage() {
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">{tx("No live verdict has gone past its line yet.", "目前还没有实时结论亏损超过所述的线。")}</p>
             )}
-            <p className="mt-3 text-[13px] text-muted-foreground">
+            <p className="t-caption mt-4 max-w-prose">
               {tx(`Most live verdicts come from people trying the desk and from our own checks, so many are small test trades. We have no verified real-trader users. Nothing is hidden: every miss is listed and every ticket is counted. Rows under ${TEST_SIZE_USDT} USDT are tagged “test size” (${misses.misses.filter((m) => m.notional < TEST_SIZE_USDT).length} of ${misses.misses.length} listed here); they are probes, often run beside a large ticket at the same moment, and they are not dropped from the totals.`, `大多数实时结论来自试用交易台的人和我们自己的检查，所以很多是小额测试交易。我们没有经核实的真实交易者用户。没有任何内容被隐藏：每一次突破都列出，每张单都计入。低于 ${TEST_SIZE_USDT} USDT 的行标为“测试规模”（此处列出的 ${misses.misses.length} 行中有 ${misses.misses.filter((m) => m.notional < TEST_SIZE_USDT).length} 行）；它们是探测单，常与同一时刻的大额单并列，并未从总数中剔除。`)}
             </p>
           </>
@@ -256,7 +255,7 @@ export default function WrongPage() {
                 : tx(`Recomputed just now: receipt ${chain.first_break?.seq} breaks - ${chain.first_break?.reason}.`, `刚刚重新计算：第 ${chain.first_break?.seq} 张凭证断开——${chain.first_break?.reason}。`)}
             </p>
             <p className="break-all font-mono text-[13px] text-muted-foreground">{tx("Latest receipt: ", "最新凭证：")}{chain.head}</p>
-            <p className="text-[13px] text-muted-foreground">
+            <p className="t-caption">
               {tx("Run it yourself: ", "自己运行：")}<a href="/api/verify" target="_blank" rel="noreferrer" className="underline underline-offset-2">/api/verify</a>{tx(", or", "，或者")}{" "}
               <code>/api/verify/&lt;id&gt;</code>{" "}
               {tx("for one verdict; every report shows its own receipt. What this proves and what it does not: the chain shows nothing was changed after its receipt was written. It is kept by the same server that writes the verdicts, so it cannot prove the whole chain was never rebuilt, and verdicts given before 29 September were chained that day. Replayed forecasts are not chained - they are rebuilt from the code and stored prices whenever the replay runs, and anyone can rebuild them the same way.", "用于单个结论；每份报告都显示自己的凭证。它能证明什么、不能证明什么：链只表明凭证写下之后没有任何东西被改动。它由写下结论的同一台服务器保管，所以无法证明整条链从未被重建；9 月 29 日之前给出的结论是在当天才串成链的。重演的预测不在链里——每次运行重演时都从代码和存储的价格重新构建，任何人都可以用同样方式重建。")}
@@ -268,7 +267,7 @@ export default function WrongPage() {
       </Section>
 
       <Section title={tx("Mistakes we found in the desk itself", "我们在交易台自身发现的错误")} subtitle={tx("Each one changed a number a trader was shown. Newest first; the open one is still open.", "每一个都改变过展示给交易者的某个数字。最新的在前；标为未解决的仍未解决。")}>
-        <ul className="space-y-3">
+        <ul className="divide-y divide-border border-y border-border">
           {FOUND.map((f0, fi) => {
             let f = lang === "zh" && FOUND_ZH[fi] ? { ...f0, ...FOUND_ZH[fi] } : f0;
             // The Bitget entry was marked fixed on 29 Sep. The fix was ours (we reach it over IPv6 and say when it
@@ -284,21 +283,21 @@ export default function WrongPage() {
               };
             }
             return (
-            <li key={f0.what} className="rounded-lg border border-border p-3 text-sm">
-              <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+            <li key={f0.what} className="t-body py-4">
+              <p className="t-caption flex flex-wrap items-center gap-x-3 gap-y-1">
                 {f.when}
                 {f.open ? <Pill tone="warning">{tx("open", "未解决")}</Pill> : <Pill tone="good">{tx("fixed", "已修复")}</Pill>}
                 {f0.what.startsWith("Bitget's US-stock data") && bitget?.status === "unavailable" ? <Pill tone="warning">{tx("outside outage ongoing", "外部服务仍在故障")}</Pill> : null}
               </p>
-              <p className="mt-1">{f.what}</p>
+              <p className="mt-1 font-medium">{f.what}</p>
               <p className="mt-1 text-muted-foreground">{f.fix}</p>
             </li>
             );
           })}
         </ul>
-        <p className="mt-3 text-[13px] text-muted-foreground">
+        <p className="t-caption mt-4 max-w-prose">
           {tx("The questions we asked about the method itself, and the five that came back “no”, are on the", "我们对方法本身提出的问题，以及其中五个答案为“否”的问题，都在")}{" "}
-          <Link href="/studies" className="underline underline-offset-2">
+          <Link href="/studies" className="relative after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] underline underline-offset-2">
             {tx("Studies", "研究")}
           </Link>{" "}
           {tx("page.", "页面。")}
