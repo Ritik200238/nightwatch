@@ -48,7 +48,7 @@ export function Working({ lang: langProp, compact = false, steps }: { lang?: "en
     : zh ? STEPS[current].zh : STEPS[current].en;
   const done = reported ? Math.min(steps.length, 6) / 6 : (current + 0.5) / STEPS.length;
   return (
-    <div className={compact ? "space-y-1.5" : "space-y-2 rounded-lg border border-border p-4"} role="status" aria-live="polite">
+    <div className={compact ? "space-y-1.5" : "space-y-2 border-l-2 border-border pl-4"} role="status" aria-live="polite">
       <p className="flex items-baseline justify-between gap-3 text-sm">
         <span className="min-w-0 truncate font-medium">{label}</span>
         <span className="shrink-0 tabular-nums text-[13px] text-muted-foreground">{Math.floor(elapsed)}s</span>

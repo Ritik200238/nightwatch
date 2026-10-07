@@ -294,7 +294,7 @@ export default function DeskPage() {
           </div>
         ) : null}
         {contrast && !report ? (
-          <div className="space-y-3 rounded-lg border border-border p-5">
+          <div className="space-y-3 border-t border-border pt-5">
             <h2 className="text-base font-semibold">{tx("Same trade, different book", "同一笔交易，不同的组合")}</h2>
             <p className="text-sm text-muted-foreground">
               {tx("Long 20k TSLA overnight, once on its own and once on top of 60k TSLA + 40k NVDA. Same moment, same data; only the book differs.", "做多 2 万美元 TSLA 过夜：一次单独做，一次叠加在 6 万 TSLA + 4 万 NVDA 之上。同一时刻、同样的数据，只有组合不同。")}

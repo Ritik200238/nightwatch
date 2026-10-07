@@ -108,7 +108,7 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
   if (id == null || take?.status === "unavailable" || take?.status === "none") return null;
   if (!take) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4" role="status">
+      <div className="border-t border-border pt-5" role="status">
         <p className="text-sm font-semibold">{lang === "zh" ? "分析师的看法" : "The analyst's take"}</p>
         <p className="mt-2 animate-pulse text-sm text-muted-foreground">{lang === "zh" ? "分析师撰写中…（约 10 秒）" : "Analyst writing… (about 10 s)"}</p>
         <div className="mt-2 space-y-1.5" aria-hidden>
@@ -119,7 +119,7 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
     );
   }
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="border-t border-border pt-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold">
           {lang === "zh" ? "分析师的看法" : "The analyst's take"}
@@ -144,13 +144,13 @@ function AnalystTakeCard({ report, langHint }: { report: Report; langHint: Lang 
             <div className="space-y-2 pb-2">
               <div className="grid gap-2 sm:grid-cols-2">
                 {take.for ? (
-                  <div className="rounded-md border border-border p-2">
+                  <div className="border-l-2 border-border pl-3">
                     <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{tr(lang)("Case for", "支持的理由")}</p>
                     <p className="mt-1 leading-relaxed">{withSourceTags(take.for, lang)}</p>
                   </div>
                 ) : null}
                 {take.against ? (
-                  <div className="rounded-md border border-border p-2">
+                  <div className="border-l-2 border-border pl-3">
                     <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{tr(lang)("Case against", "反对的理由")}</p>
                     <p className="mt-1 leading-relaxed">{withSourceTags(take.against, lang)}</p>
                   </div>
@@ -226,7 +226,7 @@ function PlanNote({ report, lang }: { report: Report; lang: Lang }) {
   }
   if (!line && !c.thesis_mismatch) return null;
   return (
-    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${c.already || tooFar || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning/40 bg-status-warning/5" : "border-border bg-muted/30"}`}>
+    <div className={`mt-3 border-l-2 pl-3 text-sm ${c.already || tooFar || c.thesis_mismatch || c.kind === "wrong_side" ? "border-status-warning" : "border-border"}`}>
       <span className="font-medium text-foreground">{L("Your plan, checked: ", "对你的计划的检查：")}</span>
       <span className="text-muted-foreground">
         {line}
@@ -268,7 +268,7 @@ function LiquidationNote({ report, lang }: { report: Report; lang: Lang }) {
     bad = (l.analog_hits ?? 0) > 0 || l.presets_hit.length > 0 || (l.mc_share ?? 0) >= 0.05;
   }
   return (
-    <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${bad ? "border-status-critical/40 bg-status-critical/5" : "border-border bg-muted/30"}`}>
+    <div className={`mt-3 border-l-2 pl-3 text-sm ${bad ? "border-status-critical" : "border-border"}`}>
       <span className="font-medium text-foreground">{L("Liquidation: ", "强平：")}</span>
       <SourceChip entry={report.provenance?.items.liquidation} lang={lang} className="mr-1.5" />
       <span className="text-muted-foreground">
@@ -289,7 +289,7 @@ function WeekendNote({ report, lang }: { report: Report; lang: Lang }) {
   const w = report.weekend_only;
   if (!w) return null;
   return (
-    <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm">
+    <div className="mt-3 border-l-2 border-status-warning pl-3 text-sm">
       <span className="font-medium text-foreground">{L("Which weekend: ", "指的是哪个周末：")}</span>
       <span className="text-muted-foreground">
         {w.scheduled && w.scheduled_h != null
@@ -313,7 +313,7 @@ function PremiseNote({ report, lang }: { report: Report; lang: Lang }) {
   // trader's own plan still has a problem the verdict alone would hide.
   const passes = report.verdict.verdict === "GO" || report.verdict.verdict === "REDUCE_TO";
   return (
-    <div role="note" className="mt-3 rounded-lg border-2 border-status-warning/60 bg-status-warning/10 px-3 py-2 text-sm">
+    <div role="note" className="mt-3 border-l-4 border-status-warning pl-3 text-sm">
       <span className="font-medium text-foreground">
         {passes ? L("The desk's limits pass, but check your own plan first: ", "交易台的各项限额通过了，但请先检查你自己的计划：") : L("Check your plan: ", "请检查你的计划：")}
       </span>
@@ -359,7 +359,7 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
     >
       <ol className="space-y-3">
         {modes.map((m) => (
-          <li key={m.key} className="rounded-lg border border-border px-3 py-2">
+          <li key={m.key} className="border-t border-border pt-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="font-medium">{modeTitle(m, lang)}</span>
               <span className="tabular text-sm font-medium text-status-critical">
@@ -528,7 +528,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       {prov ? <SourceLegend lang={lang} /> : null}
 
       {against ? (
-        <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+        <p className="mt-3 border-l-2 border-border pl-3 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{L("The best case against it: ", "反对它的最有力理由：")}</span>
           {lang === "zh" && against.text_zh ? against.text_zh : against.text}
         </p>
@@ -546,7 +546,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
           trader never made into the circuit breaker's count. */}
       {report.forecast_id != null && report.forecast_id > 0 ? <TakenButton forecastId={report.forecast_id} lang={lang} noGo={v.verdict === "NO_GO"} /> : null}
       {report.warnings.length ? (
-        <div className="mt-4 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
+        <div className="mt-4 border-l-2 border-status-warning pl-3 text-sm">
           <p className="mb-1 flex items-center gap-2 font-medium">
             <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> {L("Caveats", "注意事项")}
           </p>
@@ -823,7 +823,7 @@ function FreshFilings({ report, lang }: { report: Report; lang: Lang }) {
     >
       <div className="space-y-3">
         {notes.map((n) => (
-          <div key={`${n.accepted_at}-${n.form}`} className="rounded-lg border border-border bg-muted/20 p-3">
+          <div key={`${n.accepted_at}-${n.form}`} className="border-t border-border pt-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <p className="text-sm font-medium">{n.headline}</p>
               <Pill tone={MOVING_TONE[n.market_moving] ?? "muted"}>{impactOf(n.market_moving)}</Pill>
@@ -882,7 +882,7 @@ function Hypothetical({ report, lang }: { report: Report; lang: Lang }) {
   const L = tr(lang);
   if (report.forecast_id == null || report.forecast_id >= 0) return null;
   return (
-    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+    <div className="border-l-2 border-border pl-3 text-sm text-muted-foreground">
       <span className="font-medium text-foreground">{L("A what-if.", "假设情景。")}</span>{" "}
       {L(
         "The desk ran this against the same moment as the report you asked about. It is not journaled and will not be scored, because nobody proposed it as a trade.",
@@ -1236,10 +1236,10 @@ function LensNote({ report, onUnfiltered, lang }: { report: Report; onUnfiltered
   if (!l || !l.lenses.length) return null;
   const share = l.n_before > 0 ? l.n_after / l.n_before : 0;
   return (
-    <div className={`mb-4 rounded-lg border p-3 text-sm ${l.applied ? "border-primary/40 bg-primary/5" : "border-status-warning/40 bg-status-warning/5"}`}>
+    <div className={`mb-4 border-l-2 pl-3 text-sm ${l.applied ? "border-primary" : "border-status-warning"}`}>
       <p className="font-medium">
         {l.applied ? <>{L("Narrowed to ", "已缩小范围至：")}{lang === "zh" && l.description_zh ? l.description_zh : l.description}</> : <>{L("Could not narrow to ", "无法缩小范围至：")}{lang === "zh" && l.description_zh ? l.description_zh : l.description}</>}
-        {l.auto ? <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-xs font-normal">{L("automatic", "自动")}</span> : null}
+        {l.auto ? <span className="ml-2 text-[13px] font-normal text-primary">{L("automatic", "自动")}</span> : null}
       </p>
       {l.auto ? (
         <p className="mt-1 text-[13px] text-muted-foreground">
@@ -1821,7 +1821,7 @@ function BookNote({ report, lang }: { report: Report; lang: Lang }) {
   const after = p.after.tail_loss_quote;
   const delta = before != null && after != null ? after - before : null;
   return (
-    <div className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+    <div className="mt-3 border-l-2 border-border pl-3 text-sm">
       <p className="font-medium text-foreground">{L("Your book", "你的组合")}</p>
       {before != null && after != null && delta != null ? (
         <p className="text-muted-foreground">

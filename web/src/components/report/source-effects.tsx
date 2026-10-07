@@ -19,15 +19,15 @@ export function SourceEffects({ report, lang }: { report: Report; lang: Lang }) 
     context: L("Context only", "仅供参考"),
   };
   const tone: Record<SourceEffect["effect"], string> = {
-    moved_size: "bg-status-warning/15 text-status-warning",
-    set_preset: "bg-primary/10 text-primary",
-    raised_flag: "bg-status-warning/15 text-status-warning",
-    context: "bg-muted text-muted-foreground",
+    moved_size: "text-status-warning",
+    set_preset: "text-primary",
+    raised_flag: "text-status-warning",
+    context: "text-muted-foreground",
   };
   const sorted = [...rows].sort((a, b) => ORDER.indexOf(a.effect) - ORDER.indexOf(b.effect));
   const changed = rows.filter((r) => r.effect !== "context").length;
   return (
-    <div className="mb-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+    <div className="mb-3 border-l-2 border-border pl-3 text-sm">
       <p className="font-medium text-foreground">{L("What each source did", "各数据源起了什么作用")}</p>
       <p className="text-[13px] text-muted-foreground">
         {L(`${changed} of ${rows.length} sources changed something in this answer; the rest are shown beside it.`, `${rows.length} 个数据源中有 ${changed} 个改变了这次的结论，其余仅作参考。`)}
@@ -47,7 +47,7 @@ export function SourceEffects({ report, lang }: { report: Report; lang: Lang }) 
                 <td className="py-1.5 pr-3 font-medium text-foreground">{tl(lang, "feed", r.kind)}</td>
                 <td className="py-1.5 pr-3 text-muted-foreground">{lang === "zh" ? r.supplied_zh : r.supplied}</td>
                 <td className="py-1.5">
-                  <span className={`inline-block rounded px-1.5 py-0.5 text-[12px] font-medium ${tone[r.effect]}`}>{word[r.effect]}</span>
+                  <span className={`inline-block text-[13px] font-medium ${tone[r.effect]}`}>{word[r.effect]}</span>
                   {(lang === "zh" ? r.note_zh : r.note) ? <span className="mt-0.5 block text-muted-foreground">{lang === "zh" ? r.note_zh : r.note}</span> : null}
                 </td>
               </tr>

@@ -115,7 +115,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
       {positions.length ? (
         <ul className="space-y-1">
           {positions.map((p, i) => (
-            <li key={`${p.ticker}-${i}`} className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-sm">
+            <li key={`${p.ticker}-${i}`} className="flex min-h-10 items-center gap-2 border-t border-border py-1 text-sm">
               <span className="font-medium">{p.ticker}</span>
               <span className="text-muted-foreground">{p.side === "long" ? tx("long", "做多") : tx("short", "做空")}</span>
               <span className="tabular ml-auto">{p.notional_quote.toLocaleString()} USDT</span>

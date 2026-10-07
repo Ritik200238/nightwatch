@@ -318,7 +318,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
     <div className="flex h-full min-h-[320px] flex-col">
       <div ref={logRef} className="flex-1 space-y-3 overflow-y-auto pr-1" role="log" aria-live="polite" aria-label={tx("Conversation", "对话")}>
         {ready === false ? (
-          <div className="mb-3 rounded-lg border border-border bg-muted/40 p-3 text-sm">
+          <div className="mb-3 border-l-2 border-border pl-3 text-sm">
             <p className="font-medium">{tx("Reading your words with rules, not a model", "用规则而不是模型来理解你的话")}</p>
             <p className="text-[13px] text-muted-foreground">
               {tx("This server has no Anthropic API key, so a parser handles the sentence instead. It understands the usual shape — “long 25k TSLA overnight, stop 340” — and every number in the answer is copied from the report. With a key the same conversation gets more range.", "这台服务器没有 Anthropic API 密钥，所以由解析器处理你的句子。它能理解常见的写法——“做多 2.5 万 TSLA 过夜，止损 340”——回答里的每个数字都取自报告。有密钥时，同样的对话能覆盖更多情况。")}

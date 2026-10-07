@@ -90,7 +90,7 @@ export function MarketClock({ report, lang = "en" }: { report: Report; lang?: La
 
   const noOpen = open.length === 0;
   return (
-    <section className="rounded-lg border border-border bg-card px-3 py-2.5 text-sm" aria-label={L("The hold on the US market clock", "持仓期间的美股时钟")}>
+    <section className="border-t border-border pt-4 text-sm" aria-label={L("The hold on the US market clock", "持仓期间的美股时钟")}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="font-medium text-foreground">{L("The hold on the US market clock", "持仓期间的美股时钟")}</p>
         {live ? (

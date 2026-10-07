@@ -1,114 +1,39 @@
 "use client";
 
 import { verdictBadge } from "@/lib/verdict-style";
-import { ChevronDown } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { chipText, detailText, KIND_MEANING, KIND_NAME, type ProvEntry, type ProvKind } from "@/lib/provenance";
 import type { Lang } from "@/lib/i18n";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/** A card of the report.
+/** A section of the report. Open: a hairline above and whitespace do the grouping, no box.
+ *  The implementation is shared with the proof pages (OpenSection), so one change restyles both.
  *
- *  With `collapsible`, the header becomes a button and the body starts closed. A report
- *  has twelve of these and the full text runs to nine thousand words; open all at once it
- *  reads as noise rather than as depth. Each collapsed header carries `summary` — the one
- *  number that section is about — so the page still scans as an index of the evidence,
- *  and you open the parts you want to argue with.
- *
- *  `openAll` lets a parent force every section open at once, for the reader who does want
- *  the wall, and for printing.
- */
-export function Section({
-  title,
-  subtitle,
-  children,
-  action,
-  collapsible = false,
-  defaultOpen = false,
-  summary,
-  openAll,
-  tier = "default",
-}: {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-  action?: ReactNode;
-  collapsible?: boolean;
-  defaultOpen?: boolean;
-  summary?: ReactNode;
-  openAll?: boolean;
-  /** Visual weight only: "primary" for what the verdict rests on, "quiet" for background reading. */
-  tier?: "primary" | "default" | "quiet";
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const titleCls = tier === "primary" ? "text-base font-semibold tracking-tight" : tier === "quiet" ? "text-[13px] font-medium text-muted-foreground" : "text-sm font-semibold";
-  const cardCls = tier === "primary" ? "border-foreground/20" : tier === "quiet" ? "border-border/60 bg-transparent" : "";
-  // A parent's expand-all wins while it is set; after that the section is the reader's again.
-  useEffect(() => {
-    if (openAll !== undefined) setOpen(openAll);
-  }, [openAll]);
+ *  With `collapsible`, the heading row is a full-width button and the body starts closed. A
+ *  report has twelve of these; each collapsed header carries `summary` (the one number that
+ *  section is about) so the page still scans as an index. `openAll` lets a parent force every
+ *  section open at once. */
+export { OpenSection as Section } from "@/components/proof-page";
 
-  if (!collapsible) {
-    return (
-      <Card className={`gap-4 py-5 ${cardCls}`}>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 px-5">
-          <div className="space-y-1">
-            <CardTitle role="heading" aria-level={2} className={titleCls}>{title}</CardTitle>
-            {subtitle ? <p className="text-[13px] text-muted-foreground">{subtitle}</p> : null}
-          </div>
-          {action}
-        </CardHeader>
-        <CardContent className="px-5">{children}</CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className={`gap-0 py-0 ${cardCls} ${open ? "" : "hover:border-border/80"}`}>
-      <div role="heading" aria-level={2}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={`flex w-full items-center justify-between gap-4 rounded-xl px-5 text-left ${tier === "primary" ? "min-h-16 py-5" : tier === "quiet" ? "min-h-12 py-3" : "min-h-14 py-4"} focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
-      >
-        <span className="min-w-0 space-y-1">
-          <span className="flex items-center gap-2">
-            <CardTitle className={titleCls}>{title}</CardTitle>
-            {action}
-          </span>
-          {summary ? <span className="block text-[13px] text-muted-foreground">{summary}</span> : subtitle ? <span className="block text-[13px] text-muted-foreground">{subtitle}</span> : null}
-        </span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
-      </button>
-      </div>
-      {open ? (
-        <CardContent className="px-5 pb-5">
-          {summary && subtitle ? <p className="mb-3 text-[13px] text-muted-foreground">{subtitle}</p> : null}
-          {children}
-        </CardContent>
-      ) : null}
-    </Card>
-  );
-}
-
-/** Stat tile: label · value · optional hint. Value in proportional figures. */
+/** One number, with its label above and a quiet hint below. No box: a hairline above and
+ *  whitespace do the grouping. Value in proportional figures. */
 export function Stat({ label, value, hint, tone, chip }: { label: string; value: string; hint?: string; tone?: "good" | "warning" | "critical" | "muted"; chip?: ReactNode }) {
   const color = tone === "good" ? "text-status-good" : tone === "warning" ? "text-status-warning" : tone === "critical" ? "text-status-critical" : "";
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-background/40 px-3 py-2">
-      <span className="text-[13px] leading-snug text-muted-foreground">{label}</span>
-      <span className={`tabular text-base font-semibold leading-tight ${color}`}>{value}</span>
-      {hint ? <span className="text-[13px] leading-snug text-muted-foreground">{hint}</span> : null}
-      {chip ? <span className="mt-0.5 flex">{chip}</span> : null}
+    <div className="flex min-w-0 flex-col gap-0.5 border-t border-border pt-2.5 pb-1">
+      <span className="t-caption">{label}</span>
+      <span className={`tabular text-lg leading-tight font-semibold tracking-tight [overflow-wrap:anywhere] ${color}`}>{value}</span>
+      {hint ? <span className="t-caption">{hint}</span> : null}
+      {chip ? <span className="mt-1 flex">{chip}</span> : null}
     </div>
   );
 }
 
+/** A status word: colour on the text, no outline. A verdict keeps its badge (the one place a
+ *  small outlined shape still carries meaning) and the shared verdict colour map. */
 export function Pill({ children, tone = "muted", verdict }: { children: ReactNode; tone?: "good" | "warning" | "critical" | "muted" | "info"; verdict?: string }) {
-  const cls =
-    verdict ? verdictBadge(verdict) : tone === "good" ? "border-status-good/40 text-status-good" : tone === "warning" ? "border-status-warning/50 text-status-warning" : tone === "critical" ? "border-status-critical/50 text-status-critical" : tone === "info" ? "border-primary/40 text-primary" : "border-border text-muted-foreground";
-  return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
+  if (verdict) return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${verdictBadge(verdict)}`}>{children}</span>;
+  const cls = tone === "good" ? "text-status-good" : tone === "warning" ? "text-status-warning" : tone === "critical" ? "text-status-critical" : tone === "info" ? "text-primary" : "text-muted-foreground";
+  return <span className={`inline-flex items-center text-[13px] font-medium whitespace-nowrap ${cls}`}>{children}</span>;
 }
 
 const KIND_STYLE: Record<ProvKind, { dot: string; text: string }> = {

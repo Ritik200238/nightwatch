@@ -63,7 +63,7 @@ export function ThesisCheckCard({ forecastId, thesis, lang = "en" }: { forecastI
   }, [forecastId, thesis, lang]);
 
   if (!thesis.trim() || failed) return null;
-  const box = "mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm";
+  const box = "mt-3 border-l-2 border-border pl-3 text-sm";
   if (!got) {
     return (
       <div className={box} role="status">

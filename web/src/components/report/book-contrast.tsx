@@ -61,7 +61,7 @@ function Side({ title, r, lang }: { title: string; r: Report; lang: Lang }) {
   const v = r.verdict;
   const tail = r.portfolio?.after.tail_loss_quote ?? null;
   return (
-    <div className="space-y-1 rounded-lg border border-border p-3">
+    <div className="space-y-1 border-t border-border pt-3">
       <h4 className="text-[13px] font-medium text-muted-foreground">{title}</h4>
       <p className="text-lg font-semibold" data-testid="contrast-verdict">
         {tl(lang, "verdictName", v.verdict)}

@@ -114,7 +114,7 @@ function ScenarioRow({ s, lang, pick, onPick }: { s: PlanScenario; lang: Lang; p
   const dir = s.direction === "below" ? L("below", "跌破") : L("above", "涨破");
   const fired = s.chosen?.tripwire_status === "fired";
   return (
-    <li className="rounded-lg border border-border px-3 py-2">
+    <li className="border-t border-border pt-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <span className="font-medium">{title}</span>
         <span className="tabular text-sm">

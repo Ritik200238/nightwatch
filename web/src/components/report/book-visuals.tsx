@@ -15,7 +15,7 @@ function Tile({ label, before, after, fmt, unit = "" }: { label: string; before:
   const flat = Math.abs(d) < 1e-9 || fmt(before) === fmt(after);
   const tone: Tone = flat ? "muted" : d > 0 ? "critical" : "good";
   return (
-    <li className="rounded-md border border-border px-2.5 py-2">
+    <li className="border-t border-border pt-2">
       <span className="block text-xs text-muted-foreground">{label}</span>
       <span className="tabular mt-0.5 block text-[15px] leading-tight">
         <span className="text-muted-foreground">{fmt(before)}</span>
@@ -75,7 +75,7 @@ export function BookVisuals({ report, lang = "en" }: { report: Report; lang?: La
 
   if (!tiles.length && !rows.length) return null;
   return (
-    <section className="rounded-lg border border-border bg-card px-3 py-2.5 text-sm" aria-label={L("Your book before and after this trade", "这笔交易前后的组合")}>
+    <section className="border-t border-border pt-4 text-sm" aria-label={L("Your book before and after this trade", "这笔交易前后的组合")}>
       {tiles.length ? (
         <>
           <p className="font-medium text-foreground">{L("Your book, before → after this trade", "你的组合：这笔交易前 → 后")}</p>
@@ -97,7 +97,7 @@ export function BookVisuals({ report, lang = "en" }: { report: Report; lang?: La
                   <div className="flex items-baseline justify-between gap-2 text-xs">
                     <span className="font-medium text-foreground">
                       {c.ticker} <span className="font-normal text-muted-foreground">{c.side === "long" ? L("long", "多") : L("short", "空")}</span>
-                      {isNew ? <span className="ml-1.5 rounded bg-muted px-1 py-px text-[10px] font-normal text-muted-foreground">{L("this trade", "本次交易")}</span> : null}
+                      {isNew ? <span className="ml-1.5 text-[13px] font-normal text-muted-foreground">{L("this trade", "本次交易")}</span> : null}
                     </span>
                     <span className="tabular text-muted-foreground">
                       {cap.toFixed(0)}% {L("of capital", "资金")} <span aria-hidden>→</span>{" "}

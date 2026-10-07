@@ -104,7 +104,7 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
   if (a) items.push({ key: "analog", label: `${L("Analog search", "相似时刻检索")} (${a.result.matches.length} ${L("of", "/")} ${(a.result.n_candidates ?? 0).toLocaleString()} ${L("hours", "小时")})${ms(tm.analog)}` });
   items.push({ key: "stress", label: `${report.stress.presets.length} ${L("stress presets", "个压力预设")}${ms(tm.stress)}` });
   return (
-    <div className="mt-4 rounded-lg border border-border/60 px-3 py-2">
+    <div className="mt-4 border-l-2 border-border pl-3">
       {/* Different from the "How this verdict was built" card below: that one is the method
           (three steps); this one is the data pulled and tools called to produce this report. */}
       <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">{L("Data and tools used for this answer", "这个答案用到的数据与工具")}</p>

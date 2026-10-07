@@ -304,7 +304,7 @@ export function TicketForm({ universe, busy, working = false, error = null, onRe
         <Textarea id="invalidation" rows={2} value={invalidation} onChange={(e) => setInvalidation(e.target.value)} placeholder={tx("e.g. a close below 350", "例如 收盘跌破 350")} />
       </div>
       {working ? (
-        <div className="space-y-2 rounded-lg border border-border p-4" role="status" aria-live="polite">
+        <div className="space-y-2 border-l-2 border-border pl-4" role="status" aria-live="polite">
           <Working compact />
           <p className="text-[13px] text-muted-foreground">{tx("This can take up to a minute when the desk is busy. Your inputs are kept.", "服务器繁忙时最多需要一分钟。您填写的内容会保留。")}</p>
         </div>

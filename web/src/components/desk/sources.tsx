@@ -72,7 +72,7 @@ export function Sources() {
             const h = ageHours(r.last_update);
             const ok = r.status !== "unavailable" && h != null && h <= (FRESH_H[r.key] ?? 24);
             return (
-              <li key={r.key} className="rounded-lg border border-border bg-background/40 px-3 py-2 text-xs">
+              <li key={r.key} className="border-t border-border pt-2 text-[13px]">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 font-medium">
                     <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${ok ? "bg-status-good" : "bg-status-warning"}`} />
