@@ -47,12 +47,12 @@ export default function SourcesPage() {
         </p>
       ) : null}
       {!rows && !error ? <LoadingRecord blocks={[88, 88, 88]} onRetry={() => setAttempt((n) => n + 1)} /> : null}
-      <ul className="divide-y divide-border border-y border-border">
+      <ul className="grid grid-cols-1 divide-y divide-border border-y border-border md:grid-cols-2 md:gap-x-12 md:divide-y-0">
         {rows?.map((raw) => {
           const fresh = isFresh(raw);
           const r = { ...localSource(raw, zh), latest_label: localLatest(raw.latest_label, zh) };
           return (
-            <li key={r.key} className="py-5">
+            <li key={r.key} className="py-5 md:border-b md:border-border/60">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="flex items-center gap-2 text-sm font-semibold">
                   <span aria-hidden className={`h-2 w-2 rounded-full ${fresh ? "bg-emerald-500" : "bg-amber-500"}`} />

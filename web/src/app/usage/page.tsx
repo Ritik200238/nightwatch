@@ -95,11 +95,11 @@ export default function UsagePage() {
       </Section>
       <Section title={tx("Follow-up questions by kind of answer", "追问（按回答类型）")}>
         {kinds.length ? (
-          <ul className="t-body divide-y divide-border border-y border-border">
+          <ul className="t-body grid grid-cols-1 divide-y divide-border border-y border-border md:grid-cols-2 md:gap-x-12 md:divide-y-0">
             {kinds.map(([k, n]) => (
-              <li key={k} className="flex justify-between gap-4 py-2">
+              <li key={k} className="flex justify-between gap-4 py-2 md:border-b md:border-border/60">
                 <span>{kindLabel(k, lang)}</span>
-                <span className="tabular-nums">{n}</span>
+                <span className="tabular-nums font-medium">{n}</span>
               </li>
             ))}
           </ul>

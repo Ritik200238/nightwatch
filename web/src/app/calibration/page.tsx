@@ -123,17 +123,6 @@ export default function CalibrationPage() {
                   value={fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}
                   hint={tx(`target 5% · ${rep.adjusted.n_evaluated.toLocaleString()} forecasts · raw search ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`, `目标 5% · ${rep.adjusted.n_evaluated.toLocaleString()} 个预测 · 原始搜索 ${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}`)}
                 />
-                {rep.adjusted.raw_lo_coverage > 0.05 ? (
-                  <p className="col-span-2 t-caption max-w-prose sm:col-span-4">
-                    {tx(`Raw history breaches more often than it should (${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)} against a 5% target); that is why every verdict uses the adjusted line, which is on target (${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}).`, `原始历史突破坏情形的频率高于应有水平（${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}，目标 5%）；所以每个结论都用调整后的线，它已达标（${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}）。`)}
-                  </p>
-                ) : null}
-                <p className="col-span-2 t-caption max-w-prose sm:col-span-4">
-                  {tx(
-                    `Treating every forecast as independent, the 95% interval on that rate is ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}. That assumes ${rep.adjusted.n_evaluated.toLocaleString()} separate facts, but forecasts made on the same night share that night's market move.${rep.adjusted.adj_lo_night_ci ? ` Resampling whole nights instead (${rep.adjusted.n_nights} independent nights) gives ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}, which is the interval to trust.` : ""}`,
-                    `把每个预测都当作相互独立，该比例的 95% 区间为 ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}。这假设有 ${rep.adjusted.n_evaluated.toLocaleString()} 个独立事实，但同一夜的预测共享该夜的市场波动。${rep.adjusted.adj_lo_night_ci ? ` 改为按整夜重抽样（${rep.adjusted.n_nights} 个独立夜晚）得到 ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}，应以此区间为准。` : ""}`,
-                  )}
-                </p>
                 <Stat label={tx("Inside the 5th-95th band", "落在第 5–95 百分位区间内")} value={fmtPct(rep.adjusted.adj_band_coverage * 100, 1, false)} hint={tx(`target 90% · raw ${fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}`, `目标 90% · 原始 ${fmtPct(rep.adjusted.raw_band_coverage * 100, 1, false)}`)} />
                 {rep.adjusted.bands
                   .filter((b) => b.band !== "pooled")
@@ -145,6 +134,30 @@ export default function CalibrationPage() {
                       hint={tx(`below the 5th percentile · ${b.n.toLocaleString()} forecasts on ${b.n_nights ?? "?"} nights · ${b.adj_tail_band}`, `低于第 5 百分位 · ${b.n.toLocaleString()} 个预测，${b.n_nights ?? "?"} 个夜晚 · ${tb(b.adj_tail_band)}`)}
                     />
                   ))}
+              </div>
+              {rep.adjusted.raw_lo_coverage > 0.05 ? (
+                <p className="mt-4 t-caption max-w-prose">
+                  {tx(`Raw history breaches more often than it should (${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)} against a 5% target); that is why every verdict uses the adjusted line, which is on target (${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}).`, `原始历史突破坏情形的频率高于应有水平（${fmtPct(rep.adjusted.raw_lo_coverage * 100, 1, false)}，目标 5%）；所以每个结论都用调整后的线，它已达标（${fmtPct(rep.adjusted.adj_lo_coverage * 100, 1, false)}）。`)}
+                </p>
+              ) : null}
+              <div className="mt-3">
+                <details className="group sm:hidden">
+                  <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
+                    {tx("Show resampling statistical interval ▸", "展开重抽样统计区间细节 ▸")}
+                  </summary>
+                  <p className="mt-2 t-caption max-w-prose">
+                    {tx(
+                      `Treating every forecast as independent, the 95% interval on that rate is ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}. That assumes ${rep.adjusted.n_evaluated.toLocaleString()} separate facts, but forecasts made on the same night share that night's market move.${rep.adjusted.adj_lo_night_ci ? ` Resampling whole nights instead (${rep.adjusted.n_nights} independent nights) gives ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}, which is the interval to trust.` : ""}`,
+                      `把每个预测都当作相互独立，该比例的 95% 区间为 ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}。这假设有 ${rep.adjusted.n_evaluated.toLocaleString()} 个独立事实，但同一夜的预测共享该夜的市场波动。${rep.adjusted.adj_lo_night_ci ? ` 改为按整夜重抽样（${rep.adjusted.n_nights} 个独立夜晚）得到 ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}，应以此区间为准。` : ""}`,
+                    )}
+                  </p>
+                </details>
+                <p className="hidden sm:block t-caption max-w-prose">
+                  {tx(
+                    `Treating every forecast as independent, the 95% interval on that rate is ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}. That assumes ${rep.adjusted.n_evaluated.toLocaleString()} separate facts, but forecasts made on the same night share that night's market move.${rep.adjusted.adj_lo_night_ci ? ` Resampling whole nights instead (${rep.adjusted.n_nights} independent nights) gives ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} to ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}, which is the interval to trust.` : ""}`,
+                    `把每个预测都当作相互独立，该比例的 95% 区间为 ${fmtPct(rep.adjusted.adj_lo_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_ci[1] * 100, 1, false)}。这假设有 ${rep.adjusted.n_evaluated.toLocaleString()} 个独立事实，但同一夜的预测共享该夜的市场波动。${rep.adjusted.adj_lo_night_ci ? ` 改为按整夜重抽样（${rep.adjusted.n_nights} 个独立夜晚）得到 ${fmtPct(rep.adjusted.adj_lo_night_ci[0] * 100, 1, false)} 至 ${fmtPct(rep.adjusted.adj_lo_night_ci[1] * 100, 1, false)}，应以此区间为准。` : ""}`,
+                  )}
+                </p>
               </div>
             </Section>
           ) : null}
