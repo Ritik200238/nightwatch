@@ -80,11 +80,11 @@ export function Scenarios({ paths, horizonLabel, height = 300, lang = "en" }: Pr
             type="number"
             domain={[0, paths.hours[paths.hours.length - 1]]}
             tickFormatter={(v: number) => hourLabel(v, lang)}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
             axisLine={{ stroke: "var(--grid)" }}
             tickLine={false}
           />
-          <YAxis tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${v.toFixed(0)}%`} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} width={46} />
+          <YAxis tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${v.toFixed(0)}%`} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={false} tickLine={false} width={50} />
 
           {/* The forecast itself, under the paths it is made of. */}
           <Area dataKey="p5" stackId="fan" stroke="none" fill="none" isAnimationActive={false} />
@@ -115,13 +115,13 @@ export function Scenarios({ paths, horizonLabel, height = 300, lang = "en" }: Pr
               stroke="var(--status-critical)"
               strokeWidth={1.5}
               strokeDasharray="5 4"
-              label={{ value: L("your stop", "你的止损"), position: "insideBottomLeft", fill: "var(--status-critical)", fontSize: 11 }}
+              label={{ value: L("your stop", "你的止损"), position: "insideBottomLeft", fill: "var(--status-critical)", fontSize: 12 }}
             />
           ) : null}
         </ComposedChart>
       </ResponsiveContainer>
 
-      <figcaption className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <figcaption className="mt-2 space-y-1 text-[13px] leading-relaxed text-muted-foreground">
         <p>
           <span className="inline-block h-[2px] w-4 align-middle" style={{ background: "var(--chart-1)" }} />{" "}
           {L(`the ${near} closest matches`, `最相似的 ${near} 个`)} ·{" "}

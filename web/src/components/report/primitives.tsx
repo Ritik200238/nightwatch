@@ -1,5 +1,6 @@
 "use client";
 
+import { verdictBadge } from "@/lib/verdict-style";
 import { ChevronDown } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { chipText, detailText, KIND_MEANING, KIND_NAME, type ProvEntry, type ProvKind } from "@/lib/provenance";
@@ -26,6 +27,7 @@ export function Section({
   defaultOpen = false,
   summary,
   openAll,
+  tier = "default",
 }: {
   title: string;
   subtitle?: string;
@@ -35,8 +37,12 @@ export function Section({
   defaultOpen?: boolean;
   summary?: ReactNode;
   openAll?: boolean;
+  /** Visual weight only: "primary" for what the verdict rests on, "quiet" for background reading. */
+  tier?: "primary" | "default" | "quiet";
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const titleCls = tier === "primary" ? "text-base font-semibold tracking-tight" : tier === "quiet" ? "text-[13px] font-medium text-muted-foreground" : "text-sm font-semibold";
+  const cardCls = tier === "primary" ? "border-foreground/20" : tier === "quiet" ? "border-border/60 bg-transparent" : "";
   // A parent's expand-all wins while it is set; after that the section is the reader's again.
   useEffect(() => {
     if (openAll !== undefined) setOpen(openAll);
@@ -44,10 +50,10 @@ export function Section({
 
   if (!collapsible) {
     return (
-      <Card className="gap-4 py-5">
+      <Card className={`gap-4 py-5 ${cardCls}`}>
         <CardHeader className="flex flex-row items-start justify-between gap-4 px-5">
           <div className="space-y-1">
-            <CardTitle role="heading" aria-level={2} className="text-sm font-semibold">{title}</CardTitle>
+            <CardTitle role="heading" aria-level={2} className={titleCls}>{title}</CardTitle>
             {subtitle ? <p className="text-[13px] text-muted-foreground">{subtitle}</p> : null}
           </div>
           {action}
@@ -58,17 +64,17 @@ export function Section({
   }
 
   return (
-    <Card className={`gap-0 py-0 ${open ? "" : "hover:border-border/80"}`}>
+    <Card className={`gap-0 py-0 ${cardCls} ${open ? "" : "hover:border-border/80"}`}>
       <div role="heading" aria-level={2}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-4 rounded-xl px-5 py-4 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className={`flex w-full items-center justify-between gap-4 rounded-xl px-5 text-left ${tier === "primary" ? "min-h-16 py-5" : tier === "quiet" ? "min-h-12 py-3" : "min-h-14 py-4"} focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
       >
         <span className="min-w-0 space-y-1">
           <span className="flex items-center gap-2">
-            <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+            <CardTitle className={titleCls}>{title}</CardTitle>
             {action}
           </span>
           {summary ? <span className="block text-[13px] text-muted-foreground">{summary}</span> : subtitle ? <span className="block text-[13px] text-muted-foreground">{subtitle}</span> : null}
@@ -92,16 +98,16 @@ export function Stat({ label, value, hint, tone, chip }: { label: string; value:
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-background/40 px-3 py-2">
       <span className="text-[13px] leading-snug text-muted-foreground">{label}</span>
-      <span className={`text-base font-semibold leading-tight ${color}`}>{value}</span>
+      <span className={`tabular text-base font-semibold leading-tight ${color}`}>{value}</span>
       {hint ? <span className="text-[13px] leading-snug text-muted-foreground">{hint}</span> : null}
       {chip ? <span className="mt-0.5 flex">{chip}</span> : null}
     </div>
   );
 }
 
-export function Pill({ children, tone = "muted" }: { children: ReactNode; tone?: "good" | "warning" | "critical" | "muted" | "info" }) {
+export function Pill({ children, tone = "muted", verdict }: { children: ReactNode; tone?: "good" | "warning" | "critical" | "muted" | "info"; verdict?: string }) {
   const cls =
-    tone === "good" ? "border-status-good/40 text-status-good" : tone === "warning" ? "border-status-warning/50 text-status-warning" : tone === "critical" ? "border-status-critical/50 text-status-critical" : tone === "info" ? "border-primary/40 text-primary" : "border-border text-muted-foreground";
+    verdict ? verdictBadge(verdict) : tone === "good" ? "border-status-good/40 text-status-good" : tone === "warning" ? "border-status-warning/50 text-status-warning" : tone === "critical" ? "border-status-critical/50 text-status-critical" : tone === "info" ? "border-primary/40 text-primary" : "border-border text-muted-foreground";
   return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
 }
 

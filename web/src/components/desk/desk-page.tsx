@@ -267,7 +267,7 @@ export default function DeskPage() {
       <section ref={resultRef} className="min-w-0 scroll-mt-4" aria-live="polite" aria-busy={busy}>
         {busy && !report ? <ReportSkeleton /> : null}
         {error && tab !== "form" ? (
-          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div role="alert" className="mb-5 space-y-1 rounded-lg border border-destructive/30 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
             <p className="text-[13px] text-muted-foreground">{error}</p>
             {lastTicket ? (
@@ -278,7 +278,7 @@ export default function DeskPage() {
           </div>
         ) : null}
         {contrast && !report ? (
-          <div className="space-y-3 rounded-lg border border-border p-4">
+          <div className="space-y-3 rounded-lg border border-border p-5">
             <h2 className="text-base font-semibold">{tx("Same trade, different book", "同一笔交易，不同的组合")}</h2>
             <p className="text-sm text-muted-foreground">
               {tx("Long 20k TSLA overnight, once on its own and once on top of 60k TSLA + 40k NVDA. Same moment, same data; only the book differs.", "做多 2 万美元 TSLA 过夜：一次单独做，一次叠加在 6 万 TSLA + 4 万 NVDA 之上。同一时刻、同样的数据，只有组合不同。")}
@@ -315,9 +315,9 @@ export default function DeskPage() {
             <ReportView report={exampleReport} lang={lang} hideTake />
           </div>
         ) : !busy && !error && !contrast ? (
-          <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
+          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border p-6 sm:p-8 text-center">
             <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
-            <ol className="max-w-prose space-y-1 text-left text-sm text-muted-foreground">
+            <ol className="max-w-prose space-y-2 text-left text-sm leading-relaxed text-muted-foreground">
               <li>
                 <span className="font-medium text-foreground">1.</span> {tx("Describe the trade - in the form, or in plain words in chat (English or 中文).", "描述这笔交易——用表单，或者在聊天里用大白话（English 或中文）。")}
               </li>

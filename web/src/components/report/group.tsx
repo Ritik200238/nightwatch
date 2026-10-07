@@ -6,23 +6,23 @@ import { useEffect, useState, type ReactNode } from "react";
 /** A named heading that folds a run of report sections away, so the page opens on the
  *  verdict and the evidence behind it and a reader scans the rest by heading. Nothing
  *  inside is removed: the sections keep their own summaries and open/close state. */
-export function Group({ title, hint, openAll, children }: { title: string; hint: string; openAll?: boolean; children: ReactNode }) {
+export function Group({ title, hint, openAll, tier = "quiet", children }: { title: string; hint: string; openAll?: boolean; tier?: "primary" | "quiet"; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   // The report's expand-all / collapse-all wins while it is set; after that the reader owns it.
   useEffect(() => {
     if (openAll !== undefined) setOpen(openAll);
   }, [openAll]);
   return (
-    <div className="rounded-xl border border-border">
+    <div className={`rounded-xl border ${tier === "primary" ? "border-foreground/20" : "border-border/60"}`}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-4 rounded-xl px-5 py-4 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className={`flex w-full items-center justify-between gap-4 rounded-xl px-5 ${tier === "primary" ? "min-h-16 py-5" : "min-h-12 py-3"} text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
       >
         <span className="min-w-0">
-          <span className="block text-base font-semibold">{title}</span>
-          <span className="block text-[13px] text-muted-foreground">{hint}</span>
+          <span className={tier === "primary" ? "block text-base font-semibold tracking-tight" : "block text-sm font-medium text-muted-foreground"}>{title}</span>
+          <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">{hint}</span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
