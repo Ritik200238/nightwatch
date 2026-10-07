@@ -36,7 +36,7 @@ export function Permalink({ forecastId, lang = "en" }: { forecastId: number; lan
       <button
         type="button"
         onClick={() => void copy()}
-        className="relative inline-flex items-center gap-1 rounded underline underline-offset-2 hover:text-foreground after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="relative inline-flex min-h-10 items-center gap-1 rounded underline underline-offset-2 hover:text-foreground after:absolute after:-inset-x-3 after:-inset-y-2 after:content-[''] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         {copied ? <Check className="h-3 w-3 text-status-good" aria-hidden /> : null}
         {copied ? L("link copied", "链接已复制") : L("copy link", "复制链接")}

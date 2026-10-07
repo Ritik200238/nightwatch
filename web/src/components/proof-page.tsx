@@ -6,8 +6,8 @@ import { verdictText } from "@/lib/verdict-style";
 import { useLang } from "@/lib/lang";
 import { ProofTabs } from "./proof-tabs";
 
-/** One width for every proof page, so moving between them does not shift the layout. */
-export const PROOF_WIDTH = "mx-auto w-full max-w-5xl";
+/** One width for every proof page, aligning to the main container left edge at x=112px at 1440px. */
+export const PROOF_WIDTH = "w-full";
 /** Vertical rhythm between the blocks of a proof page (32 px; sections inside use 24). */
 export const PROOF_STACK = "space-y-8";
 export const H1_CLASS = "t-title";
@@ -77,7 +77,7 @@ export function OpenSection({
   tier = "default",
 }: {
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   children: ReactNode;
   action?: ReactNode;
   collapsible?: boolean;
@@ -98,7 +98,7 @@ export function OpenSection({
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="min-w-0 space-y-1">
             <h2 className={titleCls}>{title}</h2>
-            {subtitle ? <p className="t-caption max-w-prose">{subtitle}</p> : null}
+            {subtitle ? <div className="t-caption max-w-prose">{subtitle}</div> : null}
           </div>
           {action}
         </div>

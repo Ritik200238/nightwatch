@@ -10,6 +10,7 @@ import { plainText } from "@/lib/plain";
 import { startAgent, useAgent } from "@/lib/agent-run";
 import { loadChat, saveChat, saveReportId } from "@/lib/desk-session";
 import { GuardNote } from "@/components/report/guard-note";
+import { verdictText } from "@/lib/verdict-style";
 import { ChatCardView } from "./chat-card";
 import { Working } from "./working";
 import { reducedMotion, scrollToMessageStart } from "@/lib/scroll";
@@ -26,6 +27,8 @@ interface Msg {
   removed?: number;
   /** The small picture of the answer's own numbers, when the desk drew one. */
   card?: ChatCard;
+  /** The verdict of the report generated on this turn, if any. */
+  reportVerdict?: string;
 }
 
 interface Props {
@@ -106,9 +109,38 @@ const READ_FROM: Record<string, string> = {
   data: "the list of live sources",
 };
 
+function parseVerdictKey(m: Msg, hasReportOnScreen: boolean): string | null {
+  if (m.reportVerdict) return m.reportVerdict;
+  if (!hasReportOnScreen || m.role !== "assistant") return null;
+  if (/(?:^|\n)VERDICT:\s*([A-Z_ ]+)/i.test(m.content)) {
+    const match = m.content.match(/(?:^|\n)VERDICT:\s*([A-Z_ ]+)/i);
+    return match ? match[1].trim().toUpperCase().replace(/\s+/g, "_") : null;
+  }
+  if (/^(?:REVIEW|需复核)[：:]/i.test(m.content)) return "REVIEW";
+  if (/^(?:GO|可以做)[：:]/i.test(m.content)) return "GO";
+  if (/^(?:NO GO|NO-GO|不建议做)[：:]/i.test(m.content)) return "NO_GO";
+  if (/^(?:REDUCE TO|减仓|建议减仓)[：:]/i.test(m.content)) return "REDUCE_TO";
+  if (/^(?:HEDGE|对冲|建议对冲)[：:]/i.test(m.content)) return "HEDGE";
+  return null;
+}
+
+function verdictLabelFor(v: string, zh: boolean): string {
+  if (!zh) return v.replace(/_/g, " ");
+  switch (v) {
+    case "GO": return "可以做";
+    case "REDUCE_TO": return "建议减仓";
+    case "HEDGE": return "建议对冲";
+    case "REVIEW":
+    case "REVIEW_REQUIRED": return "需要复核";
+    case "NO_GO": return "不建议做";
+    default: return v;
+  }
+}
+
 export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewChat, script }: Props) {
   const { lang, setLang, tx } = useLang();
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [expandedMap, setExpandedMap] = useState<Record<number, boolean>>({});
   // The report the conversation is currently about. Questions are answered from it.
   const [contextId, setContextId] = useState<number | null>(null);
   // Its side, so the suggested questions are the ones that hurt this position.
@@ -269,8 +301,19 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
         commit([...next, { role: "assistant", content: snapshotNoticeFor(snapshotFlag.get() ?? isoIn(res.reply), chatLang) }]);
         return;
       }
+      const reportVerdict = res.report ? ((res.report.verdict?.verdict as string) ?? "REVIEW") : undefined;
       scrollMode.current = res.report ? "none" : "start";
-      commit([...next, { role: "assistant", content: res.reply, unverified: res.unverified_numbers, readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined, card: res.card }]);
+      commit([
+        ...next,
+        {
+          role: "assistant",
+          content: res.reply,
+          unverified: res.unverified_numbers,
+          readFrom: res.answer_kind ? (chatLang === "zh" ? READ_FROM_ZH : READ_FROM)[res.answer_kind] : undefined,
+          card: res.card,
+          reportVerdict,
+        },
+      ]);
       // A follow-up answers about the report already on screen and leaves it there.
       if (res.report) {
         onReport(res.report, chatLang);
@@ -339,16 +382,57 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
             </ul>
           </div>
         ) : null}
-        {messages.map((m, i) => (
-          <div key={i} data-msg={i} className={`scroll-mt-4 ${m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}`}>
-            <p className="whitespace-pre-wrap">{m.role === "assistant" ? plainText(m.content, lang) : m.content}</p>
-            {m.card ? <ChatCardView card={m.card} /> : null}
-            {m.readFrom ? <p className="mt-2 text-[13px] text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}
-            {m.byline ? <p className="mt-2 text-[13px] text-muted-foreground">{m.byline}</p> : null}
-            {m.removed ? <GuardNote n={m.removed} lang={lang} /> : null}
-            {m.unverified && m.unverified.length ? <p className="mt-2 text-xs text-status-warning">{tx("Numbers not found in the report: ", "报告中找不到这些数字：")}{m.unverified.join(", ")}</p> : null}
-          </div>
-        ))}
+        {messages.map((m, i) => {
+          const vKey = parseVerdictKey(m, contextId != null);
+          const isCollapsed = Boolean(vKey) && !expandedMap[i];
+
+          if (isCollapsed) {
+            return (
+              <div key={i} data-msg={i} className="mr-2 rounded-lg bg-muted px-3 py-2 text-sm scroll-mt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <span>{tx("Verdict:", "结论：")}</span>
+                    <span className={`font-semibold ${verdictText(vKey!)}`}>{verdictLabelFor(vKey!, lang === "zh")}</span>
+                    <span className="text-muted-foreground">— {tx("see the report", "见报告")}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMap((prev) => ({ ...prev, [i]: true }))}
+                    className="inline-flex min-h-7 items-center text-xs text-muted-foreground hover:text-foreground underline decoration-muted-foreground/60 underline-offset-2"
+                  >
+                    {tx("Show full answer", "展开完整回答")}
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={i} data-msg={i} className={`scroll-mt-4 ${m.role === "user" ? "ml-6 rounded-lg bg-primary/10 px-3 py-2 text-sm" : "mr-2 rounded-lg bg-muted px-3 py-2 text-sm"}`}>
+              {vKey ? (
+                <div className="mb-2 flex items-center justify-between border-b border-border/40 pb-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {tx("Verdict:", "结论：")}{" "}
+                    <span className={`font-semibold ${verdictText(vKey)}`}>{verdictLabelFor(vKey, lang === "zh")}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedMap((prev) => ({ ...prev, [i]: false }))}
+                    className="inline-flex min-h-6 items-center text-xs text-muted-foreground hover:text-foreground underline decoration-muted-foreground/60 underline-offset-2"
+                  >
+                    {tx("Collapse", "收起")}
+                  </button>
+                </div>
+              ) : null}
+              <p className="whitespace-pre-wrap">{m.role === "assistant" ? plainText(m.content, lang) : m.content}</p>
+              {m.card ? <ChatCardView card={m.card} /> : null}
+              {m.readFrom ? <p className="mt-2 text-[13px] text-muted-foreground">{tx(`Read out of ${m.readFrom}.`, `依据：${m.readFrom}。`)}</p> : null}
+              {m.byline ? <p className="mt-2 text-[13px] text-muted-foreground">{m.byline}</p> : null}
+              {m.removed ? <GuardNote n={m.removed} lang={lang} /> : null}
+              {m.unverified && m.unverified.length ? <p className="mt-2 text-xs text-status-warning">{tx("Numbers not found in the report: ", "报告中找不到这些数字：")}{m.unverified.join(", ")}</p> : null}
+            </div>
+          );
+        })}
         {/* Once there is a report, offer the questions it can answer about itself. Nobody
             guesses that a stress tester will tell them what a 6% stop would do. */}
         {contextId != null && !busy ? (

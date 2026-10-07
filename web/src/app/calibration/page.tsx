@@ -419,7 +419,6 @@ export default function CalibrationPage() {
             </Section>
           ) : null}
 
-          <div className="grid gap-4 lg:grid-cols-2">
             <Section collapsible title={tx("Coverage by quantile", "各分位数的覆盖率")} subtitle={tx("Observed share of outcomes below each predicted quantile, with a 95% interval.", "低于各预测分位数的结果所占的实际比例，附 95% 区间。")}>
               <ScrollTable>
 
@@ -454,8 +453,8 @@ export default function CalibrationPage() {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={pitData} margin={{ top: 12, right: 8, bottom: 4, left: -18 }} barCategoryGap={8}>
                     <CartesianGrid vertical={false} stroke="var(--grid)" />
-                    <XAxis dataKey="bucket" tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={{ stroke: "var(--grid)" }} tickLine={false} />
-                    <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
+                    <XAxis dataKey="bucket" tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--grid)" }} tickLine={false} />
+                    <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${Math.round(v * 100)}%`} />
                     <Tooltip contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--popover-foreground)", fontSize: 12 }} formatter={(v, name) => [`${(Number(v) * 100).toFixed(1)}%`, name === "observed" ? tx("observed", "实际") : tx("expected", "预期")]} />
                     <Bar dataKey="expected" fill="var(--muted-foreground)" fillOpacity={0.35} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} name="expected" />
                     <Bar dataKey="observed" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} name="observed" />
@@ -472,7 +471,6 @@ export default function CalibrationPage() {
                 </figcaption>
               </figure>
             </Section>
-          </div>
           </div>
         </>
       )}
@@ -507,13 +505,31 @@ function SinceFreezeBlock({ f }: { f: NonNullable<CalibrationReport["since_freez
   // Before the date, "frozen" would be a claim about the future: say it is scheduled.
   const ahead = new Date(f.frozen_at).getTime() > Date.now();
   const pretty = new Date(f.frozen_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const fullText = tx(
+    `The tail adjustment was designed while looking at the history it is scored on above, so that number is optimistic by an unknown amount. ${ahead ? `Method freeze scheduled for ${pretty} (00:00 UTC); forecasts from then on are scored separately.` : `Method frozen on ${pretty}`} (git tag ${f.git_tag ?? "?"}). Only forecasts made after it count here, so nothing in this group could have shaped the method.`,
+    `尾部调整是在看着上面所评分的历史时设计的，所以那个数字偏乐观的程度未知。${ahead ? `方法冻结定于 ${day}（UTC 00:00）；从那时起做出的预测将单独评分。` : `方法于 ${day} 冻结`}（git 标签 ${f.git_tag ?? "?"}）。这里只统计冻结之后做出的预测，所以这一组不可能影响过方法本身。`,
+  );
+  const shortText = tx(
+    `${ahead ? `Freeze scheduled: ${pretty}` : `Method frozen: ${pretty}`} (${f.git_tag ?? "?"}) · Strictly out of sample`,
+    `${ahead ? `定于 ${day} 冻结` : `于 ${day} 冻结`}（${f.git_tag ?? "?"}）· 严格样本外`,
+  );
   return (
     <Section
       title={ahead ? tx("Scored after the method freeze", "方法冻结之后才评分的预测") : tx("Scored after the method was frozen", "方法冻结之后才评分的预测")}
-      subtitle={tx(
-        `The tail adjustment was designed while looking at the history it is scored on above, so that number is optimistic by an unknown amount. ${ahead ? `Method freeze scheduled for ${pretty} (00:00 UTC); forecasts from then on are scored separately.` : `Method frozen on ${pretty}`} (git tag ${f.git_tag ?? "?"}). Only forecasts made after it count here, so nothing in this group could have shaped the method.`,
-        `尾部调整是在看着上面所评分的历史时设计的，所以那个数字偏乐观的程度未知。${ahead ? `方法冻结定于 ${day}（UTC 00:00）；从那时起做出的预测将单独评分。` : `方法于 ${day} 冻结`}（git 标签 ${f.git_tag ?? "?"}）。这里只统计冻结之后做出的预测，所以这一组不可能影响过方法本身。`,
-      )}
+      subtitle={
+        <>
+          <span className="hidden sm:inline">{fullText}</span>
+          <span className="sm:hidden block">
+            <span>{shortText}</span>
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
+                {tx("Why this matters ▸", "展开设计背景 ▸")}
+              </summary>
+              <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{fullText}</span>
+            </details>
+          </span>
+        </>
+      }
     >
       {f.n ? (
         <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">

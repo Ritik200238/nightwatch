@@ -89,7 +89,7 @@ export function Sources() {
                   <p className="mt-1">
                     <span className="font-medium">{tx("Used for: ", "用途：")}</span>
                     {zh ? r.used_for_zh : r.used_for}
-                    {r.effect ? <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{zh ? ({ "moves the size": "可改变仓位", "sets a preset": "设定情景", "raises a flag": "触发提示", "context only": "仅供参考" } as Record<string, string>)[r.effect] ?? r.effect : r.effect}</span> : null}
+                    {r.effect ? <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{zh ? ({ "moves the size": "可改变仓位", "sets a preset": "设定情景", "raises a flag": "触发提示", "context only": "仅供参考" } as Record<string, string>)[r.effect] ?? r.effect : r.effect}</span> : null}
                   </p>
                 ) : null}
                 {r.status === "unavailable" ? (

@@ -125,7 +125,7 @@ export default function StatusPage() {
                   "The US-stock data feed is down upstream. The engine marks those inputs unavailable and does not guess. Each gap is logged on the ",
                   "美股数据源在上游中断。引擎会把这些输入标为不可用，而不是猜测。每一次缺口都记录在",
                 )}
-                <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
+                <Link href="/wrong" className="relative inline-block after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] underline underline-offset-2 hover:text-foreground">
                   {tx("Misses page", "失误页面")}
                 </Link>
                 {tx(".", "。")}
@@ -152,7 +152,7 @@ export default function StatusPage() {
           <p>{sources.error ? NA : tx("Checking…", "检查中…")}</p>
         )}
         <p className="pt-1 text-[13px]">
-          <Link href="/sources" className="underline underline-offset-2 hover:text-foreground">
+          <Link href="/sources" className="relative inline-block after:absolute after:-inset-x-2 after:-inset-y-2 after:content-[''] underline underline-offset-2 hover:text-foreground">
             {tx("What each feed is", "每个数据源是什么")}
           </Link>
         </p>

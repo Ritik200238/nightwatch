@@ -74,8 +74,8 @@ export default function UsagePage() {
             label={tx("Verdicts given to visitors", "给访客的结论")}
             value={u.live_verdicts.toLocaleString()}
             hint={tx(
-              `answers visitors asked for, our own checks left out. The journal holds ${u.journal_live_verdicts_all_time.toLocaleString()} live analyses in all (open ones and our own checks included); the scored count is on /wrong.`,
-              `访客请求的回答，不含我们自己的检查。日志里共有 ${u.journal_live_verdicts_all_time.toLocaleString()} 条实时分析（含尚未到期的和我们自己的检查）；已评分的数量见 /wrong。`,
+              `answers visitors asked for, our own checks left out. The journal holds ${u.journal_live_verdicts_all_time.toLocaleString()} live analyses in all; scored count on /wrong.`,
+              `访客请求的回答，不含我们自己的检查。日志共 ${u.journal_live_verdicts_all_time.toLocaleString()} 条实时分析；已评分见 /wrong。`,
             )}
           />
           <Stat
@@ -86,12 +86,14 @@ export default function UsagePage() {
           <Stat label={tx("Useful", "有用")} value={String(u.feedback.useful)} hint={asked ? tx(`of ${asked} answers`, `共 ${asked} 个回答`) : tx("no answers yet", "暂无回答")} />
           <Stat label={tx("Not useful", "没用")} value={String(u.feedback.not_useful)} />
         </div>
-        <p className="t-body mt-6 text-muted-foreground">
-          {tx("By language: ", "按语言：")}
-          {Object.entries(u.by_language)
-            .map(([k, v]) => `${k === "zh" ? "中文" : "English"} ${v}`)
-            .join(" · ") || "-"}
-        </p>
+        <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground border-t border-border/60 pt-3">
+          <span className="font-medium text-foreground/80">{tx("By language:", "按语言：")}</span>
+          {Object.entries(u.by_language).map(([k, v]) => (
+            <span key={k} className="rounded-md border border-border/80 bg-muted/40 px-2 py-0.5 tabular-nums">
+              {k === "zh" ? "中文" : "English"}: {v}
+            </span>
+          ))}
+        </div>
       </Section>
       <Section title={tx("Follow-up questions by kind of answer", "追问（按回答类型）")}>
         {kinds.length ? (

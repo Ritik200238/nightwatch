@@ -57,8 +57,8 @@ export function HealthPill() {
   if (!health) {
     return (
       <span role="status" className="inline-flex h-7 w-28 shrink-0 items-center justify-center gap-2 rounded-full border border-border px-3 text-xs whitespace-nowrap text-muted-foreground sm:w-36">
-        <span aria-hidden className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-muted-foreground/50" />
-        {tx("checking…", "检查中…")}
+        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
+        {tx("status", "状态")}
       </span>
     );
   }
