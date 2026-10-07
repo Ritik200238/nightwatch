@@ -1441,6 +1441,39 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         s.calibration_cache[("misses", "")] = (utc_now(), out)
         return out
 
+    @app.get("/ledger")
+    def ledger() -> dict[str, Any]:
+        """Every scored forecast, one row each, so a reader can recompute the headline
+        numbers instead of trusting them: the tail line stated at the time (fitted only on
+        forecasts that had already matured, exactly as /calibration and /misses score it),
+        what then happened, and whether it went past. Live tickets carry their receipt."""
+        s = st()
+        cached = s.calibration_cache.get(("ledger", ""))
+        if cached and (utc_now() - cached[0]).total_seconds() < CALIBRATION_TTL_SEC:
+            return cached[1]
+        from nightwatch.journal import receipts
+        from nightwatch.journal.adjust import expanding_rows
+
+        with s.lock:
+            mature_and_learn(s.journal, spot_symbol_for={e.ticker: e.spot_symbol for e in s.entries})
+            df = s.journal.forecasts(matured_only=True)
+            rows = expanding_rows(df) if not df.empty else pd.DataFrame()
+            meta = df.set_index("id")[["kind", "side", "horizon_h", "verdict"]] if not df.empty else pd.DataFrame()
+            out_rows: list[dict[str, Any]] = []
+            if not rows.empty:
+                rows = rows.join(meta, on="id").sort_values("as_of", ascending=False)
+                for _, x in rows.iterrows():
+                    rc = receipts.receipt(s.store._conn, int(x["id"])) if x["kind"] == "ticket" else None
+                    out_rows.append({
+                        "id": int(x["id"]), "kind": str(x["kind"]), "as_of": pd.Timestamp(x["as_of"]).isoformat(), "ticker": x["ticker"],
+                        "side": x["side"], "horizon_h": float(x["horizon_h"]), "verdict": x["verdict"],
+                        "stated_p5_pct": float(x["a5"]), "outcome_pct": float(x["r"]), "missed": bool(x["r"] < x["a5"]),
+                        "receipt": rc["digest"] if rc else None,
+                    })
+        out = {"rows": out_rows, "scored": len(out_rows), "target_rate": 0.05}
+        s.calibration_cache[("ledger", "")] = (utc_now(), out)
+        return out
+
     @app.post("/forecasts/{forecast_id}/taken")
     def mark_taken(forecast_id: int, request: Request, taken: bool = True) -> dict[str, Any]:
         """The trader tells the desk they acted on an analysis. Only these count towards
