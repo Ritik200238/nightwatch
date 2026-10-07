@@ -380,7 +380,13 @@ const HERO_CHIPS: { en: string; zh: string; short: string; shortZh: string; send
   { en: "周末做多特斯拉 2万U 安全吗？", zh: "周末做多特斯拉 2万U 安全吗？", short: "周末做多特斯拉", shortZh: "周末做多特斯拉", send: "周末做多 TSLA 2万U，安全吗？" },
 ];
 
-const CHIP = "inline-flex min-h-10 items-center sm:min-h-8 rounded-full border border-border px-3 py-1 text-[13px] hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none";
+const WHAT_IF_CHIPS: { en: string; zh: string; short: string; shortZh: string; send?: string }[] = [
+  { en: "What if TSLA gaps down 8% at open?", zh: "如果 TSLA 开盘跳空低开 8% 会怎样？", short: "TSLA gap -8% open", shortZh: "TSLA 开盘低开 8%", send: "What if TSLA gaps down 8% at the open? How wide is the tail loss?" },
+  { en: "Can I exit 20k NVDA at 3 AM on Bitget?", zh: "凌晨 3 点能在 Bitget 平掉 2 万 NVDA 吗？", short: "Exit 20k NVDA at 3 AM", shortZh: "凌晨 3 点平仓 NVDA", send: "Can I exit 20k NVDA at 3 AM on Bitget's live order book?" },
+  { en: "Is 10x leverage safe for TSLA into the weekend?", zh: "周末 10 倍杠杆做多 TSLA 安全吗？", short: "10x leverage weekend", shortZh: "周末 10 倍杠杆", send: "Is 10x leverage safe for TSLA into the weekend? Where does liquidation sit?" },
+];
+
+const CHIP = "inline-flex min-h-10 items-center sm:min-h-8 rounded-full border border-border px-3.5 py-1 text-[13px] hover:border-foreground/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none transition-colors";
 
 /** Three proof chips from the same live endpoints the track-record pages read. */
 function HeroProof() {
@@ -399,11 +405,10 @@ function HeroProof() {
   const rate = Math.round((tk?.rate ?? 0) * 100);
   const target = Math.round((misses?.target_rate ?? 0.05) * 100);
   return (
-    <ul className="mt-3 hidden min-h-8 flex-wrap gap-2 sm:flex" aria-label={tx("Proof", "证据")}>
+    <ul className="flex min-h-8 flex-wrap gap-2" aria-label={tx("Proof", "证据")}>
       {has ? (
         <>
           <li>
-            {/* The same /misses number the page it links to shows as "Live verdicts scored": verdicts whose hold has ended and whose outcome is known. */}
             <Link href="/wrong" className={CHIP} title={tx("Live verdicts whose hold has ended and whose outcome is recorded. Open verdicts are not in this number; /usage counts the answers given to visitors.", "持有期已结束、结果已记录的实时结论。未到期的不在其中；/usage 统计的是给访客的回答。")}>
               <span className="tabular mr-1 font-semibold">{scored.toLocaleString()}</span> {tx("live verdicts scored (hold over)", "个实时结论已评分（持有期已过）")}
             </Link>
@@ -429,19 +434,48 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const { lang, tx } = useLang();
   const text = draft.trim();
   return (
-    <section className="pb-2 pt-4 sm:pt-10" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <h1 className={`text-balance text-[1.75rem] font-semibold leading-[1.15] tracking-tight sm:text-5xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
-      <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground sm:mt-4 sm:text-lg">
-        {tx("A pre-trade desk for tokenized US stocks on Bitget. ", "Bitget 上代币化美股的交易前工作台。")}
-        <span className="hidden sm:inline">
-          {tx(
-            "It prices your exit on the live order book and sizes the trade in money. Every verdict is scored in public.",
-            "按实时订单簿计算平仓成本，并以金额给出仓位。每个结论都会公开评分。",
-          )}
-        </span>
+    <section className="pb-4 pt-4 sm:pt-8" aria-label={tx("Describe a trade", "描述一笔交易")}>
+      <p className="text-[11px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/80 mb-2">
+        {tx("NIGHTWATCH · PRE-TRADE DECISION STRESS TESTING FOR BITGET", "NIGHTWATCH · BITGET 交易前决策压力测试")}
       </p>
+      <h1 className={`text-balance text-3xl font-bold tracking-tight sm:text-5xl lg:text-6xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>
+        {tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}
+      </h1>
+      <div className="mt-4 max-w-3xl space-y-2 text-[15px] leading-relaxed text-muted-foreground sm:text-base">
+        <p>
+          {tx(
+            "A pre-trade decision workbench for tokenized US stocks and leveraged trades on Bitget. The deterministic Python engine finds similar past market moments, builds an empirical forecast distribution (p5 to p95), runs stress scenarios, and prices your exit on Bitget's live order book. The Qwen model explains the trade; deterministic code computes every number.",
+            "Bitget 上代币化美股与杠杆交易的交易前决策工作台。确定性 Python 引擎检索历史上相似的市场时刻，构建实证预测分布（p5 至 p95），运行预设压力测试，并在 Bitget 实时订单簿上计算平仓成本。Qwen 模型只负责理解与解释，每个数字均由确定性代码严谨计算。"
+          )}
+        </p>
+        <p className="hidden sm:block">
+          {tx(
+            "Trading after hours or over the weekend? Type your trade in plain words — English or 中文 — like \"long 10k TSLA tonight 5x\" or \"hold NVDA over the weekend, stop 170\". Nightwatch never places orders and never touches your money: you get a sized GO / REDUCE / HEDGE / REVIEW / NO GO verdict before you risk capital.",
+            "在盘后或周末交易？用日常语言描述你的交易——支持英文或中文——例如“今晚 5 倍做多 1 万 TSLA”或“周末做多 NVDA，止损 170”。Nightwatch 绝不下单，也不触碰你的资金：在冒资金风险前，为你给出带仓位建议的 GO / REDUCE / HEDGE / REVIEW / NO GO 结论。"
+          )}
+        </p>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-medium">
+        <Link href="/calibration" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          {tx("Track record & calibration →", "战绩与校准 →")}
+        </Link>
+        <Link href="/wrong" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          {tx("What we got wrong →", "我们错在哪 →")}
+        </Link>
+        <Link href="/studies" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          {tx("Closed-market studies →", "休市研究 →")}
+        </Link>
+        <Link href="/tonight" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          {tx("Tonight's watch →", "今晚持仓监视 →")}
+        </Link>
+        <Link href="/sources" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          {tx("Data feeds & live book →", "数据源与实时盘口 →")}
+        </Link>
+      </div>
+
       <form
-        className="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row"
+        className="mt-6 flex flex-col gap-3 sm:mt-7 sm:flex-row"
         onSubmit={(e) => {
           e.preventDefault();
           if (text && !busy) onSend(text);
@@ -456,20 +490,21 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            // Enter sends, Shift+Enter breaks the line; ignore Enter while an IME is composing.
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               if (text && !busy) onSend(text);
             }
           }}
-          placeholder={tx("e.g. long NVDA over the weekend, 15k", "例如：周末做多 NVDA，1.5 万")}
+          placeholder={tx("e.g. long NVDA over the weekend, 15k, stop 170", "例如：周末做多 NVDA，1.5 万，止损 170")}
           disabled={busy}
-          className="min-w-0 flex-1 h-14 resize-none rounded-lg border border-input bg-background px-4 py-3 text-base focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:h-14 sm:py-3.5 sm:text-lg"
+          className="min-w-0 flex-1 h-14 resize-none rounded-xl border border-input bg-background/80 px-4 py-3.5 text-base sm:text-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
-        <Button type="submit" disabled={busy || !text} className="h-12 px-6 text-base sm:h-14">
+        <Button type="submit" disabled={busy || !text} className="h-12 px-6 sm:h-14 font-semibold text-base rounded-xl">
           {tx("Get the verdict", "获取结论")}
         </Button>
       </form>
+
+      {/* Prominent secondary actions right below form (above mobile fold) */}
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <Button
           type="button"
@@ -496,25 +531,80 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
           onClick={onForm}
           className="inline-flex min-h-10 items-center px-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
         >
-          {tx("Use the ticket form", "使用表单")}
+          {tx("Use ticket form", "使用表单模式")}
         </button>
       </div>
-      <ul className="mt-3 flex flex-wrap gap-2">
-        {HERO_CHIPS.map((c) => (
-          <li key={c.en} className="shrink-0">
-            <button
-              type="button"
-              disabled={busy}
-              title={lang === "zh" ? c.zh : c.en}
-              onClick={() => onSend(c.send ?? c.en)}
-              className={`${CHIP} whitespace-nowrap border-border/60 text-muted-foreground disabled:opacity-50`}
-            >
-              {lang === "zh" ? c.shortZh : c.short}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <HeroProof />
+
+      {/* Pipeline Highlight Card */}
+      <div className="mt-6 rounded-xl border border-border/80 bg-muted/20 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background">
+            {tx("Decision pipeline · 5 stages", "决策流水线 · 5 个阶段")}
+          </span>
+        </div>
+        <p className="mt-2 text-xs sm:text-[13px] leading-relaxed text-muted-foreground">
+          {tx(
+            "similar past moments → forward distribution (p5–p95) → preset stress tests → live Bitget order-book exit walk → sized verdict (GO / REDUCE / HEDGE / REVIEW / NO GO) · fully audited in public",
+            "相似历史时刻 → 结果前向分布 (p5–p95) → 预设压力测试 → Bitget 实时盘口平仓推演 → 仓位结论 (GO / REDUCE / HEDGE / REVIEW / NO GO) · 结果全公开审计"
+          )}
+        </p>
+      </div>
+
+      {/* Categorized suggestions */}
+      <div className="mt-7 space-y-5">
+        <div>
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+            {tx("Demo trades", "演示交易")}
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {HERO_CHIPS.map((c) => (
+              <li key={c.en} className="shrink-0">
+                <button
+                  type="button"
+                  disabled={busy}
+                  title={lang === "zh" ? c.zh : c.en}
+                  onClick={() => onSend(c.send ?? c.en)}
+                  className={`${CHIP} whitespace-nowrap text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:opacity-50`}
+                >
+                  {lang === "zh" ? c.shortZh : c.short}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+            {tx("What-if & book analysis", "假设情景与组合分析")}
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {WHAT_IF_CHIPS.map((c) => (
+              <li key={c.en} className="shrink-0">
+                <button
+                  type="button"
+                  disabled={busy}
+                  title={lang === "zh" ? c.zh : c.en}
+                  onClick={() => onSend(c.send ?? c.en)}
+                  className={`${CHIP} whitespace-nowrap text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:opacity-50`}
+                >
+                  {lang === "zh" ? c.shortZh : c.short}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+            {tx("The desk's own record", "交易台自身战绩")}
+          </p>
+          <HeroProof />
+        </div>
+      </div>
+
+      <p className="mt-5 text-xs text-muted-foreground/75">
+        {tx("Type a trade above, or pick one of the suggestions.", "在上方输入交易，或点击上方任一建议。")}
+      </p>
     </section>
   );
 }
