@@ -8,7 +8,7 @@ import { HealthPill } from "@/components/health-pill";
 import { LangToggle, useLang } from "@/lib/lang";
 import { fmtDateTimeL } from "@/lib/i18n";
 
-const LINK = "inline-flex min-h-10 shrink-0 items-center whitespace-nowrap rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:px-3 aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-foreground";
+const LINK = "relative inline-flex min-h-11 shrink-0 items-center whitespace-nowrap px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-transparent aria-[current=page]:font-medium aria-[current=page]:text-foreground aria-[current=page]:after:bg-foreground";
 
 /** Studies and Journal live under Track record (tabs on those pages), so they keep it lit. */
 const TRACK_PATHS = ["/calibration", "/studies", "/journal"];
@@ -50,11 +50,11 @@ export function SiteHeader() {
     <SnapshotBanner />
     {/* On a phone the brand and the controls share the first row and the four tabs get a row of
         their own, so none is cut off; from sm up it is one row. */}
-    <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 md:px-6 lg:px-8">
+    <div className="mx-auto flex min-h-14 w-full max-w-7xl flex-wrap items-center gap-x-4 gap-y-0 px-4 pt-2 sm:py-0 md:px-6 lg:px-8">
       <Link href="/" className="order-1 inline-flex min-h-10 shrink-0 items-center rounded-md text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none sm:mr-3">
         Nightwatch
       </Link>
-      <nav aria-label={tx("Primary", "主导航")} className="order-3 flex w-full basis-full items-center gap-x-1 overflow-x-auto [scrollbar-width:none] sm:order-2 sm:w-auto sm:min-w-0 sm:flex-1 sm:basis-auto [&::-webkit-scrollbar]:hidden">
+      <nav aria-label={tx("Primary", "主导航")} className="-mx-3 order-3 flex w-[calc(100%+1.5rem)] basis-full items-center gap-x-0 overflow-x-auto [scrollbar-width:none] sm:order-2 sm:mx-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:basis-auto [&::-webkit-scrollbar]:hidden">
         {items.map(([href, label]) => (
           <Link key={href} href={href} className={LINK} aria-current={isCurrent(href, path) ? "page" : undefined}>
             {label}

@@ -4,7 +4,7 @@ import { AlertTriangle, Clock, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { OpenPositions, useOpenPositions } from "@/components/desk/open-positions";
-import { Pill, Section, Stat } from "@/components/report/primitives";
+import { Figure as Stat, OpenSection as Section, Tag as Pill } from "@/components/proof-page";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, peek, type TonightReport, type UniverseEntry } from "@/lib/api";
@@ -92,12 +92,12 @@ export default function TonightPage() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-      <aside className="min-w-0 space-y-4 lg:sticky lg:top-6 lg:self-start">
+      <aside className="min-w-0 space-y-6 lg:sticky lg:top-6 lg:self-start">
         <div>
-          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <h1 className="t-title flex items-center gap-2">
             <Moon className="h-4 w-4" aria-hidden /> {tx("Tonight", "今晚")}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="t-body mt-2 text-muted-foreground">
             {tx("The desk answers what you ask it. This is the question you would not have thought to ask: of what you are already holding, which position needs you before the market opens again.", "交易台只回答你问到的问题。这是你可能想不到要问的一个：在你已有的持仓里，哪一个在市场再次开盘之前需要你处理。")}
           </p>
         </div>
@@ -118,12 +118,12 @@ export default function TonightPage() {
         <Button onClick={() => void run()} disabled={busy || !positions.length} className="w-full">
           {busy ? tx("Reading the book…", "正在读取持仓…") : positions.length ? tx(`Watch these ${positions.length}`, `盯住这 ${positions.length} 个`) : tx("Add what you hold", "添加你的持仓")}
         </Button>
-        <p className="text-[13px] text-muted-foreground">
+        <p className="t-caption">
           {tx("Every position gets the same full analysis the desk would give if you asked about it directly — the analogs over tonight's window, the presets at the size you hold, and the live book walked for that size. That takes a couple of seconds each.", "每个持仓都会得到与你直接询问时相同的完整分析——今晚这个时间窗口内的相似时刻、按你持有仓位计算的压力预设，以及按该仓位在实时盘口上的成交推演。每个大约需要几秒钟。")}
         </p>
       </aside>
 
-      <section aria-live="polite" aria-busy={busy} className="min-w-0 space-y-4">
+      <section aria-live="polite" aria-busy={busy} className="min-w-0 space-y-8">
         {error ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't read the book", "无法读取持仓")}</p>
@@ -173,7 +173,7 @@ export default function TonightPage() {
               }
             >
               <p className="text-lg font-medium leading-snug">{report.summary}</p>
-              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
                 <Stat label={tx("Positions", "持仓数")} value={String(report.items.length)} hint={report.note || tx("all judged", "全部已评估")} />
                 <Stat label={tx("Gross held", "总持仓")} value={fmtUsd(report.gross_quote)} hint={tx("USDT across the book", "整个组合合计 USDT")} />
                 <Stat
@@ -199,7 +199,7 @@ export default function TonightPage() {
                 subtitle={tx("What this position looks like over tonight's window.", "这个持仓在今晚时间窗口内的情况。")}
                 action={
                   item.flags.length ? (
-                    <span className="flex flex-wrap gap-1">
+                    <span className="flex flex-wrap gap-x-3 gap-y-1">
                       {item.flags.map((f) => (
                         <Pill key={f} tone={FLAG_TONE[f] ?? "muted"}>
                           {(lang === "zh" ? FLAG_LABEL_ZH : FLAG_LABEL)[f] ?? f.replace(/_/g, " ")}
@@ -211,7 +211,7 @@ export default function TonightPage() {
                   )
                 }
               >
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-6 lg:grid-cols-4">
                   <Stat
                     label={tx("Bad case tonight", "今晚的坏情形")}
                     value={item.p5_quote != null ? `−${fmtUsd(Math.abs(item.p5_quote))}` : "—"}
@@ -238,7 +238,7 @@ export default function TonightPage() {
                   />
                 </div>
                 {item.events.length ? (
-                  <div className="mt-3 rounded-lg border border-status-warning/40 bg-status-warning/5 p-3 text-sm">
+                  <div className="t-body mt-6 border-l-2 border-status-warning pl-4">
                     <p className="mb-1 flex items-center gap-2 font-medium">
                       <AlertTriangle className="h-4 w-4 text-status-warning" aria-hidden /> {tx("Landing inside the window", "落在这个时间窗口内")}
                     </p>
@@ -249,7 +249,7 @@ export default function TonightPage() {
                     </ul>
                   </div>
                 ) : null}
-                <p className="mt-3 text-[13px] text-muted-foreground">
+                <p className="t-caption mt-6">
                   {tx("Regime: ", "市场状态：")}{stateWord(lang, item.regime_label ?? "unknown")}.{" "}
                   <Link href="/" className="underline underline-offset-2">
                     {tx("Stress-test a change to this position", "测试对这个持仓的改动")}

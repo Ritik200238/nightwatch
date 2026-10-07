@@ -13,21 +13,21 @@ export function Group({ title, hint, openAll, tier = "quiet", children }: { titl
     if (openAll !== undefined) setOpen(openAll);
   }, [openAll]);
   return (
-    <div className={`rounded-xl border ${tier === "primary" ? "border-foreground/20" : "border-border/60"}`}>
+    <div className={`border-t ${tier === "primary" ? "border-foreground/30" : "border-border"}`}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className={`flex w-full items-center justify-between gap-4 rounded-xl px-5 ${tier === "primary" ? "min-h-16 py-5" : "min-h-12 py-3"} text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
+        className={`-mx-2 flex w-[calc(100%+1rem)] items-center justify-between gap-4 rounded-md px-2 ${tier === "primary" ? "min-h-16 py-5" : "min-h-14 py-4"} text-left hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`}
       >
         <span className="min-w-0">
-          <span className={tier === "primary" ? "block text-base font-semibold tracking-tight" : "block text-sm font-medium text-muted-foreground"}>{title}</span>
-          <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">{hint}</span>
+          <span className={tier === "primary" ? "t-heading block" : "block text-sm font-medium text-muted-foreground"}>{title}</span>
+          <span className="t-caption mt-0.5 block">{hint}</span>
         </span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {/* Hidden rather than unmounted: sections keep their state and the page keeps its anchors. */}
-      <div className={open ? "space-y-4 px-3 pb-3 sm:px-4 sm:pb-4" : "hidden"}>{children}</div>
+      <div className={open ? "space-y-6 pt-2 pb-6" : "hidden"}>{children}</div>
     </div>
   );
 }

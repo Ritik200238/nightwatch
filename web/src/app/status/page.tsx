@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { api, probeHealth, type Liveness, type Anchor, type CalibrationReport, type DataSource, type Health, type VerifyResponse } from "@/lib/api";
 import { fmtAge, isFresh, sourceAgeIso } from "@/lib/freshness";
-import { PageHead, PROOF_WIDTH } from "@/components/proof-page";
+import { PageHead, PROOF_STACK, PROOF_WIDTH } from "@/components/proof-page";
 import { useLang } from "@/lib/lang";
 import { AsOf } from "@/components/as-of";
 import { localSource } from "@/lib/source-zh";
@@ -33,12 +33,12 @@ function Dot({ ok }: { ok: boolean | "warn" | null }) {
 
 function Card({ title, ok, children }: { title: string; ok: boolean | "warn" | null; children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
+    <section className="border-t border-border pt-6">
+      <h2 className="t-heading flex items-center gap-2">
         <Dot ok={ok} />
         {title}
       </h2>
-      <div className="mt-2 space-y-1 text-sm text-muted-foreground">{children}</div>
+      <div className="t-body mt-3 space-y-1 text-muted-foreground">{children}</div>
     </section>
   );
 }
@@ -79,7 +79,7 @@ export default function StatusPage() {
   );
 
   return (
-    <div className={`${PROOF_WIDTH} space-y-4`}>
+    <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
       <PageHead title={tx("Status", "状态")} intro={health.data?.state === "down" ? tx("The API is down, so the cards below may be saved copies, not live readings.", "API 离线，下面的卡片可能是已保存的副本，而非实时读数。") : tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <AsOf path="/sources" />
