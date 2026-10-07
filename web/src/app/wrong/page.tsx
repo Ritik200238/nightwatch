@@ -157,6 +157,7 @@ export default function WrongPage() {
             </div>
             {misses.misses.length ? (
               <div className="mt-4">
+                <div className="hidden md:block">
                 <ScrollTable>
                 <Table>
                   <TableHeader>
@@ -196,6 +197,39 @@ export default function WrongPage() {
                   </TableBody>
                 </Table>
                 </ScrollTable>
+                </div>
+                <ul className="divide-y divide-border rounded-lg border border-border md:hidden" aria-label={tx("Live verdicts that went past their line", "亏损超过所述线的实时结论")}>
+                  {misses.misses.map((m) => (
+                    <li key={m.id} className="space-y-1.5 px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium">{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</span>
+                        <span className="text-[13px] text-muted-foreground">{fmtTimeL(m.as_of, lang)}</span>
+                      </div>
+                      <p className="text-sm">
+                        {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
+                        {m.notional < TEST_SIZE_USDT ? <span className="ml-1.5 rounded border border-border px-1 text-[11px] text-muted-foreground">{tx("test size", "测试规模")}</span> : null}
+                      </p>
+                      <dl className="tabular grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[13px]">
+                        <dt className="text-muted-foreground">{tx("Line stated", "所述的线")}</dt>
+                        <dd className="text-right">{fmtPct(m.stated_p5_pct, 1)}</dd>
+                        <dt className="text-muted-foreground">{tx("What happened", "实际结果")}</dt>
+                        <dd className="text-right font-medium">{fmtPct(m.outcome_pct, 1)}</dd>
+                        <dt className="text-muted-foreground">{tx("Lost past the line", "超出线的亏损")}</dt>
+                        <dd className="text-right">{fmtUsd(Math.abs(m.beyond_quote))} USDT</dd>
+                        <dt className="text-muted-foreground">{tx("Receipt", "凭证")}</dt>
+                        <dd className="text-right font-mono">
+                          {m.receipt ? (
+                            <a href={`/api/verify/${m.id}`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center underline underline-offset-2" title={m.receipt}>
+                              {m.receipt.slice(0, 10)}…
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </dd>
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">{tx("No live verdict has gone past its line yet.", "目前还没有实时结论亏损超过所述的线。")}</p>

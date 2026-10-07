@@ -27,11 +27,11 @@ function useLoad<T>(fn: () => Promise<T>): Load<T> {
   return state;
 }
 
-function Dot({ ok }: { ok: boolean | null }) {
-  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${ok === true ? "bg-emerald-500" : ok === false ? "bg-red-500" : "bg-muted-foreground/40"}`} />;
+function Dot({ ok }: { ok: boolean | "warn" | null }) {
+  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${ok === true ? "bg-emerald-500" : ok === "warn" ? "bg-amber-500" : ok === false ? "bg-red-500" : "bg-muted-foreground/40"}`} />;
 }
 
-function Card({ title, ok, children }: { title: string; ok: boolean | null; children: ReactNode }) {
+function Card({ title, ok, children }: { title: string; ok: boolean | "warn" | null; children: ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
@@ -83,7 +83,7 @@ export default function StatusPage() {
       <PageHead title={tx("Status", "状态")} intro={health.data?.state === "down" ? tx("The API is down, so the cards below may be saved copies, not live readings.", "API 离线，下面的卡片可能是已保存的副本，而非实时读数。") : tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <AsOf path="/sources" />
-      <Card title="API" ok={health.data ? health.data.state === "up" : null}>
+      <Card title="API" ok={health.data ? (health.data.state === "up" ? true : health.data.state === "slow" ? "warn" : false) : null}>
         {health.data && health.data.state !== "down" ? (
           <p>
             {health.data.state === "slow" ? tx("Up but slow", "运行中，但响应较慢") : tx("Up", "运行中")} · v{health.data.health.version} · {health.data.health.bars.toLocaleString()} {tx("candles", "根 K 线")} · {health.data.health.orderbook_snapshots.toLocaleString()} {tx("order-book snapshots", "个盘口快照")} · {health.data.health.tickers_with_data} {tx("tokens with data", "个有数据的代币")}

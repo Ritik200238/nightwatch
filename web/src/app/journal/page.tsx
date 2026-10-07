@@ -170,6 +170,11 @@ export default function JournalPage() {
                 <Stat label={tx("Tokens", "代币")} value={String(new Set(rows.map((r) => r.ticker)).size)} />
                 <Stat label={tx("Live tickets", "实时交易")} value={String(rows.filter((r) => r.kind === "ticket").length)} hint={tx("analyses a person asked for", "有人主动请求的分析")} />
               </div>
+              {points.length === 0 ? (
+                <p className="self-center rounded-lg border border-dashed border-border px-4 py-3 text-[13px] text-muted-foreground">
+                  {tx("No forecast has been scored yet, so there is nothing to plot. The chart appears once the first outcome is recorded.", "还没有预测被评分，所以暂时没有可画的内容。第一个结果记录后，图表就会出现。")}
+                </p>
+              ) : (
               <figure aria-label={tx("Predicted median against realised return", "预测中位数与实际收益对比")}>
                 <ResponsiveContainer width="100%" height={240}>
                   <ScatterChart margin={{ top: 8, right: 12, bottom: 16, left: -12 }}>
@@ -193,6 +198,7 @@ export default function JournalPage() {
                   {outside > 0 ? tx(` ${outside} point${outside === 1 ? "" : "s"} fall outside this view.`, ` 有 ${outside} 个点在此视图之外。`) : ""}
                 </figcaption>
               </figure>
+              )}
             </div>
           </Section>
 
