@@ -155,6 +155,16 @@ real:
   that doesn't do that, instead of the version that looked cleverer.
 * **A short used to be stress-tested on the wrong tail** (a gain, not a loss) — found,
   written up, and fixed; the fix is in the commit history, not erased.
+* **How far back our history goes.** The hourly history behind the analog search starts on
+  1 January 2025 (the sync's start date; Yahoo serves about two years of hourly bars). That is
+  enough for the common overnight and weekend cases, not for a 2008- or 2020-style
+  crash: those tails come from the fitted stress presets and the crash replays, and say so in
+  the report. A tool built on daily bars back to 1999 sees more rare events than we do; ours
+  sees the closed-hours path hour by hour.
+* **The whole scored record is a file.** [`/api/ledger`](https://nightwatch-gules.vercel.app/api/ledger)
+  lists every scored forecast with the line stated at the time, what happened and whether it
+  went past, and `/wrong` has a CSV download and the tickers where we are weakest. Recount the
+  totals above yourself.
 * **Multiple-testing correction, applied to ourselves.** Eleven of twelve studies started as
   "yes" candidates; after Benjamini–Hochberg correction at 5%, only the ones that survive are
   called findings. The rest say "no" or "unclear," on the page, in public.
