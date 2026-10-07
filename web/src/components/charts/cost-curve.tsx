@@ -22,15 +22,15 @@ export function CostCurve({ points, requested, budgetBps, height = 180, lang = "
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data} margin={{ top: 12, right: 16, bottom: 4, left: -18 }}>
           <CartesianGrid vertical={false} stroke="var(--grid)" strokeWidth={1} />
-          <XAxis dataKey="notional" scale="log" domain={["dataMin", "dataMax"]} type="number" tickFormatter={(v: number) => fmtCompact(v)} tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={{ stroke: "var(--grid)" }} tickLine={false} />
-          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v} bps`} width={60} />
+          <XAxis dataKey="notional" scale="log" domain={["dataMin", "dataMax"]} type="number" tickFormatter={(v: number) => fmtCompact(v)} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={{ stroke: "var(--grid)" }} tickLine={false} minTickGap={14} />
+          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v} bps`} width={60} />
           <Tooltip
             contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--popover-foreground)", fontSize: 12 }}
             formatter={(value) => [`${Number(value).toFixed(1)} bps`, L("total exit cost", "平仓总成本")]}
             labelFormatter={(v) => `${L("size", "仓位")} ${fmtCompact(Number(v))}`}
           />
-          <ReferenceLine y={budgetBps} stroke="var(--status-warning)" strokeWidth={1} label={{ value: L(`${budgetBps} bps budget`, `${budgetBps} bps 预算`), position: "insideTopRight", fill: "var(--muted-foreground)", fontSize: 11 }} />
-          <ReferenceLine x={requested} stroke="var(--foreground)" strokeWidth={1} label={{ value: L("your size", "你的仓位"), position: "top", fill: "var(--muted-foreground)", fontSize: 11 }} ifOverflow="extendDomain" />
+          <ReferenceLine y={budgetBps} stroke="var(--status-warning)" strokeWidth={1} label={{ value: L(`${budgetBps} bps budget`, `${budgetBps} bps 预算`), position: "insideTopRight", fill: "var(--muted-foreground)", fontSize: 12 }} />
+          <ReferenceLine x={requested} stroke="var(--foreground)" strokeWidth={1} label={{ value: L("your size", "你的仓位"), position: "top", fill: "var(--muted-foreground)", fontSize: 12 }} ifOverflow="extendDomain" />
           <Line type="monotone" dataKey="bps" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 4, strokeWidth: 2, stroke: "var(--card)", fill: "var(--chart-1)" }} activeDot={{ r: 6 }} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>

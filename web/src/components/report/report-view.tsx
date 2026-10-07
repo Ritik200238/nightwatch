@@ -28,6 +28,7 @@ import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
 import { Pill, Section, SourceChip, SourceLegend, Stat } from "@/components/report/primitives";
+import { verdictText } from "@/lib/verdict-style";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type ClosedHoursLine, type Report, type TicketInput } from "@/lib/api";
@@ -35,15 +36,6 @@ import { fmtBps, fmtLev, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@
 import { breakerReason, capDetail, lessonText, plainReason, plainText, ruleReason, secondOpinionHead, sensitivityNote, warningText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
 import { fmtDateL, fmtHoursL, fmtTimeL, type Lang, STRINGS, t as tl, tr } from "@/lib/i18n";
-
-/** The verdict word's colour in the headline: meaning carried by hue and by the word itself. */
-const VERDICT_TEXT: Record<Report["verdict"]["verdict"], string> = {
-  GO: "text-status-good",
-  REDUCE_TO: "text-status-warning",
-  HEDGE: "text-primary",
-  NO_GO: "text-status-critical",
-  REVIEW: "text-foreground",
-};
 
 /** What each verdict means, for someone seeing the badge for the first time. */
 const VERDICT_ORDER: Report["verdict"]["verdict"][] = ["GO", "REDUCE_TO", "HEDGE", "REVIEW", "NO_GO"];
@@ -354,6 +346,7 @@ function FailureModes({ report, openAll, lang }: { report: Report; openAll?: boo
   const worstLoss = worst.loss_quote != null ? ` ${fmtUsd(worst.loss_quote)} USDT` : "";
   return (
     <Section
+      tier="primary"
       openAll={openAll}
       collapsible
       defaultOpen
@@ -465,12 +458,11 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
       {/* The answer first: the verdict word, coloured, with the size it applies to. The
           reason is one plain line under it; the rest sit in the list further down. */}
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 leading-tight tracking-tight">
-        <span className={`text-4xl font-extrabold sm:text-5xl ${VERDICT_TEXT[v.verdict]}`}>{verdictLabel(lang, v.verdict)}</span>
+        <span className={`text-4xl font-extrabold sm:text-5xl ${verdictText(v.verdict)}`}>{verdictLabel(lang, v.verdict)}</span>
         {sizeText ? <span className="tabular text-2xl font-semibold sm:text-3xl">· {sizeText}</span> : null}
       </p>
       {subhead ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{subhead}</p> : null}
       <CredStrip lang={lang} />
-      {prov ? <SourceLegend lang={lang} /> : null}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <StressBars report={report} lang={lang} />
         <AnalogMini report={report} lang={lang} />
@@ -532,6 +524,8 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
           chip={<SourceChip entry={prov?.size} lang={lang} />}
         />
       </div>
+      {/* The key numbers come first; the key to their source tags follows them, as one quiet line. */}
+      {prov ? <SourceLegend lang={lang} /> : null}
 
       {against ? (
         <p className="mt-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -625,6 +619,7 @@ function StreetSection({ report, openAll, lang }: { report: Report; openAll?: bo
     .join(" · ");
   return (
     <Section
+      tier="quiet"
       openAll={openAll}
       collapsible
       title={L("The stock right now, and what the street thinks", "这只股票现在的情况，以及华尔街怎么看")}
@@ -778,6 +773,7 @@ function BitgetSection({ report, openAll, lang }: { report: Report; openAll?: bo
   const sector = prof?.sector ? `${prof.sector}${prof.industry ? `, ${prof.industry}` : ""}` : "";
   return (
     <Section
+      tier="quiet"
       openAll={openAll}
       collapsible
       title={L("More from Bitget's data: earnings date, valuation, dividends", "Bitget 数据补充：财报日期、估值、分红")}
@@ -908,7 +904,10 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
   const flags = report.snapshot.quality_flags.length;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-5 sm:gap-6">
+      {/* Phone stacking only (max-md): verdict card, then how the trade loses money, then the
+          rest in its usual order. The blocks are independent and nothing reads their position,
+          so this is CSS `order`; from md up every wrapper stacks exactly as before. */}
       {/* Everything the page builds itself is translated. The few sentences the server
           writes (failure-mode titles, some caveats, lens definitions) are shown as sent; one
           short note says so rather than an apology for the whole page. */}
@@ -919,6 +918,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       ) : null}
       <Hypothetical report={report} lang={lang} />
       <DecisionCard report={report} lang={lang} onRerun={onRerun} />
+      <div className="flex flex-col gap-5 empty:hidden max-md:order-2 sm:gap-6 md:contents">
       <ThreeSteps report={report} lang={lang} />
       <AccountLadder report={report} lang={lang} onRerun={onRerun} />
       <MarketClock report={report} lang={lang} />
@@ -931,8 +931,12 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           open before the summary stops being misleading. */}
       <LensNote report={report} lang={lang} onUnfiltered={onRerun ? () => onRerun({ lenses: [], auto_lens: false }) : undefined} />
       <FreshFilings report={report} lang={lang} />
-      <FailureModes report={report} openAll={openAll} lang={lang} />
+      </div>
+      <div className="flex flex-col gap-5 empty:hidden max-md:order-1 sm:gap-6 md:contents">
+        <FailureModes report={report} openAll={openAll} lang={lang} />
+      </div>
 
+      <div className="flex flex-col gap-5 max-md:order-3 sm:gap-6 md:contents">
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-[13px] text-muted-foreground">{L("The evidence behind that answer. Open what you want to argue with.", "这个结论背后的证据。想质疑哪一块，就展开哪一块。")}</p>
         <button
@@ -954,7 +958,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       <StressSection report={report} openAll={openAll} lang={lang} />
       <MarketContext report={report} lang={lang} />
 
-      <Group title={L("Evidence", "证据")} hint={L("Assumptions, today's inputs, exit cost, discipline gate, size caps, the case against, regime, what would change it", "假设、当前输入、平仓成本、纪律闸门、仓位上限、反面意见、市场状态、什么会改变结论")} openAll={openAll}>
+      <Group tier="primary" title={L("Evidence", "证据")} hint={L("What the answer assumes, today's inputs, exit cost, the limits, the case against, what would change it", "结论的前提、当前输入、平仓成本、各项限额、反面意见、什么会改变结论")} openAll={openAll}>
         <SourceEffects report={report} lang={lang} />
         <Assumptions report={report} openAll={openAll} lang={lang} />
       {/* Now */}
@@ -1214,6 +1218,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
       </p>
       {primary ? null : null}
+      </div>
     </div>
   );
 }
@@ -1284,7 +1289,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
   const a = report.analog;
   if (!a || !a.result.ok) {
     return (
-      <Section title={L("What history says", "历史怎么说")} subtitle={L("Nearest past moments to now", "与当下最接近的历史时刻")}>
+      <Section tier="primary" title={L("What history says", "历史怎么说")} subtitle={L("Nearest past moments to now", "与当下最接近的历史时刻")}>
         <p className="text-sm text-muted-foreground">
           {L(`No analog cohort: ${a?.result.reason ?? "search did not run"}. The verdict uses the stop for risk.`, `没有可比的历史样本：${a?.result.reason ?? "检索没有运行"}。结论改用止损来衡量风险。`)}
         </p>
@@ -1310,6 +1315,7 @@ function AnalogSection({ report, openAll, lang }: { report: Report; openAll?: bo
   const nMatches = a.result.matches.length;
   return (
     <Section
+      tier="primary"
       openAll={openAll}
       collapsible
       summary={
@@ -1575,7 +1581,6 @@ function ClosestMoments({ report, lang }: { report: Report; lang: Lang }) {
   );
 }
 
-const SIZE_TONE: Record<string, "good" | "warning" | "critical" | "info" | "muted"> = { GO: "good", REDUCE_TO: "warning", HEDGE: "info", NO_GO: "critical", REVIEW: "muted" };
 
 const LESSON_TONE: Record<string, "good" | "warning" | "critical" | "info" | "muted"> = {
   worse_than_stress: "critical",
@@ -2180,10 +2185,10 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
                     {isRequest ? <span className="block text-[10px] font-normal text-muted-foreground">{L("requested", "所请求")}</span> : null}
                   </span>
                   <span className="hidden h-2 w-full rounded-full bg-muted sm:block" aria-hidden>
-                    <span className="block h-2 rounded-full" style={{ width: `${Math.max(3, (p.notional / maxNotional) * 100)}%`, background: `var(--${p.verdict === "GO" ? "status-good" : p.verdict === "NO_GO" ? "status-critical" : p.verdict === "HEDGE" ? "chart-1" : "status-warning"})` }} />
+                    <span className="block h-2 rounded-full" style={{ width: `${Math.max(3, (p.notional / maxNotional) * 100)}%`, background: `var(--${p.verdict === "GO" ? "verdict-go" : p.verdict === "NO_GO" ? "verdict-nogo" : p.verdict === "REVIEW" ? "verdict-review" : "verdict-reduce"})` }} />
                   </span>
                   <span className="justify-self-start">
-                    <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{verdictLabel(lang, p.verdict)}</Pill>
+                    <Pill verdict={p.verdict}>{verdictLabel(lang, p.verdict)}</Pill>
                   </span>
                   <span className="col-span-2 text-muted-foreground sm:col-span-1">
                     {p.binding_cap && (p.recommended_notional == null || p.recommended_notional < p.notional - 1) ? L(`${tl(lang, "cap", p.binding_cap)} binds`, `${tl(lang, "cap", p.binding_cap)}是限制项`) : ""}
@@ -2216,7 +2221,7 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
                     <TableCell className="tabular text-right">{p.risk_pct_of_equity != null ? `${p.risk_pct_of_equity.toFixed(2)}%` : "—"}</TableCell>
                     <TableCell className="tabular text-right">{fmtUsd(p.risk_budget_notional)}</TableCell>
                     <TableCell className="text-right">
-                      <Pill tone={SIZE_TONE[p.verdict] ?? "muted"}>{verdictLabel(lang, p.verdict)}</Pill>
+                      <Pill verdict={p.verdict}>{verdictLabel(lang, p.verdict)}</Pill>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2240,6 +2245,7 @@ function StressSection({ report, openAll, lang }: { report: Report; openAll?: bo
   const earningsDays = typeof inp.hours_to_earnings === "number" && inp.hours_to_earnings < 700 ? Math.round(inp.hours_to_earnings / 24) : null;
   return (
     <Section
+      tier="primary"
       openAll={openAll}
       collapsible
       summary={L(

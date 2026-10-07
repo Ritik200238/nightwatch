@@ -376,7 +376,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
           </div>
         ) : null}
         {error ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+          <div role="alert" className="space-y-1 rounded-lg border border-destructive/30 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't get an answer", "没能得到回答")}</p>
             <p className="text-[13px] text-muted-foreground">{error}</p>
             <p className="mt-2 text-[13px] text-muted-foreground">{tx("You can still use the ticket form on the other tab.", "你仍然可以使用另一个标签页里的表单。")}</p>

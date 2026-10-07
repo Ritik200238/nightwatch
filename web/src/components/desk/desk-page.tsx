@@ -201,7 +201,7 @@ export default function DeskPage() {
             repeats none of them, and takes over once the hero is gone. */}
         {report || heroUsed ? (
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">{tx("Stress-test a trade", "给交易做压力测试")}</h1>
+          <h1 className={`text-balance text-lg font-semibold tracking-tight ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test a trade", "给交易做压力测试")}</h1>
           <p className="text-sm text-muted-foreground">{tx("Tokenized US stocks trade 24/7. Find out what past moments like now did, what could go wrong, and whether you can get out — before you place it.", "代币化美股全天候交易。下单之前，先看看历史上与现在相似的时刻发生了什么、可能出什么问题、以及能不能顺利平仓。")}</p>
           {/* On a phone the explainer on the right sits under this whole form, so a first
               visitor scrolls past twelve fields before learning what the desk does. */}
@@ -267,7 +267,7 @@ export default function DeskPage() {
       <section ref={resultRef} className="min-w-0 scroll-mt-4" aria-live="polite" aria-busy={busy}>
         {busy && !report ? <ReportSkeleton /> : null}
         {error && tab !== "form" ? (
-          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <div role="alert" className="mb-5 space-y-1 rounded-lg border border-destructive/30 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
             <p className="text-[13px] text-muted-foreground">{error}</p>
             {lastTicket ? (
@@ -278,7 +278,7 @@ export default function DeskPage() {
           </div>
         ) : null}
         {contrast && !report ? (
-          <div className="space-y-3 rounded-lg border border-border p-4">
+          <div className="space-y-3 rounded-lg border border-border p-5">
             <h2 className="text-base font-semibold">{tx("Same trade, different book", "同一笔交易，不同的组合")}</h2>
             <p className="text-sm text-muted-foreground">
               {tx("Long 20k TSLA overnight, once on its own and once on top of 60k TSLA + 40k NVDA. Same moment, same data; only the book differs.", "做多 2 万美元 TSLA 过夜：一次单独做，一次叠加在 6 万 TSLA + 4 万 NVDA 之上。同一时刻、同样的数据，只有组合不同。")}
@@ -315,9 +315,9 @@ export default function DeskPage() {
             <ReportView report={exampleReport} lang={lang} hideTake />
           </div>
         ) : !busy && !error && !contrast ? (
-          <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-8 text-center">
+          <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border p-6 sm:p-8 text-center">
             <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
-            <ol className="max-w-prose space-y-1 text-left text-sm text-muted-foreground">
+            <ol className="max-w-prose space-y-2 text-left text-sm leading-relaxed text-muted-foreground">
               <li>
                 <span className="font-medium text-foreground">1.</span> {tx("Describe the trade - in the form, or in plain words in chat (English or 中文).", "描述这笔交易——用表单，或者在聊天里用大白话（English 或中文）。")}
               </li>
@@ -412,7 +412,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const text = draft.trim();
   return (
     <section className="rounded-xl border border-border bg-card p-4 sm:p-6" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
+      <h1 className={`text-balance text-2xl font-semibold tracking-tight sm:text-3xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>{tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}</h1>
       <p className="mt-2 max-w-3xl text-sm text-muted-foreground sm:text-base">
         {tx("A pre-trade desk for tokenized US stocks on Bitget. ", "Bitget 上代币化美股的交易前工作台。")}
         <span className="hidden sm:inline">

@@ -23,18 +23,19 @@ export function StressBars({ report, lang }: { report: Report; lang: Lang }) {
   const max = Math.max(...rows.map((r) => Math.abs(r.v)), 1);
   return (
     <figure className="min-w-0" aria-label={L("Result of each stress test in USDT", "每个压力测试的结果（USDT）")}>
-      <figcaption className="mb-1.5 text-xs font-medium text-muted-foreground">{L("Loss in each stress test (USDT)", "每个压力测试的损失（USDT）")}</figcaption>
-      <ul className="space-y-1">
+      <figcaption className="mb-2 text-[13px] font-medium text-muted-foreground">{L("Loss in each stress test (USDT)", "每个压力测试的损失（USDT）")}</figcaption>
+      <ul className="space-y-1.5">
         {rows.map((r) => (
-          <li key={r.name} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-2 text-xs">
-            <span className="flex min-w-0 items-center gap-1 text-muted-foreground" title={presetName(lang, r.name, r.zh)}>
+          <li key={r.name} className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 text-[13px] sm:grid-cols-[minmax(0,10rem)_1fr_auto]">
+            {/* On a phone the name sits on its own line above the bar, so it wraps instead of being cut. */}
+            <span className="col-span-2 flex min-w-0 items-start gap-1 text-muted-foreground sm:col-span-1 sm:items-center" title={presetName(lang, r.name, r.zh)}>
               <SourceChip dot entry={report.provenance?.items.stress?.[r.id]} lang={lang} />
-              <span className="truncate">{presetName(lang, r.name, r.zh)}</span>
+              <span className="min-w-0 break-words sm:truncate">{presetName(lang, r.name, r.zh)}</span>
             </span>
             <span className="h-2.5 rounded-sm bg-muted" aria-hidden>
               <span className={`block h-full rounded-sm ${r.v < 0 ? "bg-status-critical" : "bg-status-good"}`} style={{ width: `${Math.max(2, (Math.abs(r.v) / max) * 100)}%` }} />
             </span>
-            <span className="tabular-nums">{fmtUsd(r.v)}</span>
+            <span className="tabular-nums text-foreground">{fmtUsd(r.v)}</span>
           </li>
         ))}
       </ul>
@@ -59,7 +60,7 @@ export function AnalogMini({ report, lang }: { report: Report; lang: Lang }) {
   const loss = h.loss_p5_pct ?? line;
   return (
     <figure className="min-w-0" aria-label={L("How the most similar past moments ended", "最相似的历史时刻最终如何")}>
-      <figcaption className="flex flex-wrap items-center gap-x-2 text-xs font-medium text-muted-foreground">
+      <figcaption className="flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-muted-foreground">
         {L(`How ${a.result.matches.length} similar past moments ended (${report.primary_horizon})`, `${a.result.matches.length} 个相似历史时刻的结果（${report.primary_horizon}）`)}
         <SourceChip entry={report.provenance?.items.analog} lang={lang} />
       </figcaption>
@@ -103,9 +104,11 @@ export function BuildTrace({ report, lang }: { report: Report; lang: Lang }) {
   if (a) items.push({ key: "analog", label: `${L("Analog search", "相似时刻检索")} (${a.result.matches.length} ${L("of", "/")} ${(a.result.n_candidates ?? 0).toLocaleString()} ${L("hours", "小时")})${ms(tm.analog)}` });
   items.push({ key: "stress", label: `${report.stress.presets.length} ${L("stress presets", "个压力预设")}${ms(tm.stress)}` });
   return (
-    <div className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-2">
-      <p className="mb-1 text-xs font-medium text-muted-foreground">{L("How this answer was built", "这个答案是怎么得出的")}</p>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+    <div className="mt-4 rounded-lg border border-border/60 px-3 py-2">
+      {/* Different from the "How this verdict was built" card below: that one is the method
+          (three steps); this one is the data pulled and tools called to produce this report. */}
+      <p className="mb-1.5 text-[13px] font-medium text-muted-foreground">{L("Data and tools used for this answer", "这个答案用到的数据与工具")}</p>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
         {items.map((i) => (
           <li key={i.key} className="flex items-center gap-1">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-good" aria-hidden />

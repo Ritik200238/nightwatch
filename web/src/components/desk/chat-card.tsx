@@ -3,14 +3,13 @@
 import type { ReactNode } from "react";
 import type { BaseRateCard, ChatCard, CompareCard, CompareRow, ShockCard, WaysCard } from "@/lib/api";
 import { fmtBps, fmtPct, fmtUsd } from "@/lib/format";
+import { verdictText } from "@/lib/verdict-style";
 import { useLang } from "@/lib/lang";
 
 const VERDICT_ZH: Record<string, string> = { GO: "可以做", REDUCE_TO: "减仓", HEDGE: "对冲", REVIEW: "复核", NO_GO: "不建议做" };
 
 function verdictTone(v: string): string {
-  if (v === "GO") return "text-status-good";
-  if (v === "NO_GO") return "text-status-critical";
-  return "text-status-warning";
+  return verdictText(v);
 }
 
 /** Money with a sign the eye can read: −2,000 for a loss, +500 for a gain. */

@@ -76,6 +76,8 @@ function fmtHorizon(h: number, zh: boolean): string {
 export default function JournalPage() {
   const { tx, lang } = useLang();
   const sideW = (s: string) => (lang === "zh" ? (s === "long" ? "做多" : s === "short" ? "做空" : s) : s);
+  const verdictPill = (r: ForecastRow) =>
+    r.verdict ? <Pill verdict={r.verdict}>{lang === "zh" ? tl(lang, "verdictName", r.verdict) : r.verdict.replace("_", " ")}</Pill> : <span className="text-[13px] text-muted-foreground">—</span>;
   const [rows, setRows] = useState<ForecastRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<(typeof KINDS)[number]>("all");
@@ -126,6 +128,10 @@ export default function JournalPage() {
           </div>
         }
       />
+      <p className="text-[13px] text-muted-foreground">
+        <span className="font-medium text-verdict-review">{tx("REVIEW", "需要复核")}</span>{" "}
+        {tx("means something is missing or unclear, such as a stop, a plan or your account size, so there is no firm verdict yet.", "表示缺少或不清楚某些信息，例如止损、计划或账户规模，所以暂时还没有确定的结论。")}
+      </p>
       {rows && rows.length > 0 ? (
         <PlainBox>
           {tx(`Of the ${rows.length} most recent forecasts, ${matured.length} have been scored against what happened. `, `最近的 ${rows.length} 个预测中，已有 ${matured.length} 个对照实际结果评了分。`)}
@@ -164,6 +170,11 @@ export default function JournalPage() {
                 <Stat label={tx("Tokens", "代币")} value={String(new Set(rows.map((r) => r.ticker)).size)} />
                 <Stat label={tx("Live tickets", "实时交易")} value={String(rows.filter((r) => r.kind === "ticket").length)} hint={tx("analyses a person asked for", "有人主动请求的分析")} />
               </div>
+              {points.length === 0 ? (
+                <p className="self-center rounded-lg border border-dashed border-border px-4 py-3 text-[13px] text-muted-foreground">
+                  {tx("No forecast has been scored yet, so there is nothing to plot. The chart appears once the first outcome is recorded.", "还没有预测被评分，所以暂时没有可画的内容。第一个结果记录后，图表就会出现。")}
+                </p>
+              ) : (
               <figure aria-label={tx("Predicted median against realised return", "预测中位数与实际收益对比")}>
                 <ResponsiveContainer width="100%" height={240}>
                   <ScatterChart margin={{ top: 8, right: 12, bottom: 16, left: -12 }}>
@@ -187,6 +198,7 @@ export default function JournalPage() {
                   {outside > 0 ? tx(` ${outside} point${outside === 1 ? "" : "s"} fall outside this view.`, ` 有 ${outside} 个点在此视图之外。`) : ""}
                 </figcaption>
               </figure>
+              )}
             </div>
           </Section>
 
@@ -199,16 +211,17 @@ export default function JournalPage() {
               </Button>
             }
           >
+            <div className="hidden md:block">
             <ScrollTable>
-              <Table className="min-w-[760px]">
+              <Table className="min-w-[820px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{tx("When", "时间")}</TableHead>
                     <TableHead>{tx("Trade", "交易")}</TableHead>
+                    <TableHead>{tx("Verdict", "结论")}</TableHead>
                     <TableHead className="text-right">{tx("Horizon", "持有期")}</TableHead>
                     <TableHead className="text-right">p5 – p50 – p95</TableHead>
                     <TableHead className="text-right">{tx("Realised", "实际")}</TableHead>
-                    <TableHead className="text-right">{tx("Verdict", "结论")}</TableHead>
                     {details ? <TableHead className="text-right">{tx("Inputs (hash)", "输入（哈希）")}</TableHead> : null}
                   </TableRow>
                 </TableHeader>
@@ -237,6 +250,7 @@ export default function JournalPage() {
                             {fmtUsd(r.notional)} · {r.analog_n ?? 0} {tx("analogs", "个相似时刻")}
                           </span>
                         </TableCell>
+                        <TableCell>{verdictPill(r)}</TableCell>
                         <TableCell className="tabular text-right whitespace-nowrap">{fmtHorizon(r.horizon_h, lang === "zh")}</TableCell>
                         <TableCell className="tabular text-right whitespace-nowrap">
                           {band ? (
@@ -254,13 +268,6 @@ export default function JournalPage() {
                             <span className={insideBand ? "" : "text-status-warning"}>{fmtPct(r.ret_pct)}</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {r.verdict ? (
-                            <Pill tone={r.verdict === "GO" ? "good" : r.verdict === "NO_GO" ? "critical" : r.verdict === "HEDGE" ? "info" : "warning"}>{lang === "zh" ? tl(lang, "verdictName", r.verdict) : r.verdict.replace("_", " ")}</Pill>
-                          ) : (
-                            <span className="text-[13px] text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
                         {details ? <TableCell className="text-right font-mono text-[13px] text-muted-foreground">{r.snapshot_hash}</TableCell> : null}
                       </TableRow>
                     );
@@ -268,6 +275,52 @@ export default function JournalPage() {
                 </TableBody>
               </Table>
             </ScrollTable>
+            </div>
+            <ul className="divide-y divide-border rounded-lg border border-border md:hidden" aria-label={tx("The journal", "日志")}>
+              {grouped.map(({ row: r, count }) => {
+                const band = r.p5 != null && r.p95 != null;
+                const insideBand = band && r.ret_pct != null && r.ret_pct >= r.p5! && r.ret_pct <= r.p95!;
+                return (
+                  <li key={r.id} className="space-y-1.5 px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      {verdictPill(r)}
+                      <span className="text-[13px] text-muted-foreground">{r.kind === "replay" ? tx("replay", "重演") : tx("live ticket", "实时交易")}</span>
+                    </div>
+                    <p className="text-sm">
+                      <span className="font-semibold">{r.ticker}</span> {sideW(r.side)} · {fmtUsd(r.notional)}
+                      {count > 1 ? <span className="tabular ml-1.5 rounded border border-border px-1 text-[13px] text-muted-foreground" title={tx(`${count} identical calls in this hour`, `这一小时内有 ${count} 次相同调用`)}>×{count}</span> : null}
+                    </p>
+                    <p className="text-[13px] text-muted-foreground">
+                      {r.kind === "replay" ? (
+                        fmtTimeL(r.as_of, lang)
+                      ) : (
+                        <Link href={`/r/${r.id}`} className="rounded underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+                          {fmtTimeL(r.as_of, lang)}
+                        </Link>
+                      )}
+                      {" · "}
+                      {r.analog_n ?? 0} {tx("analogs", "个相似时刻")} · {fmtHorizon(r.horizon_h, lang === "zh")}
+                    </p>
+                    <dl className="tabular grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[13px]">
+                      <dt className="text-muted-foreground">p5 – p50 – p95</dt>
+                      <dd className="text-right">
+                        {band ? `${fmtPct(r.p5)} · ${fmtPct(r.p50)} · ${fmtPct(r.p95)}` : <span className="text-muted-foreground">{tx("refused: too few analogs", "拒绝：相似时刻太少")}</span>}
+                      </dd>
+                      <dt className="text-muted-foreground">{tx("Realised", "实际")}</dt>
+                      <dd className="text-right">
+                        {r.ret_pct == null ? <span className="text-muted-foreground">{tx("open", "未到期")}</span> : <span className={insideBand ? "" : "text-status-warning"}>{fmtPct(r.ret_pct)}</span>}
+                      </dd>
+                      {details ? (
+                        <>
+                          <dt className="text-muted-foreground">{tx("Inputs (hash)", "输入（哈希）")}</dt>
+                          <dd className="min-w-0 break-all text-right font-mono text-muted-foreground">{r.snapshot_hash}</dd>
+                        </>
+                      ) : null}
+                    </dl>
+                  </li>
+                );
+              })}
+            </ul>
           </Section>
         </>
       )}

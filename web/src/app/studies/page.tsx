@@ -257,8 +257,13 @@ function Significance({ s, m }: { s: Study; m: number | undefined }) {
     <div className="space-y-1 text-[13px]">
       <div className="flex flex-wrap items-center gap-2">
         <span className="tabular">
-          p = {fmtP(s.p_value)}
-          {s.q_value != null ? tx(`, after correcting for ${m ?? "all"} questions q = ${fmtP(s.q_value)}`, `，校正 ${m ?? "全部"} 个问题后 q = ${fmtP(s.q_value)}`) : ""}
+          p = <span className="font-medium">{fmtP(s.p_value)}</span>
+          {s.q_value != null ? (
+            <>
+              {tx(`, after correcting for ${m ?? "all"} questions `, `，校正 ${m ?? "全部"} 个问题后 `)}
+              <Term k="fdr">q</Term> = <span className="font-medium">{fmtP(s.q_value)}</span>
+            </>
+          ) : null}
         </span>
         {s.survives_fdr != null ? <Pill tone={survives ? "good" : "warning"}>{survives ? tx("survives", "经得起校正") : tx("does not survive", "经不起校正")}</Pill> : null}
         {s.small_sample ? <Pill tone="warning">{tx("small sample", "样本量小")}</Pill> : null}
@@ -384,7 +389,11 @@ export default function StudiesPage() {
             </div>
             {rep.fdr ? (
               <p className="mt-3 text-[13px] text-muted-foreground">
-                {tx(`Asking ${rep.fdr.m_tests} testable questions at once makes a lucky “yes” likely, so the p-values are corrected together (Benjamini–Hochberg, a ${Math.round(rep.fdr.alpha * 100)}% false-discovery rate). ${rep.fdr.yes_survive} of ${rep.fdr.yes_tested} “yes” answers survive the correction${rep.fdr.yes_fail.length ? `. The other ${rep.fdr.yes_fail.length} should be read as leads, not settled findings` : ""}. The remaining ${rep.fdr.m_studies - rep.fdr.m_tests} ${rep.fdr.m_studies - rep.fdr.m_tests === 1 ? "study is" : "studies are"} not hypothesis tests and carry no p-value.`, `同时提出 ${rep.fdr.m_tests} 个可检验的问题，很容易碰巧得到“是”，所以对 p 值统一做了校正（Benjamini–Hochberg，假发现率 ${Math.round(rep.fdr.alpha * 100)}%）。${rep.fdr.yes_tested} 个回答为“是”的问题中有 ${rep.fdr.yes_survive} 个经得起校正${rep.fdr.yes_fail.length ? `；其余 ${rep.fdr.yes_fail.length} 个应当视为线索，而不是定论` : ""}。剩下的 ${rep.fdr.m_studies - rep.fdr.m_tests} 项研究不是假设检验，没有 p 值。`)}
+                {tx(`Asking ${rep.fdr.m_tests} testable questions at once makes a lucky “yes” likely, so the p-values are corrected together (`, `同时提出 ${rep.fdr.m_tests} 个可检验的问题，很容易碰巧得到“是”，所以对 p 值统一做了校正（`)}
+                <Term k="bh">Benjamini–Hochberg</Term>
+                {tx(", a ", "，")}
+                <Term k="fdr">{tx(`${Math.round(rep.fdr.alpha * 100)}% false-discovery rate`, `假发现率 ${Math.round(rep.fdr.alpha * 100)}%`)}</Term>
+                {tx(`). ${rep.fdr.yes_survive} of ${rep.fdr.yes_tested} “yes” answers survive the correction${rep.fdr.yes_fail.length ? `. The other ${rep.fdr.yes_fail.length} should be read as leads, not settled findings` : ""}. The remaining ${rep.fdr.m_studies - rep.fdr.m_tests} ${rep.fdr.m_studies - rep.fdr.m_tests === 1 ? "study is" : "studies are"} not hypothesis tests and carry no p-value.`, `）。${rep.fdr.yes_tested} 个回答为“是”的问题中有 ${rep.fdr.yes_survive} 个经得起校正${rep.fdr.yes_fail.length ? `；其余 ${rep.fdr.yes_fail.length} 个应当视为线索，而不是定论` : ""}。剩下的 ${rep.fdr.m_studies - rep.fdr.m_tests} 项研究不是假设检验，没有 p 值。`)}
               </p>
             ) : null}
             <p className="mt-3 text-[13px] text-muted-foreground">
@@ -402,6 +411,8 @@ export default function StudiesPage() {
             </p>
           ) : null}
 
+          <div className="space-y-2">
+          <h2 className="pt-2 text-[13px] font-medium tracking-wide text-muted-foreground uppercase">{tx("Each question, one by one", "逐个问题")}</h2>
           {rep.studies.map((s) => {
             const v = VERDICT[s.verdict];
             return (
@@ -456,6 +467,7 @@ export default function StudiesPage() {
               </Section>
             );
           })}
+          </div>
         </>
       ) : null}
 

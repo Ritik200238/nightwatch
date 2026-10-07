@@ -63,12 +63,13 @@ export function Histogram({ values, bins, markers = [], binCount = 24, height = 
           <XAxis
             dataKey="mid"
             tickFormatter={(v: number) => `${v.toFixed(1)}${unit}`}
-            tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+            tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
             axisLine={{ stroke: "var(--grid)" }}
             tickLine={false}
             interval="preserveStartEnd"
+            minTickGap={14}
           />
-          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+          <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
           <Tooltip
             cursor={{ fill: "var(--accent)", opacity: 0.4 }}
             contentStyle={{ background: "var(--popover)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--popover-foreground)", fontSize: 12 }}
@@ -83,7 +84,7 @@ export function Histogram({ values, bins, markers = [], binCount = 24, height = 
               stroke="var(--foreground)"
               strokeWidth={1}
               strokeDasharray="0"
-              label={{ value: m.label, position: "top", fill: "var(--muted-foreground)", fontSize: 11 }}
+              label={{ value: m.label, position: "top", fill: "var(--muted-foreground)", fontSize: 12 }}
               ifOverflow="extendDomain"
             />
           ))}

@@ -27,6 +27,10 @@
   --color-status-warning: var(--status-warning);
   --color-status-serious: var(--status-serious);
   --color-status-critical: var(--status-critical);
+  --color-verdict-go: var(--verdict-go);
+  --color-verdict-reduce: var(--verdict-reduce);
+  --color-verdict-review: var(--verdict-review);
+  --color-verdict-nogo: var(--verdict-nogo);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -84,6 +88,11 @@
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #b42323;
+  /* Verdict text colours, tuned for 4.5:1+ on the page background. */
+  --verdict-go: #0b7a2a;
+  --verdict-reduce: #1d5fb4;
+  --verdict-review: #8f5600;
+  --verdict-nogo: #b42323;
   --grid: #e1e0d9;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
@@ -124,6 +133,10 @@
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #f06a6a;
+  --verdict-go: #4cc46f;
+  --verdict-reduce: #6aa7f0;
+  --verdict-review: #f0b429;
+  --verdict-nogo: #f06a6a;
   --grid: #2c2c2a;
   --sidebar: oklch(0.185 0.008 250);
   --sidebar-foreground: oklch(0.93 0.005 250);
@@ -169,4 +182,14 @@
     align-items: center;
     min-height: 40px;
   }
+}
+
+/* Small status-coloured text in the light theme: the amber and green used as fills are
+   1.8:1 and 3.3:1 on white, too faint for 11-13 px labels. Text only; fills, borders and
+   the dark theme keep their colours. Both values are >= 4.5:1 on white and on the card. */
+:root:not(.dark) .text-status-warning {
+  color: #8a5300;
+}
+:root:not(.dark) .text-status-good {
+  color: #0a710a;
 }

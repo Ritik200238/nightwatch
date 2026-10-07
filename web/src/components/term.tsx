@@ -30,8 +30,8 @@ const GLOSSARY = {
   pinball: {
     label: ["pinball loss", "弹球损失"],
     def: [
-      "A score for a forecast that gives a range instead of one number: it charges more when the real outcome lands far outside the range. Lower is better.",
-      "给“区间预测”打分的方法：真实结果落在区间之外越远，扣分越多。越低越好。",
+      "A score for a forecast that states percentile lines (p5, p50, p95) instead of one number. The further the real outcome lands from a line, the bigger the penalty, weighted by what that line promised (a p5 line is penalised far more when the outcome falls below it). Lower is better.",
+      "给“分位线预测”（p5、p50、p95 等，而不是单个数字）打分的方法：真实结果离某条线越远，扣分越多，并按这条线的承诺加权（p5 线在结果跌到它下方时扣分要重得多）。越低越好。",
     ],
   },
   klo: {
@@ -67,6 +67,20 @@ const GLOSSARY = {
     def: [
       "When many questions are tested at once, some look like wins by luck. The false discovery rate caps the share of such lucky wins, and the q-value is the p-value after that correction.",
       "同时检验很多问题时，总会有一些碰巧显得成立。假发现率限制这类碰巧成立的比例，q 值就是经过这种校正之后的 p 值。",
+    ],
+  },
+  bh: {
+    label: ["Benjamini–Hochberg", "Benjamini–Hochberg（BH 校正）"],
+    def: [
+      "A standard way to correct a batch of p-values at once. It ranks them and keeps only the ones small enough that, on average, no more than the chosen share (here 5%) of the results declared real are lucky flukes.",
+      "同时校正一批 p 值的标准方法。它把 p 值排序，只保留足够小的那些，使被判定为“成立”的结果里，平均而言碰巧成立的比例不超过所设的份额（这里是 5%）。",
+    ],
+  },
+  khi: {
+    label: ["k_hi (upper tail factor)", "k_hi（上尾系数）"],
+    def: [
+      "The same correction as k_lo, applied to the good-case line (p95) instead of the bad-case line. Above 1 pushes it further out; below 1 pulls it in.",
+      "与 k_lo 相同的修正，但作用于好情形线（p95），而不是坏情形线。大于 1 表示往外推；小于 1 表示往里收。",
     ],
   },
   clustered: {
@@ -148,7 +162,7 @@ export function Term({ k, children }: { k: TermKey; children?: ReactNode }) {
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
         }}
-        className="cursor-help rounded-sm underline decoration-muted-foreground/70 decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="relative cursor-help rounded-sm [@media(pointer:coarse)]:after:absolute [@media(pointer:coarse)]:after:-inset-x-4 [@media(pointer:coarse)]:after:-inset-y-3 [@media(pointer:coarse)]:after:content-[''] underline decoration-muted-foreground/70 decoration-dotted underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         {children ?? entry.label[i]}
       </button>

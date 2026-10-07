@@ -27,11 +27,11 @@ function useLoad<T>(fn: () => Promise<T>): Load<T> {
   return state;
 }
 
-function Dot({ ok }: { ok: boolean | null }) {
-  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${ok === true ? "bg-emerald-500" : ok === false ? "bg-red-500" : "bg-muted-foreground/40"}`} />;
+function Dot({ ok }: { ok: boolean | "warn" | null }) {
+  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${ok === true ? "bg-emerald-500" : ok === "warn" ? "bg-amber-500" : ok === false ? "bg-red-500" : "bg-muted-foreground/40"}`} />;
 }
 
-function Card({ title, ok, children }: { title: string; ok: boolean | null; children: ReactNode }) {
+function Card({ title, ok, children }: { title: string; ok: boolean | "warn" | null; children: ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <h2 className="flex items-center gap-2 text-sm font-semibold">
@@ -63,13 +63,27 @@ export default function StatusPage() {
   const latestAnchor = list.length ? list[0] : null;
   const band = calib.data?.adjusted?.adj_tail_band;
   const NA = tx("unavailable", "不可用");
+  // The Bitget US-stock inputs go down together; when they do, they read as one handled issue.
+  const isUsStockKey = (k: string) => k === "bitget_mcp" || k.startsWith("bitget_equity_") || k.startsWith("bitget_sentiment_");
+  const usStaleRows = (sources.data ?? []).filter((r) => isUsStockKey(r.key) && !isFresh(r));
+  const renderRow = (r: DataSource) => (
+    <li key={r.key} className="flex items-center justify-between gap-3">
+      <span className="flex items-center gap-2">
+        <Dot ok={isFresh(r)} />
+        {localSource(r, zh).label}
+      </span>
+      <span className="text-[13px]">
+        {fmtAge(sourceAgeIso(r), zh)} · {isFresh(r) ? tx("ok", "正常") : tx("stale", "过期")}
+      </span>
+    </li>
+  );
 
   return (
     <div className={`${PROOF_WIDTH} space-y-4`}>
       <PageHead title={tx("Status", "状态")} intro={health.data?.state === "down" ? tx("The API is down, so the cards below may be saved copies, not live readings.", "API 离线，下面的卡片可能是已保存的副本，而非实时读数。") : tx("Read live from the API each time you open this page.", "每次打开页面都从 API 实时读取。")} />
 
       <AsOf path="/sources" />
-      <Card title="API" ok={health.data ? health.data.state === "up" : null}>
+      <Card title="API" ok={health.data ? (health.data.state === "up" ? true : health.data.state === "slow" ? "warn" : false) : null}>
         {health.data && health.data.state !== "down" ? (
           <p>
             {health.data.state === "slow" ? tx("Up but slow", "运行中，但响应较慢") : tx("Up", "运行中")} · v{health.data.health.version} · {health.data.health.bars.toLocaleString()} {tx("candles", "根 K 线")} · {health.data.health.orderbook_snapshots.toLocaleString()} {tx("order-book snapshots", "个盘口快照")} · {health.data.health.tickers_with_data} {tx("tokens with data", "个有数据的代币")}
@@ -89,19 +103,36 @@ export default function StatusPage() {
 
       <Card title={tx("Feed freshness", "数据源新鲜度")} ok={sources.error ? false : sources.data ? stale === 0 : null}>
         {sources.data ? (
-          <ul className="space-y-1">
-            {sources.data.map((r) => (
-              <li key={r.key} className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-2">
-                  <Dot ok={isFresh(r)} />
-                  {localSource(r, zh).label}
-                </span>
-                <span className="text-[13px]">
-                  {fmtAge(sourceAgeIso(r), zh)} · {isFresh(r) ? tx("ok", "正常") : tx("stale", "过期")}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            {usStaleRows.length >= 2 ? (
+              <p className="rounded-md bg-muted/50 px-3 py-2 text-[13px] leading-relaxed">
+                {tx(
+                  "The US-stock data feed is down upstream. The engine marks those inputs unavailable and does not guess. Each gap is logged on the ",
+                  "美股数据源在上游中断。引擎会把这些输入标为不可用，而不是猜测。每一次缺口都记录在",
+                )}
+                <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
+                  {tx("Misses page", "失误页面")}
+                </Link>
+                {tx(".", "。")}
+              </p>
+            ) : null}
+            <ul className="space-y-1">
+              {(usStaleRows.length >= 2 ? sources.data.filter((r) => !usStaleRows.includes(r)) : sources.data).map(renderRow)}
+            </ul>
+            {usStaleRows.length >= 2 ? (
+              <details className="group rounded-md border border-border/60 px-3 py-2">
+                <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 text-[13px] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center gap-2">
+                    <Dot ok={null} />
+                    {tx(`US-stock feed: ${usStaleRows.length} inputs unavailable`, `美股数据源：${usStaleRows.length} 项输入不可用`)}
+                  </span>
+                  <span className="underline underline-offset-2 group-open:hidden">{tx("show all", "展开全部")}</span>
+                  <span className="hidden underline underline-offset-2 group-open:inline">{tx("hide", "收起")}</span>
+                </summary>
+                <ul className="mt-2 space-y-1 border-t border-border/60 pt-2">{usStaleRows.map(renderRow)}</ul>
+              </details>
+            ) : null}
+          </>
         ) : (
           <p>{sources.error ? NA : tx("Checking…", "检查中…")}</p>
         )}
