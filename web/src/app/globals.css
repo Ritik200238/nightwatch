@@ -226,6 +226,9 @@
 @utility t-caption {
   font-size: 0.8125rem;
   line-height: 1.5;
+  /* Chinese: keep short words whole (有利, not 有 / 利); break only at punctuation. */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   color: var(--muted-foreground);
 }
 @utility t-label {

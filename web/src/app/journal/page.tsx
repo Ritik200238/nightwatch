@@ -121,7 +121,7 @@ export default function JournalPage() {
         actions={
           <div className="flex gap-1" role="group" aria-label={tx("Forecast kind", "预测类型")}>
             {KINDS.map((k) => (
-              <Button key={k} size="sm" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
+              <Button key={k} size="sm" className="min-w-10" variant={kind === k ? "default" : "secondary"} onClick={() => setKind(k)}>
                 {k === "all" ? tx("All", "全部") : k === "replay" ? tx("Replays", "重演") : tx("Live tickets", "实时交易")}
               </Button>
             ))}
@@ -165,7 +165,7 @@ export default function JournalPage() {
           <Section title={tx(`${rows.length} most recent`, `最近 ${rows.length} 条`)} subtitle={tx(`${matured.length} scored · ${rows.length - matured.length} still open${rows.length === LIMIT ? " · older rows are in the API and the CLI" : ""}`, `${matured.length} 条已评分 · ${rows.length - matured.length} 条尚未到期${rows.length === LIMIT ? " · 更早的记录在 API 和命令行里" : ""}`)}>
             <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
               <div className="grid grid-cols-2 gap-x-6 gap-y-5 self-start">
-                <Figure label={tx("Scored", "已评分")} value={String(matured.length)} hint={tx("horizon passed, outcome recorded", "持有期已过，结果已记录")} />
+                <Figure label={tx(`Scored, of these ${rows.length} most recent`, `已评分，共 ${rows.length} 条最近记录`)} value={String(matured.length)} hint={tx("horizon passed, outcome recorded", "持有期已过，结果已记录")} />
                 <Figure label={tx("Inside the p5–p95 band", "落在 p5–p95 区间内")} value={matured.length ? fmtPct((inside / matured.length) * 100, 1, false) : "—"} hint={tx("90% if the distributions are honest", "分布若诚实应为 90%")} />
                 <Figure label={tx("Tokens", "代币")} value={String(new Set(rows.map((r) => r.ticker)).size)} />
                 <Figure label={tx("Live tickets", "实时交易")} value={String(rows.filter((r) => r.kind === "ticket").length)} hint={tx("analyses a person asked for", "有人主动请求的分析")} />

@@ -468,8 +468,8 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
         <AnalogMini report={report} lang={lang} />
       </div>
       <BuildTrace report={report} lang={lang} />
-      <details className="mt-3 text-[13px] text-muted-foreground">
-        <summary className="flex min-h-10 cursor-pointer select-none items-center hover:text-foreground">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
+      <details className="mt-1 text-[13px] text-muted-foreground">
+        <summary className="flex min-h-8 cursor-pointer select-none items-center hover:text-foreground [@media(pointer:coarse)]:min-h-10">{L("What the verdicts mean", "各个结论是什么意思")}</summary>
         <ul className="mt-1 space-y-0.5">
           {VERDICT_ORDER.map((k) => (
             <li key={k} className={k === v.verdict ? "text-foreground" : undefined}>

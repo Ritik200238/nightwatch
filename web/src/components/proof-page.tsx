@@ -55,7 +55,7 @@ export function Figure({ label, value, hint, tone, chip }: { label: string; valu
   return (
     <div className="flex min-w-0 flex-col gap-1 border-t border-border pt-3">
       <span className="t-caption">{label}</span>
-      <span className={`text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere] tabular-nums sm:text-[1.75rem] ${color}`}>{value}</span>
+      <span className={`text-2xl leading-tight font-semibold tracking-tight [overflow-wrap:anywhere] [word-break:keep-all] tabular-nums sm:text-[1.75rem] ${color}`}>{value}</span>
       {hint ? <span className="t-caption">{hint}</span> : null}
       {chip ? <span className="mt-1 flex">{chip}</span> : null}
     </div>

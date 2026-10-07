@@ -105,7 +105,7 @@ export default function StatusPage() {
         {sources.data ? (
           <>
             {usStaleRows.length >= 2 ? (
-              <p className="rounded-md bg-muted/50 px-3 py-2 text-[13px] leading-relaxed">
+              <p className="border-l-2 border-foreground/25 pl-3 text-[13px] leading-relaxed">
                 {tx(
                   "The US-stock data feed is down upstream. The engine marks those inputs unavailable and does not guess. Each gap is logged on the ",
                   "美股数据源在上游中断。引擎会把这些输入标为不可用，而不是猜测。每一次缺口都记录在",
@@ -120,7 +120,7 @@ export default function StatusPage() {
               {(usStaleRows.length >= 2 ? sources.data.filter((r) => !usStaleRows.includes(r)) : sources.data).map(renderRow)}
             </ul>
             {usStaleRows.length >= 2 ? (
-              <details className="group rounded-md border border-border/60 px-3 py-2">
+              <details className="group border-l-2 border-border pl-3">
                 <summary className="flex min-h-8 cursor-pointer list-none items-center justify-between gap-3 text-[13px] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
                   <span className="flex items-center gap-2">
                     <Dot ok={null} />
@@ -188,7 +188,7 @@ export default function StatusPage() {
         {calib.data?.adjusted ? (
           <p>
             {tx("Tail band after adjustment", "调整后的尾部区间")}: <span className="font-semibold text-foreground">{zh ? ({ green: "绿", amber: "黄", red: "红" } as Record<string, string>)[band ?? ""] ?? band : band}</span> · {calib.data.adjusted.n_evaluated.toLocaleString()} {tx("matured forecasts evaluated", "个已到期预测已评估")} ·{" "}
-            <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+            <Link href="/calibration" className="relative after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] underline underline-offset-2 hover:text-foreground">
               {tx("details", "详情")}
             </Link>
           </p>

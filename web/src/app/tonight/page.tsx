@@ -115,7 +115,7 @@ export default function TonightPage() {
             {tx("Loading the token list…", "正在加载代币列表…")}
           </div>
         )}
-        <Button onClick={() => void run()} disabled={busy || !positions.length} className="w-full">
+        <Button onClick={() => void run()} disabled={busy || !positions.length} variant={positions.length || busy ? "default" : "outline"} className="w-full">
           {busy ? tx("Reading the book…", "正在读取持仓…") : positions.length ? tx(`Watch these ${positions.length}`, `盯住这 ${positions.length} 个`) : tx("Add what you hold", "添加你的持仓")}
         </Button>
         <p className="t-caption">

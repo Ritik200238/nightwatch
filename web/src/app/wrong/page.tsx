@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Figure as Stat, LoadingRecord, OpenSection as Section, PageHead, PlainBox, PROOF_STACK, PROOF_WIDTH, ScrollTable, Tag as Pill } from "@/components/proof-page";
 import { Term } from "@/components/term";
+import { verdictText } from "@/lib/verdict-style";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api, peek, type DataSource, type MissesResponse, type VerifyResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
@@ -120,8 +121,7 @@ export default function WrongPage() {
               ? tx("That is more often than it should be, and it is shown below rather than hidden. ", "这比应有的频率高，我们把它们列在下面，而不是藏起来。")
               : tx("That is close to what an honest line would give. ", "这与诚实的线应有的结果接近。")}
           {tx("Every miss is listed with its receipt, and the mistakes we found in the desk itself are listed further down. A miss is a ", "每一次突破都附有凭证列出，我们在交易台自身发现的错误列在更下面。一次突破指的是一次 ")}
-          <Term k="coverage">{tx("breach", "突破")}</Term>
-          {tx(", and a few are expected.", "，出现少量是正常的。")}
+          <Term k="coverage">{tx("breach", "突破")}</Term>{tx(", and a few are expected.", "，出现少量是正常的。")}
         </PlainBox>
       ) : null}
 
@@ -178,7 +178,7 @@ export default function WrongPage() {
                           {lang === "zh" ? (m.side === "long" ? "做多" : m.side === "short" ? "做空" : m.side) : m.side} {fmtUsd(m.notional)} {m.ticker} · {m.horizon_h.toFixed(0)}h
                           {m.notional < TEST_SIZE_USDT ? <span className="t-caption ml-2 underline decoration-dotted underline-offset-4">{tx("test size", "测试规模")}</span> : null}
                         </TableCell>
-                        <TableCell>{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</TableCell>
+                        <TableCell>{m.verdict ? <Pill verdict={m.verdict}>{t(lang, "verdictName", m.verdict)}</Pill> : "—"}</TableCell>
                         <TableCell className="tabular text-right">{fmtPct(m.stated_p5_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right font-medium">{fmtPct(m.outcome_pct, 1)}</TableCell>
                         <TableCell className="tabular text-right">{fmtUsd(Math.abs(m.beyond_quote))} USDT</TableCell>
@@ -201,7 +201,7 @@ export default function WrongPage() {
                   {misses.misses.map((m) => (
                     <li key={m.id} className="space-y-1.5 px-3 py-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium">{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</span>
+                        <span className={`text-sm font-medium ${m.verdict ? verdictText(m.verdict) : ""}`}>{m.verdict ? t(lang, "verdictName", m.verdict) : "—"}</span>
                         <span className="t-caption">{fmtTimeL(m.as_of, lang)}</span>
                       </div>
                       <p className="text-sm">
@@ -297,7 +297,7 @@ export default function WrongPage() {
         </ul>
         <p className="t-caption mt-4 max-w-prose">
           {tx("The questions we asked about the method itself, and the five that came back “no”, are on the", "我们对方法本身提出的问题，以及其中五个答案为“否”的问题，都在")}{" "}
-          <Link href="/studies" className="underline underline-offset-2">
+          <Link href="/studies" className="relative after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] underline underline-offset-2">
             {tx("Studies", "研究")}
           </Link>{" "}
           {tx("page.", "页面。")}

@@ -21,7 +21,7 @@ export function Stat({ label, value, hint, tone, chip }: { label: string; value:
   return (
     <div className="flex min-w-0 flex-col gap-0.5 border-t border-border pt-2.5 pb-1">
       <span className="t-caption">{label}</span>
-      <span className={`tabular text-lg leading-tight font-semibold tracking-tight [overflow-wrap:anywhere] ${color}`}>{value}</span>
+      <span className={`tabular text-lg leading-tight font-semibold tracking-tight [overflow-wrap:anywhere] [word-break:keep-all] ${color}`}>{value}</span>
       {hint ? <span className="t-caption">{hint}</span> : null}
       {chip ? <span className="mt-1 flex">{chip}</span> : null}
     </div>
@@ -88,10 +88,13 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
         onFocus={open}
         onBlur={() => setPos(null)}
         onClick={() => (pos ? setPos(null) : open())}
-        className={`relative inline-flex items-center gap-1 rounded-full border border-border/70 after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[''] ${dot ? "p-1" : "px-1.5 py-px"} text-[11px] font-medium leading-4 whitespace-nowrap hover:border-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${st.text}`}
+        className={`group/chip relative -mx-1 -my-3 inline-flex min-h-10 min-w-10 items-center justify-center text-[11px] font-medium leading-4 whitespace-nowrap focus-visible:outline-none ${st.text}`}
       >
-        <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
-        {dot ? <span className="sr-only">{kindName}</span> : chipText(entry, lang)}
+        {/* The button is 40 px tall for a finger; the visible chip inside keeps its small size. */}
+        <span className={`inline-flex items-center gap-1 rounded-full border border-border/70 group-hover/chip:border-border group-focus-visible/chip:ring-2 group-focus-visible/chip:ring-ring ${dot ? "p-1" : "px-1.5 py-px"}`}>
+          <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
+          {dot ? <span className="sr-only">{kindName}</span> : chipText(entry, lang)}
+        </span>
       </button>
       {pos ? (
         <span id={id} role="tooltip" style={{ position: "fixed", left: pos.x, top: pos.y, width: Math.min(288, (typeof window === "undefined" ? 288 : window.innerWidth) - 16) }} className="z-50 rounded-lg border border-border bg-popover p-2.5 text-left text-xs font-normal leading-snug text-popover-foreground shadow-md">
@@ -109,7 +112,6 @@ export function SourceChip({ entry, lang, className = "", dot = false }: { entry
 /** One line that explains the four chips, shown once above the evidence. */
 export function SourceLegend({ lang }: { lang: Lang }) {
   const kinds: ProvKind[] = ["live", "history", "assumed", "ai"];
-  const label = lang === "zh" ? "每个数字的来源：" : "Where each number comes from:";
   const kindTag = (k: ProvKind) => (
     <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${KIND_STYLE[k].text}`}>
       <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${KIND_STYLE[k].dot}`} />
@@ -118,8 +120,8 @@ export function SourceLegend({ lang }: { lang: Lang }) {
   );
   return (
     <div className="mt-4 text-xs text-muted-foreground">
-      {/* Phone: one quiet line of the four kinds; the meanings open on tap. */}
-      <details className="sm:hidden">
+      {/* One quiet line of the four kinds at every width; the meanings open on tap. */}
+      <details>
         <summary className="flex min-h-10 cursor-pointer select-none flex-nowrap items-center gap-x-2.5 whitespace-nowrap hover:text-foreground">
           <span className="font-medium text-foreground">{lang === "zh" ? "来源：" : "Sources:"}</span>
           {kinds.map((k) => (
@@ -135,15 +137,6 @@ export function SourceLegend({ lang }: { lang: Lang }) {
           ))}
         </ul>
       </details>
-      <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 sm:flex">
-        <span className="font-medium text-foreground">{label}</span>
-        {kinds.map((k) => (
-          <span key={k} className="inline-flex items-center gap-1.5">
-            {kindTag(k)}
-            {lang === "zh" ? KIND_MEANING[k].zh : KIND_MEANING[k].en}
-          </span>
-        ))}
-      </p>
     </div>
   );
 }

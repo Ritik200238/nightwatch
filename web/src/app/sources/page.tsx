@@ -56,7 +56,7 @@ export default function SourcesPage() {
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="flex items-center gap-2 text-sm font-semibold">
                   <span aria-hidden className={`h-2 w-2 rounded-full ${fresh ? "bg-emerald-500" : "bg-amber-500"}`} />
-                  <a href={r.url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                  <a href={r.url} target="_blank" rel="noreferrer" className="-my-2.5 inline-flex min-h-10 min-w-10 items-center underline-offset-2 hover:underline">
                     {r.label}
                   </a>
                 </p>

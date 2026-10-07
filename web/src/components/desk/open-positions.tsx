@@ -187,7 +187,7 @@ export function OpenPositions({ universe, positions, onChange }: Props) {
             autoComplete="off"
           />
         </div>
-        <Button type="button" variant="secondary" onClick={add} disabled={!size.trim()}>
+        <Button type="button" variant="default" onClick={add} disabled={!size.trim()}>
           {tx("Add", "添加")}
         </Button>
       </div>
