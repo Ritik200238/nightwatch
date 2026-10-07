@@ -1195,28 +1195,43 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         <BookContrast ticket={report.ticket} lang={lang} />
       </Group>
 
-      <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
-        <span>
-          {L(`Computed in ${report.timings_ms.total} ms · sources: `, `计算耗时 ${report.timings_ms.total} 毫秒 · 数据来源：`)}
-          {report.sources
-            .map((s) => sourceLine(s, report.as_of, lang))
-            .join(lang === "zh" ? "、" : ", ")}
-          {report.forecast_id != null && report.forecast_id > 0 ? L(` · journaled as forecast #${report.forecast_id}`, ` · 已记入日志，预测编号 #${report.forecast_id}`) : ""}
-          {report.forecast_id != null && report.forecast_id < 0 ? L(" · a what-if: not journaled, never scored", " · 假设情景：不记入日志，也不评分") : ""}
-        </span>
-        {report.receipt && report.forecast_id != null && report.forecast_id > 0 ? (
-          <a
-            href={`/api/verify/${report.forecast_id}`}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            title={L(`Receipt ${report.receipt}: chained to every verdict before it`, `回执 ${report.receipt}：与此前的每一条结论链接在一起`)}
-          >
-            {L("Receipt ✓", "回执 ✓")}
-          </a>
-        ) : null}
-        {report.forecast_id != null && report.forecast_id > 0 ? <Permalink forecastId={report.forecast_id} lang={lang} /> : null}
-      </p>
+      <div className="border-t border-border/70 pt-3 text-[13px] text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-4">
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span>
+              {L(`Computed in ${report.timings_ms.total} ms · `, `计算耗时 ${report.timings_ms.total} 毫秒 · `)}
+              {L("Sources: ", "数据来源：")}
+              {report.sources
+                .map((s) => sourceLine(s, report.as_of, lang))
+                .join(lang === "zh" ? "、" : ", ")}
+            </span>
+            {report.forecast_id != null && report.forecast_id > 0 ? (
+              <span className="font-mono text-foreground/80">
+                {L(`· #${report.forecast_id}`, `· #${report.forecast_id}`)}
+              </span>
+            ) : null}
+            {report.forecast_id != null && report.forecast_id < 0 ? (
+              <span>{L("· a what-if: not journaled, never scored", "· 假设情景：不记入日志，也不评分")}</span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-3">
+            {report.receipt && report.forecast_id != null && report.forecast_id > 0 ? (
+              <a
+                href={`/api/verify/${report.forecast_id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-10 items-center font-mono text-muted-foreground hover:text-foreground underline underline-offset-2"
+                title={L(`Receipt ${report.receipt}: chained to every verdict before it`, `回执 ${report.receipt}：与此前的每一条结论链接在一起`)}
+              >
+                <span>{L("Receipt ✓", "回执 ✓")}</span>
+              </a>
+            ) : null}
+            {report.forecast_id != null && report.forecast_id > 0 ? (
+              <Permalink forecastId={report.forecast_id} lang={lang} />
+            ) : null}
+          </div>
+        </div>
+      </div>
       {primary ? null : null}
       </div>
     </div>
