@@ -82,17 +82,23 @@ export default function DeskPage() {
     setScript({ id: Date.now(), steps });
   }
 
+  const [restoring, setRestoring] = useState(false);
   // A refresh or the Back button brings back the report that was on screen, from its stored copy.
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
     if (new URLSearchParams(window.location.search).has("q")) return;
+    const savedChat = loadChat<unknown>();
+    if (savedChat && savedChat.messages && savedChat.messages.length > 0) {
+      setHeroUsed(true);
+    }
     // A what-if on screen has no stored copy (its id was dropped), but the chat still knows the
     // stored report the conversation is about: bring that back rather than the example.
-    const id = loadReportId() ?? loadChat<unknown>()?.contextId ?? null;
+    const id = loadReportId() ?? savedChat?.contextId ?? null;
     if (id == null) return;
     setHeroUsed(true);
+    setRestoring(true);
     let live = true;
     void api
       .report(id)
@@ -101,7 +107,10 @@ export default function DeskPage() {
         setReport((cur) => cur ?? r);
         setFromChat(true);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (live) setRestoring(false);
+      });
     return () => {
       live = false;
     };
@@ -280,8 +289,8 @@ export default function DeskPage() {
         </Tabs>
       </aside>
 
-      <section ref={resultRef} className="min-w-0 scroll-mt-4" aria-live="polite" aria-busy={busy}>
-        {busy && !report ? <ReportSkeleton /> : null}
+      <section ref={resultRef} className="min-w-0 scroll-mt-4" aria-live="polite" aria-busy={busy || restoring}>
+        {(busy || restoring) && !report ? <ReportSkeleton /> : null}
         {error && tab !== "form" ? (
           <div role="alert" className="mb-5 space-y-1 rounded-lg border border-destructive/30 p-4 text-sm">
             <p className="font-medium">{tx("Couldn't run the analysis", "无法运行分析")}</p>
@@ -316,7 +325,7 @@ export default function DeskPage() {
               }}
             />
           </div>
-        ) : !busy && !error && !contrast && exampleReport ? (
+        ) : !busy && !restoring && !error && !contrast && !heroUsed && exampleReport ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2">
               {/* The time is formatted in the reader's locale and zone, which the server cannot know;
@@ -330,7 +339,7 @@ export default function DeskPage() {
             </div>
             <ReportView report={exampleReport} lang={lang} hideTake />
           </div>
-        ) : !busy && !error && !contrast ? (
+        ) : !busy && !restoring && !error && !contrast ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border p-6 sm:p-8 text-center">
             <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
             <ol className="max-w-prose space-y-2 text-left text-sm leading-relaxed text-muted-foreground">

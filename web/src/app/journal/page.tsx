@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Figure, LoadingRecord, OpenSection as Section, PageHead, PlainBox, PROOF_STACK, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
 import { Term } from "@/components/term";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api } from "@/lib/api";
+import { api, peek, type MissesResponse } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 import { t as tl } from "@/lib/i18n";
 import { fmtPct, fmtUsd } from "@/lib/format";
@@ -79,9 +79,25 @@ export default function JournalPage() {
   const verdictPill = (r: ForecastRow) =>
     r.verdict ? <Pill verdict={r.verdict}>{lang === "zh" ? tl(lang, "verdictName", r.verdict) : r.verdict.replace("_", " ")}</Pill> : <span className="text-[13px] text-muted-foreground">—</span>;
   const [rows, setRows] = useState<ForecastRow[] | null>(null);
+  const [misses, setMisses] = useState<MissesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<(typeof KINDS)[number]>("all");
   const [details, setDetails] = useState(false);
+
+  useEffect(() => {
+    const m = peek<MissesResponse>("/misses");
+    if (m) setMisses(m);
+    api.misses().then(setMisses).catch(() => {});
+  }, []);
+
+  const totalScored = useMemo(() => {
+    if (!misses?.totals) return null;
+    if (kind === "ticket") return misses.totals.ticket?.scored ?? null;
+    if (kind === "replay") return misses.totals.replay?.scored ?? null;
+    const t = misses.totals.ticket?.scored ?? 0;
+    const r = misses.totals.replay?.scored ?? 0;
+    return t + r > 0 ? t + r : null;
+  }, [misses, kind]);
 
   async function load() {
     setError(null);
@@ -134,14 +150,60 @@ export default function JournalPage() {
       </p>
       {rows && rows.length > 0 ? (
         <PlainBox>
-          {tx(`Of the ${rows.length} most recent forecasts, ${matured.length} have been scored against what happened. `, `最近的 ${rows.length} 个预测中，已有 ${matured.length} 个对照实际结果评了分。`)}
-          {matured.length
-            ? tx(`${fmtPct((inside / matured.length) * 100, 1, false)} of them landed inside the `, `其中 ${fmtPct((inside / matured.length) * 100, 1, false)} 落在 `)
-            : tx("None has landed yet, so there is nothing to check against the ", "目前还没有结果落地，所以还无法检验落在 ")}
-          <Term k="p5">p5</Term>
-          {tx("–", "–")}
-          <Term k="p95">p95</Term>
-          {tx(" band the desk stated; if its ranges are honest that share should be near 90%. Rows are never edited afterwards.", " 区间内的比例；如果它给出的区间是诚实的，这个比例应当接近 90%。事后不会修改任何一行。")}
+          {matured.length > 0 ? (
+            <>
+              {tx(`Of the ${rows.length} most recent forecasts shown here, ${matured.length} have been scored against what happened. `, `在此显示的最近 ${rows.length} 个预测中，已有 ${matured.length} 个对照实际结果评了分。`)}
+              {tx(`${fmtPct((inside / matured.length) * 100, 1, false)} of them landed inside the `, `其中 ${fmtPct((inside / matured.length) * 100, 1, false)} 落在 `)}
+              <Term k="p5">p5</Term>
+              {tx("–", "–")}
+              <Term k="p95">p95</Term>
+              {tx(" band the desk stated; if its ranges are honest that share should be near 90%. ", " 区间内的比例；如果它给出的区间是诚实的，这个比例应当接近 90%。")}
+              {totalScored ? (
+                <>
+                  {tx(`The full track record (${totalScored.toLocaleString()} scored across past windows) is audited on `, `完整的历史记录（在过去窗口中已评分 ${totalScored.toLocaleString()} 条）已在 `)}
+                  <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+                    {tx("Calibration", "校准")}
+                  </Link>
+                  {tx(" and ", " 和 ")}
+                  <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
+                    {tx("What we got wrong", "我们错在哪")}
+                  </Link>
+                  {tx(". Rows are never edited afterwards.", " 页公开审计。记录事后绝不修改。")}
+                </>
+              ) : (
+                tx("Rows are never edited afterwards.", "记录事后绝不修改。")
+              )}
+            </>
+          ) : (
+            <>
+              {tx(`This table displays the ${rows.length} most recent forecasts. All ${rows.length} are currently active awaiting their holding horizon (such as the next US market open), so none has matured in this recent window yet. `, `此表展示最近的 ${rows.length} 个预测。这 ${rows.length} 条目前均在持有期内（例如等待下一次美股开盘），因此在此近期窗口中尚未到期。`)}
+              {totalScored ? (
+                <>
+                  {tx(`The complete historical track record of ${totalScored.toLocaleString()} matured forecasts scored against the `, `系统拥有已对实际结果评分的 ${totalScored.toLocaleString()} 条完整到期预测历史，对照 `)}
+                  <Term k="p5">p5</Term>
+                  {tx("–", "–")}
+                  <Term k="p95">p95</Term>
+                  {tx(" band is published and audited on ", " 区间检验的结果已在 ")}
+                  <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+                    {tx("Calibration", "校准")}
+                  </Link>
+                  {tx(" and ", " 和 ")}
+                  <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
+                    {tx("What we got wrong", "我们错在哪")}
+                  </Link>
+                  {tx(". Rows are never edited afterwards.", " 页全面公开。记录事后绝不修改。")}
+                </>
+              ) : (
+                <>
+                  {tx("Once their holding periods end, outcomes are permanently recorded against the ", "一旦持有期结束，结果将永久对照 ")}
+                  <Term k="p5">p5</Term>
+                  {tx("–", "–")}
+                  <Term k="p95">p95</Term>
+                  {tx(" band. Rows are never edited afterwards.", " 区间记录。记录事后绝不修改。")}
+                </>
+              )}
+            </>
+          )}
         </PlainBox>
       ) : null}
 
@@ -162,18 +224,67 @@ export default function JournalPage() {
         </div>
       ) : (
         <>
-          <Section title={tx(`${rows.length} most recent`, `最近 ${rows.length} 条`)} subtitle={tx(`${matured.length} scored · ${rows.length - matured.length} still open${rows.length === LIMIT ? " · older rows are in the API and the CLI" : ""}`, `${matured.length} 条已评分 · ${rows.length - matured.length} 条尚未到期${rows.length === LIMIT ? " · 更早的记录在 API 和命令行里" : ""}`)}>
+          <Section
+            title={tx(`${rows.length} most recent`, `最近 ${rows.length} 条`)}
+            subtitle={tx(
+              `${matured.length} scored in view · ${rows.length - matured.length} awaiting maturity${totalScored ? ` · ${totalScored.toLocaleString()} scored in full record` : ""}${rows.length === LIMIT ? " · older rows in API / CLI" : ""}`,
+              `${matured.length} 条当前视图已评分 · ${rows.length - matured.length} 条等待到期${totalScored ? ` · 全历史共 ${totalScored.toLocaleString()} 条已评分` : ""}${rows.length === LIMIT ? " · 更早记录见 API / CLI" : ""}`,
+            )}
+          >
             <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
               <div className="grid grid-cols-2 gap-x-6 gap-y-5 self-start">
-                <Figure label={tx(`Scored, of these ${rows.length} most recent`, `已评分，共 ${rows.length} 条最近记录`)} value={String(matured.length)} hint={tx("horizon passed, outcome recorded", "持有期已过，结果已记录")} />
-                <Figure label={tx("Inside the p5–p95 band", "落在 p5–p95 区间内")} value={matured.length ? fmtPct((inside / matured.length) * 100, 1, false) : "—"} hint={tx("90% if the distributions are honest", "分布若诚实应为 90%")} />
+                <Figure
+                  label={tx(`Scored in this view (latest ${rows.length})`, `当前视图已评分（最近 ${rows.length} 条）`)}
+                  value={String(matured.length)}
+                  hint={tx(
+                    matured.length === 0 && totalScored
+                      ? `recent calls open · ${totalScored.toLocaleString()} scored on Calibration`
+                      : "horizon passed, outcome recorded",
+                    matured.length === 0 && totalScored
+                      ? `近期调用尚在持有期 · 全历史已评分 ${totalScored.toLocaleString()} 条`
+                      : "持有期已过，结果已记录",
+                  )}
+                />
+                <Figure
+                  label={tx("Inside the p5–p95 band", "落在 p5–p95 区间内")}
+                  value={matured.length ? fmtPct((inside / matured.length) * 100, 1, false) : "—"}
+                  hint={tx(
+                    matured.length === 0 && totalScored
+                      ? `see Calibration for full 90% test`
+                      : "90% if the distributions are honest",
+                    matured.length === 0 && totalScored
+                      ? `详见校准页的 90% 检验`
+                      : "分布若诚实应为 90%",
+                  )}
+                />
                 <Figure label={tx("Tokens", "代币")} value={String(new Set(rows.map((r) => r.ticker)).size)} />
                 <Figure label={tx("Live tickets", "实时交易")} value={String(rows.filter((r) => r.kind === "ticket").length)} hint={tx("analyses a person asked for", "有人主动请求的分析")} />
               </div>
               {points.length === 0 ? (
-                <p className="t-caption max-w-prose self-center border-l-2 border-border pl-3">
-                  {tx("No forecast has been scored yet, so there is nothing to plot. The chart appears once the first outcome is recorded.", "还没有预测被评分，所以暂时没有可画的内容。第一个结果记录后，图表就会出现。")}
-                </p>
+                <div className="self-center border-l-2 border-border pl-3 py-1 space-y-1">
+                  <p className="t-caption max-w-prose">
+                    {tx(
+                      totalScored
+                        ? `The ${rows.length} newest forecasts in this table are still within their hold window. The scatter plot appears once one matures.`
+                        : "No forecast has been scored yet, so there is nothing to plot. The chart appears once the first outcome is recorded.",
+                      totalScored
+                        ? `此表中的最近 ${rows.length} 个预测仍处于持有期内。一旦有预测到期，散点图即会绘制。`
+                        : "还没有预测被评分，所以暂时没有可画的内容。第一个结果记录后，图表就会出现。",
+                    )}
+                  </p>
+                  {totalScored ? (
+                    <p className="t-caption max-w-prose text-muted-foreground">
+                      {tx("See the ", "查看 ")}
+                      <Link href="/calibration" className="underline underline-offset-2 hover:text-foreground">
+                        {tx("Calibration page", "校准页面")}
+                      </Link>
+                      {tx(
+                        ` for the full distribution of ${totalScored.toLocaleString()} scored forecasts.`,
+                        ` 以获取已评分的 ${totalScored.toLocaleString()} 条预测的完整分布图。`,
+                      )}
+                    </p>
+                  ) : null}
+                </div>
               ) : (
               <figure aria-label={tx("Predicted median against realised return", "预测中位数与实际收益对比")}>
                 <ResponsiveContainer width="100%" height={240}>
