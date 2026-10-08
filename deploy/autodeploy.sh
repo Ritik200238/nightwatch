@@ -54,6 +54,18 @@ case "$conclusion" in
   *)       say "could not read CI status; refusing to deploy"; exit 0 ;;
 esac
 
+# The image is built from nightwatch/, pyproject.toml, requirements.lock and the Dockerfile,
+# and compose.yaml decides how it runs (see the Dockerfile COPY lines). A commit that touches
+# none of them (web pages, docs, README, scripts, tests) cannot change what the API does, so
+# restarting it would only cost the live demo a slow warm-up. Move the checkout forward and
+# leave the containers alone. If the diff cannot be read, deploy: restarting is the safe side.
+if changed=$(git diff --name-only "$local_sha" "$remote_sha" 2>/dev/null) && [ -n "$changed" ] \
+  && ! printf '%s\n' "$changed" | grep -Eq '^(nightwatch/|pyproject\.toml$|requirements\.lock$|Dockerfile$|compose\.yaml$|\.dockerignore$)'; then
+  git -c advice.detachedHead=false checkout --quiet --force "$remote_sha" || { say "checkout failed"; exit 1; }
+  say "${remote_sha:0:8} changes nothing the backend runs ($(printf '%s\n' "$changed" | wc -l) files); checked out, no restart"
+  exit 0
+fi
+
 say "deploying ${remote_sha:0:8}"
 # --force on purpose: this box is a deploy target, not a workspace. The repository is
 # the only source of truth for what runs here, and a stray local edit (even a file mode)
