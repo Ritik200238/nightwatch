@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang } from "@/lib/lang";
+import { WeekStrip } from "./week-strip";
 import { scrollIntoViewOnSmall, scrollToAnswer } from "@/lib/scroll";
 import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
@@ -435,25 +436,31 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const text = draft.trim();
   return (
     <section className="pb-4 pt-4 sm:pt-8" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <p className="text-[12px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/80 mb-2">
-        {tx("NIGHTWATCH · PRE-TRADE DECISION STRESS TESTING FOR BITGET", "NIGHTWATCH · BITGET 交易前决策压力测试")}
-      </p>
-      <h1 className={`text-balance text-3xl font-bold tracking-tight sm:text-5xl lg:text-6xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>
-        {tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}
-      </h1>
-      <div className="mt-4 max-w-3xl space-y-2 text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-        <p>
-          {tx(
-            "A pre-trade decision workbench for tokenized US stocks and leveraged trades on Bitget. The deterministic Python engine finds similar past market moments, builds an empirical forecast distribution (p5 to p95), runs stress scenarios, and prices your exit on Bitget's live order book. The Qwen model explains the trade; deterministic code computes every number.",
-            "Bitget 上代币化美股与杠杆交易的交易前决策工作台。确定性 Python 引擎检索历史上相似的市场时刻，构建实证预测分布（p5 至 p95），运行预设压力测试，并在 Bitget 实时订单簿上计算平仓成本。Qwen 模型只负责理解与解释，每个数字均由确定性代码严谨计算。"
-          )}
+      <div className="grid gap-6 rounded-2xl border border-[#26335a] bg-[#080e20] p-5 text-slate-100 shadow-lg sm:p-8 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:gap-10">
+        <div>
+        <p className="text-[12px] font-mono font-semibold uppercase tracking-widest text-amber-300/90 mb-3">
+          {tx("NIGHTWATCH · PRE-TRADE DECISION STRESS TESTING FOR BITGET", "NIGHTWATCH · BITGET 交易前决策压力测试")}
         </p>
-        <p className="hidden sm:block">
-          {tx(
-            "Trading after hours or over the weekend? Type your trade in plain words — English or 中文 — like \"long 10k TSLA tonight 5x\" or \"hold NVDA over the weekend, stop 170\". Nightwatch never places orders and never touches your money: you get a sized GO / REDUCE / HEDGE / REVIEW / NO GO verdict before you risk capital.",
-            "在盘后或周末交易？用日常语言描述你的交易——支持英文或中文——例如“今晚 5 倍做多 1 万 TSLA”或“周末做多 NVDA，止损 170”。Nightwatch 绝不下单，也不触碰你的资金：在冒资金风险前，为你给出带仓位建议的 GO / REDUCE / HEDGE / REVIEW / NO GO 结论。"
-          )}
-        </p>
+        <h1 className={`text-balance text-3xl font-bold text-slate-50 tracking-tight sm:text-5xl lg:text-6xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>
+          {tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}
+        </h1>
+        <div className="mt-4 max-w-3xl space-y-2 text-[15px] leading-relaxed text-slate-300 sm:text-base">
+          <p>
+            {tx(
+              "A pre-trade decision workbench for tokenized US stocks and leveraged trades on Bitget. The deterministic Python engine finds similar past market moments, builds an empirical forecast distribution (p5 to p95), runs stress scenarios, and prices your exit on Bitget's live order book. The Qwen model explains the trade; deterministic code computes every number.",
+              "Bitget 上代币化美股与杠杆交易的交易前决策工作台。确定性 Python 引擎检索历史上相似的市场时刻，构建实证预测分布（p5 至 p95），运行预设压力测试，并在 Bitget 实时订单簿上计算平仓成本。Qwen 模型只负责理解与解释，每个数字均由确定性代码严谨计算。"
+            )}
+          </p>
+          <p className="hidden sm:block">
+            {tx(
+              "Trading after hours or over the weekend? Type your trade in plain words — English or 中文 — like \"long 10k TSLA tonight 5x\" or \"hold NVDA over the weekend, stop 170\". Nightwatch never places orders and never touches your money: you get a sized GO / REDUCE / HEDGE / REVIEW / NO GO verdict before you risk capital.",
+              "在盘后或周末交易？用日常语言描述你的交易——支持英文或中文——例如“今晚 5 倍做多 1 万 TSLA”或“周末做多 NVDA，止损 170”。Nightwatch 绝不下单，也不触碰你的资金：在冒资金风险前，为你给出带仓位建议的 GO / REDUCE / HEDGE / REVIEW / NO GO 结论。"
+            )}
+          </p>
+        </div>
+
+        </div>
+        <WeekStrip />
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-medium">
