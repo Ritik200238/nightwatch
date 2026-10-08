@@ -921,8 +921,19 @@ class AnalysisReport:
         out = _serialise(self)
         _add_zh_names(out)
         _add_provenance(out)
+        _add_joint_break(out)
         _add_report_twins(out)
         return out
+
+
+def _add_joint_break(out: dict[str, Any]) -> None:
+    """The bad move and the thin book at once, from the report's own fields."""
+    try:
+        from nightwatch.execution import joint_break
+
+        out["joint_break"] = joint_break.build(out)
+    except Exception:  # noqa: BLE001 - context must never break a report
+        out["joint_break"] = None
 
 
 def _add_provenance(out: dict[str, Any]) -> None:

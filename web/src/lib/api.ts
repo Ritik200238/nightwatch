@@ -373,6 +373,27 @@ export interface ThesisCheck {
 }
 
 /** What the report quotes for one token from that measurement. */
+/** The one-in-twenty bad move and the thinnest recorded book, for the part of the week the hold runs through. */
+export interface JointBreak {
+  available: boolean;
+  reason?: string;
+  bucket: string;
+  buckets: string[];
+  n_snapshots: number;
+  notional: number;
+  move_pct: number;
+  move_quote: number;
+  depth_p5: number;
+  spread_p95_bps: number | null;
+  half_spread_floor_bps: number | null;
+  total_floor_pct: number;
+  total_floor_quote: number;
+  unclearable_quote: number;
+  clears_inside_25bps: boolean;
+  plain: string;
+  plain_zh: string;
+}
+
 export interface DeepHistoryEvent {
   date: string;
   pct: number;
@@ -1333,6 +1354,7 @@ export interface Report {
   receipt?: string | null;
   /** Where each headline number came from: live Bitget, history, assumed or AI. */
   provenance?: Provenance | null;
+  joint_break?: JointBreak | null;
   sources: Record<string, unknown>[];
   warnings: string[];
   warnings_zh?: string[];

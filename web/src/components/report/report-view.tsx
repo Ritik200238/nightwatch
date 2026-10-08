@@ -27,6 +27,7 @@ import { BookStressView } from "@/components/report/book-stress";
 import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
+import { JointBreak } from "@/components/report/joint-break";
 import { LongRecord } from "@/components/report/long-record";
 import { Pill, Section, SourceChip, SourceLegend, Stat } from "@/components/report/primitives";
 import { verdictText } from "@/lib/verdict-style";
@@ -1082,6 +1083,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
         ) : (
           <p className="text-sm text-muted-foreground">{L("No order book was available, so exit cost is unknown. Start the recorder or allow live book fetches.", "没有可用的盘口数据，所以平仓成本未知。请启动记录器，或允许实时获取盘口。")}</p>
         )}
+        <JointBreak report={report} lang={lang} />
         <LiquidityByTimeOfWeek report={report} lang={lang} />
         <ClosedHoursNote report={report} lang={lang} />
       </Section>
