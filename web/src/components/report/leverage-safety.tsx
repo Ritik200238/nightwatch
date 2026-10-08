@@ -89,7 +89,7 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
                     </button>
                   ) : (
                     <span className="font-semibold text-foreground">
-                      {fmtLev(r.leverage)}x <span className="text-[11px] font-normal text-muted-foreground">{L("(yours)", "（你的）")}</span>
+                      {fmtLev(r.leverage)}x <span className="text-[12px] font-normal text-muted-foreground">{L("(yours)", "（你的）")}</span>
                     </span>
                   )}
                 </div>
@@ -98,19 +98,19 @@ export function LeverageSafety({ report, lang, onRerun }: { report: Report; lang
 
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1.5 border-t border-border/40 text-[12px]">
                 <div>
-                  <span className="text-[11px] text-muted-foreground block">{L("Liquidation price", "强平价")}</span>
+                  <span className="text-[12px] text-muted-foreground block">{L("Liquidation price", "强平价")}</span>
                   <span className="tabular-nums font-medium text-foreground">{fmtPrice(r.liquidation_price)}</span>
                 </div>
                 <div>
-                  <span className="text-[11px] text-muted-foreground block">{L("Distance", "距离")}</span>
+                  <span className="text-[12px] text-muted-foreground block">{L("Distance", "距离")}</span>
                   <span className="tabular-nums font-medium text-foreground">{r.distance_pct == null ? "—" : `${r.distance_pct.toFixed(1)}%`}</span>
                 </div>
                 <div>
-                  <span className="text-[11px] text-muted-foreground block">{L("Margin", "保证金")}</span>
+                  <span className="text-[12px] text-muted-foreground block">{L("Margin", "保证金")}</span>
                   <span className="tabular-nums font-medium text-foreground">{fmtUsd(r.margin_quote)}</span>
                 </div>
                 <div>
-                  <span className="text-[11px] text-muted-foreground block">{L("Past moments liquidated", "曾被强平的历史时刻")}</span>
+                  <span className="text-[12px] text-muted-foreground block">{L("Past moments liquidated", "曾被强平的历史时刻")}</span>
                   <span className="tabular-nums font-medium text-foreground">{r.analog_of ? L(`${r.analog_hits ?? 0} of ${r.analog_of}`, `${r.analog_hits ?? 0} / ${r.analog_of}`) : "—"}</span>
                 </div>
               </div>

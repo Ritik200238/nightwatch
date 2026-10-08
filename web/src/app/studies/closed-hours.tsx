@@ -139,7 +139,7 @@ export function ClosedHoursSection({ ch }: { ch: ClosedHours }) {
                     <span>{k.label}</span>
                     <span className="tabular-nums font-semibold">{withCi(mv[`per_hour_var_ratio_${k.key}`], (v) => times(v, 2))}</span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <div className="mt-1 flex items-center justify-between text-[12px] text-muted-foreground">
                     <span>{tx("Share of all movement", "占全部波动")}</span>
                     <span className="tabular-nums text-foreground">{withCi(mv[`var_share_${k.key}`], (v) => pct(v, 1))}</span>
                   </div>
@@ -150,7 +150,7 @@ export function ClosedHoursSection({ ch }: { ch: ClosedHours }) {
                   <span>{tx("Open session (09:00–16:00 ET)", "开市时段（美东 09:00–16:00）")}</span>
                   <span className="tabular-nums font-medium text-foreground">1.00×</span>
                 </div>
-                <div className="mt-1 flex items-center justify-between text-[11px]">
+                <div className="mt-1 flex items-center justify-between text-[12px]">
                   <span>{tx("Share of all movement", "占全部波动")}</span>
                   <span className="tabular-nums text-foreground">{withCi(mv.var_share_open, (v) => pct(v, 1))}</span>
                 </div>
@@ -258,19 +258,19 @@ export function ClosedHoursSection({ ch }: { ch: ClosedHours }) {
                       <p className="font-medium text-foreground">{anchorLabel[a]}</p>
                       <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[12px]">
                         <div>
-                          <span className="text-muted-foreground block text-[11px]">{tx("Slope on gap", "跳空斜率")}</span>
+                          <span className="text-muted-foreground block text-[12px]">{tx("Slope on gap", "跳空斜率")}</span>
                           <span className="tabular-nums font-medium text-foreground">{withCi(b.stats.slope_open, (v) => num(v, 2))}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground block text-[11px]">{tx("Correlation", "相关系数")}</span>
+                          <span className="text-muted-foreground block text-[12px]">{tx("Correlation", "相关系数")}</span>
                           <span className="tabular-nums font-medium text-foreground">{withCi(b.stats.corr_open, (v) => num(v, 2))}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground block text-[11px]">{tx("Slope on close", "收盘斜率")}</span>
+                          <span className="text-muted-foreground block text-[12px]">{tx("Slope on close", "收盘斜率")}</span>
                           <span className="tabular-nums font-medium text-foreground">{withCi(b.stats.slope_close, (v) => num(v, 2))}</span>
                         </div>
                         <div>
-                          <span className="text-muted-foreground block text-[11px]">{tx("OOS gain", "样本外改善")}</span>
+                          <span className="text-muted-foreground block text-[12px]">{tx("OOS gain", "样本外改善")}</span>
                           <span className="tabular-nums font-medium text-foreground">{withCi(b.stats.oos_skill, (v) => pct(v, 0))}</span>
                         </div>
                       </div>
@@ -347,7 +347,7 @@ export function ClosedHoursSection({ ch }: { ch: ClosedHours }) {
                 {liqRows.map((r) => (
                   <div key={r.key} className="rounded-md border border-border/60 bg-muted/20 p-2.5 text-xs space-y-1">
                     <p className="font-medium text-foreground">{r.label}</p>
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[11px]">
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[12px]">
                       <div>
                         <span className="text-muted-foreground block">{tx("Spread", "价差")}</span>
                         <span className="tabular-nums font-medium text-foreground">{withCi(liq.stats[`spread_ratio_${r.key}`], (v) => times(v, 2))}</span>
@@ -361,7 +361,7 @@ export function ClosedHoursSection({ ch }: { ch: ClosedHours }) {
                 ))}
                 <div className="rounded-md border border-border/60 bg-muted/10 p-2.5 text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground">{tx("Open session", "开市时段")}</p>
-                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[11px]">
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/40 text-[12px]">
                     <div>
                       <span className="text-muted-foreground block">{tx("Spread", "价差")}</span>
                       <span className="tabular-nums font-medium text-foreground">1.00×</span>

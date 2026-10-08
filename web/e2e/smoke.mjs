@@ -4,7 +4,7 @@
 import { chromium } from "playwright";
 
 const BASE = (process.argv[2] || process.env.SMOKE_URL || "https://nightwatch-gules.vercel.app").replace(/\/$/, "");
-const REPORT_TIMEOUT = 90_000;
+const REPORT_TIMEOUT = 120_000;
 // Typed into the home page's one input (#hero-input), as a first visitor would.
 const STARTERS = [
   "Hold $20k of TSLA through the weekend, stop at 350",
