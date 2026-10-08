@@ -315,6 +315,16 @@ def test_deep_history_serves_the_committed_long_record_beside_the_line(client, t
     assert gone.status_code == 404 and "not a tokenized stock this desk has data for" in gone.json()["detail"]
 
 
+def test_the_blind_chat_check_is_served_with_its_misses_and_matches_a_fresh_run(client):
+    r = client.get("/chat-check").json()
+    assert r["available"] and r["cases"] >= 100 and 0 < r["cases_ok"] <= r["cases"]
+    from research.intake_blind_eval import score
+
+    fresh = score()
+    assert (fresh["cases"], fresh["cases_ok"], fresh["fields_ok"]) == (r["cases"], r["cases_ok"], r["fields_ok"])  # the page cannot drift from the code
+    assert len(r["misses"]) == r["cases"] - r["cases_ok"]
+
+
 def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
     monkeypatch.setattr("nightwatch.api.providers.select", lambda *a, **k: None)  # keyword check, no model

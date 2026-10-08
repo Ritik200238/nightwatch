@@ -9,6 +9,7 @@ import { api, peek, type StudiesResponse, type Study } from "@/lib/api";
 import { fmtTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 import { STUDY_ZH } from "@/lib/studies-zh";
+import { ChatCheckSection } from "./chat-check";
 import { ClosedHoursSection } from "./closed-hours";
 
 /** The verdict answers the question in the title, and nothing else.
@@ -506,6 +507,7 @@ export default function StudiesPage() {
       ) : null}
 
       {rep?.closed_hours ? <ClosedHoursSection ch={rep.closed_hours} /> : null}
+      <ChatCheckSection />
     </div>
   );
 }

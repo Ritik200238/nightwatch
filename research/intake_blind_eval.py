@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from nightwatch.api.intake import parse_message
@@ -162,8 +163,10 @@ def main() -> int:
         if not row["ok"]:
             print("MISS", repr(row["text"]), row["wrong"])
     print(f"\n{r['cases_ok']}/{r['cases']} sentences fully right; {r['fields_ok']}/{r['fields']} fields right")
-    out = Path(__file__).with_name("intake_blind_eval.json")
-    out.write_text(json.dumps({k: r[k] for k in ("cases", "cases_ok", "fields", "fields_ok")} | {"misses": [x for x in r["rows"] if not x["ok"]]}, ensure_ascii=False, indent=1), encoding="utf-8")
+    out = Path(__file__).resolve().parent.parent / "nightwatch" / "journal" / "chat_check.json"
+    body = {k: r[k] for k in ("cases", "cases_ok", "fields", "fields_ok")}
+    body |= {"ran_at": datetime.now(UTC).isoformat(), "misses": [x for x in r["rows"] if not x["ok"]]}
+    out.write_text(json.dumps(body, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0
 
 

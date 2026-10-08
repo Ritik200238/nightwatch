@@ -1123,6 +1123,18 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
         return closed_hours.for_ticker(ticker.upper())
 
+    @app.get("/chat-check")
+    def chat_check() -> dict[str, Any]:
+        """The blind check of the chat reader: messy sentences, answers fixed first, every miss
+        listed. A committed result of research/intake_blind_eval.py; it is not recomputed here."""
+        import json
+        from pathlib import Path
+
+        f = Path(__file__).resolve().parent.parent / "journal" / "chat_check.json"
+        if not f.exists():
+            return {"available": False}
+        return {"available": True, **json.loads(f.read_text(encoding="utf-8"))}
+
     @app.get("/deep-history/{ticker}")
     def deep_history_for(ticker: str, side: str = "long", horizon_h: float | None = None, line_pct: float | None = None) -> dict[str, Any]:
         """The stock's own daily record back to listing (1999 for the oldest), beside the

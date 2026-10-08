@@ -3,6 +3,7 @@
  "cases_ok": 98,
  "fields": 317,
  "fields_ok": 313,
+ "ran_at": "2026-10-08T04:21:49.709855+00:00",
  "misses": [
   {
    "text": "longg tsla 10k",
