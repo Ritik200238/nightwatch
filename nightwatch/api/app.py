@@ -1123,6 +1123,21 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
         return closed_hours.for_ticker(ticker.upper())
 
+    @app.get("/deep-history/{ticker}")
+    def deep_history_for(ticker: str, side: str = "long", horizon_h: float | None = None, line_pct: float | None = None) -> dict[str, Any]:
+        """The stock's own daily record back to listing (1999 for the oldest), beside the
+        desk's one-in-twenty line: how big its overnight, weekend and multi-day moves have
+        been, and how often the record went past the line. A committed measurement, read
+        only; it never feeds a verdict."""
+        from nightwatch.stress import deep_history
+
+        if side not in ("long", "short"):
+            raise HTTPException(422, "side must be 'long' or 'short'")
+        known = st().ctx.tickers_with_data()
+        if ticker.upper() not in set(known):
+            raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
+        return deep_history.for_ticker(ticker.upper(), side=side, horizon_h=horizon_h, line_pct=line_pct)
+
     @app.post("/mcp")
     async def mcp(request: Request) -> Response:
         """The desk as MCP tools, for Claude, Cursor or any other MCP client.

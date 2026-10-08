@@ -290,6 +290,31 @@ def test_closed_hours_for_one_token_quotes_only_what_was_measured(client):
     assert gone.status_code == 404 and "not a tokenized stock this desk has data for" in gone.json()["detail"]
 
 
+def test_deep_history_serves_the_committed_long_record_beside_the_line(client, tmp_path, monkeypatch):
+    import json
+
+    import numpy as np
+    import pandas as pd
+
+    from nightwatch.stress import deep_history as dh
+
+    rng = np.random.default_rng(11)
+    idx = pd.bdate_range("2003-01-02", periods=2500)
+    px = 100 * np.exp(np.cumsum(rng.normal(0, 0.02, idx.size)))
+    daily = pd.DataFrame({"ts": idx.tz_localize("UTC"), "open": px, "close": px})
+    f = tmp_path / "deep.json"
+    f.write_text(json.dumps({"ran_at": "2026-10-08T00:00:00+00:00", "source": "test", "tickers": {"TSLA": dh.summarize_ticker(daily)}, "pooled": {}}))
+    monkeypatch.setattr(dh, "RESULT_PATH", f)
+    r = client.get("/deep-history/tsla?side=long&horizon_h=60&line_pct=-4").json()
+    assert r["available"] and r["chosen"] == "weekend_close" and 0 < r["share_beyond"] < 1
+    assert r["first"] == "2003-01-02" and "one_day" in r["windows"]
+    short = client.get("/deep-history/TSLA?side=short&horizon_h=24&line_pct=4").json()
+    assert short["windows"]["one_day"]["p5"] > 0 > r["windows"]["one_day"]["p5"]
+    assert client.get("/deep-history/TSLA?side=sideways").status_code == 422
+    gone = client.get("/deep-history/ZZZZ")
+    assert gone.status_code == 404 and "not a tokenized stock this desk has data for" in gone.json()["detail"]
+
+
 def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
     monkeypatch.setattr("nightwatch.api.providers.select", lambda *a, **k: None)  # keyword check, no model
