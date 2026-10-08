@@ -8,7 +8,9 @@ Every matured long-side forecast in the journal (replays and live tickets) carri
 line the desk drew at the time (p5) and the return that followed. For each rule below we
 count how often the return went past that rule's line:
 
-* the desk's line (p5, from similar past moments),
+* the desk's stated line (p5, from similar past moments, before the tail correction the desk
+  applies afterwards; the public API exposes this line, and the Method page also shows the
+  corrected line in force),
 * the same engine's unconditioned line (base_p5, no similar-moment filter),
 * flat stops a trader would type: -2%, -3%, -5%,
 * a flat stop tuned afterwards so its overall breach rate equals the desk's. This is the best
@@ -17,6 +19,9 @@ count how often the return went past that rule's line:
 The question is not only "how often", it is "how evenly". A one-in-twenty line should be
 crossed about one time in twenty on every stock. A flat stop cannot do that: the same -3%
 is a rare event on an index fund and a routine one on a volatile name.
+
+The count differs slightly from the Method page: that page scores only forecasts made after enough
+earlier ones had matured to fit the tail correction, and this script has no such cut.
 
 Read-only. It changes nothing and feeds no verdict.
 """
@@ -86,7 +91,7 @@ def main() -> None:
             }
         )
 
-    add("Desk line (p5, similar past moments)", rows, lambda r: r["p5"])
+    add("Stated line (p5, similar past moments)", rows, lambda r: r["p5"])
     if len(with_base) >= 0.5 * len(rows):
         add("Same engine, no similar-moment filter (base p5)", with_base, lambda r: float(r["base"]))
     for x in (2.0, 3.0, 5.0):
@@ -96,7 +101,7 @@ def main() -> None:
     add(f"Flat {level:.1f}% stop, tuned afterwards to the desk's overall rate", rows, lambda r, m=level: m)
 
     print(f"{out['n']} scored long-side forecasts, {out['nights']} nights, {out['tickers']} stocks (public API, {BASE})")
-    print(f"Target: one in twenty = 5.0%. Desk overall: {desk * 100:.1f}%\n")
+    print(f"Target: one in twenty = 5.0%. Stated line overall: {desk * 100:.1f}%\n")
     head = f"{'Rule':<62}{'overall':>9}{'low':>8}{'median':>8}{'high':>8}"
     print(head)
     print("-" * len(head))

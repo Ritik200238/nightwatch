@@ -213,10 +213,11 @@ blind check of the chat reader (misses included), the table above, and that the 
 record is present. Any failed line prints what the desk actually said.
 
 It also compares the one-in-twenty line with the flat stops traders already use, on the same scored
-history (`python scripts/benchmark_stops.py`, public API only). Measured 8 Oct 2026 on 3,457 forecasts:
-the desk line was crossed 4.6% of the time overall and between 1.7% and 11.7% by stock; a flat 3.8%
-stop, picked afterwards to match that overall rate, ranged from 0% to 26%. The desk line is more even,
-not perfectly even. Details on the [Method page](https://nightwatch-gules.vercel.app/method).
+history, read live on the [Method page](https://nightwatch-gules.vercel.app/method) (`/api/stop-benchmark`).
+As of 8 Oct 2026, on 3,449 forecasts: the desk line in force was crossed 3.4% of the time overall and
+between 0.0% and 12.2% by stock; a flat 4.2% stop, chosen afterwards to match that overall rate,
+ranged from 0.0% to 24.7%. The desk line is more even, not perfectly even. `python scripts/benchmark_stops.py`
+redoes it from the public API alone, which exposes the stated line before the tail correction.
 
 ### Claim boundaries
 
