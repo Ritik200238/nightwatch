@@ -103,7 +103,7 @@ record is present. Any failed line prints what the desk actually said.
 
 | | Most AI trading bots | Nightwatch |
 |---|---|---|
-| Past moments | Vibes, or nothing | Real retrieval: named dates, a similarity score, what each one shares and differs on — [not hidden behind a claim](#the-honest-parts-we-could-have-hidden) |
+| Past moments | Vibes, or nothing | Real retrieval: named dates, a similarity score, what each one shares and differs on — [not hidden behind a claim](#claim-boundaries) |
 | Stress tests | Generic, same for every trade | Fitted from the token's own history, sized to *your* position, scaled to *your* hold length, taken from the tail that actually hurts *your* side |
 | The verdict | A vibe ("looks bullish!") | A number: GO / REDUCE TO X / HEDGE Y% / REVIEW / NO GO, with every figure traceable to a source |
 | Getting out | Never mentioned | Walks Bitget's **live order book** for your exact size and prices the real exit cost |
