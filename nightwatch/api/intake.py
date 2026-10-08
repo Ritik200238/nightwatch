@@ -18,7 +18,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from nightwatch.decision.ticket import MAX_HOLD_HOURS, HorizonKind, TradeTicket
@@ -909,13 +909,12 @@ def long_record_line(report: Any, lang: str) -> str | None:
     2020 in it. Stated as raw, unconditional history beside the desk's own line (which does
     know today's setup), never as a replacement for it and never fed to the verdict."""
     try:
-        from datetime import timezone as _tz
         from zoneinfo import ZoneInfo
 
         from nightwatch.stress import deep_history
 
         t = report.ticket
-        as_of = report.as_of if report.as_of.tzinfo else report.as_of.replace(tzinfo=_tz.utc)
+        as_of = report.as_of if report.as_of.tzinfo else report.as_of.replace(tzinfo=UTC)
         hours = float(report.horizon_h)
         et = ZoneInfo("America/New_York")
         crosses_weekend = any((as_of + timedelta(hours=k)).astimezone(et).weekday() >= 5 for k in range(int(max(hours, 1.0)) + 1))

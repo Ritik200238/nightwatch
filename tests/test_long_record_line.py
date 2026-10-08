@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from nightwatch.api.intake import long_record_line
 from nightwatch.stress.scenarios import Side
 
 
-def _report(side=Side.LONG, as_of=datetime(2026, 10, 7, 20, tzinfo=timezone.utc), hours=60.0, ticker="NVDA"):
+def _report(side=Side.LONG, as_of=datetime(2026, 10, 7, 20, tzinfo=UTC), hours=60.0, ticker="NVDA"):
     return SimpleNamespace(ticket=SimpleNamespace(ticker=ticker, side=side), as_of=as_of, horizon_h=hours)
 
 
@@ -17,7 +17,7 @@ def test_weekend_hold_quotes_the_weekend_record():
 
 
 def test_midweek_night_uses_overnight_record():
-    en = long_record_line(_report(as_of=datetime(2026, 10, 6, 21, tzinfo=timezone.utc), hours=10.0), "en")
+    en = long_record_line(_report(as_of=datetime(2026, 10, 6, 21, tzinfo=UTC), hours=10.0), "en")
     assert en and "overnight closes" in en
 
 
