@@ -373,6 +373,43 @@ export interface ThesisCheck {
 }
 
 /** What the report quotes for one token from that measurement. */
+export interface DeepHistoryEvent {
+  date: string;
+  pct: number;
+}
+
+export interface DeepHistoryWindow {
+  label: string;
+  label_zh: string;
+  n: number;
+  /** The bad tail for this side: the lower tail of the stock's move for a long, the upper for a short. */
+  p5: number;
+  p1: number;
+  worst: number;
+  worst_events: DeepHistoryEvent[];
+  recent_p5: number | null;
+}
+
+/** The stock's own daily record back to listing, beside the desk's line. A committed
+ *  measurement; `available: false` for a ticker it did not cover. */
+export interface DeepHistory {
+  ticker: string;
+  side: "long" | "short";
+  available: boolean;
+  reason?: string;
+  first?: string;
+  last?: string;
+  sessions?: number;
+  ran_at?: string | null;
+  source?: string | null;
+  chosen?: string | null;
+  windows?: Record<string, DeepHistoryWindow>;
+  pooled?: { n: number; tickers: number | null; p5: number; p1: number; worst: number } | null;
+  line_pct?: number;
+  /** Share of the record that went past the line, read off a percentile grid (an estimate). */
+  share_beyond?: number | null;
+}
+
 export interface ClosedHoursLine {
   ticker: string;
   line: string | null;
@@ -1642,6 +1679,12 @@ export const api = {
     return request<CalibrationReport>(`/calibration${s ? `?${s}` : ""}`);
   },
   studies: () => request<StudiesResponse>("/studies"),
+  deepHistory: (ticker: string, side: "long" | "short", horizonH?: number | null, linePct?: number | null) => {
+    const q = new URLSearchParams({ side });
+    if (horizonH != null) q.set("horizon_h", String(horizonH));
+    if (linePct != null) q.set("line_pct", String(linePct));
+    return request<DeepHistory>(`/deep-history/${encodeURIComponent(ticker)}?${q.toString()}`);
+  },
   closedHours: (ticker: string) => request<ClosedHoursLine>(`/closed-hours/${encodeURIComponent(ticker)}`),
   thesisCheck: (forecastId: number, lang: string) => request<ThesisCheck>(`/thesis-check/${forecastId}?lang=${lang === "zh" ? "zh" : "en"}`),
   verify: () => request<VerifyResponse>("/verify"),

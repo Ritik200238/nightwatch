@@ -27,6 +27,7 @@ import { BookStressView } from "@/components/report/book-stress";
 import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
+import { LongRecord } from "@/components/report/long-record";
 import { Pill, Section, SourceChip, SourceLegend, Stat } from "@/components/report/primitives";
 import { verdictText } from "@/lib/verdict-style";
 import { Button } from "@/components/ui/button";
@@ -953,6 +954,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
           what the verdict is built from. Everything else is filed under a heading. */}
       {/* Analogs */}
       <AnalogSection report={report} openAll={openAll} lang={lang} />
+      <LongRecord report={report} lang={lang} openAll={openAll} />
 
       {/* Stress */}
       <StressSection report={report} openAll={openAll} lang={lang} />
@@ -2232,7 +2234,7 @@ function SensitivitySection({ report, openAll, lang }: { report: Report; openAll
                 <li key={p.notional} className="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-0.5 text-xs sm:grid-cols-[5.5rem_8rem_6rem_1fr]">
                   <span className={`tabular text-right ${isRequest ? "font-semibold" : "text-muted-foreground"}`}>
                     {fmtUsd(p.notional)}
-                    {isRequest ? <span className="block text-[10px] font-normal text-muted-foreground">{L("requested", "所请求")}</span> : null}
+                    {isRequest ? <span className="block text-[12px] font-normal text-muted-foreground">{L("requested", "所请求")}</span> : null}
                   </span>
                   <span className="hidden h-2 w-full rounded-full bg-muted sm:block" aria-hidden>
                     <span className="block h-2 rounded-full" style={{ width: `${Math.max(3, (p.notional / maxNotional) * 100)}%`, background: `var(--${p.verdict === "GO" ? "verdict-go" : p.verdict === "NO_GO" ? "verdict-nogo" : p.verdict === "REVIEW" ? "verdict-review" : "verdict-reduce"})` }} />
