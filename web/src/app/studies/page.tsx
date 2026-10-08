@@ -206,20 +206,20 @@ function ConditionTable({ stats, labels }: { stats: Record<string, number>; labe
             </div>
             <div className="grid grid-cols-2 gap-2 text-[12px] pt-1 border-t border-border/40">
               <div>
-                <span className="text-muted-foreground block text-[11px]">{tx("Below p5 (all → narrowed)", "低于 p5（全部 → 收窄）")}</span>
+                <span className="text-muted-foreground block text-[12px]">{tx("Below p5 (all → narrowed)", "低于 p5（全部 → 收窄）")}</span>
                 <span className="tabular-nums font-medium text-foreground">
                   {pct(r.breach_all)} → {pct(r.breach_lens)}
                 </span>
               </div>
               <div>
-                <span className="text-muted-foreground block text-[11px]">{tx("Typical p5", "典型 p5")}</span>
+                <span className="text-muted-foreground block text-[12px]">{tx("Typical p5", "典型 p5")}</span>
                 <span className="tabular-nums font-medium text-foreground">
                   {r.p5_all_median != null ? `${num(r.p5_all_median, 1)}% → ${num(r.p5_lens_median, 1)}%` : "—"}
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-between text-[12px] pt-1 border-t border-border/40">
-              <span className="text-muted-foreground text-[11px]">{tx("t, by token", "t 值，按代币")}</span>
+              <span className="text-muted-foreground text-[12px]">{tx("t, by token", "t 值，按代币")}</span>
               <span className="tabular-nums font-medium text-foreground">{num(r.t_clustered, 1)}</span>
             </div>
           </div>
