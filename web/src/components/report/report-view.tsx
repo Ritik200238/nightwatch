@@ -463,7 +463,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
           reason is one plain line under it; the rest sit in the list further down. */}
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 leading-tight tracking-tight">
         <span className={`text-4xl font-extrabold sm:text-5xl ${verdictText(v.verdict)}`}>{verdictLabel(lang, v.verdict)}</span>
-        {sizeText ? <span className="tabular text-2xl font-semibold sm:text-3xl">· {sizeText}</span> : null}
+        {sizeText ? <span className="tabular text-2xl font-semibold sm:text-3xl"><span aria-hidden className="hidden sm:inline">· </span>{sizeText}</span> : null}
       </p>
       {subhead ? <p className="mt-2 text-base text-muted-foreground sm:text-lg">{subhead}</p> : null}
       <CredStrip lang={lang} />
@@ -1250,11 +1250,11 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
             </span>
             {report.forecast_id != null && report.forecast_id > 0 ? (
               <span className="font-mono text-foreground/80">
-                {L(`· #${report.forecast_id}`, `· #${report.forecast_id}`)}
+                #{report.forecast_id}
               </span>
             ) : null}
             {report.forecast_id != null && report.forecast_id < 0 ? (
-              <span>{L("· a what-if: not journaled, never scored", "· 假设情景：不记入日志，也不评分")}</span>
+              <span>{L("A what-if: not journaled, never scored", "假设情景：不记入日志，也不评分")}</span>
             ) : null}
           </div>
           <div className="flex items-center gap-3">
