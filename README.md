@@ -16,7 +16,7 @@ stock tool goes blind: nights, weekends, holidays, the window where only the tok
   <a href="https://youtu.be/7R6LNyro4oM"><img src="https://img.youtube.com/vi/7R6LNyro4oM/maxresdefault.jpg" alt="Watch the Nightwatch demo video on YouTube" width="640"></a>
 </p>
 
-[Demo video](https://youtu.be/7R6LNyro4oM) · [Who it's for](#who-it-is-for-and-the-idea-behind-it) · [A full research task](#one-complete-research-task-start-to-finish) · [What we measured](#one-thing-we-measured-that-changes-how-you-read-a-night-quote) · [Built on Bitget](#built-on-bitget-not-just-mentioned-on-bitget) · [Proof](#the-proof-recompute-it-yourself--nothing-here-is-a-screenshot-of-a-claim) · [Claim boundaries](#claim-boundaries) · [Run it](#how-it-works-end-to-end)
+[Demo video](https://youtu.be/7R6LNyro4oM) · [Who it's for](#who-it-is-for-and-the-idea-behind-it) · [A full research task](#one-complete-research-task-start-to-finish) · [What we measured](#one-thing-we-measured-that-changes-how-you-read-a-night-quote) · [Built on Bitget](#built-on-bitget-not-just-mentioned-on-bitget) · [Proof](#the-proof-recompute-it-yourself--nothing-here-is-a-screenshot-of-a-claim) · [Claim boundaries](#claim-boundaries) · [For judges](https://nightwatch-gules.vercel.app/judges) · [Method](https://nightwatch-gules.vercel.app/method) · [Run it](#how-it-works-end-to-end)
 
 <p align="center">
   <img src="docs/img/hero-home.png" alt="Nightwatch home page: type a trade, get a verdict, every number scored in public" width="860">
@@ -211,6 +211,12 @@ python scripts/verify_live.py     # standard library only; exit code 0 only if e
 It recomputes, from the live API, that the verdict log is unbroken and anchored in Bitcoin, the
 blind check of the chat reader (misses included), the table above, and that the long weekend
 record is present. Any failed line prints what the desk actually said.
+
+It also compares the one-in-twenty line with the flat stops traders already use, on the same scored
+history (`python scripts/benchmark_stops.py`, public API only). Measured 8 Oct 2026 on 3,457 forecasts:
+the desk line was crossed 4.6% of the time overall and between 1.7% and 11.7% by stock; a flat 3.8%
+stop, picked afterwards to match that overall rate, ranged from 0% to 26%. The desk line is more even,
+not perfectly even. Details on the [Method page](https://nightwatch-gules.vercel.app/method).
 
 ### Claim boundaries
 
