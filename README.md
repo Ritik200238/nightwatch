@@ -10,11 +10,15 @@ stock tool goes blind: nights, weekends, holidays, the window where only the tok
 [![browser-smoke](https://github.com/Ritik200238/nightwatch/actions/workflows/browser-smoke.yml/badge.svg)](https://github.com/Ritik200238/nightwatch/actions/workflows/browser-smoke.yml)
 [![tests](https://img.shields.io/badge/tests-1%2C500%2B%20passing-brightgreen)](https://github.com/Ritik200238/nightwatch/actions/workflows/ci.yml)
 
-**Live desk → https://nightwatch-gules.vercel.app**
+**Live desk → https://nightwatch-gules.vercel.app** · **Demo video (2:22) → https://youtu.be/7R6LNyro4oM**
+
+<p align="center">
+  <a href="https://youtu.be/7R6LNyro4oM"><img src="https://img.youtube.com/vi/7R6LNyro4oM/maxresdefault.jpg" alt="Watch the Nightwatch demo video on YouTube" width="640"></a>
+</p>
 
 *Bitget AI Base Camp Hackathon S2 · Track: AI Trading Desk · Sub-theme: Decision Stress Testing*
 
-[Who it's for](#who-it-is-for-and-the-idea-behind-it) · [A full research task](#one-complete-research-task-start-to-finish) · [What we measured](#one-thing-we-measured-that-changes-how-you-read-a-night-quote) · [Built on Bitget](#built-on-bitget-not-just-mentioned-on-bitget) · [Proof](#the-proof-recompute-it-yourself--nothing-here-is-a-screenshot-of-a-claim) · [Claim boundaries](#claim-boundaries) · [Run it](#how-it-works-end-to-end)
+[Demo video](https://youtu.be/7R6LNyro4oM) · [Who it's for](#who-it-is-for-and-the-idea-behind-it) · [A full research task](#one-complete-research-task-start-to-finish) · [What we measured](#one-thing-we-measured-that-changes-how-you-read-a-night-quote) · [Built on Bitget](#built-on-bitget-not-just-mentioned-on-bitget) · [Proof](#the-proof-recompute-it-yourself--nothing-here-is-a-screenshot-of-a-claim) · [Claim boundaries](#claim-boundaries) · [Run it](#how-it-works-end-to-end)
 
 <p align="center">
   <img src="docs/img/hero-home.png" alt="Nightwatch home page: type a trade, get a verdict, every number scored in public" width="860">
