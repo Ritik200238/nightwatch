@@ -902,6 +902,53 @@ def weekend_line(report: Any, lang: str) -> str | None:
     )
 
 
+def long_record_line(report: Any, lang: str) -> str | None:
+    """What the stock itself did across the closed time this hold crosses, back to 1990.
+
+    The token's own history is under two years; the stock's is decades, with 2000, 2008 and
+    2020 in it. Stated as raw, unconditional history beside the desk's own line (which does
+    know today's setup), never as a replacement for it and never fed to the verdict."""
+    try:
+        from datetime import timezone as _tz
+        from zoneinfo import ZoneInfo
+
+        from nightwatch.stress import deep_history
+
+        t = report.ticket
+        as_of = report.as_of if report.as_of.tzinfo else report.as_of.replace(tzinfo=_tz.utc)
+        hours = float(report.horizon_h)
+        et = ZoneInfo("America/New_York")
+        crosses_weekend = any((as_of + timedelta(hours=k)).astimezone(et).weekday() >= 5 for k in range(int(max(hours, 1.0)) + 1))
+        win = "weekend_gap" if crosses_weekend else "overnight_gap"
+        res = deep_history.for_ticker(t.ticker, side=t.side.value, horizon_h=None)
+        if not res.get("available"):
+            return None
+        w = (res.get("windows") or {}).get(win)
+        if not w or w["n"] < deep_history.MIN_N:
+            return None
+        since = str(res["first"])[:4]
+        long_ = t.side == Side.LONG
+        tail = w["p5"]
+        recent = w.get("recent_p5")
+        worst = w["worst_events"][0]
+        what_en = "weekends (Friday's close to Monday's open)" if crosses_weekend else "overnight closes"
+        what_zh = "个周末（周五收盘到周一开盘）" if crosses_weekend else "个隔夜收盘"
+        bad_en, bad_zh = ("lost more than", "亏损超过") if long_ else ("rose more than", "上涨超过")
+        if lang == "zh":
+            line = f"更长的记录：{t.ticker} 的股票自 {since} 年起有 {w['n']:,} {what_zh}，大约每二十个有一个{bad_zh} {abs(tail):.1f}%；最极端的一次是 {worst['date']} 的 {worst['pct']:+.1f}%。"
+            if recent is not None:
+                line += f"最近三年这一线是 {abs(recent):.1f}%。"
+            return line + "这是不看当下行情的原始历史，不改变上面的结论。"
+        line = (f"Longer record: {t.ticker}'s stock has {w['n']:,} {what_en} since {since}; 1 in 20 {bad_en} {abs(tail):.1f}%, "
+                f"and the most extreme was {worst['pct']:+.1f}% on {worst['date']}.")
+        if recent is not None:
+            line += f" Over the last 3 years that line is {abs(recent):.1f}%."
+        return line + " This is raw history that does not know today's setup, and it does not change the verdict above."
+    except Exception:  # noqa: BLE001 - context must never break a reply
+        log.exception("long record line failed")
+        return None
+
+
 def _safer_leverage(lev: dict[str, Any], lang: str) -> str:
     """One sentence on the highest leverage history calls safe, or "" when there is nothing to add.
 
@@ -1232,6 +1279,9 @@ def brief(report: Any, lang: str = "en") -> str:
     wk = weekend_line(report, lang)
     if wk:
         lines.append(wk)
+    lr = long_record_line(report, lang)
+    if lr:
+        lines.append(lr)
 
     analog = report.analog
     horizon = analog.horizons.get(report.primary_horizon) if analog else None
@@ -1474,6 +1524,9 @@ def brief_short(report: Any, lang: str = "en", *, echo: str | None = None, notes
     wk = weekend_line(report, lang)
     if wk:
         ranked.append(wk)
+    lr = long_record_line(report, lang)
+    if lr:
+        ranked.append(lr)
     for p in (keep[3:] if not zh else keep[2:]):
         if picked.get(p):
             ranked.append(picked[p])
