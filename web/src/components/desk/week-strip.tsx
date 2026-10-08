@@ -16,10 +16,10 @@ import { useLang } from "@/lib/lang";
 const DAYS_EN = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAYS_ZH = ["一", "二", "三", "四", "五", "六", "日"];
 const W = 700;
-const H = 150;
-const PAD_L = 8;
-const COL = (W - PAD_L - 8) / 7;
-const ROW_TOP = 26;
+const H = 96;
+const PAD_L = 0;
+const COL = W / 7;
+const ROW_TOP = 6;
 const ROW_H = 84;
 
 type Phase = "regular" | "extended" | "shut";
@@ -99,15 +99,17 @@ export function WeekStrip() {
 
   return (
     <figure className="m-0" aria-label={tx("The week in New York time, with US stock market hours lit", "按纽约时间绘制的一周，亮色为美股交易时段")}>
+      <div className="grid grid-cols-7 pb-1 text-center text-[12px] text-slate-400" aria-hidden>
+        {days.map((d, i) => (
+          <span key={d} className={now && now.day === i ? "font-bold text-slate-50" : ""}>{d}</span>
+        ))}
+      </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-hidden={false}>
         <title>{tx("US market hours across the week, New York time", "一周内美股交易时段（纽约时间）")}</title>
         {days.map((d, i) => {
           const weekday = i < 5;
           return (
             <g key={d}>
-              <text x={PAD_L + i * COL + COL / 2} y={16} textAnchor="middle" fontSize="12" fill="currentColor" opacity={now && now.day === i ? 1 : 0.6} fontWeight={now && now.day === i ? 700 : 500}>
-                {d}
-              </text>
               <rect x={PAD_L + i * COL + 1} y={ROW_TOP} width={COL - 2} height={ROW_H} rx="3" fill="#0b1226" stroke="#26335a" strokeWidth="1" />
               {weekday ? (
                 <>
@@ -121,14 +123,17 @@ export function WeekStrip() {
         })}
         {now ? (
           <g>
-            <line x1={x(now.day, now.hour) + 1} x2={x(now.day, now.hour) + 1} y1={ROW_TOP - 6} y2={ROW_TOP + ROW_H + 6} stroke="#ff6b6b" strokeWidth="2.5" />
-            <circle cx={x(now.day, now.hour) + 1} cy={ROW_TOP + ROW_H + 10} r="4" fill="#ff6b6b" />
-            <text x={Math.min(Math.max(x(now.day, now.hour) + 1, 24), W - 24)} y={H - 6} textAnchor="middle" fontSize="12" fill="#ff9d9d" fontWeight="700">
-              {tx("now", "现在")}
-            </text>
+            <line x1={x(now.day, now.hour) + 1} x2={x(now.day, now.hour) + 1} y1={0} y2={H} stroke="#ff6b6b" strokeWidth="2.5" />
           </g>
         ) : null}
       </svg>
+      {now ? (
+        <div className="relative mt-1 h-5" aria-hidden>
+          <span className="absolute -translate-x-1/2 text-[12px] font-bold text-[#ff9d9d]" style={{ left: `${Math.min(Math.max(((now.day + now.hour / 24) / 7) * 100, 4), 96)}%` }}>
+            ▲ {tx("now", "现在")}
+          </span>
+        </div>
+      ) : null}
       <figcaption className="mt-3">
         <p className="text-base font-semibold leading-snug text-slate-50 sm:text-lg" aria-live="polite">
           {headline}
