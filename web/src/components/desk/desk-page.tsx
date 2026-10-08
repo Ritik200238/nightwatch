@@ -479,6 +479,9 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
         <Link href="/sources" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           {tx("Data feeds & live book →", "数据源与实时盘口 →")}
         </Link>
+        <Link href="/judges" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          {tx("For judges →", "给评审 →")}
+        </Link>
       </div>
 
       <form
