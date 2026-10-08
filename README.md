@@ -36,6 +36,38 @@ see all three steps, in order, on one screen, in under 60 seconds.
 
 ---
 
+## One thing we measured that changes how you read a night quote
+
+At 3 a.m. the token has a price and the stock does not. Is that price a better guess at
+Monday's real open than just "it will open where it closed"? We checked every US session in
+the stored hourly bars (125,367 token quotes over 8,509 nights, 23 stocks, Sep 2024 to Sep 2026) against
+the real 09:30 print:
+
+| Token quote taken… | Median miss vs the real open | Last close's median miss | Token closer on |
+|---|---:|---:|---:|
+| in the last hour before the open | **20 bps** (19.4–20.9) | 85 bps | 81% of nights |
+| 4–6 hours before | 55 bps | 86 bps | 65% |
+| 12–24 hours before | **77 bps** (75.0–79.6) | 82 bps | 54% |
+
+Read it plainly: the overnight quote is a good guide only in the last few hours. Twelve or more
+hours out it is barely better than yesterday's close, so a stop placed against it is placed
+against noise. Intervals resample whole nights, not hours. It describes this sample and never
+feeds a verdict. [`/studies`](https://nightwatch-gules.vercel.app/studies) and
+[`/api/quote-trust/NVDA`](https://nightwatch-gules.vercel.app/api/quote-trust/NVDA) show the rest,
+including the control for how much of the gap is just the market moving.
+
+## Verify the claims in a minute
+
+```bash
+python scripts/verify_live.py     # standard library only; exit code 0 only if every line holds
+```
+
+It recomputes, from the live API, that the verdict log is unbroken and anchored in Bitcoin, the
+blind check of the chat reader (misses included), the table above, and that the long weekend
+record is present. Any failed line prints what the desk actually said.
+
+---
+
 ## Why this is different from "an AI chatbot that talks about stocks"
 
 | | Most AI trading bots | Nightwatch |
