@@ -79,13 +79,13 @@ export default function SourcesPage() {
                 <span>{tx("Bitget US-stock catalogue feeds", "Bitget 美股数据目录")}</span>
               </p>
               <p className="t-caption">
-                <span className="text-amber-500 font-medium">{tx("upstream HTTP 503", "上游 HTTP 503")}</span> · {tx("degraded fallback active", "已启用降级缓存")}
+                <span className="text-amber-500 font-medium">{tx("upstream HTTP 503", "上游 HTTP 503")}</span> · {tx("no data used until it recovers", "恢复前不使用其数据")}
               </p>
             </div>
             <p className="t-body mt-1 max-w-prose text-muted-foreground">
               {tx(
-                "Bitget MCP test-environment catalogue endpoint returned HTTP 503 since Oct 5. Cached snapshot fallback is active so the desk continues operating safely. 10 catalogue feeds share this upstream dependency.",
-                "Bitget 测试环境 MCP 目录端点自 10 月 5 日起返回 HTTP 503。系统已启用快照缓存降级回退，交易台保持安全运行。共有 10 个数据源共享此上游依赖。"
+                "Bitget's US-stock data service accepts our connection, but its data backend has returned HTTP 503 since Oct 5 (this is on Bitget's side). We hold no cached data from it right now, so these feeds show nothing, and a report says the data is unavailable instead of guessing. Candles, order books, filings, macro and options data are not affected. All 10 feeds share this one upstream dependency.",
+                "Bitget 美股数据服务可以连接，但其数据后端自 10 月 5 日起一直返回 HTTP 503（问题在 Bitget 一侧）。目前我们没有来自它的缓存数据，因此这些数据源显示为空，报告会注明数据不可用，而不是猜测。K 线、订单簿、公告、宏观和期权数据不受影响。这 10 个数据源共用同一个上游依赖。"
               )}
             </p>
             <details className="group mt-3">
