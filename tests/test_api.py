@@ -335,6 +335,13 @@ def test_session_beta_is_served_with_controls_and_unknown_tickers_are_refused(cl
     assert client.get("/session-beta/ZZZZ").status_code == 404
 
 
+def test_quote_trust_is_served_pooled_with_a_row_for_the_hours_left_and_refuses_unknown_tickers(client):
+    r = client.get("/quote-trust/TSLA?hours_to_open=0.5").json()
+    assert r["available"] and r["now"]["from_h"] == 0 and r["now"]["token_bps"] < r["now"]["last_close_bps"]
+    assert r["pooled"][-1]["to_h"] == 72 and r["nights"] > 1000
+    assert client.get("/quote-trust/ZZZZ").status_code == 404
+
+
 def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
     monkeypatch.setattr("nightwatch.api.providers.select", lambda *a, **k: None)  # keyword check, no model

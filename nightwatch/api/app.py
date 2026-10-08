@@ -1134,6 +1134,17 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
         return session_beta.for_ticker(ticker.upper())
 
+    @app.get("/quote-trust/{ticker}")
+    def quote_trust_for(ticker: str, hours_to_open: float | None = None) -> dict[str, Any]:
+        """How far the token's overnight quote has been from the real opening print, by hours
+        before the open, against simply holding the last close. Committed measurement; read only."""
+        from nightwatch.stress import quote_trust
+
+        known = st().ctx.tickers_with_data()
+        if ticker.upper() not in set(known):
+            raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
+        return quote_trust.for_ticker(ticker.upper(), hours_to_open)
+
     @app.get("/chat-check")
     def chat_check() -> dict[str, Any]:
         """The blind check of the chat reader: messy sentences, answers fixed first, every miss

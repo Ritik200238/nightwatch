@@ -394,6 +394,31 @@ export interface JointBreak {
   plain_zh: string;
 }
 
+export interface TrustBin {
+  from_h: number;
+  to_h: number;
+  n: number;
+  nights: number;
+  token_bps: number;
+  last_close_bps: number;
+  token_closer: number;
+  token_ci?: number[];
+  last_close_ci?: number[];
+}
+
+/** How far the token's overnight quote has been from the stock's real opening print, by hours before the open. */
+export interface QuoteTrust {
+  ticker: string;
+  available: boolean;
+  pooled?: TrustBin[];
+  own?: TrustBin[] | null;
+  now?: TrustBin | null;
+  rows?: number;
+  nights?: number;
+  tickers?: number;
+  ran_at?: string;
+}
+
 export interface BetaRegime {
   beta: number;
   ci: number[];
@@ -1741,6 +1766,8 @@ export const api = {
     if (linePct != null) q.set("line_pct", String(linePct));
     return request<DeepHistory>(`/deep-history/${encodeURIComponent(ticker)}?${q.toString()}`);
   },
+  quoteTrust: (ticker: string, hoursToOpen?: number | null) =>
+    request<QuoteTrust>(`/quote-trust/${encodeURIComponent(ticker)}${hoursToOpen != null ? `?hours_to_open=${hoursToOpen.toFixed(2)}` : ""}`),
   sessionBeta: (ticker: string) => request<SessionBeta>(`/session-beta/${encodeURIComponent(ticker)}`),
   chatCheck: () => request<ChatCheck>("/chat-check"),
   closedHours: (ticker: string) => request<ClosedHoursLine>(`/closed-hours/${encodeURIComponent(ticker)}`),
