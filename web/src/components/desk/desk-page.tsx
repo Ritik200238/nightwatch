@@ -436,22 +436,22 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const text = draft.trim();
   return (
     <section className="pb-4 pt-4 sm:pt-8" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <div className="grid gap-6 rounded-2xl border border-[#26335a] bg-[#080e20] p-5 text-slate-100 shadow-lg sm:p-8 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:gap-10">
+      <div className="grid gap-6 rounded-2xl border border-white/10 bg-[#080e20] p-5 text-slate-100 sm:p-8 lg:grid-cols-[1.15fr_1fr] lg:items-center lg:gap-10">
         <div>
-        <p className="text-[12px] font-mono font-semibold uppercase tracking-widest text-amber-300/90 mb-3">
+        <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.18em] text-amber-200/80">
           {tx("NIGHTWATCH · PRE-TRADE DECISION STRESS TESTING FOR BITGET", "NIGHTWATCH · BITGET 交易前决策压力测试")}
         </p>
-        <h1 className={`text-balance text-3xl font-bold text-slate-50 tracking-tight sm:text-5xl lg:text-6xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>
+        <h1 className={`text-balance text-3xl font-semibold leading-[1.08] tracking-[-0.03em] text-slate-50 sm:text-5xl lg:text-[3.5rem] ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>
           {tx("Stress-test the trade before you place it.", "下单之前，先给这笔交易做压力测试。")}
         </h1>
-        <div className="mt-4 max-w-3xl space-y-2 text-[15px] leading-relaxed text-slate-300 sm:text-base">
+        <div className="mt-5 max-w-3xl space-y-3 text-[15px] leading-relaxed text-slate-300 sm:text-base">
           <p>
             {tx(
               "A pre-trade decision workbench for tokenized US stocks and leveraged trades on Bitget. The deterministic Python engine finds similar past market moments, builds an empirical forecast distribution (p5 to p95), runs stress scenarios, and prices your exit on Bitget's live order book. The Qwen model explains the trade; deterministic code computes every number.",
               "Bitget 上代币化美股与杠杆交易的交易前决策工作台。确定性 Python 引擎检索历史上相似的市场时刻，构建实证预测分布（p5 至 p95），运行预设压力测试，并在 Bitget 实时订单簿上计算平仓成本。Qwen 模型只负责理解与解释，每个数字均由确定性代码严谨计算。"
             )}
           </p>
-          <p className="hidden sm:block">
+          <p className="hidden text-slate-400 sm:block">
             {tx(
               "Trading after hours or over the weekend? Type your trade in plain words — English or 中文 — like \"long 10k TSLA tonight 5x\" or \"hold NVDA over the weekend, stop 170\". Nightwatch never places orders and never touches your money: you get a sized GO / REDUCE / HEDGE / REVIEW / NO GO verdict before you risk capital.",
               "在盘后或周末交易？用日常语言描述你的交易——支持英文或中文——例如“今晚 5 倍做多 1 万 TSLA”或“周末做多 NVDA，止损 170”。Nightwatch 绝不下单，也不触碰你的资金：在冒资金风险前，为你给出带仓位建议的 GO / REDUCE / HEDGE / REVIEW / NO GO 结论。"
@@ -546,12 +546,10 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
       </div>
 
       {/* Pipeline Highlight Card */}
-      <div className="mt-6 rounded-xl border border-border/80 bg-muted/20 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center rounded-md bg-foreground px-2.5 py-1 text-xs font-semibold text-background">
-            {tx("Decision pipeline · 5 stages", "决策流水线 · 5 个阶段")}
-          </span>
-        </div>
+      <div className="mt-6 rounded-xl border border-border/70 p-4 sm:p-5">
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-foreground/80">
+          {tx("Decision pipeline · 5 stages", "决策流水线 · 5 个阶段")}
+        </p>
         <p className="mt-2 text-xs sm:text-[13px] leading-relaxed text-muted-foreground">
           {tx(
             "similar past moments → forward distribution (p5–p95) → preset stress tests → live Bitget order-book exit walk → sized verdict (GO / REDUCE / HEDGE / REVIEW / NO GO) · fully audited in public",
@@ -563,7 +561,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
       {/* Categorized suggestions */}
       <div className="mt-7 space-y-5">
         <div>
-          <p className="text-[12px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             {tx("Demo trades", "演示交易")}
           </p>
           <ul className="flex flex-wrap gap-2">
@@ -584,7 +582,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
         </div>
 
         <div>
-          <p className="text-[12px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             {tx("What-if & book analysis", "假设情景与组合分析")}
           </p>
           <ul className="flex flex-wrap gap-2">
@@ -605,7 +603,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
         </div>
 
         <div>
-          <p className="text-[12px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+          <p className="mb-2.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
             {tx("The desk's own record", "交易台自身战绩")}
           </p>
           <HeroProof />
