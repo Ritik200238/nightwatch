@@ -58,6 +58,7 @@ const ROWS: Row[] = [
       { href: "/calibration", label: ["Scored forecasts", "已评分的预测"] },
       { href: "/wrong", label: ["Published misses", "公开的失误"] },
       { href: "/studies", label: ["Internal studies, failures included", "内部研究（含失败）"] },
+      { href: "/method", label: ["Method, and our line against plain stop rules", "方法，以及我们的线与常见止损规则的对比"] },
       { href: "/api/verify", label: ["Verdict chain, recomputed on request", "结论链（按需重新计算）"], external: true },
     ],
   },

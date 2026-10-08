@@ -96,6 +96,10 @@ export function SiteFooter() {
         <Link href="/judges" className="inline-flex min-h-10 items-center px-1 underline underline-offset-2 hover:text-foreground">
           {tx("For judges", "给评审")}
         </Link>
+        {" · "}
+        <Link href="/method" className="inline-flex min-h-10 items-center px-1 underline underline-offset-2 hover:text-foreground">
+          {tx("Method", "方法")}
+        </Link>
       </p>
     </div>
   );
