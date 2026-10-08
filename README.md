@@ -16,8 +16,6 @@ stock tool goes blind: nights, weekends, holidays, the window where only the tok
   <a href="https://youtu.be/7R6LNyro4oM"><img src="https://img.youtube.com/vi/7R6LNyro4oM/maxresdefault.jpg" alt="Watch the Nightwatch demo video on YouTube" width="640"></a>
 </p>
 
-*Bitget AI Base Camp Hackathon S2 · Track: AI Trading Desk · Sub-theme: Decision Stress Testing*
-
 [Demo video](https://youtu.be/7R6LNyro4oM) · [Who it's for](#who-it-is-for-and-the-idea-behind-it) · [A full research task](#one-complete-research-task-start-to-finish) · [What we measured](#one-thing-we-measured-that-changes-how-you-read-a-night-quote) · [Built on Bitget](#built-on-bitget-not-just-mentioned-on-bitget) · [Proof](#the-proof-recompute-it-yourself--nothing-here-is-a-screenshot-of-a-claim) · [Claim boundaries](#claim-boundaries) · [Run it](#how-it-works-end-to-end)
 
 <p align="center">
