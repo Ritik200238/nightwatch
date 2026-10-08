@@ -36,6 +36,37 @@ see all three steps, in order, on one screen, in under 60 seconds.
 
 ---
 
+## Who it is for, and the idea behind it
+
+**Built for** retail and semi-professional traders who hold tokenized US stocks on Bitget through
+the US close: roughly 5,000 to 200,000 USDT a position, a few trades a week, mostly the large
+names (TSLA, NVDA, AAPL, MSFT, AMZN, GOOGL, META) and the leveraged index tokens (TQQQ, SQQQ).
+They are happy to hold overnight or over a weekend and unhappy to be caught by a gap they never
+priced. **Not for** market makers, high-frequency systems, or anyone who wants an AI to place
+orders. Nightwatch never places one.
+
+**The idea.** A tokenized stock trades all week, but the stock behind it only trades about a fifth of
+the week (regular hours plus a few extended ones). The rest of the time the token's price is set by its own thin book, and
+the trader's worst losses come from a handful of those closed-market nights, not from average
+days. So the question worth asking before every position is: *if this goes wrong while the market
+is shut, how wrong, and what size survives it?* Nightwatch answers that from the token's own
+history, the stock's own 30-year record, and Bitget's live order book, and the AI only explains
+what deterministic code computed.
+
+## One complete research task, start to finish
+
+> **Question (typed as is):** *long 15000 usdt nvda 5x over the weekend stop 160*
+> **Asked on a Thursday, answered in about 13 seconds on the live desk, 8 Oct 2026.**
+
+- **Read.** Long 15,000 USDT of NVDA, 5x (3,000 margin), Friday's close to Monday's open (66 h), stop 160. It asks for the account size, which it needs to size the trade.
+- **Past moments and distribution.** A one-in-twenty bad night loses about 503 USDT at this size. Over NVDA's last 87 token weekends, 1 in 20 lost more than 3.5% and the worst was -13.7%. The stock's own record has 1,400+ weekends to set that against.
+- **Stress tests.** Ten preset cases (weekend gap, volatility spike, token-vs-fair-value blowout, a thin book, being unable to exit for 24 h, and more), plus a leverage table from 2x to 20x checked against the same history.
+- **Exit.** The live Bitget order book is walked for the exact size to price the real exit cost.
+- **Verdict.** REVIEW. The stop is 32% away, wider than the 25% rule, and without an account size the position can't be sized. By account size it says 25k, 50k, 100k, 250k each come out NO GO.
+
+That is the sub-theme's own loop, "retrieve similar scenarios, show the historical distribution,
+run preset stress tests", on one screen, ending in a decision the human still makes.
+
 ## One thing we measured that changes how you read a night quote
 
 At 3 a.m. the token has a price and the stock does not. Is that price a better guess at
@@ -154,16 +185,16 @@ sources in total**, every one live, every one listed with its real freshness on
 
 ## The proof (recompute it yourself — nothing here is a screenshot of a claim)
 
-Figures as of 6 Oct 2026. Pulled live from the production API — this whole block is
+Figures as of 8 Oct 2026. Pulled live from the production API — this whole block is
 rewritten by a script (`nightwatch proof-sync`) that reads the same endpoints linked
 below, so it can't drift from what the site shows.
 
 | Claim | The real number, right now | Check it yourself |
 |---|---:|---|
-| Every live verdict is on the record, unedited | **(1,548 checked, no break, as of 6 Oct 2026)** | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the whole hash chain live |
-| Anchored to something we can't fake | **(7 of 7 in Bitcoin; verify a `.ots` proof at opentimestamps.org)** | [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) |
-| The "1-in-20 bad case" line roughly holds | **3,468 scored forecasts (140 independent nights; resampling whole nights the interval is 2.2% to 4.8%), raw breach rate 4.7% (green), 3.4% with factors fitted only on earlier forecasts (green), as of 6 Oct 2026** | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed live |
-| We publish our own misses | **104 of 2,131 replays and 12 of 1,267 live tickets (6 distinct events) went past the line (as of 6 Oct 2026)** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
+| Every live verdict is on the record, unedited | **(1,913 checked, no break, as of 8 Oct 2026)** | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify) recomputes the whole hash chain live |
+| Anchored to something we can't fake | **(9 of 9 in Bitcoin; verify a `.ots` proof at opentimestamps.org)** | [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) |
+| The "1-in-20 bad case" line roughly holds | **3,642 scored forecasts (141 independent nights; resampling whole nights the interval is 2.2% to 4.6%), raw breach rate 4.5% (green), 3.2% with factors fitted only on earlier forecasts (green), as of 8 Oct 2026** | [`/calibration`](https://nightwatch-gules.vercel.app/calibration), recomputed live |
+| We publish our own misses | **104 of 2,131 replays and 12 of 1,438 live tickets (6 distinct events) went past the line (as of 8 Oct 2026)** | [`/wrong`](https://nightwatch-gules.vercel.app/wrong) — every one of them, listed |
 | We test the method itself, not just the trades | **11 internal studies: 3 yes, 5 no, 3 unclear** (a 12th study, against a random-hours baseline, is built and merged but has not yet run on production) | [`/studies`](https://nightwatch-gules.vercel.app/studies), corrected for multiple testing |
 | Universe coverage | **24 tokenized US stocks live now** (configured for 112 — the throttled backfill in `docs/universe-expansion.md` hasn't run yet; check the real count live, not this line) | [`/api/universe`](https://nightwatch-gules.vercel.app/api/universe) |
 | Not verified by us | real-trader adoption; directional edge (measured: **none**) | — said plainly, not hidden |
@@ -172,36 +203,27 @@ below, so it can't drift from what the site shows.
   <img src="docs/img/calibration.png" alt="Track record page: 3,497 forecasts tested, the 1-in-20 warning beaten 3.5% of the time against a 5% target, and an honest 'not proven' badge where the evidence doesn't support a claim" width="860">
 </p>
 
-### The honest parts we could have hidden
+### Claim boundaries
 
-This is the part most entries skip, and it's the part that actually proves the numbers are
-real:
+What each claim is, said before anyone has to ask.
 
-* **p50/p75/p95 bands are flagged outside their confidence interval on the live page** —
-  we show it anyway, instead of quietly fixing the display.
-* **One internal study says our retrieval is "not proven" to beat picking a random past
-  hour** (closer in 45% of 2,280 pairs) — tagged on the track-record page itself, in
-  amber, not buried in a changelog.
-* **"Closer is not tighter."** We measured that weighting near-identical past moments more
-  heavily made the forecast *worse* (clustered t = −6.2, n = 958) — and shipped the version
-  that doesn't do that, instead of the version that looked cleverer.
-* **A short used to be stress-tested on the wrong tail** (a gain, not a loss) — found,
-  written up, and fixed; the fix is in the commit history, not erased.
-* **How far back our history goes.** The hourly history behind the analog search starts on
-  1 January 2025 (the sync's start date; Yahoo serves about two years of hourly bars). That is
-  enough for the common overnight and weekend cases, not for a 2008- or 2020-style
-  crash: those tails come from the fitted stress presets and the crash replays, and say so in
-  the report. A tool built on daily bars back to 1999 sees more rare events than we do; ours
-  sees the closed-hours path hour by hour.
-* **The whole scored record is a file.** [`/api/ledger`](https://nightwatch-gules.vercel.app/api/ledger)
-  lists every scored forecast with the line stated at the time, what happened and whether it
-  went past, and `/wrong` has a CSV download and the tickers where we are weakest. Recount the
-  totals above yourself.
-* **Multiple-testing correction, applied to ourselves.** Eleven of twelve studies started as
-  "yes" candidates; after Benjamini–Hochberg correction at 5%, only the ones that survive are
-  called findings. The rest say "no" or "unclear," on the page, in public.
+| Claim | Status | Where to check |
+|---|---|---|
+| Every live verdict is written down, hash-chained and anchored in Bitcoin | **Proven**, recomputable | [`/api/verify`](https://nightwatch-gules.vercel.app/api/verify), [`/api/anchors`](https://nightwatch-gules.vercel.app/api/anchors) |
+| The "1-in-20 bad case" line roughly holds | **Measured**: breach rate near the 5% target on thousands of scored forecasts, interval resampled by whole nights | [`/calibration`](https://nightwatch-gules.vercel.app/calibration) |
+| We publish the forecasts that went past the line | **Proven**: every one is listed, with a CSV | [`/wrong`](https://nightwatch-gules.vercel.app/wrong), [`/api/ledger`](https://nightwatch-gules.vercel.app/api/ledger) |
+| The chat reads trades correctly, in English and 中文 | **Measured**: blind set of 102 phrasings, misses published | [`/studies`](https://nightwatch-gules.vercel.app/studies) |
+| Stress tests use the stock's long record, not only two years of token bars | **Measured**: daily bars back to 1990 for 112 stocks | [`/api/deep-history/NVDA`](https://nightwatch-gules.vercel.app/api/deep-history/NVDA) |
+| Retrieval of past moments beats picking random hours | **Not proven**: closer in 45% of 2,280 pairs, shown in amber on the track-record page | [`/calibration`](https://nightwatch-gules.vercel.app/calibration) |
+| A directional edge (it tells you which way to bet) | **Not claimed**: measured, none. It sizes risk, it does not predict | [`/studies`](https://nightwatch-gules.vercel.app/studies) |
+| Real-trader adoption | **Not yet**: the validation plan is in [docs/submission.md](docs/submission.md) | - |
+| Places or touches orders | **Never**: read-only by design | - |
 
-If a judge can break a claim, we would rather have broken it first and said so.
+A few choices we made against looking clever: weighting near-identical past moments more heavily made
+the forecast worse (clustered t = -6.2, n = 958), so we shipped the version that doesn't; eleven of
+twelve internal studies started as "yes" candidates and only those that survive
+Benjamini-Hochberg correction are called findings; and the whole scored record is a file you can
+recount. If a judge can break a claim, we would rather have broken it first and said so.
 
 ---
 
