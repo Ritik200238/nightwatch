@@ -12,6 +12,11 @@
 set -uo pipefail
 
 cd /home/ubuntu/nightwatch || exit 1
+
+# Keep the public Vercel function resident. keepwarm.sh was never scheduled by anything, so an
+# idle site made the first visitor wait for a cold start. This job already runs every five
+# minutes, so it carries the ping; it never blocks or fails the health checks below.
+bash deploy/keepwarm.sh &
 LOG=/home/ubuntu/heal.log
 say() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
 

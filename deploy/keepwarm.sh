@@ -5,7 +5,7 @@
 # cold start: measured at eleven seconds against under two for a warm one. That first
 # click is the one a judge makes, so it is the one worth paying for.
 #
-# The box is already awake all the time, so it does the pinging. One request every few
+# deploy/heal.sh (cron, every five minutes) calls this. The box is already awake all the time, so it does the pinging. One request every few
 # minutes keeps the function resident and costs nothing worth counting; every route under
 # /api is the same function, so warming health warms an analysis too.
 set -uo pipefail
