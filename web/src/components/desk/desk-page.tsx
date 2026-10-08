@@ -49,6 +49,10 @@ export default function DeskPage() {
   const [equity, setEquity] = useState<number | null>(null);
   const { positions, setPositions } = useOpenPositions();
   const heroUp = !report && !heroUsed;
+  // The saved example is formatted in the reader's time zone, which the server cannot know, so it
+  // is drawn only after hydration; drawing it on the server made every non-UTC browser log a mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const exampleReport = (snapshot?.reports.TSLA as unknown as Report | undefined) ?? null;
 
   async function loadUniverse() {
@@ -327,7 +331,7 @@ export default function DeskPage() {
             />
           </div>
         ) : !busy && !restoring && !error && !contrast && !heroUsed && exampleReport ? (
-          <div className="space-y-3">
+          mounted ? (<div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2">
               {/* The time is formatted in the reader's locale and zone, which the server cannot know;
                   React is told the difference is expected rather than re-rendering the page. */}
@@ -339,7 +343,7 @@ export default function DeskPage() {
               </Button>
             </div>
             <ReportView report={exampleReport} lang={lang} hideTake />
-          </div>
+          </div>) : null
         ) : !busy && !restoring && !error && !contrast ? (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border p-6 sm:p-8 text-center">
             <p className="text-base font-semibold">{tx("What happens to your position while the US market is shut?", "美股休市期间，你的仓位会怎样？")}</p>
