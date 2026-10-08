@@ -394,6 +394,29 @@ export interface JointBreak {
   plain_zh: string;
 }
 
+export interface BetaRegime {
+  beta: number;
+  ci: number[];
+  n: number;
+  corr: number;
+}
+
+/** How much a token follows the Nasdaq token while the US market is open versus shut. */
+export interface SessionBeta {
+  ticker: string;
+  available: boolean;
+  reason?: string;
+  proxy?: string;
+  open?: BetaRegime;
+  closed?: BetaRegime;
+  diff?: { est: number; ci: number[] };
+  distinguishable?: boolean;
+  controls?: Record<string, { open: BetaRegime; closed: BetaRegime } | null>;
+  since?: string;
+  until?: string;
+  ran_at?: string;
+}
+
 /** The blind check of the chat reader, from the committed run of research/intake_blind_eval.py. */
 export interface ChatCheck {
   available: boolean;
@@ -1718,6 +1741,7 @@ export const api = {
     if (linePct != null) q.set("line_pct", String(linePct));
     return request<DeepHistory>(`/deep-history/${encodeURIComponent(ticker)}?${q.toString()}`);
   },
+  sessionBeta: (ticker: string) => request<SessionBeta>(`/session-beta/${encodeURIComponent(ticker)}`),
   chatCheck: () => request<ChatCheck>("/chat-check"),
   closedHours: (ticker: string) => request<ClosedHoursLine>(`/closed-hours/${encodeURIComponent(ticker)}`),
   thesisCheck: (forecastId: number, lang: string) => request<ThesisCheck>(`/thesis-check/${forecastId}?lang=${lang === "zh" ? "zh" : "en"}`),

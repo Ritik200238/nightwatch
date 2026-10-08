@@ -28,6 +28,7 @@ import { TripwireButton } from "@/components/report/tripwire";
 import { AnalogMini, BuildTrace, CredStrip, StressBars } from "@/components/report/decision-extras";
 import { Permalink } from "@/components/report/permalink";
 import { JointBreak } from "@/components/report/joint-break";
+import { SessionBetaPanel } from "@/components/report/session-beta";
 import { LongRecord } from "@/components/report/long-record";
 import { Pill, Section, SourceChip, SourceLegend, Stat } from "@/components/report/primitives";
 import { verdictText } from "@/lib/verdict-style";
@@ -956,6 +957,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
       {/* Analogs */}
       <AnalogSection report={report} openAll={openAll} lang={lang} />
       <LongRecord report={report} lang={lang} openAll={openAll} />
+      <SessionBetaPanel report={report} lang={lang} openAll={openAll} />
 
       {/* Stress */}
       <StressSection report={report} openAll={openAll} lang={lang} />

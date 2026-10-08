@@ -1123,6 +1123,17 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
         return closed_hours.for_ticker(ticker.upper())
 
+    @app.get("/session-beta/{ticker}")
+    def session_beta_for(ticker: str) -> dict[str, Any]:
+        """How much this token follows the Nasdaq token while the US market is open versus
+        shut, from the committed measurement, with the TQQQ/SQQQ controls. Read only."""
+        from nightwatch.stress import session_beta
+
+        known = st().ctx.tickers_with_data()
+        if ticker.upper() not in set(known):
+            raise HTTPException(404, f"{ticker.upper()[:12]} is not a tokenized stock this desk has data for. Available: {', '.join(sorted(known))}.")
+        return session_beta.for_ticker(ticker.upper())
+
     @app.get("/chat-check")
     def chat_check() -> dict[str, Any]:
         """The blind check of the chat reader: messy sentences, answers fixed first, every miss

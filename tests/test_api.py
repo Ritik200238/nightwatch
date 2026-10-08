@@ -325,6 +325,16 @@ def test_the_blind_chat_check_is_served_with_its_misses_and_matches_a_fresh_run(
     assert len(r["misses"]) == r["cases"] - r["cases_ok"]
 
 
+def test_session_beta_is_served_with_controls_and_unknown_tickers_are_refused(client):
+    r = client.get("/session-beta/TSLA").json()
+    assert r["available"] and r["proxy"] == "QQQ" and "ci" in r["diff"]
+    assert set(r["controls"]) == {"TQQQ", "SQQQ"} and r["controls"]["TQQQ"]["open"]["beta"] > 2.5 and r["controls"]["SQQQ"]["open"]["beta"] < -2.5
+    from nightwatch.stress import session_beta as sb
+
+    assert sb.for_ticker("QQQ")["available"] is False
+    assert client.get("/session-beta/ZZZZ").status_code == 404
+
+
 def test_the_reason_check_is_served_and_answers_in_chat(client, monkeypatch):
     monkeypatch.setattr("nightwatch.api.llm.credentials_present", lambda: False)
     monkeypatch.setattr("nightwatch.api.providers.select", lambda *a, **k: None)  # keyword check, no model
