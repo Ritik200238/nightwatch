@@ -83,7 +83,7 @@ def _closed_hours_slim() -> dict[str, Any] | None:
 # leave every other token cold.
 WARM_YIELD_MAX_S = 30.0
 
-CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors")
+CACHED_PAGES = ("/sources", "/studies", "/calibration", "/misses", "/stop-benchmark", "/verify", "/anchors")
 
 
 class PositionIn(BaseModel):
@@ -1488,6 +1488,29 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                     })
         out = {"totals": totals, "misses": out_rows, "target_rate": 0.05}
         s.calibration_cache[("misses", "")] = (utc_now(), out)
+        return out
+
+    @app.get("/stop-benchmark")
+    def stop_benchmark() -> dict[str, Any]:
+        """The desk's one-in-twenty line against flat stop rules, on the same scored long-side
+        history: how often each rule's line was crossed, overall and stock by stock. Read-only;
+        it describes the past sample and feeds no verdict."""
+        s = st()
+        cached = s.calibration_cache.get(("stop-benchmark", ""))
+        if cached and (utc_now() - cached[0]).total_seconds() < CALIBRATION_TTL_SEC:
+            return cached[1]
+        from nightwatch.journal.adjust import expanding_rows
+        from nightwatch.journal.stop_benchmark import compare
+
+        with s.lock:
+            df = s.journal.forecasts(matured_only=True)
+            rows = expanding_rows(df) if not df.empty else pd.DataFrame()
+            if not rows.empty:
+                meta = df.set_index("id")[["side", "base_p5"]].rename(columns={"base_p5": "base"})
+                rows = rows.join(meta, on="id")
+                rows = rows[rows["side"] == "long"]
+        out = {**compare(rows if not rows.empty else pd.DataFrame()), "as_of": utc_now().isoformat()}
+        s.calibration_cache[("stop-benchmark", "")] = (utc_now(), out)
         return out
 
     @app.get("/ledger")

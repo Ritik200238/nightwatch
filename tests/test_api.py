@@ -379,3 +379,13 @@ def test_a_stop_on_the_wrong_side_is_refused_up_front_in_plain_words(client):
     assert s.status_code == 422 and "must be above the current price" in s.json()["detail"]
     # Nothing was journaled for the refused tickets.
     assert client.post("/analyze", json={**base, "stop_price": 300}).status_code == 200
+
+
+def test_the_stop_benchmark_is_served_with_the_desk_line_and_the_flat_stops(client):
+    r = client.get("/stop-benchmark").json()
+    if not r["arms"]:  # a fixture with no scored history has nothing to compare
+        return
+    keys = [a["key"] for a in r["arms"]]
+    assert keys[0] == "desk" and {"flat2", "flat3", "flat5", "flat_tuned"} <= set(keys)
+    desk = r["arms"][0]
+    assert 0 <= desk["ticker_min"] <= desk["ticker_median"] <= desk["ticker_max"] <= 1 and r["n"] == desk["n"]
