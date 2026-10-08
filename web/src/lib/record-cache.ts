@@ -11,7 +11,7 @@ const PREFIX = "nw.record.";
 const MAX_CHARS = 1_500_000;
 
 /** Paths worth remembering: reads whose answer changes slowly and is the same for everyone. */
-const REMEMBERED = ["/sources", "/studies", "/calibration", "/misses", "/verify", "/anchors", "/usage", "/lenses", "/universe"];
+const REMEMBERED = ["/sources", "/studies", "/calibration", "/misses", "/stop-benchmark", "/verify", "/anchors", "/usage", "/lenses", "/universe"];
 
 export function isRemembered(path: string): boolean {
   const p = path.split("?")[0];

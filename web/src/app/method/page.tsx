@@ -1,28 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { OpenSection as Section, PageHead, PROOF_STACK, PROOF_WIDTH, ScrollTable } from "@/components/proof-page";
+import { useEffect, useState } from "react";
+import { LoadingRecord, OpenSection as Section, PageHead, PROOF_STACK, PROOF_WIDTH, RecordError, ScrollTable } from "@/components/proof-page";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { api, peek, type StopBenchmark, type StopBenchmarkArm } from "@/lib/api";
 import { useLang } from "@/lib/lang";
 
 const REPO = "https://github.com/Ritik200238/nightwatch";
 
-/** Measured 8 Oct 2026 with scripts/benchmark_stops.py against the public API: 3,457 scored
- *  long-side forecasts, 148 nights, 24 stocks. Percent of forecasts whose return went past the
- *  rule's line: overall, then by stock (lowest, median, highest; stocks with 30+ forecasts).
- *  The base-line row uses the 2,143 forecasts that stored it. */
-const BENCH: { rule: [string, string]; overall: string; low: string; median: string; high: string; highName: string; bold?: boolean }[] = [
-  { rule: ["Desk line: similar past moments, one in twenty", "交易台的线：相似历史时刻，二十分之一"], overall: "4.6", low: "1.7", median: "5.8", high: "11.7", highName: "INTC", bold: true },
-  { rule: ["Same engine without the similar-moment filter", "同一引擎，不做相似时刻筛选"], overall: "9.6", low: "1.0", median: "9.4", high: "16.3", highName: "AVGO" },
-  { rule: ["Flat 2% stop", "固定 2% 止损"], overall: "12.2", low: "0.0", median: "16.5", high: "37.7", highName: "CRCL" },
-  { rule: ["Flat 3% stop", "固定 3% 止损"], overall: "6.9", low: "0.0", median: "7.8", high: "31.2", highName: "CRCL" },
-  { rule: ["Flat 5% stop", "固定 5% 止损"], overall: "2.0", low: "0.0", median: "1.4", high: "15.6", highName: "CRCL" },
-  { rule: ["Flat 3.8% stop, picked afterwards to match the desk overall", "固定 3.8% 止损，事后挑选以与交易台整体持平"], overall: "4.6", low: "0.0", median: "4.9", high: "26.0", highName: "CRCL" },
-];
+const RULE_ZH: Record<string, string> = {
+  desk: "交易台当时生效的线",
+  stated: "给出的线（尾部校正之前）",
+  base: "同一引擎，不做相似时刻筛选",
+  flat2: "固定 2% 止损",
+  flat3: "固定 3% 止损",
+  flat5: "固定 5% 止损",
+};
+
+const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+
+function ruleName(a: StopBenchmarkArm, zh: boolean): string {
+  if (!zh) return a.rule;
+  if (a.key === "flat_tuned") return `固定 ${Math.abs(a.level_pct ?? 0).toFixed(1)}% 止损，事后挑选以与交易台整体持平`;
+  return RULE_ZH[a.key] ?? a.rule;
+}
 
 export default function MethodPage() {
   const { tx, lang } = useLang();
   const zh = lang === "zh";
+  const [bench, setBench] = useState<StopBenchmark | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function load() {
+    setError(null);
+    api
+      .stopBenchmark()
+      .then(setBench)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : tx("Could not load the comparison.", "无法加载对比。")));
+  }
+  useEffect(() => {
+    const kept = peek<StopBenchmark>("/stop-benchmark");
+    if (kept) setBench(kept);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const desk = bench?.arms.find((a) => a.key === "desk");
+  const flat3 = bench?.arms.find((a) => a.key === "flat3");
+  const tuned = bench?.arms.find((a) => a.key === "flat_tuned");
 
   return (
     <div className={`${PROOF_WIDTH} ${PROOF_STACK}`}>
@@ -66,66 +92,88 @@ export default function MethodPage() {
           "每一行都使用同一份已评分的历史：收益越过各规则划线的频率。",
         )}
       >
-        <ScrollTable>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{tx("Rule", "规则")}</TableHead>
-                <TableHead className="text-right">{tx("Past its line, overall", "越线占比（整体）")}</TableHead>
-                <TableHead className="text-right">{tx("Lowest stock", "最低的股票")}</TableHead>
-                <TableHead className="text-right">{tx("Median stock", "中位的股票")}</TableHead>
-                <TableHead className="text-right">{tx("Highest stock", "最高的股票")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {BENCH.map((r) => (
-                <TableRow key={r.rule[0]} className={r.bold ? "font-medium" : ""}>
-                  <TableCell className="whitespace-normal">{zh ? r.rule[1] : r.rule[0]}</TableCell>
-                  <TableCell className="tabular text-right">{r.overall}%</TableCell>
-                  <TableCell className="tabular text-right">{r.low}%</TableCell>
-                  <TableCell className="tabular text-right">{r.median}%</TableCell>
-                  <TableCell className="tabular text-right">
-                    {r.high}% <span className="text-muted-foreground">{r.highName}</span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </ScrollTable>
-        <p className="t-caption mt-2 max-w-prose">
-          {tx(
-            "3,457 scored long-side forecasts across 148 nights and 24 stocks, measured 8 Oct 2026. Stock columns use the stocks with at least 30 scored forecasts. The base-line row covers the 2,143 forecasts that stored it.",
-            "共 3,457 条已评分的做多预测，覆盖 148 个夜晚、24 只股票，测量日期 2026 年 10 月 8 日。按股票的列只统计至少有 30 条已评分预测的股票。“不做相似时刻筛选”一行覆盖保存了该数据的 2,143 条预测。",
-          )}
-        </p>
-        <ul className="t-body mt-4 max-w-prose list-disc space-y-2 pl-5 text-muted-foreground">
-          <li>
-            {tx(
-              "A one-in-twenty line should be crossed about one time in twenty on every stock. A flat stop cannot do that: in this sample the same 3% was never reached on an index fund and was reached nearly a third of the time on the most volatile name.",
-              "二十分之一的线，在每只股票上都应该大约二十次里被越过一次。固定止损做不到：在这份样本里，同样的 3% 在指数基金上从未触及，在波动最大的股票上却有近三分之一的时间被触及。",
-            )}
-          </li>
-          <li>
-            {tx(
-              "The last row is the best case for a flat rule: its level was chosen after the fact to match the desk's overall rate, so it was given the answer for free. It still ranges from 0% to 26% by stock; the desk line ranges from 1.7% to 11.7%.",
-              "最后一行是固定止损最有利的情形：它的水平是事后挑选的，使整体越线率与交易台持平，等于白送了答案。按股票看，它仍然从 0% 到 26%，而交易台的线是 1.7% 到 11.7%。",
-            )}
-          </li>
-          <li>
-            {tx(
-              "The desk line is not even either. Its busiest stock is crossed at more than twice the target, and the pattern is on the track-record page.",
-              "交易台的线也不是处处均匀。越线最频繁的股票超过目标的两倍多，具体情况见战绩页面。",
-            )}
-          </li>
-          <li>
-            {tx(
-              "Forecasts on the same night share that night's market move, so 3,457 is far fewer than 3,457 independent facts. The track-record page carries intervals that resample whole nights.",
-              "同一夜的预测共享当晚的市场走势，所以 3,457 远不等于 3,457 个独立事实。战绩页面给出了按整夜重抽样的区间。",
-            )}
-          </li>
-        </ul>
+        {!bench && !error ? <LoadingRecord blocks={[220]} onRetry={load} /> : null}
+        {error && !bench ? <RecordError message={error} onRetry={load} /> : null}
+        {bench && bench.arms.length > 0 && desk ? (
+          <>
+            <ScrollTable>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{tx("Rule", "规则")}</TableHead>
+                    <TableHead className="text-right">{tx("Past its line, overall", "越线占比（整体）")}</TableHead>
+                    <TableHead className="text-right">{tx("Lowest stock", "最低的股票")}</TableHead>
+                    <TableHead className="text-right">{tx("Median stock", "中位的股票")}</TableHead>
+                    <TableHead className="text-right">{tx("Highest stock", "最高的股票")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bench.arms.map((a) => (
+                    <TableRow key={a.key} className={a.key === "desk" ? "font-medium" : ""}>
+                      <TableCell className="whitespace-normal">{ruleName(a, zh)}</TableCell>
+                      <TableCell className="tabular text-right">{pct(a.overall)}</TableCell>
+                      <TableCell className="tabular text-right">{pct(a.ticker_min)}</TableCell>
+                      <TableCell className="tabular text-right">{pct(a.ticker_median)}</TableCell>
+                      <TableCell className="tabular text-right">
+                        {pct(a.ticker_max)} <span className="text-muted-foreground">{a.most_crossed}</span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollTable>
+            <p className="t-caption mt-2 max-w-prose">
+              {tx(
+                `${bench.n.toLocaleString()} scored long-side forecasts across ${bench.nights} nights and ${bench.tickers} stocks, read live from the journal. The by-stock columns use stocks with at least ${bench.min_per_ticker ?? 30} scored forecasts. The same-engine row covers only the forecasts that stored it.`,
+                `共 ${bench.n.toLocaleString()} 条已评分的做多预测，覆盖 ${bench.nights} 个夜晚、${bench.tickers} 只股票，直接从记录中实时读取。按股票的列只统计至少有 ${bench.min_per_ticker ?? 30} 条已评分预测的股票。“同一引擎”一行只覆盖保存了该数据的预测。`,
+              )}
+            </p>
+            <ul className="t-body mt-4 max-w-prose list-disc space-y-2 pl-5 text-muted-foreground">
+              {flat3 ? (
+                <li>
+                  {tx(
+                    `A one-in-twenty line should be crossed about one time in twenty on every stock. A flat stop cannot do that: in this sample a flat 3% was crossed from ${pct(flat3.ticker_min)} (${flat3.least_crossed}) to ${pct(flat3.ticker_max)} (${flat3.most_crossed}) depending on the stock.`,
+                    `二十分之一的线，在每只股票上都应该大约二十次里被越过一次。固定止损做不到：在这份样本里，固定 3% 的越线比例从 ${pct(flat3.ticker_min)}（${flat3.least_crossed}）到 ${pct(flat3.ticker_max)}（${flat3.most_crossed}），取决于股票。`,
+                  )}
+                </li>
+              ) : null}
+              {tuned ? (
+                <li>
+                  {tx(
+                    `The last row is the best case for a flat rule: its level was chosen after the fact to match the desk's overall rate, so it was given the answer for free. It still ranges from ${pct(tuned.ticker_min)} to ${pct(tuned.ticker_max)} by stock; the desk line ranges from ${pct(desk.ticker_min)} to ${pct(desk.ticker_max)}.`,
+                    `最后一行是固定止损最有利的情形：它的水平是事后挑选的，使整体越线率与交易台持平，等于白送了答案。按股票看，它仍然从 ${pct(tuned.ticker_min)} 到 ${pct(tuned.ticker_max)}，而交易台的线是 ${pct(desk.ticker_min)} 到 ${pct(desk.ticker_max)}。`,
+                  )}
+                </li>
+              ) : null}
+              <li>
+                {desk.ticker_max > 0.1
+                  ? tx(
+                      `The desk line is not even either. Its busiest stock (${desk.most_crossed}) is crossed ${pct(desk.ticker_max)} of the time, more than twice the target.`,
+                      `交易台的线也不是处处均匀。越线最频繁的股票（${desk.most_crossed}）越线比例为 ${pct(desk.ticker_max)}，超过目标的两倍。`,
+                    )
+                  : tx(
+                      `The desk line is not perfectly even either: its busiest stock (${desk.most_crossed}) is crossed ${pct(desk.ticker_max)} of the time, against a target of 5%.`,
+                      `交易台的线也并非处处完全均匀：越线最频繁的股票（${desk.most_crossed}）越线比例为 ${pct(desk.ticker_max)}，目标是 5%。`,
+                    )}
+              </li>
+              <li>
+                {tx(
+                  "The desk line in force is the stated line after the tail correction, which is fitted only on forecasts that had already been scored. The stated-line row shows what it was before that correction.",
+                  "“当时生效的线”是尾部校正之后的线，校正只用已评分的预测拟合。“给出的线”一行显示的是校正之前的样子。",
+                )}
+              </li>
+              <li>
+                {tx(
+                  `Forecasts on the same night share that night's market move, so ${bench.n.toLocaleString()} is far fewer than ${bench.n.toLocaleString()} independent facts. The track-record page carries intervals that resample whole nights.`,
+                  `同一夜的预测共享当晚的市场走势，所以 ${bench.n.toLocaleString()} 远不等于 ${bench.n.toLocaleString()} 个独立事实。战绩页面给出了按整夜重抽样的区间。`,
+                )}
+              </li>
+            </ul>
+          </>
+        ) : null}
+        {bench && bench.arms.length === 0 ? <p className="t-body text-muted-foreground">{tx("No scored forecasts to compare yet.", "还没有可对比的已评分预测。")}</p> : null}
         <p className="t-body mt-3 text-muted-foreground">
-          {tx("Rerun it: ", "自己重新运行：")}
+          {tx("Rerun it from the public API: ", "用公开接口自己重新运行：")}
           <code className="rounded bg-muted px-1.5 py-0.5 text-[13px]">python scripts/benchmark_stops.py</code>{" "}
           <a href={`${REPO}/blob/main/scripts/benchmark_stops.py`} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center underline underline-offset-2 hover:text-foreground">
             {tx("source", "源码")}

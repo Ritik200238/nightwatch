@@ -1775,6 +1775,7 @@ export const api = {
   verify: () => request<VerifyResponse>("/verify"),
   anchors: () => request<{ anchors: Anchor[] }>("/anchors"),
   misses: () => request<MissesResponse>("/misses"),
+  stopBenchmark: () => request<StopBenchmark>("/stop-benchmark"),
   ledger: () => request<LedgerResponse>("/ledger"),
   analystStart: (forecastId: number, lang: "en" | "zh") => request<AnalystTake>(`/analyst/${forecastId}?lang=${lang}`, { method: "POST" }),
   agentStart: (forecastId: number, lang: "en" | "zh") => request<AgentRun>(`/agent/${forecastId}?lang=${lang}`, { method: "POST" }),
@@ -1819,6 +1820,22 @@ export interface WeekendOnly {
   scheduled?: boolean;
   scheduled_h?: number;
 }
+
+/** The desk's one-in-twenty line against flat stop rules on the same scored history. */
+export type StopBenchmarkArm = {
+  key: string;
+  rule: string;
+  n: number;
+  /** Share of forecasts whose return went past this rule's line, 0..1. */
+  overall: number;
+  ticker_min: number;
+  ticker_median: number;
+  ticker_max: number;
+  least_crossed: string;
+  most_crossed: string;
+  level_pct?: number;
+};
+export type StopBenchmark = { n: number; nights: number; tickers: number; min_per_ticker?: number; arms: StopBenchmarkArm[]; as_of?: string };
 
 /** The receipt chain over every live verdict, recomputed on request. */
 export interface VerifyResponse {

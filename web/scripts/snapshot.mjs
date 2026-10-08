@@ -8,7 +8,7 @@ const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "snapshot
 const ORIGIN = (process.env.NIGHTWATCH_API_ORIGIN ?? "").replace(/\/$/, "");
 
 // Keys must match snapshotKey(): sorted query params.
-const GETS = ["/health", "/universe?core=true", "/sources", "/calibration", "/studies", "/misses", "/verify", "/anchors", "/lessons", "/forecasts?limit=100", "/lenses"];
+const GETS = ["/health", "/universe?core=true", "/sources", "/calibration", "/studies", "/misses", "/stop-benchmark", "/verify", "/anchors", "/lessons", "/forecasts?limit=100", "/lenses"];
 const DEMOS = [
   { ticker: "TSLA", side: "long", notional_quote: 20000, account_equity_quote: 200000, horizon_kind: "next_open", thesis: "Delivery numbers beat and the trend is up.", invalidation: "Closes below the recent swing low.", record: false },
   { ticker: "NVDA", side: "long", notional_quote: 20000, leverage: 5, horizon_kind: "next_open", thesis: "Momentum into earnings.", invalidation: "Loses the 20-day average.", record: false },
