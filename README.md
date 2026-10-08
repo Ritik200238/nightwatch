@@ -12,6 +12,10 @@ stock tool goes blind: nights, weekends, holidays, the window where only the tok
 
 **Live desk → https://nightwatch-gules.vercel.app**
 
+*Bitget AI Base Camp Hackathon S2 · Track: AI Trading Desk · Sub-theme: Decision Stress Testing*
+
+[Who it's for](#who-it-is-for-and-the-idea-behind-it) · [A full research task](#one-complete-research-task-start-to-finish) · [What we measured](#one-thing-we-measured-that-changes-how-you-read-a-night-quote) · [Built on Bitget](#built-on-bitget-not-just-mentioned-on-bitget) · [Proof](#the-proof-recompute-it-yourself--nothing-here-is-a-screenshot-of-a-claim) · [Claim boundaries](#claim-boundaries) · [Run it](#how-it-works-end-to-end)
+
 <p align="center">
   <img src="docs/img/hero-home.png" alt="Nightwatch home page: type a trade, get a verdict, every number scored in public" width="860">
 </p>
@@ -87,16 +91,6 @@ feeds a verdict. [`/studies`](https://nightwatch-gules.vercel.app/studies) and
 [`/api/quote-trust/NVDA`](https://nightwatch-gules.vercel.app/api/quote-trust/NVDA) show the rest,
 including the control for how much of the gap is just the market moving.
 
-## Verify the claims in a minute
-
-```bash
-python scripts/verify_live.py     # standard library only; exit code 0 only if every line holds
-```
-
-It recomputes, from the live API, that the verdict log is unbroken and anchored in Bitcoin, the
-blind check of the chat reader (misses included), the table above, and that the long weekend
-record is present. Any failed line prints what the desk actually said.
-
 ---
 
 ## Why this is different from "an AI chatbot that talks about stocks"
@@ -117,7 +111,9 @@ record is present. Any failed line prints what the desk actually said.
 
 **1. Ask it anything, in plain words.** English, 中文, messy phrasing, leverage, stops,
 holdings you already have — it reads the trade, tells you what it understood ("I read this
-as…"), and runs the full chain.
+as…"), and runs the full chain. The reader is tested blind on 102 messy phrasings in English and
+中文: 98 read fully right, 313 of 317 fields correct, and the misses are published on
+[`/studies`](https://nightwatch-gules.vercel.app/studies).
 
 **2. It checks your own reasoning.** Give it a reason ("because Nvidia hit record highs,
 wrong if it closes below 170") and it holds that claim against real news headlines and SEC
@@ -151,8 +147,9 @@ pipeline, not written by hand.
   <img src="docs/img/bitget-integration.png" alt="Built on Bitget, checked live: Bitget candles and order books, Bitget perp margin tiers, Bitget US-stock MCP, bitget-signal skill, Qwen through the Bitget hackathon gateway, Agent Hub skill file" width="860">
 </p>
 
-Every green dot in that strip is a live, working Bitget integration, clickable, checked
-against reality on every report:
+The strip above was captured with every integration green. Each one is checked against
+reality on every report, and [`/sources`](https://nightwatch-gules.vercel.app/sources) shows the live
+status of each, including any that are down at that moment:
 
 * **Bitget spot & perp candles, funding, and order books** — pulled every 30 s, 1.6M+ order-book
   snapshots recorded and counting. This *is* the price data the whole product runs on.
@@ -174,7 +171,7 @@ against reality on every report:
   ```
 
 Plus Yahoo, Nasdaq, FRED, SEC EDGAR, RSS news, and Cboe options data — **21 distinct data
-sources in total**, every one live, every one listed with its real freshness on
+sources in total**, each listed with its real row count and freshness on
 [`/sources`](https://nightwatch-gules.vercel.app/sources):
 
 <p align="center">
@@ -202,6 +199,16 @@ below, so it can't drift from what the site shows.
 <p align="center">
   <img src="docs/img/calibration.png" alt="Track record page: 3,497 forecasts tested, the 1-in-20 warning beaten 3.5% of the time against a 5% target, and an honest 'not proven' badge where the evidence doesn't support a claim" width="860">
 </p>
+
+### Check them all in a minute
+
+```bash
+python scripts/verify_live.py     # standard library only; exit code 0 only if every line holds
+```
+
+It recomputes, from the live API, that the verdict log is unbroken and anchored in Bitcoin, the
+blind check of the chat reader (misses included), the table above, and that the long weekend
+record is present. Any failed line prints what the desk actually said.
 
 ### Claim boundaries
 
