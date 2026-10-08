@@ -1522,10 +1522,10 @@ def brief_short(report: Any, lang: str = "en", *, echo: str | None = None, notes
             ranked.append(picked[p])
     wk = weekend_line(report, lang)
     if wk:
-        ranked.append(wk)
-    lr = long_record_line(report, lang)
-    if lr:
-        ranked.append(lr)
+        # The long record rides with the weekend sentence, never as a line of its own: the
+        # short reply keeps two lines, and a new line must not push the history line out.
+        lr = long_record_line(report, lang)
+        ranked.append(wk + (" " + lr if lr else ""))
     for p in (keep[3:] if not zh else keep[2:]):
         if picked.get(p):
             ranked.append(picked[p])
