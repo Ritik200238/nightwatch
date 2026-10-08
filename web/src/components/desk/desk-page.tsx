@@ -435,7 +435,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
   const text = draft.trim();
   return (
     <section className="pb-4 pt-4 sm:pt-8" aria-label={tx("Describe a trade", "描述一笔交易")}>
-      <p className="text-[11px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/80 mb-2">
+      <p className="text-[12px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/80 mb-2">
         {tx("NIGHTWATCH · PRE-TRADE DECISION STRESS TESTING FOR BITGET", "NIGHTWATCH · BITGET 交易前决策压力测试")}
       </p>
       <h1 className={`text-balance text-3xl font-bold tracking-tight sm:text-5xl lg:text-6xl ${lang === "zh" ? "[word-break:keep-all] [overflow-wrap:anywhere]" : ""}`}>
@@ -457,19 +457,19 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-medium">
-        <Link href="/calibration" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/calibration" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           {tx("Track record & calibration →", "战绩与校准 →")}
         </Link>
-        <Link href="/wrong" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/wrong" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           {tx("What we got wrong →", "我们错在哪 →")}
         </Link>
-        <Link href="/studies" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/studies" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           {tx("Closed-market studies →", "休市研究 →")}
         </Link>
-        <Link href="/tonight" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/tonight" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           {tx("Tonight's watch →", "今晚持仓监视 →")}
         </Link>
-        <Link href="/sources" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/sources" className="inline-flex min-h-10 items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
           {tx("Data feeds & live book →", "数据源与实时盘口 →")}
         </Link>
       </div>
@@ -553,7 +553,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
       {/* Categorized suggestions */}
       <div className="mt-7 space-y-5">
         <div>
-          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+          <p className="text-[12px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
             {tx("Demo trades", "演示交易")}
           </p>
           <ul className="flex flex-wrap gap-2">
@@ -574,7 +574,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
         </div>
 
         <div>
-          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+          <p className="text-[12px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
             {tx("What-if & book analysis", "假设情景与组合分析")}
           </p>
           <ul className="flex flex-wrap gap-2">
@@ -595,7 +595,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
         </div>
 
         <div>
-          <p className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
+          <p className="text-[12px] font-mono font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
             {tx("The desk's own record", "交易台自身战绩")}
           </p>
           <HeroProof />
