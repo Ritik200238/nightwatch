@@ -673,3 +673,23 @@ def test_a_word_in_the_traders_own_reason_is_not_a_request_to_narrow_the_history
     assert not asks_to_narrow(msg) and not needs_the_model(msg)
     assert asks_to_narrow("long 8k NVDA overnight, compare only against Fridays")
     assert asks_to_narrow("long 8k NVDA overnight because momentum, but only count Fridays")
+
+
+@pytest.mark.parametrize(
+    ("text", "notional"),
+    [
+        ("long tsla 15 000 usdt", 15_000),
+        ("long nvda 1 500 000", 1_500_000),
+        ("long tsla 2 million", 2_000_000),
+        ("long tsla 25 grand", 25_000),
+        ("short nvda 40 thousand", 40_000),
+    ],
+)
+def test_a_size_written_with_spaces_or_words_is_read_whole_never_as_zero_or_its_first_group(text, notional):
+    assert p(text).notional_quote == notional
+
+
+def test_fri_to_mon_is_the_weekend_and_a_bare_duo_before_a_stock_is_a_long():
+    assert p("tsla 15k long fri to mon").horizon_kind == "through_weekend"
+    assert p("多 tsla 30000u").side == "long"
+    assert p("多少钱 tsla").side is None

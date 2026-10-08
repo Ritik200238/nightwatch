@@ -29,6 +29,8 @@ _SHORT = re.compile(r"做空|卖空|沽空|看空|空头|开空|空单|做淡")
 # A bare 空 straight before a stock ("空特斯拉5千") is a short. 清空 and 落空 are not: they
 # close or miss, they do not open.
 _BARE_SHORT = re.compile(r"(?<![清落腾架天])空\s*(?=" + "|".join(sorted(map(re.escape, ALIASES_ZH), key=len, reverse=True)) + r"|[A-Za-z]{2,5})")
+# A bare 多 straight before a stock ("多 tsla 30000u"), the mirror of the bare 空. 多少 and 许多 are not.
+_BARE_LONG = re.compile(r"(?<![许很太差诸众繁])多(?![少数久半])\s*(?=" + "|".join(sorted(map(re.escape, ALIASES_ZH), key=len, reverse=True)) + r"|[A-Za-z]{2,5})")
 _LONG = re.compile(r"做多|买入|买进|看多|多头|开多|多单|持有|拿(?!不)|入手|上车|抄底|建仓|进场|加仓|囤|买")
 # A one-word answer to "做多还是做空？".
 _BARE_SIDE = {"多": "long", "做多": "long", "多单": "long", "空": "short", "做空": "short", "空单": "short"}
@@ -236,7 +238,7 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         out["side"] = bare
     elif short or _BARE_SHORT.search(text):
         out["side"] = "short"
-    elif long_:
+    elif long_ or _BARE_LONG.search(text):
         out["side"] = "long"
     stop_pct = _STOP_PCT.search(text)
     stop = stop_pct or _STOP.search(text)

@@ -1,0 +1,48 @@
+{
+ "cases": 102,
+ "cases_ok": 98,
+ "fields": 317,
+ "fields_ok": 313,
+ "misses": [
+  {
+   "text": "longg tsla 10k",
+   "ok": false,
+   "wrong": {
+    "side": [
+     "long",
+     null
+    ]
+   }
+  },
+  {
+   "text": "shrot 5k meta",
+   "ok": false,
+   "wrong": {
+    "side": [
+     "short",
+     null
+    ]
+   }
+  },
+  {
+   "text": "ape 2k into smci",
+   "ok": false,
+   "wrong": {
+    "side": [
+     "long",
+     null
+    ]
+   }
+  },
+  {
+   "text": "long tsla two thousand",
+   "ok": false,
+   "wrong": {
+    "notional": [
+     2000,
+     null
+    ]
+   }
+  }
+ ]
+}

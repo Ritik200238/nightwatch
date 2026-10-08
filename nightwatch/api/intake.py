@@ -73,7 +73,7 @@ _HOURS = re.compile(r"\b([\d.]+)\s*(?:hours?|hrs?|h)\b", re.I)
 _DAYS = re.compile(r"\b([\d.]+)\s*(?:days?|d)\b", re.I)
 _NEXT_OPEN = re.compile(r"\bover\s*-?\s*night\b|\bovernite\b|\btonight\b|\btonite\b|\b(?:for|through|thru)\s+(?:the\s+|one\s+)?(?:night|nite)\b|\b(?:until|till|to|through)\s+(?:the\s+)?(?:us\s+)?open\b|\bnext\s+open\b", re.I)
 # "Through the weekend" said on a Thursday is until Monday's open, not Thursday's.
-_WEEKEND = re.compile(r"\bweekend\b|\b(?:into|until|till|to)\s+monday\b|\bmonday(?:'s)?\s+open\b", re.I)
+_WEEKEND = re.compile(r"\bweekend\b|\b(?:into|until|till|to)\s+mon(?:day)?\b|\bmonday(?:'s)?\s+open\b", re.I)
 # "until Wednesday", "through Thursday's close": a named day, held to its open unless the
 # close is said. Monday is the weekend rule's, which already means the open after it.
 _WEEKDAY = re.compile(r"\b(?:until|till|to|through|into|by)\s+(?:next\s+)?(tues|wednes|thurs|fri)day(?:'s)?(?:\s+(open|close))?", re.I)
@@ -489,11 +489,24 @@ def _apply_margin(out: RuleIntent, zh: bool) -> None:
                              else f"{out.notional_quote:,.0f} USDT on {m:,.0f} margin is {lev:.3g}x leverage.")
 
 
+# "15 000 usdt", "1 500 000": a size written with spaces between the thousands. Read apart,
+# the first group is a size and the rest is noise, which once made "15 000" a size of zero.
+_SPACED_THOUSANDS = re.compile(r"(?<![\d.,])(\d{1,3})((?:[   ]\d{3})+)(?![\d])")
+# "2 million", "25 grand", "40 thousand": a size in words, folded to the "2m" / "25k" forms.
+_WORD_SCALE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s*(million|mil|thousand|grand)\b", re.I)
+_WORD_SCALE_TO = {"million": "m", "mil": "m", "thousand": "k", "grand": "k"}
+
+
+def _fold_size_words(text: str) -> str:
+    text = _SPACED_THOUSANDS.sub(lambda m: m.group(1) + re.sub(r"\D", "", m.group(2)), text)
+    return _WORD_SCALE.sub(lambda m: m.group(1) + _WORD_SCALE_TO[m.group(2).lower()], text)
+
+
 def parse_message(text: str, known_tickers: list[str], account_equity: float | None = None) -> RuleIntent:
     """Read one message into a ticket. Nothing is invented; what is absent is asked for."""
     out = RuleIntent()
     # Full-width digits and letters ("２万Ｕ", "％") read like their ordinary forms.
-    text = unicodedata.normalize("NFKC", text)
+    text = _fold_size_words(unicodedata.normalize("NFKC", text))
     # What is already held is read first and blanked out, so it cannot be mistaken for the trade.
     held: list[tuple[str, str, float]] = []
     if _CJK.search(text):
