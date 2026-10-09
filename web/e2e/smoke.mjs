@@ -65,6 +65,10 @@ async function openHome(page, errors) {
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 60_000 });
   // One input until a trade is asked; the Chat/Ticket rail appears after that.
   await page.locator("#hero-input").waitFor();
+  // The input is in the server HTML before the page's scripts are ready, and an Enter pressed
+  // in that gap is lost. The status pill is filled in by a client fetch, so once it shows the
+  // page is live and typing works.
+  await page.getByText(/\d+ tokens/).first().waitFor({ timeout: 45_000 });
   await guard(page, errors);
 }
 
