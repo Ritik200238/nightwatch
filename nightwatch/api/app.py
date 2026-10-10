@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from nightwatch import __version__
-from nightwatch.api import followup, guard
+from nightwatch.api import followup, guard, timing
 from nightwatch.api.locking import RequestFirstLock
 from nightwatch.api.sources import annotate_used_for, data_sources, open_interest_row, options_row, rwa_row, street_row
 from nightwatch.config import Settings, load_settings
@@ -923,6 +923,9 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 return JSONResponse({"detail": "Too many requests. Please wait a moment and try again."}, status_code=429, headers={"Retry-After": str(max(1, int(wait + 0.999)))})
         return await call_next(request)
 
+    # Outermost, so the clock covers the secret check, the rate limit and the page cache too.
+    app.add_middleware(timing.TimingMiddleware)
+
     def st() -> AppState:
         return app.state.nw
 
@@ -1668,13 +1671,15 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
         client = _who(request)[0]
+        clock = timing.current()  # the worker thread below does not inherit the request's context
 
         def put(kind: str, data: Any) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, (kind, data))
 
         def work() -> None:
             try:
-                with progress_to(lambda ev: put("step", ev)), trader_scope(client):
+                with timing.attached(clock), progress_to(lambda ev: put("step", ev)), trader_scope(client):
+                    timing.mark("work_start")
                     out = _chat(body)
                 _count_chat(body, request, out)
                 put("done", out)
@@ -1740,6 +1745,16 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         from nightwatch.journal import engagement
 
         return engagement.usage(st().store._conn)
+
+    @app.get("/timing")
+    def request_timing(limit: int = 100) -> dict[str, Any]:
+        """Where recent requests spent their time: queued for the analysis lock, holding it, or
+        neither (nightwatch.api.timing). Method, path and milliseconds only; empty after a restart."""
+        s = st()
+        return {
+            "enabled": timing.enabled(), "started_at": s.started_at.isoformat(), "lock": s.lock.snapshot(),
+            "requests": timing.recent(min(max(limit, 1), timing.RECENT_MAX)),
+        }
 
     @app.post("/watch")
     def watch_create(body: WatchIn, request: Request) -> dict[str, Any]:

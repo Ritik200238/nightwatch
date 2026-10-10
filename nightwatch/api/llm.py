@@ -334,8 +334,9 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
     provider = provider or (as_provider(client) if client is not None else select())
     if provider is None:
         raise RuntimeError("no language provider has credentials (set BITGET_QWEN_API_KEY or ANTHROPIC_API_KEY)")
-    from nightwatch.api import intake
+    from nightwatch.api import intake, timing
 
+    timing.mark("chat_turn")
     tickers = list(state.ctx.tickers_with_data())
     latest = next((m["content"] for m in reversed(messages) if m.get("role") == "user" and (m.get("content") or "").strip()), "")
     lang = intake.language_of(latest)
