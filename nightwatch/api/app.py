@@ -37,6 +37,7 @@ from nightwatch.data.sync import UniverseEntry, build_universe
 from nightwatch.decision import tonight as tonight_mod
 from nightwatch.decision.ticket import MAX_HOLD_HOURS, MAX_NOTIONAL, MAX_PRICE, HorizonKind, TradeTicket, stop_side_problem
 from nightwatch.features.snapshot import InsufficientData, build_snapshot
+from nightwatch.journal import idempotency
 from nightwatch.journal.calibration import calibrate
 from nightwatch.journal.journal import Journal
 from nightwatch.journal.postmortem import LessonBook, mature_and_learn
@@ -163,6 +164,9 @@ class ChatIn(BaseModel):
     # The report the conversation is currently about, so a question can be answered from
     # it. The desk already stores every report it produces; this is the key to one.
     context_forecast_id: int | None = None
+    # One random id per user send, the same on the stream and on its plain retry. Optional: a
+    # caller without one (the Telegram bot, an old page) is answered exactly as before.
+    request_id: str | None = Field(default=None, max_length=128)
 
     @field_validator("messages", mode="before")
     @classmethod
@@ -232,6 +236,9 @@ class AppState:
         from nightwatch.journal import engagement, plans, receipts, tripwires, watches
 
         self.store._conn.executescript(engagement.SCHEMA)
+        self.store._conn.executescript(idempotency.SCHEMA)
+        # A claim still pending belongs to the process that was running before this one.
+        idempotency.clear_pending(self.store._conn)
         self.store._conn.executescript(plans.SCHEMA)
         self.store._conn.executescript(watches.SCHEMA)
         self.store._conn.executescript(tripwires.SCHEMA)
@@ -1646,6 +1653,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             from nightwatch.journal import engagement
 
+            if out.get("replayed"):
+                return  # the first run was counted
             s = st()
             _, lang, internal = _who(request)
             fid = (out.get("report") or {}).get("forecast_id") if isinstance(out.get("report"), dict) else None
@@ -1871,6 +1880,33 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             return _chat(ChatIn(messages=[ChatMessage(**m) for m in messages], context_forecast_id=context_id))
 
     def _chat(body: ChatIn) -> dict[str, Any]:
+        """One chat turn, answered once per ``request_id``.
+
+        The stream and its plain retry carry the same id. The first to arrive runs; a second
+        waits for that run and returns its stored answer, so a stream cut while its turn was
+        queued does not analyse and journal the same trade again. No id, or a malformed one,
+        and the turn simply runs, as it did before ids existed."""
+        rid = body.request_id
+        if not idempotency.valid(rid):
+            return _chat_once(body)
+        conn = st().store._conn
+        got = idempotency.claim(conn, rid)
+        if not got.owner and got.result is None:
+            got = idempotency.wait(conn, rid)  # the first run is still going: wait for its answer
+        if got.result is not None:
+            return {**got.result, "replayed": True}
+        if not got.owner:
+            # 409, not 503: the proxy replaces 502/503/504 with a saved example of another trade.
+            raise HTTPException(409, "That message is still being answered; please wait a moment.")
+        try:
+            out = _chat_once(body)
+        except BaseException:
+            idempotency.abandon(conn, rid)
+            raise
+        idempotency.finish(conn, rid, jsonable_encoder(out))
+        return out
+
+    def _chat_once(body: ChatIn) -> dict[str, Any]:
         """One chat turn, plus the small card for it when a picture helps."""
         from nightwatch.api import cards
 

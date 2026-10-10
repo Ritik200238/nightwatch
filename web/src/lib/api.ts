@@ -28,6 +28,7 @@ function resolveApiUrl(): string {
 export const API_URL = resolveApiUrl();
 
 import { SNAPSHOT_HEADER, classifyHealth, markSavedCopy, snapshotFlag } from "./snapshot";
+import { newRequestId } from "./request-id";
 import { isRemembered, recall, remember } from "./record-cache";
 import { friendlyDetail, stillBusyMessage, type ErrLang } from "./errors";
 
@@ -1704,17 +1705,20 @@ export const api = {
     onStep: (s: ChatStep) => void,
     lang: "en" | "zh" = "en",
   ): Promise<ChatResponse> => {
+    // One id for this send, on the stream and on the retry below: if the stream is cut while the
+    // server is still working, the retry gets that run's answer instead of a second analysis.
+    const requestId = newRequestId();
     const again = () =>
       request<ChatResponse>("/chat", {
         method: "POST",
-        body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null }),
+        body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null, request_id: requestId }),
       });
     let res: Response;
     try {
       res = await fetch(`${API_URL}${withIdentity("/chat/stream")}`, {
         method: "POST",
         headers: { "content-type": "application/json", accept: "text/event-stream" },
-        body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null }),
+        body: JSON.stringify({ messages, account_equity_quote: accountEquity ?? null, context_forecast_id: contextForecastId ?? null, request_id: requestId }),
       });
     } catch {
       return again();
