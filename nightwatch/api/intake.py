@@ -86,6 +86,15 @@ THROUGH_EARNINGS = re.compile(
     re.I,
 )
 _WINDOW_END = re.compile(r"\b(?:until|till|to|by|into)\s+(?:the\s+)?close\b|\bsession\s+end\b", re.I)
+# "until tomorrow", "into tomorrow's open", "tomorrow's close": a hold that ends on the next day's
+# session. It needs a word that ends a hold, or "open"/"close" straight after, so a message that only
+# mentions tomorrow ("earnings are tomorrow") does not become a horizon.
+_TOMORROW = re.compile(
+    r"\b(?:until|till|to|into|through|thru|by|for)\s+(?:the\s+)?tomorrow(?:'s)?\b"
+    r"|\btomorrow(?:'s)?\s+(?:us\s+|market\s+|stock\s+)?(?:open|close)\b",
+    re.I,
+)
+_TOMORROW_CLOSE = re.compile(r"\btomorrow(?:'s)?\s+(?:us\s+|market\s+|stock\s+)?close\b", re.I)
 # "5x", "5x leverage", "at 10x", "leverage 3", "3x lev". A multiple, never a size.
 _LEVERAGE = re.compile(r"\b(\d{1,3}(?:\.\d+)?)\s*[x×](?![a-z])|\bleverage(?:d)?\s*(?:of|at|:|=)?\s*(\d{1,3}(?:\.\d+)?)\s*[x×]?", re.I)
 # "20k margin", "margin of 4000", "with 5k collateral": the money put up, not the position.
@@ -311,6 +320,59 @@ def hours_until_weekday(weekday: int, which: str = "open", now: datetime | None 
         if at > now:
             return round((at - now).total_seconds() / 3600.0, 2)
     return None
+
+
+def hours_until_tomorrow(which: str = "open", now: datetime | None = None) -> float | None:
+    """Hours from now to the regular open (or close) of the first trading day after today.
+
+    "Tomorrow's open" said before this morning's open is not the open fifty minutes away: the
+    next open is today's, and "tomorrow" names another day. From a Friday it is Monday's. A
+    holiday moves it to the next session, an early close is honoured, and the hours are the
+    difference of real instants, so a clock change inside the hold is counted.
+
+    Between midnight and the start of the pre-market (04:00 New York) it returns None: a person
+    awake then is as likely to mean "later today" as the next calendar day, and that is not
+    guessed here.
+    """
+    from nightwatch.time_utils import ET, PRE_OPEN, _regular_bounds, next_trading_day, utc_now
+
+    now = now or utc_now()
+    local = now.astimezone(ET)
+    if local.time() < PRE_OPEN:
+        return None
+    open_utc, close_utc = _regular_bounds(next_trading_day(local.date()))
+    at = close_utc if which == "close" else open_utc
+    return round((at - now).total_seconds() / 3600.0, 2)
+
+
+def tomorrow_hold(kind: str | None, close: bool = False, now: datetime | None = None) -> float | None:
+    """The hours to apply for a hold said to end tomorrow, or None to leave the parse alone.
+
+    Only a hold that would otherwise be "the next open", "the end of this window" or nothing
+    said is changed; an explicit length, a named weekday and the weekend words keep their own
+    rule. And only when tomorrow's session is not already the one that would have been used:
+    in the session and after the close, tomorrow's open IS the next open, and the hold stays
+    a next-open hold exactly as before.
+    """
+    from nightwatch.analog.outcomes import structural_horizons
+    from nightwatch.time_utils import utc_now
+
+    if kind not in (None, "next_open", "window_end"):
+        return None
+    now = now or utc_now()
+    h = hours_until_tomorrow("close" if close else "open", now)
+    if h is None:
+        return None
+    if not close and kind in (None, "next_open") and abs(h - structural_horizons(now)["next_open"]) < 0.01:
+        return None
+    return h
+
+
+def says_tomorrow(text: str) -> bool:
+    """Whether the message ends the hold on tomorrow, in English or Chinese."""
+    from nightwatch.api import intake_zh
+
+    return bool(_TOMORROW.search(text or "") or intake_zh.TOMORROW.search(text or ""))
 
 
 def find_equity(text: str) -> re.Match[str] | None:
@@ -585,6 +647,8 @@ def parse_message(text: str, known_tickers: list[str], account_equity: float | N
         out.horizon_kind, out.horizon_hours = "hours", float(days.group(1)) * 24.0
     elif re.search(r"\b(?:a|one)\s+week\b", text, re.I):
         out.horizon_kind, out.horizon_hours = "hours", 168.0
+    if _TOMORROW.search(text) and (h := tomorrow_hold(out.horizon_kind, bool(_TOMORROW_CLOSE.search(text)))) is not None:
+        out.horizon_kind, out.horizon_hours = "hours", h
     # Left as None when the message says nothing about a horizon. A conversation merges
     # message by message, so filling in the default here would let "make it 30k" quietly
     # overwrite the "for 8 hours" from the message before it. The default is applied once,

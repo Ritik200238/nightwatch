@@ -48,6 +48,10 @@ _WEEKDAY_INDEX = {"二": 1, "三": 2, "四": 3, "五": 4}
 # "5倍杠杆", "五倍", "杠杆10倍": a multiple, never a size.
 _LEVERAGE = re.compile(r"([0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]+)\s*倍(?:杠杆)?|杠杆\s*([0-9]+(?:\.[0-9]+)?)\s*倍?")
 _NEXT_OPEN = re.compile(r"过夜|隔夜|到开盘|开盘前|今晚")
+# "到明天开盘", "持有到明日收盘", "拿到明早": a hold that ends on tomorrow's session (see
+# intake.hours_until_tomorrow). A bare "明天" ("明天有财报") is not a horizon.
+TOMORROW = re.compile(r"(?:到|至|拿到|持有到|等到|留到)\s*明(?:天|日|早)|明(?:天|日)(?:的)?\s*(?:美股)?\s*(?:开盘|收盘)")
+_TOMORROW_CLOSE = re.compile(r"明(?:天|日)(?:的)?\s*(?:美股)?\s*收盘")
 _HOURS = re.compile(r"([0-9]+(?:\.[0-9]+)?)\s*(?:个)?小时")
 _DAYS = re.compile(r"([0-9]+)\s*天")
 _THESIS = re.compile(r"(?:因为|理由是|逻辑是|理由\s*[:：]|论点\s*[:：]|逻辑\s*[:：])(.+?)(?:[，,。；;！!？?]|$)")
@@ -326,6 +330,12 @@ def read(text: str, known: set[str]) -> dict[str, object]:
         out["horizon_kind"], out["horizon_hours"] = "hours", float(h.group(1))
     elif (d := _DAYS.search(text)):
         out["horizon_kind"], out["horizon_hours"] = "hours", float(d.group(1)) * 24.0
+    if TOMORROW.search(text):
+        from nightwatch.api.intake import tomorrow_hold
+
+        h = tomorrow_hold(out.get("horizon_kind"), bool(_TOMORROW_CLOSE.search(text)))
+        if h is not None:
+            out["horizon_kind"], out["horizon_hours"] = "hours", h
     if thesis:
         out["thesis"] = thesis.group(1).strip()
     if invalid:

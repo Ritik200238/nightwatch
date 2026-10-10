@@ -444,6 +444,14 @@ def chat_turn(state: Any, messages: list[dict[str, str]], *, account_equity: flo
             from dataclasses import replace
 
             ticket = replace(ticket, leverage=rules.leverage)  # the rules read "5x"; the model's schema has no field for it
+        if rules.horizon_kind == "hours" and rules.horizon_hours and intake.says_tomorrow(latest) and ticket.horizon_kind.value in ("next_open", "window_end"):
+            from dataclasses import replace
+
+            from nightwatch.decision.ticket import HorizonKind
+
+            # "until tomorrow's open" said before this morning's open: the rules dated it from the
+            # calendar, and the model's "next_open" would be the open fifty minutes away.
+            ticket = replace(ticket, horizon_kind=HorizonKind.HOURS, horizon_hours=rules.horizon_hours)
         if rules.open_positions:
             from dataclasses import replace
 
