@@ -379,10 +379,16 @@ export default function DeskPage() {
 // Each chip is a full ticket the desk can parse (ticker, side, size, horizon); `send` may
 // carry a written plan the label leaves out so the verdict is not just "plan missing".
 // `short` is only what the chip shows, so a row of them fits one line on a phone.
-const HERO_CHIPS: { en: string; zh: string; short: string; shortZh: string; send?: string }[] = [
-  { en: "Long NVDA over the weekend — is 15k safe?", zh: "周末做多 NVDA，1.5 万安全吗？", short: "NVDA weekend 15k", shortZh: "周末 NVDA 1.5 万", send: "Long NVDA over the weekend, 15k, thesis: earnings momentum, wrong if it closes below 170 — is it safe?" },
-  { en: "5x long TSLA overnight?", zh: "5 倍杠杆做多 TSLA 过夜？", short: "5x TSLA overnight", shortZh: "5 倍 TSLA 过夜", send: "5x long 10k TSLA overnight — safe?" },
-  { en: "周末做多特斯拉 2万U 安全吗？", zh: "周末做多特斯拉 2万U 安全吗？", short: "周末做多特斯拉", shortZh: "周末做多特斯拉", send: "周末做多 TSLA 2万U，安全吗？" },
+// Each also states an account (the same 200k as the TSLA example) and a reason with a
+// "wrong if" line: without them the gate asks for the account and the written plan, and
+// every chip came back REVIEW. Each line is a move inside the stock's own one-in-twenty
+// move over that hold, so it can bind, and past holds do cross it (see tests/test_starter_chips.py).
+// `sendZh` is the same trade in Chinese, sent on the Chinese page: same size, leverage,
+// account, reason, line and hold, checked field by field in tests/test_starter_chips.py.
+const HERO_CHIPS: { en: string; zh: string; short: string; shortZh: string; send?: string; sendZh?: string }[] = [
+  { en: "Long NVDA over the weekend, account 200k — is 15k safe?", zh: "周末做多 NVDA，账户 20 万，1.5 万安全吗？", short: "NVDA weekend 15k", shortZh: "周末 NVDA 1.5 万", send: "Long NVDA over the weekend, 15k, account 200k, because I think the uptrend holds into Monday, wrong if it drops 4% over the weekend. Is it safe?", sendZh: "周末做多 NVDA 1.5万U，账户 20 万，理由是我认为上升趋势会延续到周一，如果周末下跌超过 4% 就算错，安全吗？" },
+  { en: "5x long TSLA overnight, account 200k?", zh: "5 倍杠杆做多 TSLA 过夜，账户 20 万？", short: "5x TSLA overnight", shortZh: "5 倍 TSLA 过夜", send: "5x long 10k TSLA overnight, account 200k, because I think the strength carries through the night, wrong if it drops 3% before the open. Is it safe?", sendZh: "5 倍杠杆做多 TSLA 1万U 过夜，账户 20 万，理由是我认为强势会延续整晚，如果开盘前下跌超过 3% 就算错，安全吗？" },
+  { en: "周末做多特斯拉 2万U，账户 20 万，安全吗？", zh: "周末做多特斯拉 2万U，账户 20 万，安全吗？", short: "周末做多特斯拉", shortZh: "周末做多特斯拉", send: "周末做多 TSLA 2万U，账户 20 万，理由是我认为强势会延续到周一，如果周末下跌超过 4% 就算错，安全吗？" },
 ];
 
 const WHAT_IF_CHIPS: { en: string; zh: string; short: string; shortZh: string; send?: string }[] = [
@@ -509,7 +515,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
               if (text && !busy) onSend(text);
             }
           }}
-          placeholder={tx("e.g. long NVDA over the weekend, 15k, stop 170", "例如：周末做多 NVDA，1.5 万，止损 170")}
+          placeholder={tx("e.g. long NVDA over the weekend, 15k, account 200k, stop 170", "例如：周末做多 NVDA，1.5 万，账户 20 万，止损 170")}
           disabled={busy}
           className="min-w-0 flex-1 h-14 resize-none rounded-xl border border-input bg-background/80 px-4 py-3.5 text-base sm:text-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
@@ -575,7 +581,7 @@ function Hero({ draft, setDraft, busy, onSend, onContrast, onExample, exampleDis
                   type="button"
                   disabled={busy}
                   title={lang === "zh" ? c.zh : c.en}
-                  onClick={() => onSend(c.send ?? c.en)}
+                  onClick={() => onSend((lang === "zh" ? c.sendZh : undefined) ?? c.send ?? c.en)}
                   className={`${CHIP} whitespace-nowrap text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:opacity-50`}
                 >
                   {lang === "zh" ? c.shortZh : c.short}
