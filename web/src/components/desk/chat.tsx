@@ -298,7 +298,7 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
       // must never replace the report on screen, which belongs to the trader's own trade.
       if (isSnapshotAnswer(res)) {
         scrollMode.current = "start";
-        commit([...next, { role: "assistant", content: snapshotNoticeFor(snapshotFlag.get() ?? isoIn(res.reply), chatLang) }]);
+        commit([...next, { role: "assistant", content: snapshotNoticeFor(isoIn(res.reply) || (snapshotFlag.get() ?? ""), chatLang) }]);
         return;
       }
       // A live answer means the server answered. The streamed call never updates the flag the

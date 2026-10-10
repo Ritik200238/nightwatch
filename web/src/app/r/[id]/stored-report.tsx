@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { ReportView } from "@/components/report/report-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, api, peek, type Report } from "@/lib/api";
 import { recall } from "@/lib/record-cache";
-import { snapshotFlag } from "@/lib/snapshot";
+import { savedCopyAt } from "@/lib/snapshot";
 import { fmtDateTimeL } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 
@@ -45,12 +45,15 @@ export function StoredReport({ id }: { id: string }) {
   const [attempt, setAttempt] = useState(0);
   // Set when the report on screen is a copy (this browser's, or the proxy's saved one), not a live read.
   const [copyFrom, setCopyFrom] = useState<string | null>(null);
-  const proxyCopy = useSyncExternalStore(snapshotFlag.subscribe, snapshotFlag.get, () => null);
+  // Set only when the proxy answered *this report* from its saved copy. The shared flag is not used:
+  // it says some read fell back, and the record chip's /misses and /verify on this page can.
+  const [proxyCopy, setProxyCopy] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
     setSlow(false);
+    setProxyCopy(null);
     // A stored report never changes, so a copy this browser already holds shows at once.
     const path = `/reports/${id}`;
     const cached = peek<Report>(path);
@@ -66,6 +69,7 @@ export function StoredReport({ id }: { id: string }) {
         if (cancelled) return;
         setReport(r);
         setCopyFrom(null);
+        setProxyCopy(savedCopyAt(r));
       })
       .catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : tx("Could not load that report.", "无法加载这份报告。")))
       .finally(() => clearTimeout(timer));

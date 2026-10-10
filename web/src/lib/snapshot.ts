@@ -84,6 +84,23 @@ export function isSnapshotAnswer(res: { intent?: { kind?: string } | null }): bo
   return res.intent?.kind === "snapshot";
 }
 
+// Which parsed answers the proxy served from its saved copy, and from when. The shared flag
+// below says only that some read fell back most recently; this says whether *this* answer did,
+// so a page that holds one answer never takes an unrelated read's fallback for its own.
+const savedCopies = new WeakMap<object, string>();
+
+/** Remember that `data` (a parsed response body) came from the saved copy dated `iso`. A live
+ *  answer, or one with no object body, is left unmarked. Returns `data` unchanged. */
+export function markSavedCopy<T>(data: T, iso: string | null): T {
+  if (iso && data !== null && typeof data === "object") savedCopies.set(data as object, iso);
+  return data;
+}
+
+/** When this very answer's saved copy is from, or null for a live answer. */
+export function savedCopyAt(data: unknown): string | null {
+  return data !== null && typeof data === "object" ? (savedCopies.get(data as object) ?? null) : null;
+}
+
 /** Body for a POST /chat or /analyze served from the snapshot, or null if none saved. */
 export function snapshotPost(data: SnapshotData | null, path: string, requestBody: string): unknown | null {
   if (!data) return null;

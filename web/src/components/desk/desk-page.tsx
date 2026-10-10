@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang } from "@/lib/lang";
 import { WeekStrip } from "./week-strip";
 import { scrollIntoViewOnSmall, scrollToAnswer } from "@/lib/scroll";
-import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
+import { savedCopyAt, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
 import { ApiError, api, type MissesResponse, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 import { fmtDateL } from "@/lib/i18n";
@@ -175,10 +175,13 @@ export default function DeskPage() {
     try {
       // The book travels with the ticket so the report can judge both.
       const got = await api.analyze({ ...ticket, open_positions: positions });
-      if (snapshotFlag.get() !== null) {
+      // Asked of this answer, not of the shared flag: another read can fall back while this one
+      // is still being read, and that must not turn a live report into "a saved example".
+      const savedAt = savedCopyAt(got);
+      if (savedAt !== null) {
         // The proxy answered from its saved copy because the live server is down. That is an
         // example, not this trade, so it is said in words and the report on screen stays.
-        setError(snapshotNoticeFor(snapshotFlag.get() as string, lang));
+        setError(snapshotNoticeFor(savedAt, lang));
       } else {
         setContrast(null);
         scrollPending.current = true;

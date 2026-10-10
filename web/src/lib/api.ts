@@ -27,7 +27,7 @@ function resolveApiUrl(): string {
 
 export const API_URL = resolveApiUrl();
 
-import { SNAPSHOT_HEADER, classifyHealth, snapshotFlag } from "./snapshot";
+import { SNAPSHOT_HEADER, classifyHealth, markSavedCopy, snapshotFlag } from "./snapshot";
 import { isRemembered, recall, remember } from "./record-cache";
 import { friendlyDetail, stillBusyMessage, type ErrLang } from "./errors";
 
@@ -1647,7 +1647,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const data = (await res.json()) as T;
   if (isRead && isRemembered(path) && !res.headers.get(SNAPSHOT_HEADER)) remember(path, data);
-  return data;
+  // Per answer, so a page can tell its own saved copy from some other read's (see savedCopyAt).
+  return markSavedCopy(data, res.headers.get(SNAPSHOT_HEADER));
 }
 
 /** The last good answer for a record page, shown at once while the fresh one loads. */

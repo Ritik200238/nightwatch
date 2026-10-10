@@ -1,7 +1,7 @@
 // Run: node --experimental-strip-types src/lib/snapshot.test.mjs   (Node >= 22.6)
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { classifyHealth, snapshotKey, shouldFallback, snapshotPost, snapshotGet, readableTimes, snapshotNoticeFor, isSnapshotAnswer, snapshotFlag } from "./snapshot.ts";
+import { classifyHealth, snapshotKey, shouldFallback, snapshotPost, snapshotGet, readableTimes, snapshotNoticeFor, isSnapshotAnswer, snapshotFlag, markSavedCopy, savedCopyAt } from "./snapshot.ts";
 
 const data = { generated_at: "T0", gets: { "/universe?core=true": [1], "/a?x=1&y=2": "ok" }, reports: { TSLA: { t: "TSLA" }, NVDA: { t: "NVDA" } } };
 assert.equal(snapshotKey("a", "?y=2&x=1"), "/a?x=1&y=2");
@@ -38,6 +38,34 @@ const chat = readFileSync(new URL("../components/desk/chat.tsx", import.meta.url
 assert.ok(chat.includes("isSnapshotAnswer(res)"), "chat.tsx decides from the answer alone");
 assert.ok(!/isSnapshotAnswer\([^)]*snapshotFlag/.test(chat), "chat.tsx must not pass the shared flag");
 assert.ok(chat.indexOf("snapshotFlag.set(null)") > chat.indexOf("if (isSnapshotAnswer(res))"), "a live answer clears the flag after the saved-answer branch");
+// Per answer: a page that holds one answer asks that answer whether it is a saved copy, never the
+// shared flag, which only says that some read fell back most recently.
+const savedBody = snapshotPost(data, "analyze", '{"ticker":"NVDA"}');
+assert.equal(savedCopyAt(savedBody), null, "nothing is a saved copy until a response says so");
+assert.equal(markSavedCopy(savedBody, "T0"), savedBody, "marking hands the body back unchanged");
+assert.equal(savedCopyAt(savedBody), "T0");
+const liveReport = { ticket: { ticker: "TSLA" }, forecast_id: 21509 };
+snapshotFlag.set("2026-10-10T03:46:00Z"); // an unrelated read fell back to its saved copy
+assert.equal(savedCopyAt(liveReport), null, "a live answer is not made a saved copy by the shared flag");
+assert.equal(markSavedCopy(liveReport, null), liveReport);
+assert.equal(savedCopyAt(liveReport), null);
+assert.equal(savedCopyAt(savedBody), "T0", "a genuine saved copy keeps its own time, whatever the flag says");
+snapshotFlag.set(null);
+assert.equal(savedCopyAt(savedBody), "T0", "and keeps it once the flag is cleared");
+// Bodies that are not objects cannot be marked, and must not throw.
+assert.equal(markSavedCopy("text", "T0"), "text");
+assert.equal(savedCopyAt("text"), null);
+assert.equal(savedCopyAt(null), null);
+assert.equal(savedCopyAt(undefined), null);
+// The pages that decide "is this a saved copy" ask the answer, and the request layer marks it.
+const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
+const apiSrc = src("./api.ts");
+assert.ok(apiSrc.includes("markSavedCopy(data, res.headers.get(SNAPSHOT_HEADER))"), "request() marks each saved answer");
+const stored = src("../app/r/[id]/stored-report.tsx");
+assert.ok(!stored.includes("snapshotFlag") && stored.includes("savedCopyAt(r)"), "a stored report asks its own answer, not the shared flag");
+const desk = src("../components/desk/desk-page.tsx");
+assert.ok(!desk.includes("snapshotFlag") && desk.includes("savedCopyAt(got)"), "the form path asks its own answer, not the shared flag");
+assert.ok(chat.indexOf("isoIn(res.reply) ||") > 0 && chat.indexOf("isoIn(res.reply) ||") < chat.indexOf("snapshotFlag.get() ??"), "a saved chat answer is dated from its own text first");
 assert.ok(!readableTimes("saved from 2026-09-12T10:00:00+00:00, ok", "en-US").includes("T10:00"));
 assert.ok(readableTimes("from 2026-09-12T10:00:00Z.", "zh-CN").includes("2026"));
 assert.ok(snapshotNoticeFor("2026-09-12T10:00:00Z", "zh").startsWith("实时服务器"));
