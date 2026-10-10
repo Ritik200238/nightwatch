@@ -182,6 +182,14 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
   measured by asking for all 24 tokens both ways at four at a time: 48 verdicts, median
   7.4 s, slowest 9.1 s. Two of those sweeps at once (96 queued analyses) pushes the
   slowest past three minutes and some time out. That is a demo box, not a service.
+* **Where a slow answer spent its time.** `GET /timing` (and one `nw_timing` line per request in
+  `docker compose logs api`) says, for every request that took the analysis lock or ran 3 s or more:
+  `total_ms`, `to_lock_ms` (arrival to the first ask for the lock), `lock_wait_ms` (queued),
+  `lock_hold_ms` (the analysis itself), `after_lock_ms` (what came after), `queued_ahead` and the
+  `holder` it waited for. A slow request with no lock fields never touched the lock, so the time
+  went elsewhere (the database, the box). Only method, path and milliseconds are kept - never the
+  body, the query string or an address. `/timing` holds the last 300 and is empty after a restart.
+  `NIGHTWATCH_TIMING=0` turns it off.
 * **Self-healing**: `deploy/heal.sh` runs from cron every five minutes and restarts a
   container that is running but unhealthy - a wedged API, or a recorder that has not
   written an order book in five minutes. Docker's restart policy only covers a process
