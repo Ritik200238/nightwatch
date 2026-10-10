@@ -296,11 +296,15 @@ export function Chat({ accountEquity, busy, setBusy, onReport, onRestore, onNewC
       );
       // A saved example served while the live server is down is a chat message only: it
       // must never replace the report on screen, which belongs to the trader's own trade.
-      if (isSnapshotAnswer(res, snapshotFlag.get())) {
+      if (isSnapshotAnswer(res)) {
         scrollMode.current = "start";
         commit([...next, { role: "assistant", content: snapshotNoticeFor(snapshotFlag.get() ?? isoIn(res.reply), chatLang) }]);
         return;
       }
+      // A live answer means the server answered. The streamed call never updates the flag the
+      // way every other request does, so a saved read that fell back earlier would otherwise
+      // leave the "server unreachable" banner over a live report.
+      snapshotFlag.set(null);
       const reportVerdict = res.report ? ((res.report.verdict?.verdict as string) ?? "REVIEW") : undefined;
       scrollMode.current = res.report ? "none" : "start";
       commit([

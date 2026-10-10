@@ -1,6 +1,7 @@
 // Run: node --experimental-strip-types src/lib/snapshot.test.mjs   (Node >= 22.6)
 import assert from "node:assert/strict";
-import { classifyHealth, snapshotKey, shouldFallback, snapshotPost, snapshotGet, readableTimes, snapshotNoticeFor, isSnapshotAnswer } from "./snapshot.ts";
+import { readFileSync } from "node:fs";
+import { classifyHealth, snapshotKey, shouldFallback, snapshotPost, snapshotGet, readableTimes, snapshotNoticeFor, isSnapshotAnswer, snapshotFlag } from "./snapshot.ts";
 
 const data = { generated_at: "T0", gets: { "/universe?core=true": [1], "/a?x=1&y=2": "ok" }, reports: { TSLA: { t: "TSLA" }, NVDA: { t: "NVDA" } } };
 assert.equal(snapshotKey("a", "?y=2&x=1"), "/a?x=1&y=2");
@@ -18,9 +19,25 @@ assert.equal(snapshotPost(null, "chat", "{}"), null);
 // A browser always adds its anonymous id and language; the saved page must still match.
 assert.equal(snapshotKey("/calibration", "?nw_client=abc&nw_lang=zh&nw_internal=1"), snapshotKey("calibration"));
 assert.equal(snapshotKey("universe", "?nw_client=x&core=true"), "/universe?core=true");
-// A snapshot answer is recognised by its intent or by the proxy header, and its time is readable.
-assert.ok(isSnapshotAnswer({ intent: { kind: "snapshot" } }, null) && isSnapshotAnswer({}, "2026-09-12T10:00:00Z"));
-assert.ok(!isSnapshotAnswer({ intent: { kind: "analyze" } }, null));
+// A saved answer is recognised by its own intent, and its time is readable.
+assert.ok(isSnapshotAnswer({ intent: { kind: "snapshot" } }));
+assert.ok(!isSnapshotAnswer({ intent: { kind: "analyze" } }) && !isSnapshotAnswer({}) && !isSnapshotAnswer({ intent: null }));
+// What the proxy really builds for a saved chat answer is recognised, so the fix cannot miss one.
+assert.ok(isSnapshotAnswer(c));
+// Regression: a live streamed answer must be kept even when the shared flag was set by an
+// unrelated read that fell back to a saved copy while the analysis ran. The decision takes only
+// the answer, so no flag value can turn a live answer into a "saved example".
+snapshotFlag.set("2026-10-10T03:46:00Z");
+const live = { intent: { kind: "analyze", ticker: "NVDA" }, report: { ticket: { ticker: "NVDA" }, forecast_id: 21509 }, reply: "GO on long 15,000 USDT of NVDA" };
+assert.equal(isSnapshotAnswer(live), false);
+assert.equal(isSnapshotAnswer(snapshotPost(data, "chat", '{"messages":[{"role":"user","content":"x"}]}')), true);
+snapshotFlag.set(null);
+// The chat component must not feed the shared flag into that decision again, and a live answer
+// must clear a flag an earlier saved read left behind.
+const chat = readFileSync(new URL("../components/desk/chat.tsx", import.meta.url), "utf8");
+assert.ok(chat.includes("isSnapshotAnswer(res)"), "chat.tsx decides from the answer alone");
+assert.ok(!/isSnapshotAnswer\([^)]*snapshotFlag/.test(chat), "chat.tsx must not pass the shared flag");
+assert.ok(chat.indexOf("snapshotFlag.set(null)") > chat.indexOf("if (isSnapshotAnswer(res))"), "a live answer clears the flag after the saved-answer branch");
 assert.ok(!readableTimes("saved from 2026-09-12T10:00:00+00:00, ok", "en-US").includes("T10:00"));
 assert.ok(readableTimes("from 2026-09-12T10:00:00Z.", "zh-CN").includes("2026"));
 assert.ok(snapshotNoticeFor("2026-09-12T10:00:00Z", "zh").startsWith("实时服务器"));

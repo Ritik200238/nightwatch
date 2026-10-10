@@ -72,9 +72,16 @@ export function snapshotNoticeFor(iso: string, lang: "en" | "zh"): string {
     : `The live server is unreachable right now; the example is a saved one from ${when}, not an answer to your trade.`;
 }
 
-/** True for an answer the proxy served from its saved copy. Such an answer is never a result. */
-export function isSnapshotAnswer(res: { intent?: { kind?: string } | null }, headerIso: string | null): boolean {
-  return res.intent?.kind === "snapshot" || headerIso !== null;
+/** True for an answer the proxy served from its saved copy. Such an answer is never a result.
+ *
+ *  It is decided by the answer's own body, never by the shared `snapshotFlag`. That flag is
+ *  set by whichever read last fell back to a saved copy, so an unrelated slow GET could set
+ *  it while a live analysis was running, and the live answer was then thrown away as "not an
+ *  answer to your trade". The proxy builds every saved chat answer with `snapshotPost`, which
+ *  always marks `intent.kind` as "snapshot", and a streamed answer is never served from the
+ *  saved copy at all. */
+export function isSnapshotAnswer(res: { intent?: { kind?: string } | null }): boolean {
+  return res.intent?.kind === "snapshot";
 }
 
 /** Body for a POST /chat or /analyze served from the snapshot, or null if none saved. */
