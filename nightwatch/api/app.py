@@ -1687,9 +1687,13 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         def put(kind: str, data: Any) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, (kind, data))
 
+        def on_step(ev: dict[str, Any]) -> None:
+            timing.mark(f"stage_{ev.get('stage')}")  # when each stage finished, on the request's clock
+            put("step", ev)
+
         def work() -> None:
             try:
-                with timing.attached(clock), progress_to(lambda ev: put("step", ev)), trader_scope(client):
+                with timing.attached(clock), progress_to(on_step), trader_scope(client):
                     timing.mark("work_start")
                     out = _chat(body)
                 _count_chat(body, request, out)

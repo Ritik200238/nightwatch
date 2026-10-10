@@ -204,6 +204,8 @@ def test_a_stream_reports_its_worker_start_and_the_lock(client, lines):
     f = got[0]
     assert f["outcome"] == "ok" and int(f["locks"]) >= 1
     assert f["marks"].split(",")[0].startswith("work_start:")
+    stages = [m.split(":")[0] for m in f["marks"].split(",") if m.startswith("stage_")]
+    assert stages[:2] == ["stage_snapshot", "stage_analog"], "each analysis stage is on the request's clock"
     assert int(f["to_lock_ms"]) <= int(f["total_ms"])
     assert "long 40000" not in "\n".join(lines)
 
