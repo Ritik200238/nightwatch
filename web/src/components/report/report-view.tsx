@@ -36,6 +36,7 @@ import { verdictText } from "@/lib/verdict-style";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { type AnalystTake, api, type ClosedHoursLine, type Report, type TicketInput } from "@/lib/api";
+import { EXIT_COST_CAVEAT, EXIT_COST_CAVEAT_SHORT } from "@/lib/caveats";
 import { fmtBps, fmtLev, fmtPct, fmtPrice, fmtRatio, fmtUsd, titleCase } from "@/lib/format";
 import { breakerReason, capDetail, lessonText, plainReason, plainText, ruleReason, secondOpinionHead, sensitivityNote, warningText } from "@/lib/plain";
 import { ordinal, presetName, regimeDescription, riskBasis, sourceName, stateWord } from "@/lib/i18n-terms";
@@ -517,7 +518,7 @@ function DecisionCard({ report, lang, onRerun }: { report: Report; lang: Lang; o
         <Stat
           label={L("Getting out costs", "平仓成本")}
           value={exit?.total_cost_quote != null ? `−${fmtUsd(exit.total_cost_quote)}` : "—"}
-          hint={exit?.total_cost_bps != null ? L(`${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book`, `按${stateWord(lang, report.execution.book_source)}盘口计 ${fmtBps(exit.total_cost_bps)}`) : L("no order book", "没有盘口数据")}
+          hint={exit?.total_cost_bps != null ? L(`${fmtBps(exit.total_cost_bps)} on the ${report.execution.book_source} book · ${EXIT_COST_CAVEAT_SHORT.en}`, `按${stateWord(lang, report.execution.book_source)}盘口计 ${fmtBps(exit.total_cost_bps)} · ${EXIT_COST_CAVEAT_SHORT.zh}`) : L("no order book", "没有盘口数据")}
           chip={<SourceChip entry={prov?.exit_cost} lang={lang} />}
         />
         <Stat
@@ -1083,6 +1084,7 @@ export function ReportView({ report, onRerun, lang = "en", hideTake = false }: {
               ) : null}
             </div>
             {report.execution.cost_curve ? <CostCurve points={report.execution.cost_curve} requested={t.notional_quote} budgetBps={budget} lang={lang} /> : null}
+            <p className="text-[13px] text-muted-foreground lg:col-span-2">{L(EXIT_COST_CAVEAT.en, EXIT_COST_CAVEAT.zh)}</p>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">{L("No order book was available, so exit cost is unknown. Start the recorder or allow live book fetches.", "没有可用的盘口数据，所以平仓成本未知。请启动记录器，或允许实时获取盘口。")}</p>
