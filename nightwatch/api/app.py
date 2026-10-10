@@ -941,7 +941,6 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         from nightwatch.api.providers import describe as describe_llm
 
         s = st()
-        c = s.store._conn
         # A stuck read snapshot answers every request with old data and slows down as the
         # WAL grows behind it. Unhealthy is the honest answer: Docker marks the container,
         # and deploy/heal.sh restarts it within minutes instead of hours.
@@ -956,11 +955,14 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         now_m = time.monotonic()
         counts = _health_counts.setdefault(id(s.store), {})  # per store, so test apps never share
         if now_m - counts.get("at", -1e9) > HEALTH_COUNTS_TTL_S:
-            counts.update(
-                at=now_m,
-                bars=c.execute("SELECT COUNT(*) FROM bars").fetchone()[0],
-                books=c.execute("SELECT COUNT(*) FROM orderbook_snapshots").fetchone()[0],
-            )
+            # On a connection of its own: counted on the shared one, these two scans (about 20 s)
+            # held every other query waiting, the analyses and this page's own callers included.
+            with s.store.side_reader() as c:
+                counts.update(
+                    at=now_m,
+                    bars=c.execute("SELECT COUNT(*) FROM bars").fetchone()[0],
+                    books=c.execute("SELECT COUNT(*) FROM orderbook_snapshots").fetchone()[0],
+                )
         bars, n_books = counts["bars"], counts["books"]
         newest = s.store.latest_book_ms()
         last_book = datetime.fromtimestamp(newest / 1000, tz=UTC).isoformat() if newest else None

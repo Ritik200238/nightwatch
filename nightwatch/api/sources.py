@@ -7,6 +7,7 @@ One row per upstream source. ``last_update`` is when we last pulled it (the sync
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,8 +19,8 @@ def _iso(ms: int | float | None) -> str | None:
     return None if ms is None else datetime.fromtimestamp(ms / 1000, tz=UTC).isoformat()
 
 
-def _one(store: Store, sql: str, args: tuple = ()) -> tuple:
-    row = store._conn.execute(sql, args).fetchone()
+def _one(conn: sqlite3.Connection, sql: str, args: tuple = ()) -> tuple:
+    row = conn.execute(sql, args).fetchone()
     return row if row is not None else ()
 
 
@@ -134,22 +135,28 @@ def street_row(cached: list[tuple[datetime, Any]], status: dict[str, Any] | None
 
 
 def data_sources(store: Store) -> list[dict[str, Any]]:
-    c = store._conn
-    last = {task: ms for task, ms in c.execute("SELECT task, MAX(finished_at) FROM sync_log GROUP BY task").fetchall()}
-    last_yahoo = _one(store, "SELECT MAX(finished_at) FROM sync_log WHERE task IN ('bars','equity_refresh') AND (venue=? OR task='equity_refresh')", (Venue.YAHOO.value,))
-    last_bitget = _one(store, "SELECT MAX(finished_at) FROM sync_log WHERE task IN ('bars','refresh') AND venue<>?", (Venue.YAHOO.value,))
+    # Whole-table counts, on a connection of their own: on the shared one they held every other
+    # query (the analyses included) for as long as they ran. See Store.side_reader.
+    with store.side_reader() as c:
+        return _data_sources(c)
 
-    bars_bitget = _one(store, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue<>?", (Venue.YAHOO.value,))
-    bars_yahoo = _one(store, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue=?", (Venue.YAHOO.value,))
+
+def _data_sources(c: sqlite3.Connection) -> list[dict[str, Any]]:
+    last = {task: ms for task, ms in c.execute("SELECT task, MAX(finished_at) FROM sync_log GROUP BY task").fetchall()}
+    last_yahoo = _one(c, "SELECT MAX(finished_at) FROM sync_log WHERE task IN ('bars','equity_refresh') AND (venue=? OR task='equity_refresh')", (Venue.YAHOO.value,))
+    last_bitget = _one(c, "SELECT MAX(finished_at) FROM sync_log WHERE task IN ('bars','refresh') AND venue<>?", (Venue.YAHOO.value,))
+
+    bars_bitget = _one(c, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue<>?", (Venue.YAHOO.value,))
+    bars_yahoo = _one(c, "SELECT COUNT(*), MAX(ts) FROM bars WHERE venue=?", (Venue.YAHOO.value,))
     # By id, not MAX(ts): the newest snapshot is the last inserted, and MAX(ts) has no index.
-    books = _one(store, "SELECT (SELECT COUNT(*) FROM orderbook_snapshots), (SELECT ts FROM orderbook_snapshots ORDER BY id DESC LIMIT 1)")
-    earnings = _one(store, "SELECT COUNT(*), MAX(observed_at), MIN(report_date), MAX(report_date) FROM earnings")
-    corporate = _one(store, "SELECT COUNT(*), MAX(observed_at), MAX(event_date) FROM corporate_events")
-    macro = _one(store, "SELECT COUNT(*), MAX(observed_at), MAX(release_ts) FROM macro")
-    news = _one(store, "SELECT COUNT(*), MAX(published_at) FROM news")
-    filings = _one(store, "SELECT COUNT(*), MAX(accepted_at), COUNT(DISTINCT ticker) FROM filings")
-    latest_filing = _one(store, "SELECT ticker, form, accepted_at, items FROM filings ORDER BY accepted_at DESC LIMIT 1")
-    latest_news = _one(store, "SELECT title, published_at FROM news ORDER BY published_at DESC LIMIT 1")
+    books = _one(c, "SELECT (SELECT COUNT(*) FROM orderbook_snapshots), (SELECT ts FROM orderbook_snapshots ORDER BY id DESC LIMIT 1)")
+    earnings = _one(c, "SELECT COUNT(*), MAX(observed_at), MIN(report_date), MAX(report_date) FROM earnings")
+    corporate = _one(c, "SELECT COUNT(*), MAX(observed_at), MAX(event_date) FROM corporate_events")
+    macro = _one(c, "SELECT COUNT(*), MAX(observed_at), MAX(release_ts) FROM macro")
+    news = _one(c, "SELECT COUNT(*), MAX(published_at) FROM news")
+    filings = _one(c, "SELECT COUNT(*), MAX(accepted_at), COUNT(DISTINCT ticker) FROM filings")
+    latest_filing = _one(c, "SELECT ticker, form, accepted_at, items FROM filings ORDER BY accepted_at DESC LIMIT 1")
+    latest_news = _one(c, "SELECT title, published_at FROM news ORDER BY published_at DESC LIMIT 1")
 
     def row(key: str, label: str, what: str, *, cadence: str, last_update: int | None, rows: int, latest: str | None, latest_label: str | None = None, url: str) -> dict[str, Any]:
         return {"key": key, "label": label, "what": what, "cadence": cadence, "last_update": _iso(last_update), "rows": rows, "latest": latest, "latest_label": latest_label, "url": url}

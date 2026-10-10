@@ -18,7 +18,8 @@ import json
 import sqlite3
 import threading
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -178,6 +179,22 @@ class Store:
         for it here each time rather than keeping its own reference, so reconnect() reaches
         all of them at once."""
         return self._live
+
+    @contextmanager
+    def side_reader(self) -> Iterator[sqlite3.Connection]:
+        """A short-lived read-only connection of its own, for a query that scans a whole table.
+
+        The shared connection runs one statement at a time: SQLite holds the connection while a
+        statement steps, so a ``COUNT(*)`` over millions of rows (about 20 s on the box) made
+        every other query on it - the analyses, ``/health`` - wait for it. Measured on the
+        box: ``/health`` taking 17-40 s every ten minutes, exactly when it recounted, and
+        analyses stalling for as long as a ``/sources`` recompute ran. A reader of its own
+        waits for nobody and blocks nobody (the database is in WAL mode)."""
+        conn = sqlite3.connect(f"file:{self.path.as_posix()}?mode=ro", uri=True, timeout=30, check_same_thread=False)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def reconnect(self) -> None:
         """Swap in a fresh connection, for when the shared one is stuck on an old snapshot.
