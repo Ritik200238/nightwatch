@@ -10,6 +10,7 @@ import { presetName, stateWord } from "@/lib/i18n-terms";
 import { useAgent } from "@/lib/agent-run";
 import { SourceChip } from "@/components/report/primitives";
 import { fmtTimeL, type Lang, tr } from "@/lib/i18n";
+import { recordCountsText } from "@/lib/record";
 
 /** Loss per stress test, in USDT, as horizontal bars (worst first). Built from report.stress. */
 export function StressBars({ report, lang }: { report: Report; lang: Lang }) {
@@ -200,8 +201,8 @@ export function CredStrip({ lang }: { lang: Lang }) {
     <p className="mt-2 text-[13px] text-muted-foreground">
       <Link href="/wrong" className="underline underline-offset-2 hover:text-foreground">
         {L(
-          `Live record: ${tk.scored.toLocaleString()} verdicts scored, ${rate.toFixed(0)}% went past their 1-in-20 line (target ${(target * 100).toFixed(0)}%)`,
-          `实时记录：已评分 ${tk.scored.toLocaleString()} 个结论，${rate.toFixed(0)}% 越过了各自的二十分之一线（目标 ${(target * 100).toFixed(0)}%）`,
+          `Live record: ${recordCountsText(tk, "en")}; ${rate.toFixed(0)}% went past their 1-in-20 line (target ${(target * 100).toFixed(0)}%)`,
+          `实时记录：${recordCountsText(tk, "zh")}；${rate.toFixed(0)}% 越过了各自的二十分之一线（目标 ${(target * 100).toFixed(0)}%）`,
         )}
         {rec?.verify?.ok ? L(" · receipts verified", " · 回执已校验") : ""}
       </Link>

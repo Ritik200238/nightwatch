@@ -21,6 +21,7 @@ import { snapshotFlag, snapshotNoticeFor, readableTime } from "@/lib/snapshot";
 import { snapshot } from "@/snapshot";
 import { ApiError, api, type MissesResponse, type Report, type TicketInput, type UniverseEntry } from "@/lib/api";
 import { fmtDateL } from "@/lib/i18n";
+import { recordCountsText } from "@/lib/record";
 import { loadChat, loadReportId, saveReportId } from "@/lib/desk-session";
 
 export default function DeskPage() {
@@ -401,7 +402,7 @@ const CHIP = "inline-flex min-h-10 items-center sm:min-h-8 rounded-full border b
 
 /** Three proof chips from the same live endpoints the track-record pages read. */
 function HeroProof() {
-  const { tx } = useLang();
+  const { lang, tx } = useLang();
   const [misses, setMisses] = useState<MissesResponse | null>(null);
   useEffect(() => {
     let live = true;
@@ -420,8 +421,8 @@ function HeroProof() {
       {has ? (
         <>
           <li>
-            <Link href="/wrong" className={CHIP} title={tx("Live verdicts whose hold has ended and whose outcome is recorded. Open verdicts are not in this number; /usage counts the answers given to visitors.", "持有期已结束、结果已记录的实时结论。未到期的不在其中；/usage 统计的是给访客的回答。")}>
-              <span className="tabular mr-1 font-semibold">{scored.toLocaleString()}</span> {tx("live verdicts scored (hold over)", "个实时结论已评分（持有期已过）")}
+            <Link href="/wrong" className={`${CHIP} tabular`} title={tx("Live forecasts whose hold has ended and whose outcome is recorded, most from testers and our own checks. The same ticket asked again is one distinct event, and forecasts on one night share that night's move, so the nights are the most independent count. Open forecasts are not in these numbers; /usage counts the answers given to visitors.", "持有期已结束、结果已记录的实时预测，大多来自试用者和我们自己的检查。同一笔单重复提问只算一个独立事件；同一夜的预测共享当夜的行情，所以夜晚数才是最独立的计数。未到期的不在其中；/usage 统计的是给访客的回答。")}>
+              <span>{recordCountsText(tk ?? { scored }, lang).split(/(\d[\d,]*)/).map((part, i) => (i % 2 ? <span key={i} className="font-semibold">{part}</span> : part))}</span>
             </Link>
           </li>
           <li>
