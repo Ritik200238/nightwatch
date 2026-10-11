@@ -18,17 +18,18 @@ spec = importlib.util.spec_from_file_location("uptime_check", Path(__file__).res
 uc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(uc)
 
-NOW = datetime.now(UTC).isoformat()
-HEALTH = {"ok": True, "bars": 1_500_000, "tickers_with_data": 24, "last_book_ts": NOW}
-SOURCES = [{"key": "bitget_bars", "rows": 10, "last_update": NOW}]
+HEALTH = {"ok": True, "bars": 1_500_000, "tickers_with_data": 24}
 ANALYSIS = {"verdict": {"verdict": "GO"}, "timings_ms": {"total": 1200}}
 
 
 def site(**over):
+    # Stamped when the test runs, not when the file is loaded: the check fails a book older than
+    # ten minutes, and in a long CI run this file's tests start more than ten minutes after loading.
+    now = datetime.now(UTC).isoformat()
     answers = {
         "/": (200, b"<html>", {}),
-        "/api/health": (200, json.dumps(HEALTH).encode(), {}),
-        "/api/sources": (200, json.dumps(SOURCES).encode(), {}),
+        "/api/health": (200, json.dumps({**HEALTH, "last_book_ts": now}).encode(), {}),
+        "/api/sources": (200, json.dumps([{"key": "bitget_bars", "rows": 10, "last_update": now}]).encode(), {}),
         "/api/analyze": (200, json.dumps(ANALYSIS).encode(), {}),
     }
     answers.update(over)
