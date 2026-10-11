@@ -451,12 +451,19 @@ class AppState:
 
     def warm_pages(self) -> None:
         """Ask this API for the pages a judge opens first, so their cache is full before
-        anyone arrives. Best effort: the port is the one the container serves on."""
+        anyone arrives. Best effort: the port is the one the container serves on.
+
+        One page at a time, each recomputed before the next is asked for. A plain request found
+        each page an hour old, was answered from the saved copy at once and set off a background
+        refresh, so all seven recomputed together (measured at 06:00:57: four of them inside one
+        second, /stop-benchmark queued 22 s for the analysis lock). ``x-nw-refresh`` makes the
+        request wait for its own recompute instead; visitors meanwhile get the saved copy."""
         import urllib.request
 
         for path in CACHED_PAGES:
             try:
-                urllib.request.urlopen(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}{path}", timeout=120).read()
+                req = urllib.request.Request(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}{path}", headers={"x-nw-refresh": "1"})
+                urllib.request.urlopen(req, timeout=120).read()
             except Exception:  # noqa: BLE001 - warming must never stop the warm loop
                 log.info("could not warm %s", path)
 
