@@ -156,3 +156,20 @@ def persisted_count(path) -> int:
     finally:
         c.close()
 
+
+def test_lesson_recall_survives_an_open_read_on_the_shared_connection(client):
+    """Recalling lessons is a read. It used to re-run the lessons schema on every analysis,
+    which is a write, and under load the report lost its lessons to 'database is locked'."""
+    from nightwatch.journal.postmortem import LessonBook
+
+    journal = client.app.state.nw.journal
+    LessonBook(journal)  # the first one creates the table
+    store = journal.store
+    reading = store._conn.execute("SELECT ts FROM bars")
+    assert reading.fetchone() is not None
+    recorder_commits(store.path)
+    try:
+        book = LessonBook(journal)
+        assert book.recall(ticker="TSLA", as_of=AS_OF, limit=3) is not None
+    finally:
+        reading.fetchall()

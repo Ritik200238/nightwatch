@@ -249,6 +249,9 @@ class AppState:
         if chained:
             log.info("chained %d forecasts that had no receipt", chained)
         self.reports = ReportStore(self.store)
+        # The lessons table, made now while nothing else is using the connection, so an analysis
+        # never has to (see LessonBook).
+        LessonBook(self.journal)
         from nightwatch.api.analyst import AnalystJobs
 
         self.analyst = AnalystJobs()

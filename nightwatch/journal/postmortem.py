@@ -20,6 +20,7 @@ Three rules keep this from becoming horoscope:
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -28,6 +29,8 @@ from enum import Enum
 import pandas as pd
 
 from nightwatch.time_utils import ensure_utc, from_epoch_ms, to_epoch_ms, utc_now, whole_hours
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS lessons (
@@ -183,7 +186,18 @@ class LessonBook:
 
     def __init__(self, journal):  # noqa: ANN001 - nightwatch.journal.journal.Journal
         self.journal = journal
-        self._conn.executescript(SCHEMA)
+        # Once per store, not per analysis: even CREATE ... IF NOT EXISTS is a write, and a write
+        # on the shared connection is refused at once while another thread is mid-read there
+        # (Store.own_writer), which dropped the lessons from reports under load.
+        store = journal.store
+        if not getattr(store, "_lessons_schema_ready", False):
+            try:
+                self._conn.executescript(SCHEMA)
+                store._lessons_schema_ready = True
+            except sqlite3.OperationalError as exc:
+                # Refused under load: the table is there once anyone has made it (the API makes
+                # it at start-up), so reading lessons goes ahead; a real absence fails the read.
+                log.info("lessons schema not checked this time: %s", exc)
 
     # ------------------------------------------------------------------ writing
 
