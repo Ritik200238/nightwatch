@@ -209,6 +209,7 @@ class Store:
         conn = sqlite3.connect(str(self.path), timeout=30, isolation_level=None, check_same_thread=False)
         try:
             conn.execute("PRAGMA busy_timeout=30000")
+            conn.execute("PRAGMA foreign_keys=ON")  # as on the shared connection
             yield conn
         finally:
             conn.close()

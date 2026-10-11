@@ -207,25 +207,39 @@ class Journal:
         as_of = ensure_utc(as_of)
         horizon_end = as_of + timedelta(hours=horizon_h)
         b = baseline_quantiles or {}
-        with self._conn:
-            cur = self._conn.execute(
-                """INSERT INTO forecasts (created_at, kind, ticker, side, notional, as_of, bar_ts, horizon_h, horizon_end, entry_price,
-                   snapshot_hash, analog_n, analog_scope, p5, p25, p50, p75, p95, es5, mc_p5, mc_p95, verdict, recommended_notional, payload,
-                   base_p5, base_p25, base_p50, base_p75, base_p95)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    to_epoch_ms(utc_now()), kind, ticker, side, notional, to_epoch_ms(as_of), to_epoch_ms(bar_ts), horizon_h, to_epoch_ms(horizon_end), entry_price,
-                    snapshot_hash, analog_n, analog_scope, quantiles.get("p5"), quantiles.get("p25"), quantiles.get("p50"), quantiles.get("p75"), quantiles.get("p95"),
-                    es5, mc_p5, mc_p95, verdict, recommended_notional, json.dumps(payload, default=str, separators=(",", ":")),
-                    b.get("p5"), b.get("p25"), b.get("p50"), b.get("p75"), b.get("p95"),
-                ),
-            )
-            from nightwatch.journal import receipts
+        # On a connection of its own, in one real transaction. On the shared connection the
+        # write ran inside whatever read another thread had open there, and SQLite refused it at
+        # once ("database is locked", SQLITE_BUSY_SNAPSHOT) whenever the recorder had committed
+        # since: the analysis was shown and never recorded. And on an autocommit connection
+        # ``with conn:`` opens no transaction, so the forecast and its receipt were committed
+        # separately. BEGIN IMMEDIATE takes the write lock first (waiting like any writer), so
+        # the chain head read below is the newest one.
+        from nightwatch.journal import receipts
 
-            # In the same transaction: a live verdict and its receipt land together or not at all.
-            if kind == receipts.KIND:
-                receipts.append(self._conn, int(cur.lastrowid))
-        return int(cur.lastrowid)
+        with self.store.own_writer() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                cur = conn.execute(
+                    """INSERT INTO forecasts (created_at, kind, ticker, side, notional, as_of, bar_ts, horizon_h, horizon_end, entry_price,
+                       snapshot_hash, analog_n, analog_scope, p5, p25, p50, p75, p95, es5, mc_p5, mc_p95, verdict, recommended_notional, payload,
+                       base_p5, base_p25, base_p50, base_p75, base_p95)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        to_epoch_ms(utc_now()), kind, ticker, side, notional, to_epoch_ms(as_of), to_epoch_ms(bar_ts), horizon_h, to_epoch_ms(horizon_end), entry_price,
+                        snapshot_hash, analog_n, analog_scope, quantiles.get("p5"), quantiles.get("p25"), quantiles.get("p50"), quantiles.get("p75"), quantiles.get("p95"),
+                        es5, mc_p5, mc_p95, verdict, recommended_notional, json.dumps(payload, default=str, separators=(",", ":")),
+                        b.get("p5"), b.get("p25"), b.get("p50"), b.get("p75"), b.get("p95"),
+                    ),
+                )
+                fid = int(cur.lastrowid)
+                # In the same transaction: a live verdict and its receipt land together or not at all.
+                if kind == receipts.KIND:
+                    receipts.append(conn, fid)
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
+        return fid
 
     def log_trade(self, *, forecast_id: int | None, ticker: str, side: str, opened_at: datetime, notional: float, entry_price: float | None, note: str | None = None) -> int:
         with self._conn:

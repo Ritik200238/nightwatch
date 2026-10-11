@@ -44,17 +44,26 @@ class ReportStore:
 
     def save(self, forecast_id: int, report: dict[str, Any], *, keep: int = KEEP) -> None:
         body = zlib.compress(json.dumps(report, default=str).encode("utf-8"), 6)
-        with self._conn:
-            self._conn.execute(
-                "INSERT INTO reports (forecast_id, created_at, body) VALUES (?,?,?) "
-                "ON CONFLICT(forecast_id) DO UPDATE SET created_at=excluded.created_at, body=excluded.body",
-                (int(forecast_id), int(utc_now().timestamp() * 1000), body),
-            )
-            self._conn.execute(
-                "DELETE FROM reports WHERE forecast_id NOT IN "
-                "(SELECT forecast_id FROM reports ORDER BY created_at DESC LIMIT ?)",
-                (int(keep),),
-            )
+        # On a connection of its own, in one transaction: on the shared connection the write was
+        # refused at once while another thread was mid-read there (see Store.own_writer), and
+        # the report a link reopens was silently never kept.
+        with self.store.own_writer() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                conn.execute(
+                    "INSERT INTO reports (forecast_id, created_at, body) VALUES (?,?,?) "
+                    "ON CONFLICT(forecast_id) DO UPDATE SET created_at=excluded.created_at, body=excluded.body",
+                    (int(forecast_id), int(utc_now().timestamp() * 1000), body),
+                )
+                conn.execute(
+                    "DELETE FROM reports WHERE forecast_id NOT IN "
+                    "(SELECT forecast_id FROM reports ORDER BY created_at DESC LIMIT ?)",
+                    (int(keep),),
+                )
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
 
     def get(self, forecast_id: int) -> dict[str, Any] | None:
         row = self._conn.execute("SELECT body FROM reports WHERE forecast_id=?", (int(forecast_id),)).fetchone()

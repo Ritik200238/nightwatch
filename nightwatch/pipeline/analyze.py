@@ -1493,7 +1493,10 @@ def analyze(ctx: AnalysisContext, ticket: TradeTicket, *, as_of: datetime | None
             report.forecast_id = _record(ctx, report)
             from nightwatch.journal import receipts
 
-            got = receipts.receipt(ctx.journal.store._conn, report.forecast_id)
+            # Read back on a fresh connection: the shared one may still be inside another
+            # thread's older read, which does not see the row just committed.
+            with ctx.journal.store.side_reader() as fresh:
+                got = receipts.receipt(fresh, report.forecast_id)
             report.receipt = got["digest"] if got else None
         except Exception:  # noqa: BLE001 - journaling must never break an analysis
             log.exception("failed to journal the forecast")
