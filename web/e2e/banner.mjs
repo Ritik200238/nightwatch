@@ -67,8 +67,11 @@ await scenario("A. API down: the saved example is labelled, the banner shows", {
 });
 
 await scenario("B. live answer while another read fell back: kept, not labelled saved", { failGets: ["/misses", "/verify"] }, async (page) => {
+  // The unrelated fallback really happens first: a page read answered from the saved copy. (The
+  // site banner shows whichever read finished last, so the response is the reliable witness.)
+  const fellBack = page.waitForResponse((r) => /\/api\/(misses|verify)/.test(r.url()) && !!r.headers()["x-nightwatch-snapshot"], { timeout: 45_000 });
   await openHome(page);
-  await page.getByText(SITE_BANNER).first().waitFor(); // the unrelated fallback really happened first
+  await fellBack;
   await ask(page);
   await page.getByText(LIVE_REPLY).first().waitFor();
   await page.getByText(REPORT_RE).first().waitFor();
