@@ -11,7 +11,9 @@ import { chromium } from "playwright";
 const SITE = (process.argv[2] || "http://127.0.0.1:3100").replace(/\/$/, "");
 const FAKE = (process.argv[3] || "http://127.0.0.1:8765").replace(/\/$/, "");
 const TRADE = "Hold $20k of TSLA through the weekend, stop at 350";
-const LIVE_REPLY = "Live answer from the test backend.";
+// The fake API gives its live report this id; a saved example has none. With a report the chat
+// shows the verdict line, not the reply text, so the id on the page is the mark of the live answer.
+const LIVE_MARK = /#424242/;
 const SAVED_CHAT = /The live server is unreachable right now; the example is a saved one from/;
 const SITE_BANNER = /Live server unreachable — showing a saved snapshot from/;
 const REPORT_RE = /What history says/;
@@ -63,7 +65,7 @@ await scenario("A. API down: the saved example is labelled, the banner shows", {
   await ask(page);
   await page.getByText(SAVED_CHAT).first().waitFor();
   await page.getByText(SITE_BANNER).first().waitFor();
-  if (await page.getByText(LIVE_REPLY).count()) throw new Error("a live answer appeared although the API was down");
+  if (await page.getByText(LIVE_MARK).count()) throw new Error("a live answer appeared although the API was down");
 });
 
 await scenario("B. live answer while another read fell back: kept, not labelled saved", { failGets: ["/misses", "/verify"] }, async (page) => {
@@ -73,11 +75,11 @@ await scenario("B. live answer while another read fell back: kept, not labelled 
   await openHome(page);
   await fellBack;
   await ask(page);
-  await page.getByText(LIVE_REPLY).first().waitFor();
+  await page.getByText(LIVE_MARK).first().waitFor();
   await page.getByText(REPORT_RE).first().waitFor();
   if (await page.getByText(EXAMPLE_RE).first().isVisible().catch(() => false)) throw new Error("the stored example is still shown instead of the live report");
   await page.waitForTimeout(2_000); // let anything that would discard it run
-  if (!(await page.getByText(LIVE_REPLY).first().isVisible())) throw new Error("the live answer was discarded");
+  if (!(await page.getByText(LIVE_MARK).first().isVisible())) throw new Error("the live answer was discarded");
   if (await page.getByText(SAVED_CHAT).count()) throw new Error("the live answer was labelled a saved example");
 });
 
