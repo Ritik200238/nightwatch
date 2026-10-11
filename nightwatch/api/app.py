@@ -29,6 +29,7 @@ from nightwatch import __version__
 from nightwatch.api import followup, guard, timing
 from nightwatch.api.health_counts import HealthCounts
 from nightwatch.api.locking import RequestFirstLock
+from nightwatch.api.singleflight import SingleFlight
 from nightwatch.api.sources import annotate_used_for, data_sources, open_interest_row, options_row, rwa_row, street_row
 from nightwatch.config import Settings, load_settings
 from nightwatch.data.bitget import BitgetPublicClient
@@ -70,6 +71,9 @@ THESIS_CHECK_CACHE_MAX = 200
 PAGE_CACHE_PARAMS = frozenset({"core", "ticker", "kind", "limit"})
 PAGE_CACHE_TTL_S = 60.0
 PAGE_CACHE_STALE_S = 6 * 3600.0  # beyond this a saved page is too old to show even while refreshing
+# How long a request waits for someone else's computation of the same page before computing it
+# itself. The warm-up allows a page 120 s; the proxy gives up after 20 s and shows its saved copy.
+PAGE_FLIGHT_WAIT_S = 120.0
 
 
 def _closed_hours_slim() -> dict[str, Any] | None:
@@ -864,6 +868,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     # a cold box. They change slowly, so a successful answer is kept for a minute and the
     # warm-up fills them before anyone asks (AppState.warm_pages).
     page_cache: dict[str, tuple[float, bytes, str]] = {}
+    page_flights: SingleFlight[tuple[int, bytes, str, list[tuple[bytes, bytes]]]] = SingleFlight()
+    app.state.page_flights = page_flights
     refreshing_keys: set[str] = set()
 
     def _refresh_later(key: str) -> None:
@@ -904,16 +910,30 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 _refresh_later(key)
             if age < PAGE_CACHE_STALE_S:
                 return Response(hit[1], media_type=hit[2], headers={"x-nightwatch-cache": "hit" if age < PAGE_CACHE_TTL_S else "stale"})
-        response = await call_next(request)
-        if response.status_code != 200:
-            return response
-        body = b"".join([chunk async for chunk in response.body_iterator])
+
+        async def compute() -> tuple[int, bytes, str, list[tuple[bytes, bytes]]]:
+            response = await call_next(request)
+            body = b"".join([chunk async for chunk in response.body_iterator])
+            media = response.media_type or "application/json"
+            if response.status_code == 200 and cacheable:
+                page_cache.pop(key, None)
+                page_cache[key] = (time.monotonic(), body, media)
+                while len(page_cache) > PAGE_CACHE_MAX:
+                    page_cache.pop(next(iter(page_cache)))
+            return response.status_code, body, media, list(response.raw_headers)
+
         if cacheable:
-            page_cache.pop(key, None)
-            page_cache[key] = (time.monotonic(), body, response.media_type or "application/json")
-            while len(page_cache) > PAGE_CACHE_MAX:
-                page_cache.pop(next(iter(page_cache)))
-        return Response(body, status_code=200, media_type=response.media_type or "application/json", headers={"x-nightwatch-cache": "miss"})
+            # Requests for the same page while it is being computed wait for that computation
+            # instead of starting their own (see singleflight).
+            (status, body, media, raw), here = await page_flights.run(key, compute, wait_s=PAGE_FLIGHT_WAIT_S)
+        else:
+            (status, body, media, raw), here = await compute(), True
+        if status != 200:
+            # Not cached, so the next request after this one tries again; headers as the route sent them.
+            out = Response(body, status_code=status)
+            out.raw_headers = raw
+            return out
+        return Response(body, status_code=200, media_type=media, headers={"x-nightwatch-cache": "miss" if here else "joined"})
 
     # Registered after the page cache on purpose: the last middleware added runs first, so
     # the secret and the rate limit apply to cached answers too.
