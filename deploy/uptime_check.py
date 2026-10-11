@@ -19,14 +19,39 @@ TIMEOUT = 90
 MAX_BOOK_AGE_S = 600  # the recorder writes every minute; ten minutes of silence is broken
 
 
-def fetch(url: str, payload: dict | None = None) -> tuple[int, bytes]:
+# The web proxy's mark on an answer it served from its saved copy because the API did not answer.
+SNAPSHOT_HEADER = "x-nightwatch-snapshot"
+
+
+def fetch(url: str, payload: dict | None = None) -> tuple[int, bytes, dict[str, str]]:
+    """(status, body, headers). A connection that fails outright is status 0 with the reason as
+    the body, so the run reports it in a sentence instead of dying in a traceback."""
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data, headers={"content-type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            return r.status, r.read()
+            return r.status, r.read(), {k.lower(): v for k, v in r.headers.items()}
     except urllib.error.HTTPError as e:
-        return e.code, e.read()
+        return e.code, e.read(), {k.lower(): v for k, v in (e.headers or {}).items()}
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        return 0, f"no answer: {getattr(e, 'reason', e)}".encode(), {}
+
+
+def as_json(what: str, body: bytes, problems: list[str]) -> object | None:
+    """The body as JSON, or None with the problem said: an error page in place of an answer."""
+    try:
+        return json.loads(body)
+    except ValueError:
+        problems.append(f"{what} did not answer with JSON: {body[:120].decode(errors='replace')!r}")
+        return None
+
+
+def saved_copy(what: str, headers: dict[str, str], problems: list[str]) -> bool:
+    """True when the proxy answered from its saved copy: the API itself is not answering."""
+    if SNAPSHOT_HEADER in headers:
+        problems.append(f"the API is not answering: {what} came from the saved copy dated {headers[SNAPSHOT_HEADER]}")
+        return True
+    return False
 
 
 # How old a pull may be before the log says so. Only bitget_bars fails the run.
@@ -37,16 +62,18 @@ def main(base: str) -> int:
     base = base.rstrip("/")
     problems: list[str] = []
 
-    status, _ = fetch(base + "/")
+    status, body, _ = fetch(base + "/")
     print(f"desk: HTTP {status}")
     if status != 200:
-        problems.append(f"the desk returned HTTP {status}")
+        problems.append(f"the desk returned HTTP {status}" + (f" ({body[:120].decode(errors='replace')})" if status == 0 else ""))
 
-    status, body = fetch(base + "/api/health")
+    status, body, headers = fetch(base + "/api/health")
+    h = None
     if status != 200:
-        problems.append(f"health returned HTTP {status}")
-    else:
-        h = json.loads(body)
+        problems.append(f"health returned HTTP {status}: {body[:200].decode(errors='replace')}")
+    elif not saved_copy("health", headers, problems):
+        h = as_json("health", body, problems)
+    if isinstance(h, dict):
         age = None
         if h.get("last_book_ts"):
             age = (datetime.now(UTC) - datetime.fromisoformat(h["last_book_ts"])).total_seconds()
@@ -65,12 +92,15 @@ def main(base: str) -> int:
     # Every feed, and how old each one is. Only the market data can break the demo, so
     # only that fails the run; the rest are printed so a look at the log shows a feed that
     # has quietly stopped without emailing about a news site having a bad afternoon.
-    status, body = fetch(base + "/api/sources")
+    status, body, headers = fetch(base + "/api/sources")
+    rows = None
     if status != 200:
         problems.append(f"sources returned HTTP {status}")
-    else:
+    elif not saved_copy("sources", headers, problems):
+        rows = as_json("sources", body, problems)
+    if isinstance(rows, list):
         now = datetime.now(UTC)
-        for row in json.loads(body):
+        for row in rows:
             if not row.get("last_update"):
                 print(f"source {row['key']}: never pulled  STALE")
                 continue
@@ -86,13 +116,15 @@ def main(base: str) -> int:
         "horizon_kind": "next_open", "stop_price": 350, "thesis": "uptime check",
         "invalidation": "uptime check", "record": False,
     }
-    status, body = fetch(base + "/api/analyze", ticket)
+    status, body, headers = fetch(base + "/api/analyze", ticket)
+    r = None
     if status != 200:
         problems.append(f"an analysis returned HTTP {status}: {body[:200].decode(errors='replace')}")
-    else:
-        r = json.loads(body)
-        verdict = r["verdict"]["verdict"]
-        print(f"analysis: {verdict} in {r['timings_ms']['total']} ms")
+    elif not saved_copy("the analysis", headers, problems):  # a saved example has a verdict too
+        r = as_json("the analysis", body, problems)
+    if isinstance(r, dict):
+        verdict = (r.get("verdict") or {}).get("verdict")
+        print(f"analysis: {verdict} in {(r.get('timings_ms') or {}).get('total')} ms")
         if verdict not in ("GO", "REDUCE_TO", "HEDGE", "NO_GO", "REVIEW"):
             problems.append(f"unexpected verdict {verdict}")
 
