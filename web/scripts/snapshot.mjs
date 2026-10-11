@@ -23,6 +23,9 @@ async function call(path, init, ms) {
 
 async function main() {
   if (!ORIGIN) return console.log("[snapshot] NIGHTWATCH_API_ORIGIN unset; skipping");
+  // A preview build (any branch other than main) would read the production API's pages and set
+  // off their refreshes there, for a site no visitor sees. Only production builds save a copy.
+  if (process.env.VERCEL_ENV === "preview") return console.log("[snapshot] preview build; not reading the production API");
   const out = { generated_at: new Date().toISOString(), gets: {}, reports: {} };
   // One at a time: the API serialises analyses behind one lock on a small box, so fetching
   // in parallel made the slow pages (calibration) time out behind the demo analyses.
