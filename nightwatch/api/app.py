@@ -1702,7 +1702,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         client, lang, internal = _who(request)
         try:
-            engagement.mark_verdict(s.store._conn, forecast_id, lang=lang, client=client, internal=internal)
+            with s.store.transaction() as conn:  # not on the shared connection (Store.transaction)
+                engagement.mark_verdict(conn, forecast_id, lang=lang, client=client, internal=internal)
         except Exception as exc:  # noqa: BLE001 - counting must never fail an analysis
             log.warning("could not count verdict %s: %s", forecast_id, exc)
 
@@ -1729,7 +1730,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 _mark(s, request, fid)
             kind = out.get("answer_kind") or (out.get("mode") if body.context_forecast_id else None)
             if kind and body.context_forecast_id and not internal:
-                engagement.count_chat(s.store._conn, kind=str(kind), lang=lang)
+                with s.store.transaction() as conn:
+                    engagement.count_chat(conn, kind=str(kind), lang=lang)
         except Exception as exc:  # noqa: BLE001 - counting is never worth a failed answer
             log.warning("chat counters: %s", exc)
 
@@ -1809,10 +1811,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"No forecast {body.forecast_id}.")
         client, _, internal = _who(request)
         try:
-            engagement.add_feedback(
-                s.store._conn, forecast_id=body.forecast_id, useful=body.useful, note=body.note,
-                lang=body.lang, client=client, internal=internal,
-            )
+            with s.store.transaction() as conn:  # the limit check and the insert together (Store.transaction)
+                engagement.add_feedback(
+                    conn, forecast_id=body.forecast_id, useful=body.useful, note=body.note,
+                    lang=body.lang, client=client, internal=internal,
+                )
         except engagement.RateLimited as exc:
             raise HTTPException(429, "Too much feedback from one visitor this hour.") from exc
         except engagement.Duplicate as exc:
@@ -1852,7 +1855,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
-            return watches.create(s.store._conn, forecast_id=body.forecast_id, report=report, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+            with s.store.transaction() as conn:  # the duplicate and limit checks and the insert together
+                return watches.create(conn, forecast_id=body.forecast_id, report=report, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except watches.TooMany as exc:
             raise HTTPException(429, "Too many re-checks from one visitor this hour.") from exc
 
@@ -1891,7 +1895,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
-            return tripwires.create(s.store._conn, forecast_id=body.forecast_id, report=report, level=body.level, label=body.label, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+            with s.store.transaction() as conn:  # the duplicate and limit checks and the insert together
+                return tripwires.create(conn, forecast_id=body.forecast_id, report=report, level=body.level, label=body.label, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except tripwires.BadLevel as exc:
             raise HTTPException(422, guard.plain_message(exc)) from exc
         except tripwires.TooMany as exc:
@@ -1932,7 +1937,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
-            return plans.save(s.store._conn, forecast_id=body.forecast_id, report=report, choices=body.choices, arm=body.arm, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+            with s.store.transaction() as conn:  # the plan and every tripwire it arms, whole or not at all
+                return plans.save(conn, forecast_id=body.forecast_id, report=report, choices=body.choices, arm=body.arm, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except plans.BadPlan as exc:
             raise HTTPException(422, guard.plain_message(exc)) from exc
 

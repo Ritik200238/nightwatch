@@ -134,9 +134,9 @@ class Journal:
 
     def mark_taken(self, forecast_id: int, taken: bool = True) -> bool:
         """Record that the trader acted on this analysis (or did not, after all)."""
-        with self._conn:
-            cur = self._conn.execute("UPDATE forecasts SET taken=? WHERE id=?", (int(taken), int(forecast_id)))
-        return cur.rowcount > 0
+        with self.store.transaction() as conn:  # not on the shared connection (Store.transaction)
+            cur = conn.execute("UPDATE forecasts SET taken=? WHERE id=?", (int(taken), int(forecast_id)))
+            return cur.rowcount > 0
 
     def owner_of(self, forecast_id: int) -> str | None:
         """The anonymous visitor (a salted hash, see ``engagement``) whose analysis this was, or
@@ -326,10 +326,13 @@ class Journal:
                 hi = float(window["high"].max()) / entry - 1.0
                 lo = float(window["low"].min()) / entry - 1.0
                 mfe, mae = (hi * 100.0, lo * 100.0) if sign > 0 else (-lo * 100.0, -hi * 100.0)
-            with self._conn:
-                self._conn.execute(
-                    "INSERT INTO forecast_outcomes (forecast_id, matured_at, exit_ts, exit_price, ret_pct, mfe_pct, mae_pct, max_abs_basis_bps) VALUES (?,?,?,?,?,?,?,?)",
+            # On a connection of its own (Store.transaction). OR IGNORE: the recorder matures
+            # forecasts too, every 15 minutes, and if it wrote this outcome first - computed from the
+            # same bars - that row stands and this page must not fail on the duplicate.
+            with self.store.transaction() as conn:
+                cur = conn.execute(
+                    "INSERT OR IGNORE INTO forecast_outcomes (forecast_id, matured_at, exit_ts, exit_price, ret_pct, mfe_pct, mae_pct, max_abs_basis_bps) VALUES (?,?,?,?,?,?,?,?)",
                     (fid, to_epoch_ms(now), to_epoch_ms(exit_ts.to_pydatetime()), exit_price, ret, mfe, mae, None),
                 )
-            n += 1
+            n += cur.rowcount
         return n

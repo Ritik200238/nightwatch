@@ -154,6 +154,30 @@ def _ms(ts: datetime | None) -> int | None:
 PRUNE_BATCH = 5_000
 
 
+class _InTransaction:
+    """A connection inside ``Store.transaction``. Its ``with conn:`` is a no-op, so code written
+    to commit its own small steps becomes part of the one transaction around it instead of
+    committing it half-way. Everything else is the connection itself."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def __enter__(self) -> _InTransaction:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def commit(self) -> None:  # the transaction around it commits
+        return None
+
+    def executescript(self, *_a: object, **_k: object) -> None:
+        raise RuntimeError("executescript commits; not allowed inside Store.transaction")
+
+    def __getattr__(self, name: str):  # noqa: ANN204
+        return getattr(self._conn, name)
+
+
 class Store:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -213,6 +237,28 @@ class Store:
             yield conn
         finally:
             conn.close()
+
+    @contextmanager
+    def transaction(self) -> Iterator[sqlite3.Connection]:
+        """One write, start to finish, as a single transaction on a connection of its own.
+
+        For the writes a visitor's action makes (a tripwire, a plan, feedback...). On the shared
+        connection they were refused at once while another thread was mid-read there (see
+        ``own_writer``), and their check-then-insert steps ran as separate autocommit statements:
+        two requests could both pass "is there one already?" and a plan could be half written.
+
+        BEGIN IMMEDIATE takes the write lock before the first read, so the checks and the insert
+        see and change the same state; it waits for the recorder like any writer (the busy
+        timeout) and is never retried here. Code inside may keep its own ``with conn:`` blocks:
+        they are part of this transaction, which commits once at the end or rolls back whole."""
+        with self.own_writer() as raw:
+            raw.execute("BEGIN IMMEDIATE")
+            try:
+                yield _InTransaction(raw)  # type: ignore[misc]
+                raw.execute("COMMIT")
+            except BaseException:
+                raw.execute("ROLLBACK")
+                raise
 
     def reconnect(self) -> None:
         """Swap in a fresh connection, for when the shared one is stuck on an old snapshot.
