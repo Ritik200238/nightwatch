@@ -29,6 +29,7 @@ from nightwatch import __version__
 from nightwatch.api import followup, guard, timing
 from nightwatch.api.health_counts import HealthCounts
 from nightwatch.api.locking import RequestFirstLock
+from nightwatch.api.page_store import PageStore
 from nightwatch.api.singleflight import SingleFlight
 from nightwatch.api.sources import annotate_used_for, data_sources, open_interest_row, options_row, rwa_row, street_row
 from nightwatch.config import Settings, load_settings
@@ -74,6 +75,9 @@ PAGE_CACHE_STALE_S = 6 * 3600.0  # beyond this a saved page is too old to show e
 # How long a request waits for someone else's computation of the same page before computing it
 # itself. The warm-up allows a page 120 s; the proxy gives up after 20 s and shows its saved copy.
 PAGE_FLIGHT_WAIT_S = 120.0
+# For this long after start-up a page read back from disk is served without setting off a refresh:
+# the warm-up recomputes the pages one at a time, instead of the first visitors each setting one off.
+PAGE_RESTORED_GRACE_S = 600.0
 
 
 def _closed_hours_slim() -> dict[str, Any] | None:
@@ -831,6 +835,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         state = AppState(settings)
         app.state.nw = state
         state.health_counts.refresh_if_due()  # the first count starts now, not on the first /health
+        restore_pages()
         if warm:
             state.start_warm()
         # The Telegram bot lives in this process (it needs the desk); a no-op without
@@ -880,6 +885,25 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     page_cache: dict[str, tuple[float, bytes, str]] = {}
     page_flights: SingleFlight[tuple[int, bytes, str, list[tuple[bytes, bytes]]]] = SingleFlight()
     app.state.page_flights = page_flights
+    # Saved to disk as well, so a restart begins with the pages it had (see page_store).
+    # NIGHTWATCH_PAGE_STORE=0 turns it off (memory only, as before).
+    page_store = (
+        PageStore(settings.data_dir / "page_cache", version=__version__, max_age_s=PAGE_CACHE_STALE_S, max_files=PAGE_CACHE_MAX)
+        if os.environ.get("NIGHTWATCH_PAGE_STORE", "1") != "0" else None
+    )
+    app.state.page_store = page_store
+    restored: dict[str, float] = {}  # key -> when it was read back from disk (monotonic)
+
+    def restore_pages() -> None:
+        if page_store is None:
+            return
+        now = time.monotonic()
+        for key, (age, body, media) in page_store.load(lambda k: k.split("?", 1)[0] in CACHED_PAGES).items():
+            page_cache[key] = (now - age, body, media)
+            restored[key] = now
+        if restored:
+            log.info("restored %d saved pages", len(restored))
+
     refreshing_keys: set[str] = set()
 
     def _refresh_later(key: str) -> None:
@@ -914,7 +938,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         refreshing = request.headers.get("x-nw-refresh") == "1"
         if hit and not refreshing:
             age = time.monotonic() - hit[0]
-            if age >= PAGE_CACHE_TTL_S and age < PAGE_CACHE_STALE_S:
+            just_restored = key in restored and time.monotonic() - restored[key] < PAGE_RESTORED_GRACE_S
+            if age >= PAGE_CACHE_TTL_S and age < PAGE_CACHE_STALE_S and not just_restored:
                 # Serve the saved answer now and refresh it behind the reader's back, so no
                 # visitor waits the 6-8 s a recompute takes on this box.
                 _refresh_later(key)
@@ -928,8 +953,13 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             if response.status_code == 200 and cacheable:
                 page_cache.pop(key, None)
                 page_cache[key] = (time.monotonic(), body, media)
+                restored.pop(key, None)
                 while len(page_cache) > PAGE_CACHE_MAX:
                     page_cache.pop(next(iter(page_cache)))
+                if page_store is not None:
+                    from starlette.concurrency import run_in_threadpool
+
+                    await run_in_threadpool(page_store.save, key, body, media)
             return response.status_code, body, media, list(response.raw_headers)
 
         if cacheable:

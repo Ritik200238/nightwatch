@@ -177,6 +177,11 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
   answers with the last good ones at once; `counts` says how old they are (`fresh`, `stale`
   while a recount runs or after one failed, `counting` before the first). The last good
   counts are saved to `health_counts.json` in the data directory so a restart starts from them.
+* The cached read-only pages (`/sources`, `/studies`, `/calibration`, `/misses`,
+  `/stop-benchmark`, `/verify`, `/anchors`) are also saved, to `page_cache/` in the data
+  directory, and read back at start-up: the first visitors after a deploy get the saved page
+  at once while the warm-up recomputes them one at a time. A saved page older than six hours,
+  or saved by another API version, is not used. `NIGHTWATCH_PAGE_STORE=0` turns it off.
 * `GET /sources` lists every upstream feed with when it was last pulled, how many rows it
   holds and the newest thing in it. It is the fastest way to tell a dead feed from a quiet
   market, and the desk shows the same six rows in its sidebar.
