@@ -242,6 +242,16 @@ def test_a_fast_health_check_is_not_logged_and_the_switch_turns_it_all_off(clien
     assert len(lines) == n
 
 
+def test_a_slow_health_check_says_which_step_it_waited_in(client, lines, monkeypatch):
+    client.get("/health")
+    monkeypatch.setattr(timing, "SLOW_REQUEST_S", 0.0)  # log every health check for this test
+    lines.clear()
+    assert client.get("/health").status_code == 200
+    got = timing_lines(lines, "/health")
+    assert len(got) == 1
+    assert [m.split(":")[0] for m in got[0]["marks"].split(",")] == ["lag", "counts", "book", "tickers", "llm"]
+
+
 def test_timing_endpoint_serves_the_recent_requests_and_the_lock(client, lines):
     client.post("/analyze?nw_v=visitor-xyz", json={
         "ticker": "TSLA", "side": "long", "notional_quote": 20000, "account_equity_quote": 200000, "stop_price": 300,

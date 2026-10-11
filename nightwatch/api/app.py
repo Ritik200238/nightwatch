@@ -971,7 +971,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # A stuck read snapshot answers every request with old data and slows down as the
         # WAL grows behind it. Unhealthy is the honest answer: Docker marks the container,
         # and deploy/heal.sh restarts it within minutes instead of hours.
+        # Each step is marked on the request's clock: a slow health check (15-19 s seen right
+        # after a restart) then says which of them it waited in.
         lag = s.store.snapshot_lag_seconds()
+        timing.mark("lag")
         if lag > STALE_SNAPSHOT_S:
             from nightwatch.data.store import open_cursor_report
 
@@ -980,17 +983,22 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         # Row counts take about 20 s on the box. They are recounted in the background every ten
         # minutes and this page reports the last good ones, with their age (see health_counts).
         counts = s.health_counts.read()
+        timing.mark("counts")
         bars, n_books = counts.pop("bars"), counts.pop("books")
         newest = s.store.latest_book_ms()
+        timing.mark("book")
         last_book = datetime.fromtimestamp(newest / 1000, tz=UTC).isoformat() if newest else None
+        n_tickers = len(s.ctx.tickers_with_data())
+        timing.mark("tickers")
         # Which model is answering, not just whether one is. "chat_ready: true" with no
         # way to see who is behind it was how the box ran on the rule-based fallback for
         # days without anyone noticing.
         llm = describe_llm()
+        timing.mark("llm")
         return {
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "snapshot_heals": s.snapshot_heals, "bars": bars, "orderbook_snapshots": n_books, "last_book_ts": last_book,
             "started_at": s.started_at.isoformat(), "uptime_s": int((utc_now() - s.started_at).total_seconds()),
-            "counts": counts, "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
+            "counts": counts, "tickers_with_data": n_tickers, "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
             "bitget_mcp": s.ctx.street_status() if s.ctx.street_client is not None else None,
         }
 
