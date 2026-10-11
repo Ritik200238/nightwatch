@@ -10,9 +10,19 @@ on:
     - cron: "7,22,37,52 * * * *" # off the hour; scheduled runs bunch up at :00
   workflow_dispatch:
 
+# It only reads the repository. One check at a time: a slow one must not stack up behind itself.
+permissions:
+  contents: read
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Each request in the check gives up after 90 s; a hung run must fail fast, not after the
+    # six-hour default, so the next one can start and the failure email goes out.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - run: python3 deploy/uptime_check.py https://nightwatch-gules.vercel.app

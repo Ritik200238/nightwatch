@@ -13,6 +13,7 @@ import math
 import os
 import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any
@@ -904,25 +905,45 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if restored:
             log.info("restored %d saved pages", len(restored))
 
-    refreshing_keys: set[str] = set()
+    # Old pages are refreshed by one worker, one page at a time, each page queued once. A thread per
+    # page let anything that reads several old pages in a row - the web build's snapshot step on
+    # every deploy - recompute them all at once: at 10:52 on 11 Oct /stop-benchmark queued 26.6 s
+    # and /lenses 34.9 s for the analysis lock behind the pages it had set off.
+    refresh_queue: deque[str] = deque()
+    refreshing_keys: set[str] = set()  # queued or being refreshed
+    refresh_mu = threading.Lock()
+    refresh_worker = {"running": False}
 
     def _refresh_later(key: str) -> None:
-        if key in refreshing_keys:
-            return
-        refreshing_keys.add(key)
+        with refresh_mu:
+            if key in refreshing_keys:
+                return
+            refreshing_keys.add(key)
+            refresh_queue.append(key)
+            if refresh_worker["running"]:
+                return
+            refresh_worker["running"] = True
+        threading.Thread(target=_drain_refreshes, name="page-refresh", daemon=True).start()
 
-        def run() -> None:
-            import urllib.request
+    def _drain_refreshes() -> None:
+        import urllib.request
 
+        while True:
+            with refresh_mu:
+                if not refresh_queue:
+                    refresh_worker["running"] = False
+                    return
+                key = refresh_queue.popleft()
             try:
                 req = urllib.request.Request(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}{key}", headers={"x-nw-refresh": "1"})
                 urllib.request.urlopen(req, timeout=120).read()
             except Exception:  # noqa: BLE001 - the stale copy keeps serving
                 log.info("background refresh of %s failed", key)
             finally:
-                refreshing_keys.discard(key)
+                with refresh_mu:
+                    refreshing_keys.discard(key)
 
-        threading.Thread(target=run, name="page-refresh", daemon=True).start()
+    app.state.page_refresh_pending = lambda: len(refreshing_keys)
 
     @app.middleware("http")
     async def cache_slow_pages(request: Request, call_next):  # noqa: ANN001, ANN202
@@ -1702,7 +1723,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
         client, lang, internal = _who(request)
         try:
-            engagement.mark_verdict(s.store._conn, forecast_id, lang=lang, client=client, internal=internal)
+            with s.store.transaction() as conn:  # not on the shared connection (Store.transaction)
+                engagement.mark_verdict(conn, forecast_id, lang=lang, client=client, internal=internal)
         except Exception as exc:  # noqa: BLE001 - counting must never fail an analysis
             log.warning("could not count verdict %s: %s", forecast_id, exc)
 
@@ -1729,7 +1751,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
                 _mark(s, request, fid)
             kind = out.get("answer_kind") or (out.get("mode") if body.context_forecast_id else None)
             if kind and body.context_forecast_id and not internal:
-                engagement.count_chat(s.store._conn, kind=str(kind), lang=lang)
+                with s.store.transaction() as conn:
+                    engagement.count_chat(conn, kind=str(kind), lang=lang)
         except Exception as exc:  # noqa: BLE001 - counting is never worth a failed answer
             log.warning("chat counters: %s", exc)
 
@@ -1809,10 +1832,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(404, f"No forecast {body.forecast_id}.")
         client, _, internal = _who(request)
         try:
-            engagement.add_feedback(
-                s.store._conn, forecast_id=body.forecast_id, useful=body.useful, note=body.note,
-                lang=body.lang, client=client, internal=internal,
-            )
+            with s.store.transaction() as conn:  # the limit check and the insert together (Store.transaction)
+                engagement.add_feedback(
+                    conn, forecast_id=body.forecast_id, useful=body.useful, note=body.note,
+                    lang=body.lang, client=client, internal=internal,
+                )
         except engagement.RateLimited as exc:
             raise HTTPException(429, "Too much feedback from one visitor this hour.") from exc
         except engagement.Duplicate as exc:
@@ -1852,7 +1876,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
-            return watches.create(s.store._conn, forecast_id=body.forecast_id, report=report, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+            with s.store.transaction() as conn:  # the duplicate and limit checks and the insert together
+                return watches.create(conn, forecast_id=body.forecast_id, report=report, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except watches.TooMany as exc:
             raise HTTPException(429, "Too many re-checks from one visitor this hour.") from exc
 
@@ -1891,7 +1916,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
-            return tripwires.create(s.store._conn, forecast_id=body.forecast_id, report=report, level=body.level, label=body.label, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+            with s.store.transaction() as conn:  # the duplicate and limit checks and the insert together
+                return tripwires.create(conn, forecast_id=body.forecast_id, report=report, level=body.level, label=body.label, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except tripwires.BadLevel as exc:
             raise HTTPException(422, guard.plain_message(exc)) from exc
         except tripwires.TooMany as exc:
@@ -1932,7 +1958,8 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
             raise HTTPException(422, guard.plain_message(exc)) from exc
         client, _, _ = _who(request)
         try:
-            return plans.save(s.store._conn, forecast_id=body.forecast_id, report=report, choices=body.choices, arm=body.arm, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
+            with s.store.transaction() as conn:  # the plan and every tripwire it arms, whole or not at all
+                return plans.save(conn, forecast_id=body.forecast_id, report=report, choices=body.choices, arm=body.arm, webhook=hook, lang=engagement.norm_lang(body.lang), client=client)
         except plans.BadPlan as exc:
             raise HTTPException(422, guard.plain_message(exc)) from exc
 

@@ -33,3 +33,58 @@ jobs:
       # each file prints "ok" and exits non-zero on the first failed assertion.
       - run: for t in src/lib/*.test.mjs; do node --experimental-strip-types "$t"; done
       - run: npm run build
+
+  # The saved-copy notices as a person sees them, in Chromium: the built site against
+  # web/e2e/fake-backend.mjs, which a test can make fail on purpose. Nothing here reaches the
+  # live API. Kept out of the python/web checks the box deploys on, so a browser hiccup cannot
+  # hold back a deploy; a failure here is still a red CI run.
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NIGHTWATCH_API_ORIGIN: http://127.0.0.1:8765
+      NEXT_PUBLIC_API_URL: /api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Start the fake API
+        run: |
+          nohup node e2e/fake-backend.mjs 8765 > "$RUNNER_TEMP/fake.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/health >/dev/null && break; sleep 1; done
+      # The build's snapshot step saves the fake API's answers, so the site has a saved copy to fall back to.
+      - run: npm run build
+      - name: Start the site
+        run: |
+          nohup npx next start -p 3100 > "$RUNNER_TEMP/site.log" 2>&1 &
+          for i in $(seq 1 60); do curl -fs http://127.0.0.1:3100/ >/dev/null && break; sleep 1; done
+      - name: Install playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm i playwright@1.49.1
+          npx playwright install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+      - name: Saved-copy notices in a real browser
+        run: |
+          cp e2e/banner.mjs "$RUNNER_TEMP/pw/banner.mjs"
+          cd "$RUNNER_TEMP/pw" && node banner.mjs http://127.0.0.1:3100 http://127.0.0.1:8765
+      - name: Logs and screenshots on failure
+        if: failure()
+        run: |
+          tail -50 "$RUNNER_TEMP/site.log" || true
+          tail -50 "$RUNNER_TEMP/fake.log" || true
+          ls "$RUNNER_TEMP/pw"/*.png 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: banner-screenshots
+          path: ${{ runner.temp }}/pw/*.png
+          if-no-files-found: ignore

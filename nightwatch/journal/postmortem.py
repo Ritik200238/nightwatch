@@ -231,8 +231,8 @@ class LessonBook:
         return written
 
     def _insert(self, x: Lesson) -> None:
-        with self._conn:
-            self._conn.execute(
+        with self.journal.store.transaction() as conn:  # not on the shared connection (Store.transaction)
+            conn.execute(
                 """INSERT OR REPLACE INTO lessons (forecast_id, written_at, matured_at, as_of, ticker, side, kind, bucket, regime_label,
                    horizon_h, classification, breached_low, breached_high, touched_stress, recovered, ret_pct, p5, p50, p95, mae_pct,
                    verdict, requested_notional, recommended_notional, size_effect_quote, text)

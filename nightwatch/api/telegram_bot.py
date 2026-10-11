@@ -327,10 +327,11 @@ class TelegramBot:
             except ValueError:
                 return _t("tw_bad", lang, names=", ".join(by_label) or "-")
         try:
-            row = tripwires.create(
-                self.state.store._conn, forecast_id=int(report.get("forecast_id") or sess.context_id), report=report,
-                level=level, label=label, webhook=telegram.target(chat_id), lang=lang, client=client,
-            )
+            with self.state.store.transaction() as conn:  # as POST /tripwire (Store.transaction)
+                row = tripwires.create(
+                    conn, forecast_id=int(report.get("forecast_id") or sess.context_id), report=report,
+                    level=level, label=label, webhook=telegram.target(chat_id), lang=lang, client=client,
+                )
         except tripwires.BadLevel as exc:
             return str(exc)
         except tripwires.TooMany:
@@ -348,7 +349,8 @@ class TelegramBot:
         if fid is None or fid <= 0:
             return _t("w_nogo", lang)  # a what-if was never journalled; same rule as POST /watch
         try:
-            row = watches.create(self.state.store._conn, forecast_id=fid, report=report, webhook=telegram.target(chat_id), lang=lang, client=client)
+            with self.state.store.transaction() as conn:  # as POST /watch (Store.transaction)
+                row = watches.create(conn, forecast_id=fid, report=report, webhook=telegram.target(chat_id), lang=lang, client=client)
         except watches.TooMany:
             return _t("w_many", lang)
         due = str(row.get("due_at") or "")
@@ -380,7 +382,8 @@ class TelegramBot:
             sess.context_id = fid if isinstance(fid, int) else None
             if fresh and isinstance(fid, int) and fid > 0:
                 try:
-                    engagement.mark_verdict(self.state.store._conn, fid, lang=lang, client=client, internal=False)
+                    with self.state.store.transaction() as conn:
+                        engagement.mark_verdict(conn, fid, lang=lang, client=client, internal=False)
                 except Exception as exc:  # noqa: BLE001 - counting is never worth a failed answer
                     log.warning("could not count verdict: %s", exc)
         self._say(chat_id, reply)

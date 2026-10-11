@@ -13,6 +13,14 @@ on:
     types: [completed]
     branches: [main]
 
+# It only reads the repository. One run at a time: a scheduled run and the one after a deploy
+# would otherwise overlap, each sending its chats (each chat is a journaled analysis) at once.
+permissions:
+  contents: read
+concurrency:
+  group: browser-smoke
+  cancel-in-progress: false
+
 jobs:
   smoke:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
