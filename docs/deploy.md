@@ -172,7 +172,11 @@ ssh ubuntu@<ip> /home/ubuntu/nightwatch/deploy/autodeploy.sh
 ## Health and uptime
 
 * `GET /health` returns bar count, order-book snapshot count, the timestamp of the last
-  book, and the warm-up state. Point any uptime monitor at it.
+  book, and the warm-up state. Point any uptime monitor at it. The two counts take about
+  20 s to compute, so they are recounted in the background every ten minutes and `/health`
+  answers with the last good ones at once; `counts` says how old they are (`fresh`, `stale`
+  while a recount runs or after one failed, `counting` before the first). The last good
+  counts are saved to `health_counts.json` in the data directory so a restart starts from them.
 * `GET /sources` lists every upstream feed with when it was last pulled, how many rows it
   holds and the newest thing in it. It is the fastest way to tell a dead feed from a quiet
   market, and the desk shows the same six rows in its sidebar.

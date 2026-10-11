@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from nightwatch import __version__
 from nightwatch.api import followup, guard, timing
+from nightwatch.api.health_counts import HealthCounts
 from nightwatch.api.locking import RequestFirstLock
 from nightwatch.api.sources import annotate_used_for, data_sources, open_interest_row, options_row, rwa_row, street_row
 from nightwatch.config import Settings, load_settings
@@ -56,8 +57,6 @@ STALE_SNAPSHOT_S = 600.0
 SELF_HEAL_LAG_S = 180.0
 SNAPSHOT_CHECK_S = 60.0
 RETIRE_GRACE_S = 300.0
-HEALTH_COUNTS_TTL_S = 600.0
-_health_counts: dict[int, dict[str, Any]] = {}
 # How often the idle API re-reads its cached frames so they are not swapped out.
 TOUCH_EVERY_S = 180.0
 # Open interest is read from cache for five minutes; refreshing a little sooner keeps it always warm.
@@ -282,9 +281,16 @@ class AppState:
         self.started_at = utc_now()
         self._lens_availability: tuple[datetime, dict[str, dict[str, int]]] | None = None
         self.snapshot_heals = 0
+        self.health_counts = HealthCounts(self._count_rows, saved=settings.data_dir / "health_counts.json")
         self.thesis_checks: dict[tuple[int, str], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
         # The trade on screen re-run with the account the page sent, keyed by (report, account).
         self.equity_runs: dict[tuple[int, float], dict[str, Any]] = _BoundedCache(THESIS_CHECK_CACHE_MAX)
+
+    def _count_rows(self) -> tuple[int, int]:
+        # On a connection of its own: counted on the shared one, these two scans (about 20 s)
+        # held every other query waiting, the analyses included.
+        with self.store.side_reader() as c:
+            return (c.execute("SELECT COUNT(*) FROM bars").fetchone()[0], c.execute("SELECT COUNT(*) FROM orderbook_snapshots").fetchone()[0])
 
     def prefetch_take(self, forecast_id: int | None, payload: dict[str, Any], lang: str = "en") -> None:
         """Start the analyst's take now, in the report's own language, so it is usually
@@ -810,6 +816,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
     async def lifespan(app: FastAPI):
         state = AppState(settings)
         app.state.nw = state
+        state.health_counts.refresh_if_due()  # the first count starts now, not on the first /health
         if warm:
             state.start_warm()
         # The Telegram bot lives in this process (it needs the desk); a no-op without
@@ -950,20 +957,10 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
 
             log.error("API read snapshot is %.0f s behind the database; open cursors: %s", lag, open_cursor_report())
             return JSONResponse({"ok": False, "detail": f"read snapshot {lag:.0f} s behind the database"}, status_code=503)
-        # Row counts are a second each over a million rows on the box, and Docker asks for
-        # this page every 30 s; they change slowly, so they are counted every ten minutes.
-        now_m = time.monotonic()
-        counts = _health_counts.setdefault(id(s.store), {})  # per store, so test apps never share
-        if now_m - counts.get("at", -1e9) > HEALTH_COUNTS_TTL_S:
-            # On a connection of its own: counted on the shared one, these two scans (about 20 s)
-            # held every other query waiting, the analyses and this page's own callers included.
-            with s.store.side_reader() as c:
-                counts.update(
-                    at=now_m,
-                    bars=c.execute("SELECT COUNT(*) FROM bars").fetchone()[0],
-                    books=c.execute("SELECT COUNT(*) FROM orderbook_snapshots").fetchone()[0],
-                )
-        bars, n_books = counts["bars"], counts["books"]
+        # Row counts take about 20 s on the box. They are recounted in the background every ten
+        # minutes and this page reports the last good ones, with their age (see health_counts).
+        counts = s.health_counts.read()
+        bars, n_books = counts.pop("bars"), counts.pop("books")
         newest = s.store.latest_book_ms()
         last_book = datetime.fromtimestamp(newest / 1000, tz=UTC).isoformat() if newest else None
         # Which model is answering, not just whether one is. "chat_ready: true" with no
@@ -973,7 +970,7 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         return {
             "ok": True, "version": __version__, "time": utc_now().isoformat(), "snapshot_heals": s.snapshot_heals, "bars": bars, "orderbook_snapshots": n_books, "last_book_ts": last_book,
             "started_at": s.started_at.isoformat(), "uptime_s": int((utc_now() - s.started_at).total_seconds()),
-            "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
+            "counts": counts, "tickers_with_data": len(s.ctx.tickers_with_data()), "warm": s.warm_status, "chat_ready": llm["ready"], "llm": llm,
             "bitget_mcp": s.ctx.street_status() if s.ctx.street_client is not None else None,
         }
 
