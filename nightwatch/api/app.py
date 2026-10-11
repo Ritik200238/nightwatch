@@ -13,6 +13,7 @@ import math
 import os
 import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any
@@ -904,25 +905,45 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         if restored:
             log.info("restored %d saved pages", len(restored))
 
-    refreshing_keys: set[str] = set()
+    # Old pages are refreshed by one worker, one page at a time, each page queued once. A thread per
+    # page let anything that reads several old pages in a row - the web build's snapshot step on
+    # every deploy - recompute them all at once: at 10:52 on 11 Oct /stop-benchmark queued 26.6 s
+    # and /lenses 34.9 s for the analysis lock behind the pages it had set off.
+    refresh_queue: deque[str] = deque()
+    refreshing_keys: set[str] = set()  # queued or being refreshed
+    refresh_mu = threading.Lock()
+    refresh_worker = {"running": False}
 
     def _refresh_later(key: str) -> None:
-        if key in refreshing_keys:
-            return
-        refreshing_keys.add(key)
+        with refresh_mu:
+            if key in refreshing_keys:
+                return
+            refreshing_keys.add(key)
+            refresh_queue.append(key)
+            if refresh_worker["running"]:
+                return
+            refresh_worker["running"] = True
+        threading.Thread(target=_drain_refreshes, name="page-refresh", daemon=True).start()
 
-        def run() -> None:
-            import urllib.request
+    def _drain_refreshes() -> None:
+        import urllib.request
 
+        while True:
+            with refresh_mu:
+                if not refresh_queue:
+                    refresh_worker["running"] = False
+                    return
+                key = refresh_queue.popleft()
             try:
                 req = urllib.request.Request(f"http://127.0.0.1:{os.environ.get('PORT', '8000')}{key}", headers={"x-nw-refresh": "1"})
                 urllib.request.urlopen(req, timeout=120).read()
             except Exception:  # noqa: BLE001 - the stale copy keeps serving
                 log.info("background refresh of %s failed", key)
             finally:
-                refreshing_keys.discard(key)
+                with refresh_mu:
+                    refreshing_keys.discard(key)
 
-        threading.Thread(target=run, name="page-refresh", daemon=True).start()
+    app.state.page_refresh_pending = lambda: len(refreshing_keys)
 
     @app.middleware("http")
     async def cache_slow_pages(request: Request, call_next):  # noqa: ANN001, ANN202
