@@ -1912,10 +1912,14 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         rid = body.request_id
         if not idempotency.valid(rid):
             return _chat_once(body)
-        conn = st().store._conn
-        got = idempotency.claim(conn, rid)
-        if not got.owner and got.result is None:
-            got = idempotency.wait(conn, rid)  # the first run is still going: wait for its answer
+        # Not on the shared connection: a write there fails at once ("database is locked") while
+        # another thread is mid-read on it and the recorder has committed since (Store.own_writer).
+        # That ended streamed chats with an error before they were analysed.
+        store = st().store
+        with store.own_writer() as conn:
+            got = idempotency.claim(conn, rid)
+            if not got.owner and got.result is None:
+                got = idempotency.wait(conn, rid)  # the first run is still going: wait for its answer
         if got.result is not None:
             return {**got.result, "replayed": True}
         if not got.owner:
@@ -1924,9 +1928,11 @@ def create_app(settings: Settings | None = None, *, warm: bool = True) -> FastAP
         try:
             out = _chat_once(body)
         except BaseException:
-            idempotency.abandon(conn, rid)
+            with store.own_writer() as conn:
+                idempotency.abandon(conn, rid)
             raise
-        idempotency.finish(conn, rid, jsonable_encoder(out))
+        with store.own_writer() as conn:
+            idempotency.finish(conn, rid, jsonable_encoder(out))
         return out
 
     def _chat_once(body: ChatIn) -> dict[str, Any]:

@@ -196,6 +196,23 @@ class Store:
         finally:
             conn.close()
 
+    @contextmanager
+    def own_writer(self) -> Iterator[sqlite3.Connection]:
+        """A short-lived read-write connection of its own, for a small write that must not fail
+        because of what another thread is doing on the shared connection.
+
+        A write on the shared connection runs inside whatever read another thread has open on it.
+        If the recorder committed since that read began, SQLite refuses the write at once with
+        SQLITE_BUSY_SNAPSHOT ("database is locked") and does not wait, because waiting cannot
+        help. A connection of its own starts from the newest snapshot and waits for the
+        recorder's write lock like any other writer (the busy timeout)."""
+        conn = sqlite3.connect(str(self.path), timeout=30, isolation_level=None, check_same_thread=False)
+        try:
+            conn.execute("PRAGMA busy_timeout=30000")
+            yield conn
+        finally:
+            conn.close()
+
     def reconnect(self) -> None:
         """Swap in a fresh connection, for when the shared one is stuck on an old snapshot.
 
