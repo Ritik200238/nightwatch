@@ -257,7 +257,10 @@ class Store:
                 yield _InTransaction(raw)  # type: ignore[misc]
                 raw.execute("COMMIT")
             except BaseException:
-                raw.execute("ROLLBACK")
+                # SQLite ends the transaction itself on some errors (disk full, I/O); a ROLLBACK then
+                # fails with "no transaction is active" and would hide the error that mattered.
+                if raw.in_transaction:
+                    raw.execute("ROLLBACK")
                 raise
 
     def reconnect(self) -> None:

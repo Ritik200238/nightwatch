@@ -274,3 +274,20 @@ def test_maturing_a_forecast_the_recorder_matured_first_is_not_an_error(tmp_path
         assert count(s.path, "SELECT exit_price FROM forecast_outcomes") == 100, "the first writer's row is kept, not replaced"
     finally:
         s.close()
+
+
+def test_an_error_after_sqlite_ended_the_transaction_itself_is_the_error_raised(tmp_path):
+    """SQLite rolls a transaction back on its own after some errors (disk full, I/O). The error
+    that did it must reach the caller, not "cannot rollback - no transaction is active"."""
+    s = Store(tmp_path / "t.sqlite")
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="disk I/O error"), s.transaction() as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS t (n INTEGER)")
+            conn.execute("ROLLBACK")  # what SQLite does by itself on such an error
+            raise sqlite3.OperationalError("disk I/O error")
+        with s.transaction() as conn:  # and the store still works afterwards
+            conn.execute("CREATE TABLE IF NOT EXISTS t (n INTEGER)")
+            conn.execute("INSERT INTO t VALUES (1)")
+        assert count(s.path, "SELECT COUNT(*) FROM t") == 1
+    finally:
+        s.close()
